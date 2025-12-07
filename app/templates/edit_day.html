@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>my day index</title>
+  <meta property="og:title" content="index.life" />
+  <meta property="og:description" content="mood book" />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="{{ url_for('static', filename='images/android-chrome-512x512.png', _external=True) }}" />
+
+  <!-- Основные favicon -->
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
+  <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='images/favicon-16x16.png') }}">
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='images/favicon-32x32.png') }}">
+
+  <!-- iOS Safari (для добавления на рабочий стол iPhone) -->
+  <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='images/apple-touch-icon.png') }}">
+
+  <!-- Android Chrome -->
+  <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='images/android-chrome-192x192.png') }}">
+  <link rel="icon" type="image/png" sizes="512x512" href="{{ url_for('static', filename='images/android-chrome-512x512.png') }}">
+
+  <!-- Web App Manifest (для PWA функций) -->
+  <link rel="manifest" href="{{ url_for('static', filename='images/site.webmanifest') }}">
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/edit_day.css') }}">
+</head>
+<body>
+  <header class="main-header">
+    <nav class="top-menu">
+      <a href="{{ url_for('main.mood_grid') }}" class="menu-link">index.life</a>
+      <a href="{{ url_for('main.account') }}" class="menu-link">account</a>
+      <a href="{{ url_for('main.what_is_index') }}" class="menu-link">what is index.life?</a>
+    </nav>
+  </header>
+  <div class="center-content">
+    <h1 class="header" style="font-weight:normal;">my day index</h1>
+    <p class="date-display">{{ day.strftime('%Y-%m-%d') }}</p>
+    <form method="post" novalidate class="form-block">
+      <div class="cubes-row" id="rating-cubes">
+        {% for i in range(1, 11) %}
+          <span class="cube{% if entry and entry.rating >= i %} filled{% endif %}" data-value="{{ i }}"></span>
+        {% endfor %}
+      </div>
+      <input type="hidden" name="rating" id="rating-input" value="{{ entry.rating if entry else '' }}">
+      <div><p style="font-size:20px;">my day comment</p></div>
+      <div class="textarea-block">
+        <textarea name="note" class="note-textarea" rows="6">{{ entry.note if entry else '' }}</textarea>
+      </div>
+      <button class="save-btn" type="submit">save</button>
+    </form>
+  </div>
+  <footer class="main-footer">Copyright 2025 Émile Alexanyan</footer>
+  <script>
+    const cubes = document.querySelectorAll('.cube');
+    const ratingInput = document.getElementById('rating-input');
+    let selected = parseInt(ratingInput.value) || 0;
+
+    function fillCubes(count, className) {
+      cubes.forEach((c, idx) => {
+        c.classList.remove('filled', 'hovered');
+        if (idx < count) c.classList.add(className);
+      });
+    }
+
+    fillCubes(selected, 'filled');
+
+    cubes.forEach((cube, idx) => {
+      cube.addEventListener('mouseenter', function() {
+        fillCubes(idx + 1, 'hovered');
+      });
+      cube.addEventListener('mouseleave', function() {
+        fillCubes(selected, 'filled');
+      });
+      cube.addEventListener('click', function() {
+        selected = idx + 1;
+        ratingInput.value = selected;
+        fillCubes(selected, 'filled');
+      });
+    });
+
+    // Auto-expand textarea
+    const noteTextarea = document.querySelector('.note-textarea');
+    if (noteTextarea) {
+      noteTextarea.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = (this.scrollHeight) + 'px';
+      });
+      // Инициализация при загрузке
+      noteTextarea.style.height = 'auto';
+      noteTextarea.style.height = (noteTextarea.scrollHeight) + 'px';
+    }
+  </script>
+</body>
+</html>

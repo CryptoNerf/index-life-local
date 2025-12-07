@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Account</title>
+  <meta property="og:title" content="index.life" />
+  <meta property="og:description" content="mood book" />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="{{ url_for('static', filename='images/android-chrome-512x512.png', _external=True) }}" />
+  <!-- Основные favicon -->
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
+  <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='images/favicon-16x16.png') }}">
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='images/favicon-32x32.png') }}">
+
+  <!-- iOS Safari (для добавления на рабочий стол iPhone) -->
+  <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='images/apple-touch-icon.png') }}">
+
+  <!-- Android Chrome -->
+  <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='images/android-chrome-192x192.png') }}">
+  <link rel="icon" type="image/png" sizes="512x512" href="{{ url_for('static', filename='images/android-chrome-512x512.png') }}">
+
+  <!-- Web App Manifest (для PWA функций) -->
+  <link rel="manifest" href="{{ url_for('static', filename='images/site.webmanifest') }}">
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/account.css') }}">
+</head>
+<body>
+  <header class="main-header">
+    <nav class="top-menu">
+      <a href="{{ url_for('main.mood_grid') }}" class="menu-link">index.life</a>
+      <a href="{{ url_for('main.account') }}" class="menu-link">account</a>
+      <a href="{{ url_for('main.what_is_index') }}" class="menu-link">what is index.life?</a>
+    </nav>
+  </header>
+  <div class="center-account-block">
+    <h2>Account info</h2>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="flash-message {{ category }}" style="margin-bottom: 20px; padding: 10px; border-radius: 4px; background: {% if category == 'success' %}#d4edda{% elif category == 'error' %}#f8d7da{% else %}#d1ecf1{% endif %};">
+            {{ message }}
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <div style="font-size:18px;margin-bottom:24px;">Name: {{ profile.username }}</div>
+    {% if profile.avg_rating > 0 %}
+      <div style="margin-bottom:18px;font-size:17px;">
+        Avg Mood Index: {{ profile.avg_rating }}
+      </div>
+    {% endif %}
+    <div style="margin-bottom:18px;font-size:17px;">
+      Total Entries: {{ profile.total_entries }}
+    </div>
+
+    {% if profile.photo_filename %}
+      <div style="margin-bottom:24px;">
+        <img src="{{ url_for('static', filename='profile_photos/' ~ profile.photo_filename) }}" alt="Profile photo" style="max-width:200px;max-height:200px;object-fit:cover;border-radius:8px;">
+      </div>
+    {% else %}
+      <div style="margin-bottom:24px;">
+        <span style="color:#888;">no photo</span>
+      </div>
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data" style="margin-bottom:24px;">
+      <div style="margin-bottom:16px;">
+        <label style="display:block;margin-bottom:8px;">Username:</label>
+        <input type="text" name="username" value="{{ profile.username }}" class="text-input" style="width:100%;max-width:300px;padding:8px;font-size:16px;">
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <label style="display:block;margin-bottom:8px;">Email (optional):</label>
+        <input type="email" name="email" value="{{ profile.email or '' }}" class="text-input" style="width:100%;max-width:300px;padding:8px;font-size:16px;">
+      </div>
+
+      <div class="file-input-container" style="margin-bottom:16px;">
+        <label class="input-file-label">
+          Choose photo
+          <input type="file" name="photo" class="input-file" accept="image/*" onchange="updateFileName(this)">
+        </label>
+        <span id="file-name" class="selected-file">The File is not selected</span>
+      </div>
+
+      <button class="account-btn" type="submit">Save changes</button>
+    </form>
+
+    <script>
+      function updateFileName(input) {
+        const fileName = input.files.length ? input.files[0].name : 'The File is not selected';
+        document.getElementById('file-name').textContent = fileName;
+      }
+    </script>
+  </div>
+  <footer class="main-footer">Copyright 2025 Émile Alexanyan</footer>
+</body>
+</html>

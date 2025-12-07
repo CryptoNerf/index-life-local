@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>calendar {{ year }}</title>
+  <meta property="og:title" content="index.life" />
+  <meta property="og:description" content="mood book" />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="{{ url_for('static', filename='images/android-chrome-512x512.png', _external=True) }}" />
+  <!-- Основные favicon -->
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
+  <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='images/favicon-16x16.png') }}">
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='images/favicon-32x32.png') }}">
+
+  <!-- iOS Safari (для добавления на рабочий стол iPhone) -->
+  <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='images/apple-touch-icon.png') }}">
+
+  <!-- Android Chrome -->
+  <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='images/android-chrome-192x192.png') }}">
+  <link rel="icon" type="image/png" sizes="512x512" href="{{ url_for('static', filename='images/android-chrome-512x512.png') }}">
+
+  <!-- Web App Manifest (для PWA функций) -->
+  <link rel="manifest" href="{{ url_for('static', filename='images/site.webmanifest') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/calendar.css') }}">
+</head>
+<body>
+  <header class="main-header">
+    <nav class="top-menu">
+      <a href="{{ url_for('main.mood_grid') }}" class="menu-link">index.life</a>
+      <a href="{{ url_for('main.account') }}" class="menu-link">account</a>
+      <a href="{{ url_for('main.what_is_index') }}" class="menu-link">what is index.life?</a>
+    </nav>
+  </header>
+  <p class="calendar-title" style="font-weight: normal;">calendar<sup>{{ year }}</sup></p>
+  <main>
+    <div class="calendar-grid">
+      {% for month in months %}
+        <div class="month-block">
+          <div class="month-grid">
+            {% for day in month.days %}
+              <a href="{{ url_for('main.edit_day', day=day.date.strftime('%Y-%m-%d')) }}"
+                 class="cube{% if day.filled %} filled{% endif %}{% if day.date == today %} today{% endif %}"
+                 title="{{ day.date.strftime('%Y-%m-%d') }}"></a>
+            {% endfor %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </main>
+  <footer class="main-footer">Copyright 2025 Émile Alexanyan</footer>
+</body>
+</html>

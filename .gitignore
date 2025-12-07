@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Database
+diary.db
+*.db
+*.sqlite
+*.sqlite3
+
+# PyInstaller
+*.spec.lock
+build/
+dist/
+
+# User uploads
+app/static/profile_photos/*
+!app/static/profile_photos/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Export/Import files
+diary_export.json
+*.json.bak
+
+# Logs
+*.log
+
+# Environment variables
+.env
+.env.local

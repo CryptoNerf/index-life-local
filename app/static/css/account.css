@@ -1,0 +1,148 @@
+header {
+  width: 100%;
+  top: 0;
+  left: 0;
+}
+.top-menu {
+  display: flex;
+  gap: 24px;
+  font-size: 20px;
+  margin-top: 60px;
+  margin-left: 70px;
+}
+
+/* Мобильные устройства (до 768px) */
+@media (max-width: 768px) {
+  .top-menu {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    margin-left: 0;
+    margin-top: 30px;
+    gap: 24px;
+    padding: 0 20px;
+  }
+}
+
+/* Очень маленькие экраны (до 480px) */
+@media (max-width: 480px) {
+  .top-menu {
+    margin-top: 20px;
+    gap: 24px;
+    padding: 0 15px;
+  }
+}
+
+.menu-link {
+  color: #222;
+  text-decoration: none;
+  font-family: inherit;
+  transition: color 0.2s;
+}
+.menu-link:hover {
+  color: #000;
+  text-decoration: underline;
+}
+/* Make header fixed and add top padding to body */
+.main-header {
+  top: 0;
+  left: 0;
+  width: 100%;
+}
+body {
+  font-family: 'Times New Roman', Times, serif;
+  background: #fff;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+
+}
+/* ========== Footer ========== */
+.main-footer {
+  width: 100%;
+  margin: 20px 0 0 0;
+  text-align: center;
+  color: #222;
+  font-size: 16px;
+  background: #fff;
+  padding: 10px 0;
+  flex-shrink: 0;
+}
+
+/* Полностью скрываем стандартный input file */
+.input-file {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+/* Стилизуем label как кнопку (копируем стиль save-btn) */
+.input-file-label {
+  display: inline-block;
+  padding: 8px;
+  background: #000;
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  font-family: inherit;
+  text-decoration: none;
+  transition: background-color 0.3s ease;
+  margin-right: 12px;
+  user-select: none;
+}
+
+.input-file-label:hover {
+  background: #333;
+}
+
+.input-file-label:active {
+  transform: translateY(1px);
+}
+
+/* Стили для текста с названием файла */
+.selected-file {
+  color: #666;
+  font-size: 14px;
+  margin-left: 8px;
+}
+
+/* Контейнер для файлового инпута */
+.file-input-container {
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.center-account-block {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+
+@media (max-width: 600px) {
+  .main-footer {
+    bottom: 8px;
+  }
+}
+
+/* Unified button style for all account page buttons */
+.account-btn {
+  background: #000000;
+  color: #fff;
+  border: none;
+  padding: 8px 20px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
