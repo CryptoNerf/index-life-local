@@ -28,12 +28,16 @@ def index():
 
 
 @bp.route('/calendar')
+@bp.route('/calendar/<int:year>')
 @bp.route('/mood_grid')
-def mood_grid():
-    """Display calendar grid with all mood entries for current year"""
-    year = date.today().year
+@bp.route('/mood_grid/<int:year>')
+def mood_grid(year=None):
+    """Display calendar grid with all mood entries for specified year"""
+    # If no year specified, use current year
+    if year is None:
+        year = date.today().year
 
-    # Get all entries for current year
+    # Get all entries for specified year
     entries = MoodEntry.query.filter(
         db.extract('year', MoodEntry.date) == year
     ).all()
@@ -58,8 +62,25 @@ def mood_grid():
             'days': days
         })
 
+    # Get all available years for navigation
+    all_years = db.session.query(
+        db.extract('year', MoodEntry.date).label('year')
+    ).distinct().order_by(db.text('year DESC')).all()
+    available_years = [int(y.year) for y in all_years]
+
+    # Add current year if not in list
+    current_year = date.today().year
+    if current_year not in available_years:
+        available_years.insert(0, current_year)
+        available_years.sort(reverse=True)
+
     today = date.today()
-    return render_template('mood_grid.html', months=months, today=today, year=year)
+    return render_template('mood_grid.html',
+                         months=months,
+                         today=today,
+                         year=year,
+                         available_years=available_years,
+                         current_year=current_year)
 
 
 @bp.route('/day/<string:day>', methods=['GET', 'POST'])
@@ -109,7 +130,8 @@ def edit_day(day):
     return render_template('edit_day.html',
                          day=day_date,
                          entry=entry,
-                         is_new=is_new)
+                         is_new=is_new,
+                         current_year=date.today().year)
 
 
 @bp.route('/account', methods=['GET', 'POST'])
@@ -122,6 +144,20 @@ def account():
         profile = UserProfile(username='User', email='')
         db.session.add(profile)
         db.session.commit()
+
+    # Get all years with entries for archive
+    all_years = db.session.query(
+        db.extract('year', MoodEntry.date).label('year')
+    ).distinct().order_by(db.text('year DESC')).all()
+    archive_years = [int(y.year) for y in all_years]
+
+    # Get entry count for each year
+    year_stats = {}
+    for year in archive_years:
+        count = MoodEntry.query.filter(
+            db.extract('year', MoodEntry.date) == year
+        ).count()
+        year_stats[year] = count
 
     if request.method == 'POST':
         # Update profile information
@@ -160,13 +196,18 @@ def account():
             db.session.rollback()
             flash(f'Error updating profile: {e}', 'error')
 
-    return render_template('account.html', profile=profile)
+    return render_template('account.html',
+                         profile=profile,
+                         archive_years=archive_years,
+                         year_stats=year_stats,
+                         current_year=date.today().year)
 
 
 @bp.route('/what_is_index')
 def what_is_index():
     """Information page about the application"""
-    return render_template('what_is_index.html')
+    return render_template('what_is_index.html',
+                         current_year=date.today().year)
 
 
 @bp.route('/stats')

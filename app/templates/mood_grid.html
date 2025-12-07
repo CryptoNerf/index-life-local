@@ -32,7 +32,60 @@
       <a href="{{ url_for('main.what_is_index') }}" class="menu-link">what is index.life?</a>
     </nav>
   </header>
-  <p class="calendar-title" style="font-weight: normal;">calendar<sup>{{ year }}</sup></p>
+  <div style="text-align: center; margin: 20px 0;">
+    <p class="calendar-title" style="font-weight: normal; margin-bottom: 16px;">
+      calendar<sup>{{ year }}</sup>
+      {% if year != current_year %}
+        <span style="font-size: 16px; color: #888; margin-left: 10px;">(archive)</span>
+      {% endif %}
+    </p>
+
+    <!-- Year Navigation -->
+    {% if available_years|length > 1 %}
+      <div style="display: flex; justify-content: center; align-items: center; gap: 8px; margin-bottom: 20px;">
+        {% set year_index = available_years.index(year) %}
+
+        <!-- Previous year button -->
+        {% if year_index < available_years|length - 1 %}
+          <a href="{{ url_for('main.mood_grid', year=available_years[year_index + 1]) }}"
+             style="padding: 8px 16px; background: #f0f0f0; border-radius: 6px; text-decoration: none; color: #333; font-size: 14px; transition: all 0.2s;"
+             onmouseover="this.style.background='#e0e0e0'"
+             onmouseout="this.style.background='#f0f0f0'">
+            ← {{ available_years[year_index + 1] }}
+          </a>
+        {% else %}
+          <span style="padding: 8px 16px; background: #f8f8f8; border-radius: 6px; color: #ccc; font-size: 14px;">
+            ← older
+          </span>
+        {% endif %}
+
+        <!-- Year selector dropdown -->
+        <select onchange="window.location.href='{{ url_for('main.mood_grid', year=0) }}'.replace('/0', '/' + this.value)"
+                style="padding: 8px 12px; font-size: 14px; border: 1px solid #ddd; border-radius: 6px; background: white; cursor: pointer;">
+          {% for y in available_years %}
+            <option value="{{ y }}" {% if y == year %}selected{% endif %}>
+              {{ y }}{% if y == current_year %} (current){% endif %}
+            </option>
+          {% endfor %}
+        </select>
+
+        <!-- Next year button -->
+        {% if year_index > 0 %}
+          <a href="{{ url_for('main.mood_grid', year=available_years[year_index - 1]) }}"
+             style="padding: 8px 16px; background: #f0f0f0; border-radius: 6px; text-decoration: none; color: #333; font-size: 14px; transition: all 0.2s;"
+             onmouseover="this.style.background='#e0e0e0'"
+             onmouseout="this.style.background='#f0f0f0'">
+            {{ available_years[year_index - 1] }} →
+          </a>
+        {% else %}
+          <span style="padding: 8px 16px; background: #f8f8f8; border-radius: 6px; color: #ccc; font-size: 14px;">
+            newer →
+          </span>
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+
   <main>
     <div class="calendar-grid">
       {% for month in months %}
@@ -48,6 +101,6 @@
       {% endfor %}
     </div>
   </main>
-  <footer class="main-footer">Copyright 2025 Émile Alexanyan</footer>
+  <footer class="main-footer">Copyright {{ current_year }} Émile Alexanyan</footer>
 </body>
 </html>

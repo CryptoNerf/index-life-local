@@ -1,5 +1,7 @@
 # index.life - Local Mood Diary
 
+> **English version** | [🇷🇺 Русская версия](README.ru.md)
+
 A private, offline mood tracking application that runs entirely on your computer.
 
 ![Version](https://img.shields.io/badge/version-2.0.0--local-blue)
@@ -20,7 +22,9 @@ A private, offline mood tracking application that runs entirely on your computer
 
 ### Windows
 
-1. Double-click `install.bat`
+1. Double-click `install.bat` (first time)
+   - ✨ If Python is not installed, the script will offer to install it automatically!
+   - Just agree, wait a few minutes, and run it again
 2. Double-click `start.bat`
 3. Browser opens automatically at `http://localhost:5000`
 
@@ -28,17 +32,26 @@ A private, offline mood tracking application that runs entirely on your computer
 
 ```bash
 chmod +x install.sh start.sh
-./install.sh
-./start.sh
+./install.sh  # First run (Python will install automatically if needed)
+./start.sh    # Subsequent runs
 ```
 
 That's it! 🎉
 
+> 💡 **Automatic Python Installation**:
+> - **Windows**: `install.bat` installs Python automatically
+> - **Linux/Mac**: `install.sh` installs Python via your package manager (apt, dnf, pacman, or brew)
+> - Just agree when prompted and enter your sudo password if requested
+
 ## Manual Installation
+
+> ⚠️ **Usually not needed!** Automatic installation scripts work on all platforms.
+
+If automatic scripts don't work for some reason:
 
 ### Requirements
 
-- Python 3.8 or higher
+- Python 3.8 or higher (installation scripts install automatically)
 - pip (Python package manager)
 
 ### Installation Steps
@@ -173,6 +186,9 @@ pyinstaller build.spec
 The executable will be in `dist/index-life/`
 
 ## FAQ
+
+**Q: Do I need to install Python before running?**
+A: No! Just run the installation script (`install.bat` for Windows or `install.sh` for Linux/Mac) - it will automatically install Python if it's not present. On Linux/Mac you may need to enter your sudo password. No additional steps needed!
 
 **Q: Where is my data stored?**
 A: In `diary.db` SQLite database file in the application directory.
