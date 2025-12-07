@@ -88,6 +88,24 @@
       <button class="account-btn" type="submit">Save changes</button>
     </form>
 
+    <!-- Export Section -->
+    <div style="margin-top: 40px; padding-top: 24px; border-top: 1px solid #e0e0e0;">
+      <h2 style="margin-bottom: 20px;">Export</h2>
+      <div style="margin-bottom: 16px; color: #666; font-size: 15px;">
+        Download all your diary entries
+      </div>
+
+      <a href="{{ url_for('main.export_markdown') }}"
+         class="account-btn"
+         style="display: inline-block; text-decoration: none;">
+         Export to Markdown
+      </a>
+
+      <div style="margin-top: 12px; font-size: 13px; color: #888;">
+        Downloads a .md file with all your entries, organized by year and month
+      </div>
+    </div>
+
     <!-- Archive Section -->
     {% if archive_years %}
       <div style="margin-top: 40px; padding-top: 24px; border-top: 1px solid #e0e0e0;">
@@ -112,7 +130,6 @@
         </div>
       </div>
     {% endif %}
-
     <script>
       function updateFileName(input) {
         const fileName = input.files.length ? input.files[0].name : 'The File is not selected';

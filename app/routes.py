@@ -2,7 +2,7 @@
 Routes for local diary application
 Single-user version (no authentication)
 """
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, make_response
 from datetime import datetime, date
 import calendar
 from werkzeug.utils import secure_filename
@@ -237,3 +237,76 @@ def stats():
                          avg_rating=avg_rating,
                          monthly_stats=monthly_stats,
                          year=year)
+
+
+@bp.route('/export/markdown')
+def export_markdown():
+    """Export all diary entries to Markdown format"""
+    # Get user profile
+    profile = UserProfile.query.first()
+    username = profile.username if profile else 'User'
+
+    # Get all entries sorted by date (newest first)
+    entries = MoodEntry.query.order_by(MoodEntry.date.desc()).all()
+
+    if not entries:
+        flash('No entries to export', 'error')
+        return redirect(url_for('main.account'))
+
+    # Build Markdown content
+    markdown_lines = []
+    markdown_lines.append(f"# {username}'s Mood Diary")
+    markdown_lines.append("")
+    markdown_lines.append(f"**Total Entries:** {len(entries)}")
+    if profile:
+        markdown_lines.append(f"**Average Mood:** {profile.avg_rating}/10")
+    markdown_lines.append(f"**Exported:** {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    markdown_lines.append("")
+    markdown_lines.append("---")
+    markdown_lines.append("")
+
+    # Group entries by year and month
+    current_year = None
+    current_month = None
+
+    for entry in entries:
+        entry_year = entry.date.year
+        entry_month = entry.date.month
+
+        # Add year header if changed
+        if entry_year != current_year:
+            markdown_lines.append("")
+            markdown_lines.append(f"## {entry_year}")
+            markdown_lines.append("")
+            current_year = entry_year
+            current_month = None
+
+        # Add month header if changed
+        if entry_month != current_month:
+            month_name = calendar.month_name[entry_month]
+            markdown_lines.append(f"### {month_name}")
+            markdown_lines.append("")
+            current_month = entry_month
+
+        # Add entry
+        day_str = entry.date.strftime('%Y-%m-%d, %A')
+        markdown_lines.append(f"#### {day_str}")
+        markdown_lines.append("")
+        markdown_lines.append(f"**Mood Rating:** {entry.rating}/10")
+        markdown_lines.append("")
+
+        if entry.note and entry.note.strip():
+            markdown_lines.append(entry.note.strip())
+            markdown_lines.append("")
+
+        markdown_lines.append("---")
+        markdown_lines.append("")
+
+    # Create response with file download
+    markdown_content = '\n'.join(markdown_lines)
+
+    response = make_response(markdown_content)
+    response.headers['Content-Type'] = 'text/markdown; charset=utf-8'
+    response.headers['Content-Disposition'] = f'attachment; filename=mood_diary_{datetime.now().strftime("%Y%m%d_%H%M%S")}.md'
+
+    return response
