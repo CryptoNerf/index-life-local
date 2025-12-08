@@ -118,7 +118,7 @@
           {% for year in archive_years %}
             <a href="{{ url_for('main.mood_grid', year=year) }}"
                class="archive-year-link"
-               style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; text-decoration: none; color: #333; border: {% if year == current_year %}1px solid #000000ff{% else %}1px solid #ffffffff{% endif %};">
+               style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; margin-bottom: 30px; text-decoration: none; color: #333; border: {% if year == current_year %}1px solid #000000ff{% else %}1px solid #ffffffff{% endif %};">
               <span style="font-size: 18px; font-weight: {% if year == current_year %}600{% else %}400{% endif %};">
                 {{ year }}{% if year == current_year %} <span style="font-size: 14px; color: #4a90e2;">(current)</span>{% endif %}
               </span>
@@ -137,6 +137,5 @@
       }
     </script>
   </div>
-  <footer class="main-footer">Copyright {{ current_year }} Émile Alexanyan</footer>
 </body>
 </html>
