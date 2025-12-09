@@ -1,0 +1,230 @@
+name: Build Multi-Platform Releases
+
+on:
+  release:
+    types: [created]
+  workflow_dispatch:  # Позволяет запускать вручную
+
+jobs:
+  build-windows:
+    name: Build Windows .exe
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build Windows executable
+        run: |
+          python -m PyInstaller build.spec --clean
+
+      - name: Create zip archive
+        run: |
+          Compress-Archive -Path dist\index-life\* -DestinationPath index-life_windows_x64.zip
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: index-life_windows_x64.zip
+
+      - name: Upload to Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: index-life_windows_x64.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-macos:
+    name: Build macOS .app
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          pip3 install -r requirements.txt
+          pip3 install pyinstaller
+
+      - name: Build macOS .app bundle
+        run: |
+          python3 -m PyInstaller build_macos.spec --clean
+
+      - name: Install create-dmg
+        run: brew install create-dmg
+
+      - name: Create DMG image
+        run: |
+          # Создаём DMG образ
+          create-dmg \
+            --volname "index.life" \
+            --window-pos 200 120 \
+            --window-size 600 400 \
+            --icon-size 100 \
+            --icon "index.life.app" 175 190 \
+            --hide-extension "index.life.app" \
+            --app-drop-link 425 190 \
+            --no-internet-enable \
+            "index-life_macos.dmg" \
+            "dist/"
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-build
+          path: index-life_macos.dmg
+
+      - name: Upload to Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: index-life_macos.dmg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-linux:
+    name: Build Linux AppImage
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libfuse2 file
+
+      - name: Install Python dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          pip3 install -r requirements.txt
+          pip3 install pyinstaller
+
+      - name: Build Linux executable
+        run: |
+          python3 -m PyInstaller build.spec --clean
+
+      - name: Download appimagetool
+        run: |
+          wget https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool-x86_64.AppImage
+
+      - name: Create AppImage structure
+        run: |
+          # Создаём структуру AppDir
+          mkdir -p index-life.AppDir/usr/bin
+          cp -r dist/index-life/* index-life.AppDir/usr/bin/
+
+          # Создаём .desktop файл
+          cat > index-life.AppDir/index-life.desktop << 'EOF'
+          [Desktop Entry]
+          Name=index.life
+          Exec=index-life
+          Icon=index-life
+          Type=Application
+          Categories=Utility;
+          Comment=Private mood tracking diary
+          Terminal=false
+          EOF
+
+          # Копируем иконку (если есть)
+          mkdir -p index-life.AppDir/usr/share/icons/hicolor/256x256/apps
+          if [ -f app/static/images/icon.png ]; then
+            cp app/static/images/icon.png index-life.AppDir/usr/share/icons/hicolor/256x256/apps/index-life.png
+            cp app/static/images/icon.png index-life.AppDir/index-life.png
+          fi
+
+          # Создаём AppRun скрипт
+          cat > index-life.AppDir/AppRun << 'EOF'
+          #!/bin/bash
+          SELF=$(readlink -f "$0")
+          HERE=${SELF%/*}
+          export PATH="${HERE}/usr/bin/:${PATH}"
+          export LD_LIBRARY_PATH="${HERE}/usr/lib:${LD_LIBRARY_PATH}"
+          cd "${HERE}/usr/bin"
+          exec "${HERE}/usr/bin/index-life" "$@"
+          EOF
+          chmod +x index-life.AppDir/AppRun
+
+      - name: Build AppImage
+        run: |
+          ./appimagetool-x86_64.AppImage index-life.AppDir index-life_linux_x86_64.AppImage
+
+      - name: Make AppImage executable
+        run: chmod +x index-life_linux_x86_64.AppImage
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-build
+          path: index-life_linux_x86_64.AppImage
+
+      - name: Upload to Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: index-life_linux_x86_64.AppImage
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  create-release-notes:
+    name: Update Release Notes
+    runs-on: ubuntu-latest
+    needs: [build-windows, build-macos, build-linux]
+    if: github.event_name == 'release'
+
+    steps:
+      - name: Update Release Description
+        uses: softprops/action-gh-release@v1
+        with:
+          append_body: true
+          body: |
+
+            ---
+
+            ## 📦 Downloads
+
+            ### 🪟 Windows
+            Download `index-life_windows_x64.zip`, unzip and run `index-life.exe`
+
+            ### 🍎 macOS
+            Download `index-life_macos.dmg`, open it and drag to Applications
+
+            ### 🐧 Linux
+            Download `index-life_linux_x86_64.AppImage`, make executable and run:
+            ```bash
+            chmod +x index-life_linux_x86_64.AppImage
+            ./index-life_linux_x86_64.AppImage
+            ```
+
+            ---
+
+            🤖 *Built automatically with GitHub Actions*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

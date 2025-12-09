@@ -64,4 +64,11 @@ import_data.py
 CHANGELOG.md
 GITHUB_SETUP.md
 RELEASE_INSTRUCTIONS.md
-build.spec
+CODE_SIGNING_GUIDE.md
+BUILDING_FOR_MACOS.md
+GITHUB_ACTIONS_GUIDE.md
+
+# Icon generation scripts (developer tools)
+create_icons.py
+create_icns.py
+icon.iconset/

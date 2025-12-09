@@ -9,6 +9,62 @@ A private, offline mood tracking application that runs entirely on your computer
 ![Flask](https://img.shields.io/badge/flask-3.0.0-lightgrey)
 ![License](https://img.shields.io/badge/license-MIT-yellow)
 
+---
+
+## 📥 Download Pre-built Version
+
+### 🪟 Windows (No Python Installation Required)
+[⬇️ Download index.life v2.0.0 for Windows](https://github.com/CryptoNerf/index-life-local/releases/latest/download/index-life_v2.0.0_windows_x64.zip)
+
+Just unzip and run `index-life.exe`
+
+### 🍎 macOS / 🐧 Linux
+
+For macOS and Linux, use the installation script (Python will be installed automatically):
+
+```bash
+# Download the script
+curl -O https://raw.githubusercontent.com/CryptoNerf/index-life-local/main/install.sh
+chmod +x install.sh
+
+# Install and run
+./install.sh  # First time (auto-installs Python if needed)
+./start.sh    # Subsequent runs
+```
+
+> 💡 The script auto-detects your system (macOS, Ubuntu, Fedora, Arch) and installs Python automatically!
+
+> ⚠️ **Windows may show "Unrecognized Publisher" warning**
+>
+> This is normal! Windows protects against unknown software. To run:
+>
+> 1. Click **"More info"**
+> 2. Click **"Run anyway"**
+>
+> **Why does this happen?**
+> - The app doesn't have a paid digital signature ($300/year)
+> - This is an Open Source project, code can be verified on GitHub
+> - Your data is 100% safe and stored only on your computer
+>
+> <details>
+> <summary>📸 Screenshots: How to allow execution</summary>
+>
+> **Step 1:** Windows will show this window
+> ```
+> Windows protected your PC
+> Running this app might put your PC at risk
+> [Don't run]
+> ```
+>
+> **Step 2:** Click **"More info"**
+>
+> **Step 3:** Click **"Run anyway"**
+>
+> **Done!** The app will start normally
+> </details>
+
+---
+
 ## Features
 
 - 📅 **Calendar View** - Visual heatmap-inspired calendar showing all your mood entries
