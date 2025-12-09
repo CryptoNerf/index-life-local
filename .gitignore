@@ -42,9 +42,21 @@ Thumbs.db
 diary_export.json
 *.json.bak
 
+# Migration scripts (from Django version)
+convert_django_dump.py
+import_data.py
+
 # Logs
 *.log
 
 # Environment variables
 .env
 .env.local
+
+# Claude Code settings
+.claude/
+
+# Developer documentation (not needed for end users)
+CHANGELOG.md
+GITHUB_SETUP.md
+build.spec
