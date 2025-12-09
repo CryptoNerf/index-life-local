@@ -18,10 +18,14 @@ diary.db
 *.sqlite
 *.sqlite3
 
-# PyInstaller
+# PyInstaller build artifacts
 *.spec.lock
 build/
 dist/
+
+# Executable folder (will be distributed via GitHub Releases)
+index-life_exe/
+*.zip
 
 # User uploads
 app/static/profile_photos/*
@@ -59,4 +63,5 @@ import_data.py
 # Developer documentation (not needed for end users)
 CHANGELOG.md
 GITHUB_SETUP.md
+RELEASE_INSTRUCTIONS.md
 build.spec
