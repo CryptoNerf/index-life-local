@@ -10,6 +10,12 @@
 ![License](https://img.shields.io/badge/license-MIT-yellow)
 
 ---
+## 📥 Скачать готовую версию
+
+### Windows (не требует установки Python)
+[⬇️ Скачать index.life v2.0.0 для Windows](https://github.com/CryptoNerf/index-life-local/releases/latest/download/index-life_v2.0.0_windows_x64.zip)
+
+Просто распакуйте и запустите `index-life.exe`
 
 ## 🚀 Быстрый старт (3 секунды)
 
