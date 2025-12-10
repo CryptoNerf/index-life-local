@@ -5,6 +5,9 @@ on:
     types: [created]
   workflow_dispatch:  # Позволяет запускать вручную
 
+permissions:
+  contents: write  # Required for uploading release assets
+
 jobs:
   build-windows:
     name: Build Windows .exe
@@ -174,7 +177,7 @@ jobs:
 
       - name: Build AppImage
         run: |
-          ./appimagetool-x86_64.AppImage index-life.AppDir index-life_linux_x86_64.AppImage
+          ARCH=x86_64 ./appimagetool-x86_64.AppImage --appimage-extract-and-run index-life.AppDir index-life_linux_x86_64.AppImage
 
       - name: Make AppImage executable
         run: chmod +x index-life_linux_x86_64.AppImage
