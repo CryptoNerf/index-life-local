@@ -67,8 +67,12 @@ RELEASE_INSTRUCTIONS.md
 CODE_SIGNING_GUIDE.md
 BUILDING_FOR_MACOS.md
 GITHUB_ACTIONS_GUIDE.md
+RELEASE_TEMPLATE.md
+RELEASE_TEMPLATE_RU.md
 
 # Icon generation scripts (developer tools)
 create_icons.py
 create_icns.py
 icon.iconset/
+HOW_TO_CREATE_RELEASE.md
+QUICK_RELEASE_GUIDE.txt

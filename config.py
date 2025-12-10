@@ -24,7 +24,7 @@ class Config:
 
     # Application settings
     APP_NAME = 'index.life'
-    APP_VERSION = '2.0.0-local'
+    APP_VERSION = '2.1.0'
 
     # Auto-open browser on startup
     AUTO_OPEN_BROWSER = True
