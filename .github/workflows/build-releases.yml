@@ -144,6 +144,10 @@ jobs:
           mkdir -p index-life.AppDir/usr/bin
           cp -r dist/index-life/* index-life.AppDir/usr/bin/
 
+          # Копируем иконку
+          cp app/static/images/icon.png index-life.AppDir/index-life.png
+          cp app/static/images/icon.png index-life.AppDir/.DirIcon
+
           # Создаём .desktop файл
           cat > index-life.AppDir/index-life.desktop << 'EOF'
           [Desktop Entry]
@@ -155,13 +159,6 @@ jobs:
           Comment=Private mood tracking diary
           Terminal=false
           EOF
-
-          # Копируем иконку (если есть)
-          mkdir -p index-life.AppDir/usr/share/icons/hicolor/256x256/apps
-          if [ -f app/static/images/icon.png ]; then
-            cp app/static/images/icon.png index-life.AppDir/usr/share/icons/hicolor/256x256/apps/index-life.png
-            cp app/static/images/icon.png index-life.AppDir/index-life.png
-          fi
 
           # Создаём AppRun скрипт
           cat > index-life.AppDir/AppRun << 'EOF'
@@ -175,12 +172,29 @@ jobs:
           EOF
           chmod +x index-life.AppDir/AppRun
 
+          # Проверяем структуру
+          ls -la index-life.AppDir/
+          ls -la index-life.AppDir/usr/bin/
+
       - name: Build AppImage
         run: |
-          ARCH=x86_64 ./appimagetool-x86_64.AppImage --appimage-extract-and-run index-life.AppDir index-life_linux_x86_64.AppImage
+          # Запускаем с verbose выводом
+          ARCH=x86_64 ./appimagetool-x86_64.AppImage --appimage-extract-and-run --verbose index-life.AppDir index-life_linux_x86_64.AppImage || {
+            echo "AppImage build failed, trying without FUSE..."
+            ./appimagetool-x86_64.AppImage --appimage-extract
+            ./squashfs-root/AppRun index-life.AppDir index-life_linux_x86_64.AppImage
+          }
 
-      - name: Make AppImage executable
-        run: chmod +x index-life_linux_x86_64.AppImage
+      - name: Verify and prepare AppImage
+        run: |
+          if [ -f index-life_linux_x86_64.AppImage ]; then
+            chmod +x index-life_linux_x86_64.AppImage
+            ls -lh index-life_linux_x86_64.AppImage
+            echo "✅ AppImage created successfully!"
+          else
+            echo "❌ AppImage file not found!"
+            exit 1
+          fi
 
       - name: Upload Linux artifact
         uses: actions/upload-artifact@v4
