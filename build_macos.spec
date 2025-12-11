@@ -52,12 +52,13 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=False,  # No console window on macOS
+    console=True,  # Terminal is needed for Flask server
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon='app/static/images/icon.icns',  # macOS icon for executable
 )
 
 coll = COLLECT(
@@ -84,7 +85,9 @@ app = BUNDLE(
         'CFBundleDisplayName': 'index.life',
         'CFBundleVersion': '2.1.0',
         'CFBundleShortVersionString': '2.1.0',
+        'CFBundleIconFile': 'icon.icns',
         'NSHighResolutionCapable': True,
         'LSBackgroundOnly': False,
+        'LSUIElement': False,
     },
 )

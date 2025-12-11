@@ -26,21 +26,14 @@ Download the ready-to-use version for your operating system from [Releases](http
 
 **macOS:**
 1. Download `index-life_macos.dmg`
-2. Open the DMG file
-3. Drag the application to your Applications folder
-4. **Important!** On first launch, macOS will block the app. Do one of the following:
-
-   **Method 1 (easier):**
-   - Find index.life in Applications
-   - **Right-click** on the app → **Open**
-   - In the dialog that appears, click **"Open"**
-
-   **Method 2 (via Terminal):**
+2. Open the DMG file and drag the application to your Applications folder
+3. **Important!** macOS blocks unsigned apps. Open Terminal and run:
    ```bash
    xattr -d com.apple.quarantine /Applications/index.life.app
    ```
+4. Now launch index.life from Applications
 
-   After this, the app will launch normally.
+> The app will open a Terminal window (this is normal - the Flask server runs there). Your browser will open automatically.
 
 **Linux:**
 1. Download `index-life_linux_x86_64.AppImage`
