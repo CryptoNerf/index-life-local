@@ -21,6 +21,7 @@ a = Analysis(
         ('app/templates', 'app/templates'),
         ('app/static', 'app/static'),
         ('config.py', '.'),
+        ('app/static/images/icon.icns', '.'),  # Include icon for macOS bundle
     ],
     hiddenimports=[
         'flask',
@@ -58,7 +59,6 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='app/static/images/icon.icns',  # macOS icon for executable
 )
 
 coll = COLLECT(
