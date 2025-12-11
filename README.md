@@ -4,179 +4,75 @@
 
 A private, offline mood tracking application that runs entirely on your computer.
 
-![Version](https://img.shields.io/badge/version-2.0.0--local-blue)
+![Version](https://img.shields.io/badge/version-2.1.0-blue)
 ![Python](https://img.shields.io/badge/python-3.8+-green)
 ![Flask](https://img.shields.io/badge/flask-3.0.0-lightgrey)
 ![License](https://img.shields.io/badge/license-MIT-yellow)
 
 ---
 
-## 📥 Download Pre-built Version
+## Installation
 
-### 🪟 Windows (No Python Installation Required)
-[⬇️ Download index.life v2.0.0 for Windows](https://github.com/CryptoNerf/index-life-local/releases/latest/download/index-life_v2.0.0_windows_x64.zip)
+### Option 1: Pre-built Releases (Recommended)
 
-Just unzip and run `index-life.exe`
+Download the ready-to-use version for your operating system from [Releases](https://github.com/CryptoNerf/index-life-local/releases/latest):
 
-### 🍎 macOS / 🐧 Linux
+**Windows:**
+1. Download `index-life_windows_x64.zip`
+2. Unzip the archive
+3. Run `index-life.exe`
 
-For macOS and Linux, use the installation script (Python will be installed automatically):
+> On first launch, Windows may show an "Unrecognized Publisher" warning. This is normal for applications without a paid digital signature. Click "More info" → "Run anyway".
 
+**macOS:**
+1. Download `index-life_macos.dmg`
+2. Open the DMG file
+3. Drag the application to your Applications folder
+4. Launch index.life
+
+**Linux:**
+1. Download `index-life_linux_x86_64.AppImage`
+2. Make the file executable:
+   ```bash
+   chmod +x index-life_linux_x86_64.AppImage
+   ```
+3. Run:
+   ```bash
+   ./index-life_linux_x86_64.AppImage
+   ```
+
+### Option 2: Installation via Scripts (From Source)
+
+If you want to run from source code:
+
+**Windows:**
 ```bash
-# Download the script
-curl -O https://raw.githubusercontent.com/CryptoNerf/index-life-local/main/install.sh
-chmod +x install.sh
+# Double-click install.bat (first time)
+# Double-click start.bat (subsequent runs)
+```
 
-# Install and run
-./install.sh  # First time (auto-installs Python if needed)
+**Linux/macOS:**
+```bash
+chmod +x install.sh start.sh
+./install.sh  # First run (installs Python if needed)
 ./start.sh    # Subsequent runs
 ```
 
-> 💡 The script auto-detects your system (macOS, Ubuntu, Fedora, Arch) and installs Python automatically!
-
-> ⚠️ **Windows may show "Unrecognized Publisher" warning**
->
-> This is normal! Windows protects against unknown software. To run:
->
-> 1. Click **"More info"**
-> 2. Click **"Run anyway"**
->
-> **Why does this happen?**
-> - The app doesn't have a paid digital signature ($300/year)
-> - This is an Open Source project, code can be verified on GitHub
-> - Your data is 100% safe and stored only on your computer
->
-> <details>
-> <summary>📸 Screenshots: How to allow execution</summary>
->
-> **Step 1:** Windows will show this window
-> ```
-> Windows protected your PC
-> Running this app might put your PC at risk
-> [Don't run]
-> ```
->
-> **Step 2:** Click **"More info"**
->
-> **Step 3:** Click **"Run anyway"**
->
-> **Done!** The app will start normally
-> </details>
+The scripts will automatically install Python and all dependencies if they're not present on your system.
 
 ---
 
 ## Features
 
-- 📅 **Calendar View** - Visual heatmap-inspired calendar showing all your mood entries
-- ✍️ **Daily Entries** - Rate your day (1-10) and add personal notes
-- 📊 **Statistics** - Track your average mood and total entries
-- 👤 **Profile** - Customize with your name, email, and photo
-- 🔒 **100% Private** - All data stored locally on your device (SQLite)
-- 🚀 **Easy to Use** - Simple web interface, no installation complexity
+- Calendar with visual heatmap of all your entries
+- Daily entries with mood rating (1-10) and notes
+- Statistics showing average mood and total entries
+- Profile with name, email, and photo
+- 100% privacy - all data stored locally (SQLite)
+- Works completely offline
+- Simple web interface
 
-## Quick Start
-
-### Windows
-
-1. Double-click `install.bat` (first time)
-   - ✨ If Python is not installed, the script will offer to install it automatically!
-   - Just agree, wait a few minutes, and run it again
-2. Double-click `start.bat`
-3. Browser opens automatically at `http://localhost:5000`
-
-### Linux/Mac
-
-```bash
-chmod +x install.sh start.sh
-./install.sh  # First run (Python will install automatically if needed)
-./start.sh    # Subsequent runs
-```
-
-That's it! 🎉
-
-> 💡 **Automatic Python Installation**:
-> - **Windows**: `install.bat` installs Python automatically
-> - **Linux/Mac**: `install.sh` installs Python via your package manager (apt, dnf, pacman, or brew)
-> - Just agree when prompted and enter your sudo password if requested
-
-## Manual Installation
-
-> ⚠️ **Usually not needed!** Automatic installation scripts work on all platforms.
-
-If automatic scripts don't work for some reason:
-
-### Requirements
-
-- Python 3.8 or higher (installation scripts install automatically)
-- pip (Python package manager)
-
-### Installation Steps
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/YOUR_USERNAME/index-life-local.git
-   cd index-life-local
-   ```
-
-2. **Create virtual environment** (optional but recommended)
-   ```bash
-   python -m venv venv
-
-   # Windows
-   venv\Scripts\activate
-
-   # Linux/Mac
-   source venv/bin/activate
-   ```
-
-3. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **Run the application**
-   ```bash
-   python run.py
-   ```
-
-5. **Open in browser**
-   Navigate to: `http://127.0.0.1:5000`
-
-## Usage
-
-### Adding Entries
-
-1. Click on any day in the calendar
-2. Select your mood rating (1-10) by clicking the cubes
-3. Add optional notes about your day
-4. Click "Save"
-
-### Viewing Statistics
-
-Go to **Account** page to see:
-- Your average mood rating
-- Total number of entries
-- Upload a profile photo
-
-### Backing Up Data
-
-Your data is stored in `diary.db`. To backup:
-
-```bash
-# Windows
-copy diary.db backups\diary_backup_%date%.db
-
-# Linux/Mac
-cp diary.db backups/diary_backup_$(date +%Y%m%d).db
-```
-
-## Configuration
-
-Edit `config.py` to customize:
-
-- **PORT**: Change server port (default: 5000)
-- **AUTO_OPEN_BROWSER**: Auto-open browser on startup (default: True)
-- **MAX_CONTENT_LENGTH**: Max upload file size (default: 16MB)
+---
 
 ## Project Structure
 
@@ -187,10 +83,6 @@ index-life-local/
 │   ├── models.py            # Database models
 │   ├── routes.py            # Application routes
 │   ├── templates/           # HTML templates
-│   │   ├── mood_grid.html
-│   │   ├── edit_day.html
-│   │   ├── account.html
-│   │   └── what_is_index.html
 │   └── static/              # Static files (CSS, images)
 ├── config.py                # Configuration
 ├── run.py                   # Application entry point
@@ -200,6 +92,8 @@ index-life-local/
 └── diary.db                 # SQLite database (created on first run)
 ```
 
+---
+
 ## Technologies
 
 - **Backend**: Flask 3.0.0
@@ -207,76 +101,38 @@ index-life-local/
 - **Frontend**: HTML, CSS, Vanilla JavaScript
 - **Images**: Pillow (Python Imaging Library)
 
-## Migrating from Django Version
-
-If you're migrating from the Django/VPS version:
-
-1. Export your data using the provided `convert_django_dump.py` script
-2. Run `python import_data.py your_export.json`
-3. Your data will be imported into the local database
-
-See the migration scripts in the repository for details.
-
-## Development
-
-### Running in Debug Mode
-
-Edit `config.py`:
-
-```python
-DEBUG = True
-```
-
-Then run:
-
-```bash
-python run.py
-```
-
-### Building Standalone Executable
-
-```bash
-pyinstaller build.spec
-```
-
-The executable will be in `dist/index-life/`
+---
 
 ## FAQ
 
-**Q: Do I need to install Python before running?**
-A: No! Just run the installation script (`install.bat` for Windows or `install.sh` for Linux/Mac) - it will automatically install Python if it's not present. On Linux/Mac you may need to enter your sudo password. No additional steps needed!
+**Where is my data stored?**
+In the `diary.db` file in the application directory. For backups, simply copy this file.
 
-**Q: Where is my data stored?**
-A: In `diary.db` SQLite database file in the application directory.
+**Can I use this on multiple devices?**
+This is a local-only application. For syncing between devices, you can use cloud storage (Dropbox, Google Drive) for the `diary.db` file.
 
-**Q: Can I access this from multiple devices?**
-A: This is a local-only application. For multi-device access, consider syncing the `diary.db` file via cloud storage.
+**Is my data encrypted?**
+The database is not encrypted by default. Make sure your device is password protected.
 
-**Q: Is my data encrypted?**
-A: The database is not encrypted by default. Keep your device secure.
+**Do I need internet to use this?**
+No, the application works completely offline on your computer.
 
-**Q: Can I export my data?**
-A: Yes, the `diary.db` file can be backed up and the data is in standard SQLite format.
+**Can I export my data?**
+Yes, all data is stored in standard SQLite format in the `diary.db` file, which can be copied and opened with any SQLite tools.
 
-## Contributing
+**Do I need to register or log in?**
+No, just launch the application and start using it. No accounts or passwords required.
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+---
 
 ## License
 
 MIT License - See LICENSE file for details
+
+---
 
 ## Author
 
 **Émile Alexanyan**
 
 Created to help remember and understand yourself better through daily reflection.
-
-## Acknowledgments
-
-- Inspired by GitHub's contribution heatmap
-- Built with love and the need for privacy
-
----
-
-**Note**: This is a personal diary application. All data stays on your local device.
