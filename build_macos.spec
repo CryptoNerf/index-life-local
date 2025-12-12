@@ -52,7 +52,7 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=True,  # Terminal is needed for Flask server
+    console=False,  # No visible console window (Flask runs in background)
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
@@ -75,7 +75,7 @@ coll = COLLECT(
 app = BUNDLE(
     coll,
     name='index.life.app',
-    icon='app/static/images/icon.icns',  # macOS icon
+    icon=str(root_dir / 'app' / 'static' / 'images' / 'icon.icns'),  # macOS icon (absolute path)
     bundle_identifier='com.cryptonerf.indexlife',
     info_plist={
         'NSPrincipalClass': 'NSApplication',
