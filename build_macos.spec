@@ -21,6 +21,7 @@ a = Analysis(
         ('app/templates', 'app/templates'),
         ('app/static', 'app/static'),
         ('config.py', '.'),
+        ('app/static/images/icon.icns', 'Resources'),  # Explicitly copy icon to Resources folder
     ],
     hiddenimports=[
         'flask',
@@ -84,7 +85,7 @@ app = BUNDLE(
         'CFBundleDisplayName': 'index.life',
         'CFBundleVersion': '2.1.0',
         'CFBundleShortVersionString': '2.1.0',
-        'CFBundleIconFile': 'icon.icns',
+        'CFBundleIconFile': 'icon',  # Without .icns extension (macOS adds it automatically)
         'NSHighResolutionCapable': True,
         'LSBackgroundOnly': False,
         'LSUIElement': False,
