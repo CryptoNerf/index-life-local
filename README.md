@@ -33,7 +33,7 @@ Download the ready-to-use version for your operating system from [Releases](http
    ```
 4. Now launch index.life from Applications
 
-> The app will open a Terminal window (this is normal - the Flask server runs there). Your browser will open automatically.
+> The app will start the Flask server in the background and automatically open your browser.
 
 **Linux:**
 1. Download `index-life_linux_x86_64.AppImage`
