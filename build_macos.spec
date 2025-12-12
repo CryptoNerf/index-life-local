@@ -21,7 +21,6 @@ a = Analysis(
         ('app/templates', 'app/templates'),
         ('app/static', 'app/static'),
         ('config.py', '.'),
-        ('app/static/images/icon.icns', '.'),  # Include icon for macOS bundle
     ],
     hiddenimports=[
         'flask',
