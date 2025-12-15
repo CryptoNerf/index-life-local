@@ -2,7 +2,7 @@
 
 > **English version** | [🇷🇺 Русская версия](README.ru.md)
 
-A private, offline mood tracking application that runs entirely on your computer.
+A mood tracker app designed to help people remember and become more aware of themselves and their time.
 
 ![Version](https://img.shields.io/badge/version-2.1.0-blue)
 ![Python](https://img.shields.io/badge/python-3.8+-green)
