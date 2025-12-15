@@ -53,7 +53,7 @@
 
     {% if entry %}
     <!-- Delete button (only show if entry exists) -->
-    <form id="delete-form" method="post" action="{{ url_for('main.delete_day', day=day.strftime('%Y-%m-%d')) }}" style="text-align: center; margin-top: 20px;">
+    <form id="delete-form" method="post" action="{{ url_for('main.delete_day', day=day.strftime('%Y-%m-%d')) }}" style="text-align: center; margin-top: 60px; margin-bottom: 20px;">
       <button type="button" onclick="confirmDelete()" style="background: none; border: none; color: #999; font-size: 14px; cursor: pointer; text-decoration: none; padding: 8px;">
         kill a note
       </button>
