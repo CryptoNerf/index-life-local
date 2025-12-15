@@ -122,7 +122,8 @@ def edit_day(day):
         try:
             db.session.commit()
             flash('Entry saved successfully!', 'success')
-            return redirect(url_for('main.mood_grid'))
+            # Redirect to the year of the edited entry
+            return redirect(url_for('main.mood_grid', year=day_date.year))
         except Exception as e:
             db.session.rollback()
             flash(f'Error saving entry: {e}', 'error')
