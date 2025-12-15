@@ -50,7 +50,23 @@
       </div>
       <button class="save-btn" type="submit">save</button>
     </form>
+
+    {% if entry %}
+    <!-- Delete button (only show if entry exists) -->
+    <form id="delete-form" method="post" action="{{ url_for('main.delete_day', day=day.strftime('%Y-%m-%d')) }}" style="text-align: center; margin-top: 20px;">
+      <button type="button" onclick="confirmDelete()" style="background: none; border: none; color: #999; font-size: 14px; cursor: pointer; text-decoration: none; padding: 8px;">
+        kill a note
+      </button>
+    </form>
+    {% endif %}
   </div>
+  <script>
+    function confirmDelete() {
+      if (confirm('Are you sure you want to kill the note?')) {
+        document.getElementById('delete-form').submit();
+      }
+    }
+  </script>
   <script>
     const cubes = document.querySelectorAll('.cube');
     const ratingInput = document.getElementById('rating-input');
