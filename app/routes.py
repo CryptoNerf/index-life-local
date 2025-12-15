@@ -74,6 +74,10 @@ def mood_grid(year=None):
         available_years.insert(0, current_year)
         available_years.sort(reverse=True)
 
+    # If requested year doesn't exist (e.g., last entry was deleted), redirect to current year
+    if year != current_year and year not in available_years:
+        return redirect(url_for('main.mood_grid', year=current_year))
+
     today = date.today()
     return render_template('mood_grid.html',
                          months=months,
