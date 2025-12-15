@@ -83,6 +83,31 @@ def mood_grid(year=None):
                          current_year=current_year)
 
 
+@bp.route('/day/<string:day>/delete', methods=['POST'])
+def delete_day(day):
+    """Delete mood entry for specific day"""
+    try:
+        day_date = datetime.strptime(day, "%Y-%m-%d").date()
+    except ValueError:
+        flash('Invalid date format', 'error')
+        return redirect(url_for('main.mood_grid'))
+
+    entry = MoodEntry.query.filter_by(date=day_date).first()
+
+    if entry:
+        entry_year = entry.date.year
+        try:
+            db.session.delete(entry)
+            db.session.commit()
+            return redirect(url_for('main.mood_grid', year=entry_year))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error deleting entry: {e}', 'error')
+            return redirect(url_for('main.edit_day', day=day))
+    else:
+        return redirect(url_for('main.mood_grid'))
+
+
 @bp.route('/day/<string:day>', methods=['GET', 'POST'])
 def edit_day(day):
     """Edit or create mood entry for specific day"""
