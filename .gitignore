@@ -76,3 +76,5 @@ create_icns.py
 icon.iconset/
 HOW_TO_CREATE_RELEASE.md
 QUICK_RELEASE_GUIDE.txt
+check_database.py
+create_2025_database.py
