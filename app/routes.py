@@ -129,9 +129,9 @@ def edit_day(day):
         rating = request.form.get('rating', type=int)
         note = request.form.get('note', '').strip()
 
-        # Validate rating
+        # Validate rating - MUST be provided
         if rating is None or not (1 <= rating <= 10):
-            flash('Rating must be between 1 and 10', 'error')
+            flash('Please select your day mood rating (1-10) before saving', 'error')
             return redirect(url_for('main.edit_day', day=day))
 
         if entry:

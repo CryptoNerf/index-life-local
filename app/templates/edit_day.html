@@ -37,7 +37,17 @@
   <div class="center-content">
     <h1 class="header" style="font-weight:normal;">my day index</h1>
     <p class="date-display">{{ day.strftime('%Y-%m-%d') }}</p>
-    <form method="post" novalidate class="form-block">
+    
+    <!-- Error message display -->
+    {% if get_flashed_messages(category_filter=['error']) %}
+      <div class="error-message" style="margin-bottom: 20px; padding: 15px; background-color: #fee; border-left: 4px solid #f44; border-radius: 4px; color: #c00;">
+        {% for message in get_flashed_messages(category_filter=['error']) %}
+          <p style="margin: 5px 0;">{{ message }}</p>
+        {% endfor %}
+      </div>
+    {% endif %}
+    
+    <form method="post" novalidate class="form-block" id="edit-form">
       <div class="cubes-row" id="rating-cubes">
         {% for i in range(1, 11) %}
           <span class="cube{% if entry and entry.rating >= i %} filled{% endif %}" data-value="{{ i }}"></span>
@@ -72,6 +82,7 @@
   <script>
     const cubes = document.querySelectorAll('.cube');
     const ratingInput = document.getElementById('rating-input');
+    const editForm = document.getElementById('edit-form');
     let selected = parseInt(ratingInput.value) || 0;
 
     function fillCubes(count, className) {
@@ -108,6 +119,39 @@
       noteTextarea.style.height = 'auto';
       noteTextarea.style.height = (noteTextarea.scrollHeight) + 'px';
     }
+
+    // Form validation
+    editForm.addEventListener('submit', function(e) {
+      const rating = parseInt(ratingInput.value);
+      if (!rating || rating < 1 || rating > 10) {
+        e.preventDefault();
+        
+        // Remove previous error message if exists
+        const existingError = document.querySelector('.form-error-message');
+        if (existingError) {
+          existingError.remove();
+        }
+        
+        // Show error message
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'form-error-message';
+        errorDiv.style.marginBottom = '20px';
+        errorDiv.style.padding = '15px';
+        errorDiv.style.backgroundColor = '#fee';
+        errorDiv.style.borderLeft = '4px solid #f44';
+        errorDiv.style.borderRadius = '4px';
+        errorDiv.style.color = '#c00';
+        errorDiv.innerHTML = '<p style="margin: 5px 0;">Please select your day mood rating (1-10) before saving</p>';
+        
+        const form = this;
+        form.parentNode.insertBefore(errorDiv, form);
+        
+        // Scroll to error message
+        errorDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        
+        return false;
+      }
+    });
   </script>
 </body>
 </html>
