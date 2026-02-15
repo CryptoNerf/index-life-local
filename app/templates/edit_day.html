@@ -108,16 +108,21 @@
       });
     });
 
-    // Auto-expand textarea
+    // Auto-expand textarea with max height
     const noteTextarea = document.querySelector('.note-textarea');
     if (noteTextarea) {
-      noteTextarea.addEventListener('input', function() {
-        this.style.height = 'auto';
-        this.style.height = (this.scrollHeight) + 'px';
-      });
+      const maxHeight = 400; // Максимальная высота в пикселях
+
+      function adjustHeight() {
+        noteTextarea.style.height = 'auto';
+        const newHeight = Math.min(noteTextarea.scrollHeight, maxHeight);
+        noteTextarea.style.height = newHeight + 'px';
+      }
+
+      noteTextarea.addEventListener('input', adjustHeight);
+
       // Инициализация при загрузке
-      noteTextarea.style.height = 'auto';
-      noteTextarea.style.height = (noteTextarea.scrollHeight) + 'px';
+      adjustHeight();
     }
 
     // Form validation
