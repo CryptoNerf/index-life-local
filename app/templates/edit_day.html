@@ -147,7 +147,6 @@
     // WYSIWYG Editor
     const noteTextarea = document.querySelector('.note-textarea');
     const wysiwygEditor = document.querySelector('.wysiwyg-editor');
-    const DEBUG_MARKDOWN = false;
     const REMOVE_EMPTY_LINES = true;
     const hasMarked = typeof marked !== 'undefined';
     const hasTurndown = typeof TurndownService !== 'undefined';
@@ -190,7 +189,7 @@
           }
 
           wysiwygEditor.innerHTML = html;
-          stripInterBlockWhitespace(wysiwygEditor);
+          normalizeEditorDom(wysiwygEditor);
 
           // Make existing links clickable with Ctrl+Click
           wysiwygEditor.querySelectorAll('a').forEach(link => {
@@ -289,6 +288,82 @@
         });
       }
 
+      function wrapRootInlineRuns(root) {
+        const blockTags = new Set(['div', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'blockquote', 'hr', 'pre']);
+        const children = Array.from(root.childNodes);
+        const hasBlock = children.some(node => (
+          node.nodeType === 1 && blockTags.has(node.tagName.toLowerCase())
+        ));
+
+        if (!hasBlock) return;
+
+        let buffer = [];
+        function flushBuffer(beforeNode) {
+          if (!buffer.length) return;
+          const div = document.createElement('div');
+          buffer.forEach(node => div.appendChild(node));
+          root.insertBefore(div, beforeNode || null);
+          buffer = [];
+        }
+
+        children.forEach(node => {
+          if (node.nodeType === 3 && !node.textContent.trim()) {
+            root.removeChild(node);
+            return;
+          }
+
+          if (node.nodeType === 1 && blockTags.has(node.tagName.toLowerCase())) {
+            flushBuffer(node);
+            return;
+          }
+
+          buffer.push(node);
+        });
+
+        flushBuffer(null);
+      }
+
+      function convertTextNewlinesToBreaks(node) {
+        const children = Array.from(node.childNodes);
+        children.forEach(child => {
+          if (child.nodeType === 3) {
+            const text = child.nodeValue || '';
+            if (!text.includes('\n')) return;
+
+            const parts = text.split(/\n/);
+            const frag = document.createDocumentFragment();
+
+            parts.forEach((part, index) => {
+              if (part) {
+                frag.appendChild(document.createTextNode(part));
+              }
+              if (index < parts.length - 1) {
+                frag.appendChild(document.createElement('br'));
+              }
+            });
+
+            child.parentNode.replaceChild(frag, child);
+            return;
+          }
+
+          if (child.nodeType === 1) {
+            convertTextNewlinesToBreaks(child);
+          }
+        });
+      }
+
+      function normalizeEditorDom(root) {
+        wrapRootInlineRuns(root);
+        convertTextNewlinesToBreaks(root);
+        stripInterBlockWhitespace(root);
+      }
+
+      function getNormalizedEditorHtml() {
+        const clone = wysiwygEditor.cloneNode(true);
+        normalizeEditorDom(clone);
+        return clone.innerHTML;
+      }
+
       function normalizeMarkdown(markdown) {
         let result = (markdown || '')
           .replace(/[\u200B-\u200D\uFEFF]/g, '')
@@ -382,16 +457,10 @@
       }
 
       function syncMarkdown() {
-        const htmlContent = wysiwygEditor.innerHTML;
+        const htmlContent = getNormalizedEditorHtml();
         const markdown = htmlToMarkdown(htmlContent);
         noteTextarea.value = markdown;
 
-        if (DEBUG_MARKDOWN) {
-          console.groupCollapsed('Markdown sync');
-          console.log('HTML:', htmlContent);
-          console.log('Markdown:', markdown);
-          console.groupEnd();
-        }
       }
 
       // Sync editor content to hidden textarea before form submission
