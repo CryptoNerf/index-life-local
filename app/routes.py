@@ -8,6 +8,7 @@ import calendar
 from werkzeug.utils import secure_filename
 from pathlib import Path
 import os
+import re
 
 from app import db
 from app.models import MoodEntry, UserProfile
@@ -19,6 +20,37 @@ def allowed_file(filename, allowed_extensions):
     """Check if file extension is allowed"""
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in allowed_extensions
+
+
+def normalize_note(note):
+    """Normalize markdown saved from the editor to avoid blank lines."""
+    if not note:
+        return ''
+
+    cleaned = note.replace('\r\n', '\n').replace('\r', '\n')
+    cleaned = cleaned.replace('\u00a0', ' ')
+    cleaned = re.sub(r'[\u200B-\u200D\uFEFF]', '', cleaned)
+
+    lines = cleaned.split('\n')
+    output = []
+    in_fence = False
+
+    for line in lines:
+        if line.strip().startswith('```'):
+            in_fence = not in_fence
+            output.append(line.strip())
+            continue
+
+        if in_fence:
+            output.append(line.rstrip())
+            continue
+
+        if not line.strip():
+            continue
+
+        output.append(line.rstrip())
+
+    return '\n'.join(output).strip()
 
 
 @bp.route('/')
@@ -127,7 +159,7 @@ def edit_day(day):
 
     if request.method == 'POST':
         rating = request.form.get('rating', type=int)
-        note = request.form.get('note', '').strip()
+        note = normalize_note(request.form.get('note', ''))
 
         # Validate rating - MUST be provided
         if rating is None or not (1 <= rating <= 10):
