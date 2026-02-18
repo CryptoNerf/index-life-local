@@ -12,6 +12,9 @@ dist/
 build/
 *.egg
 
+# Node / JS
+node_modules/
+
 # Database
 diary.db
 *.db

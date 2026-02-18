@@ -1,0 +1,13 @@
+{
+  "name": "index-life-local-tests",
+  "private": true,
+  "type": "commonjs",
+  "devDependencies": {
+    "jsdom": "^24.0.0"
+  },
+  "scripts": {
+    "test:formatting": "node --test tests/formatting_utils.test.js",
+    "test:dom": "node --test tests/formatting_dom.test.js",
+    "test:all": "node --test tests/formatting_utils.test.js tests/formatting_dom.test.js"
+  }
+}

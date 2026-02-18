@@ -25,6 +25,8 @@
   <link rel="manifest" href="{{ url_for('static', filename='images/site.webmanifest') }}">
 
   <link rel="stylesheet" href="{{ url_for('static', filename='css/edit_day.css') }}">
+  <script src="{{ url_for('static', filename='js/formatting_dom_utils.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/formatting_utils.js') }}"></script>
   <script src="{{ url_for('static', filename='js/marked.umd.js') }}"></script>
   <script src="{{ url_for('static', filename='js/turndown.js') }}"></script>
 </head>
@@ -147,11 +149,62 @@
     // WYSIWYG Editor
     const noteTextarea = document.querySelector('.note-textarea');
     const wysiwygEditor = document.querySelector('.wysiwyg-editor');
+    const entryDate = "{{ day.strftime('%Y-%m-%d') }}";
+    const draftKey = `draft:${entryDate}`;
     const REMOVE_EMPTY_LINES = true;
     const hasMarked = typeof marked !== 'undefined';
     const hasTurndown = typeof TurndownService !== 'undefined';
+    const normalizeMarkdown = (typeof FormattingUtils !== 'undefined' && FormattingUtils.normalizeMarkdown)
+      ? (markdown) => FormattingUtils.normalizeMarkdown(markdown, { removeEmptyLines: REMOVE_EMPTY_LINES })
+      : (markdown) => (markdown || '').trim();
+    const domUtils = (typeof FormattingDomUtils !== 'undefined') ? FormattingDomUtils : null;
+    const hasRichFormatting = (domUtils && domUtils.hasRichFormatting)
+      ? domUtils.hasRichFormatting
+      : (root) => !!(root && root.querySelector && root.querySelector('strong, b, em, i, u, s, del, strike, a, h1, h2, h3, h4, h5, h6, ul, ol, li, blockquote, pre, code'));
+    const extractPlainText = (domUtils && domUtils.extractPlainText)
+      ? domUtils.extractPlainText
+      : (root) => (root && (root.textContent || root.innerText) ? (root.textContent || root.innerText) : '');
 
     if (noteTextarea && wysiwygEditor) {
+      function loadDraft() {
+        try {
+          const raw = localStorage.getItem(draftKey);
+          return raw ? JSON.parse(raw) : null;
+        } catch (e) {
+          return null;
+        }
+      }
+
+      function saveDraft(markdown) {
+        try {
+          if (!markdown || !markdown.trim()) {
+            localStorage.removeItem(draftKey);
+            return;
+          }
+          localStorage.setItem(draftKey, JSON.stringify({
+            content: markdown,
+            updatedAt: Date.now()
+          }));
+        } catch (e) {
+          // Ignore storage errors (quota, private mode, etc.)
+        }
+      }
+
+      function clearDraft() {
+        try {
+          localStorage.removeItem(draftKey);
+        } catch (e) {
+          // Ignore
+        }
+      }
+
+      let draftTimer = null;
+      function scheduleDraftSave(markdown) {
+        if (draftTimer) {
+          clearTimeout(draftTimer);
+        }
+        draftTimer = setTimeout(() => saveDraft(markdown), 300);
+      }
       if (hasMarked) {
         marked.setOptions({
           breaks: true,
@@ -161,7 +214,15 @@
 
       // Initialize editor with existing content (render markdown to HTML)
       const initialContent = noteTextarea.value;
-      const normalizedInitial = normalizeMarkdown(initialContent);
+      const draft = loadDraft();
+      if (draft && draft.content) {
+        if (draft.content === initialContent) {
+          clearDraft();
+        } else {
+          noteTextarea.value = draft.content;
+        }
+      }
+      const normalizedInitial = normalizeMarkdown(noteTextarea.value);
       if (normalizedInitial.trim()) {
         noteTextarea.value = normalizedInitial;
         if (hasMarked) {
@@ -277,170 +338,18 @@
         });
       }
 
-      function stripInterBlockWhitespace(root) {
-        const containers = [root, ...root.querySelectorAll('ul, ol, blockquote')];
-        containers.forEach(container => {
-          Array.from(container.childNodes).forEach(node => {
-            if (node.nodeType === 3 && !node.textContent.trim()) {
-              container.removeChild(node);
-            }
-          });
-        });
-      }
-
-      function wrapRootInlineRuns(root) {
-        const blockTags = new Set(['div', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'blockquote', 'hr', 'pre']);
-        const children = Array.from(root.childNodes);
-        const hasBlock = children.some(node => (
-          node.nodeType === 1 && blockTags.has(node.tagName.toLowerCase())
-        ));
-
-        if (!hasBlock) return;
-
-        let buffer = [];
-        function flushBuffer(beforeNode) {
-          if (!buffer.length) return;
-          const div = document.createElement('div');
-          buffer.forEach(node => div.appendChild(node));
-          root.insertBefore(div, beforeNode || null);
-          buffer = [];
-        }
-
-        children.forEach(node => {
-          if (node.nodeType === 3 && !node.textContent.trim()) {
-            root.removeChild(node);
-            return;
-          }
-
-          if (node.nodeType === 1 && blockTags.has(node.tagName.toLowerCase())) {
-            flushBuffer(node);
-            return;
-          }
-
-          buffer.push(node);
-        });
-
-        flushBuffer(null);
-      }
-
-      function convertTextNewlinesToBreaks(node) {
-        const children = Array.from(node.childNodes);
-        children.forEach(child => {
-          if (child.nodeType === 3) {
-            const text = child.nodeValue || '';
-            if (!text.includes('\n')) return;
-
-            const parts = text.split(/\n/);
-            const frag = document.createDocumentFragment();
-
-            parts.forEach((part, index) => {
-              if (part) {
-                frag.appendChild(document.createTextNode(part));
-              }
-              if (index < parts.length - 1) {
-                frag.appendChild(document.createElement('br'));
-              }
-            });
-
-            child.parentNode.replaceChild(frag, child);
-            return;
-          }
-
-          if (child.nodeType === 1) {
-            convertTextNewlinesToBreaks(child);
-          }
-        });
-      }
-
       function normalizeEditorDom(root) {
-        wrapRootInlineRuns(root);
-        convertTextNewlinesToBreaks(root);
-        stripInterBlockWhitespace(root);
+        if (domUtils && domUtils.normalizeEditorDom) {
+          domUtils.normalizeEditorDom(root);
+          return;
+        }
       }
 
       function getNormalizedEditorHtml() {
-        const clone = wysiwygEditor.cloneNode(true);
-        normalizeEditorDom(clone);
-        return clone.innerHTML;
-      }
-
-      function normalizeMarkdown(markdown) {
-        let result = (markdown || '')
-          .replace(/[\u200B-\u200D\uFEFF]/g, '')
-          .replace(/\u00a0/g, ' ')
-          .replace(/\r\n?/g, '\n');
-        const lines = result.split('\n');
-        let inCodeFence = false;
-
-        const normalized = lines.map(line => {
-          const scrubbedLine = line.replace(/[\u200B-\u200D\uFEFF]/g, '');
-          line = scrubbedLine;
-          const fenceMatch = line.match(/^\s*```/);
-          if (fenceMatch) {
-            inCodeFence = !inCodeFence;
-            return line.trim();
-          }
-
-          if (inCodeFence) {
-            return line.replace(/[ \t]+$/g, '');
-          }
-
-          if (!line.trim()) return '';
-
-          if (line.trim().startsWith('>')) {
-            const rest = line.replace(/^\s*>\s?/, '');
-            return rest.trim() ? '> ' + rest.trim() : '>';
-          }
-
-          const listMatch = line.match(/^(\s*)(-|\d+\.)\s*(.*)$/);
-          if (listMatch) {
-            const indent = listMatch[1] || '';
-            const marker = listMatch[2];
-            const rest = listMatch[3].trim();
-            return indent + marker + (rest ? ' ' + rest : '');
-          }
-
-          if (line.startsWith('  ')) {
-            return '  ' + line.slice(2).trim();
-          }
-
-          return line.trim();
-        });
-
-        let output = [];
-        let inFence = false;
-
-        for (const line of normalized) {
-          if (/^\s*```/.test(line)) {
-            inFence = !inFence;
-            output.push(line);
-            continue;
-          }
-
-          if (inFence) {
-            output.push(line);
-            continue;
-          }
-
-          if (REMOVE_EMPTY_LINES) {
-            if (line === '') continue;
-            output.push(line);
-            continue;
-          }
-
-          if (line === '') {
-            if (output.length && output[output.length - 1] === '') continue;
-            output.push('');
-            continue;
-          }
-
-          output.push(line);
+        if (domUtils && domUtils.getNormalizedEditorHtml) {
+          return domUtils.getNormalizedEditorHtml(wysiwygEditor);
         }
-
-        result = output.join('\n');
-        result = result.replace(/[ \t]+\n/g, '\n');
-        result = result.replace(/\n{3,}/g, '\n\n');
-        return result.trim();
+        return wysiwygEditor.innerHTML;
       }
 
       // Convert HTML to Markdown
@@ -457,15 +366,24 @@
       }
 
       function syncMarkdown() {
-        const htmlContent = getNormalizedEditorHtml();
-        const markdown = htmlToMarkdown(htmlContent);
+        let markdown = '';
+        if (!hasRichFormatting(wysiwygEditor)) {
+          const clone = wysiwygEditor.cloneNode(true);
+          normalizeEditorDom(clone);
+          const plainText = extractPlainText(clone);
+          markdown = normalizeMarkdown(plainText);
+        } else {
+          const htmlContent = getNormalizedEditorHtml();
+          markdown = htmlToMarkdown(htmlContent);
+        }
         noteTextarea.value = markdown;
-
+        scheduleDraftSave(markdown);
       }
 
       // Sync editor content to hidden textarea before form submission
       editForm.addEventListener('submit', function() {
         syncMarkdown();
+        clearDraft();
       });
 
       // Sync content on any change (store as markdown)
@@ -476,6 +394,25 @@
 
     // Formatting toolbar functionality for WYSIWYG
     const formatBtns = document.querySelectorAll('.format-btn');
+
+    function unwrapBlockquote(blockquote) {
+      if (!blockquote || !blockquote.parentNode) return;
+      const parent = blockquote.parentNode;
+      const frag = document.createDocumentFragment();
+      while (blockquote.firstChild) {
+        frag.appendChild(blockquote.firstChild);
+      }
+      parent.replaceChild(frag, blockquote);
+    }
+
+    function unwrapHeading(heading) {
+      if (!heading || !heading.parentNode) return;
+      const p = document.createElement('p');
+      while (heading.firstChild) {
+        p.appendChild(heading.firstChild);
+      }
+      heading.parentNode.replaceChild(p, heading);
+    }
 
     function applyFormat(format) {
       wysiwygEditor.focus();
@@ -489,6 +426,26 @@
           // If text node, get parent element
           if (node.nodeType === 3) {
             node = node.parentNode;
+          }
+
+          if (format === 'quote' && node && node.closest) {
+            const quoteNode = node.closest('blockquote');
+            if (quoteNode && wysiwygEditor.contains(quoteNode)) {
+              unwrapBlockquote(quoteNode);
+              wysiwygEditor.dispatchEvent(new Event('input'));
+              setTimeout(updateToolbarState, 10);
+              return;
+            }
+          }
+
+          if (node && node.closest && (format === 'h1' || format === 'h2' || format === 'h3')) {
+            const headingNode = node.closest(format);
+            if (headingNode && wysiwygEditor.contains(headingNode)) {
+              unwrapHeading(headingNode);
+              wysiwygEditor.dispatchEvent(new Event('input'));
+              setTimeout(updateToolbarState, 10);
+              return;
+            }
           }
 
           // Find current block-level element
