@@ -31,6 +31,16 @@ def normalize_note(note):
     cleaned = cleaned.replace('\u00a0', ' ')
     cleaned = re.sub(r'[\u200B-\u200D\uFEFF]', '', cleaned)
 
+    # Collapse blank lines between list items (ordered or unordered)
+    cleaned = re.sub(
+        r'(^\s*(?:-|\d+\.)\s+.*)\n\s*\n(?=\s*(?:-|\d+\.)\s+)',
+        r'\1\n',
+        cleaned,
+        flags=re.MULTILINE
+    )
+
+    cleaned = renumber_ordered_lists(cleaned)
+
     lines = cleaned.split('\n')
     output = []
     in_fence = False
@@ -51,6 +61,35 @@ def normalize_note(note):
         output.append(line.rstrip())
 
     return '\n'.join(output).strip()
+
+
+def renumber_ordered_lists(text):
+    """Renumber ordered list items to 1..n within each contiguous list block."""
+    lines = text.split('\n')
+    output = []
+    in_list = False
+    current_indent = ''
+    counter = 1
+
+    for line in lines:
+        match = re.match(r'^(\s*)(\d+)\.\s+(.*)$', line)
+        if match:
+            indent = match.group(1) or ''
+            content = match.group(3)
+            if not in_list or indent != current_indent:
+                in_list = True
+                current_indent = indent
+                counter = 1
+            output.append(f"{indent}{counter}. {content}")
+            counter += 1
+            continue
+
+        in_list = False
+        current_indent = ''
+        counter = 1
+        output.append(line)
+
+    return '\n'.join(output)
 
 
 @bp.route('/')

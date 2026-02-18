@@ -260,11 +260,14 @@ textarea {
   margin: 8px 0;
 }
 .wysiwyg-editor ul, .wysiwyg-editor ol {
-  margin: 8px 0;
+  margin: 0;
   padding-left: 24px;
 }
 .wysiwyg-editor li {
-  margin: 4px 0;
+  margin: 0;
+}
+.wysiwyg-editor li p {
+  margin: 0;
 }
 .wysiwyg-editor strong, .wysiwyg-editor b {
   font-weight: bold;
@@ -323,11 +326,14 @@ textarea {
   margin: 8px 0;
 }
 .preview-block ul, .preview-block ol {
-  margin: 8px 0;
+  margin: 0;
   padding-left: 24px;
 }
 .preview-block li {
-  margin: 4px 0;
+  margin: 0;
+}
+.preview-block li p {
+  margin: 0;
 }
 .preview-block strong {
   font-weight: bold;
