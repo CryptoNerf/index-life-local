@@ -3,11 +3,19 @@
   "private": true,
   "type": "commonjs",
   "devDependencies": {
-    "jsdom": "^24.0.0"
+    "@tiptap/core": "^3.20.0",
+    "@tiptap/extension-placeholder": "^3.20.0",
+    "@tiptap/extension-typography": "^3.20.0",
+    "@tiptap/starter-kit": "^3.20.0",
+    "esbuild": "^0.27.3",
+    "jsdom": "^24.0.0",
+    "prosemirror-markdown": "^1.13.4",
+    "tiptap-markdown": "^0.9.0"
   },
   "scripts": {
     "test:formatting": "node --test tests/formatting_utils.test.js",
     "test:dom": "node --test tests/formatting_dom.test.js",
-    "test:all": "node --test tests/formatting_utils.test.js tests/formatting_dom.test.js"
+    "test:all": "node --test tests/formatting_utils.test.js tests/formatting_dom.test.js",
+    "build:tiptap": "esbuild tiptap-bundle-entry.js --bundle --outfile=app/static/js/tiptap-bundle.js --format=iife --global-name=TiptapBundle"
   }
 }

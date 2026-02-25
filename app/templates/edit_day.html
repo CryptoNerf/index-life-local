@@ -25,10 +25,9 @@
   <link rel="manifest" href="{{ url_for('static', filename='images/site.webmanifest') }}">
 
   <link rel="stylesheet" href="{{ url_for('static', filename='css/edit_day.css') }}">
-  <script src="{{ url_for('static', filename='js/formatting_dom_utils.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/formatting_utils.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/marked.umd.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/turndown.js') }}"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/tiptap-custom.css') }}">
+  <script src="{{ url_for('static', filename='js/tiptap-bundle.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/tiptap-editor-init.js') }}"></script>
 </head>
 <body>
   <header class="main-header">
@@ -91,9 +90,9 @@
           </button>
         </div>
         <!-- Hidden textarea for form submission -->
-        <textarea name="note" class="note-textarea" rows="6" style="display: none;">{{ entry.note if entry else '' }}</textarea>
-        <!-- WYSIWYG editor -->
-        <div class="wysiwyg-editor" contenteditable="true" data-placeholder="Write your note here..."></div>
+        <textarea name="note" id="note-textarea" class="note-textarea" rows="6" style="display: none;">{{ entry.note if entry else '' }}</textarea>
+        <!-- Tiptap editor container -->
+        <div id="tiptap-editor" class="tiptap-editor"></div>
       </div>
       <p style="font-size: 13px; color: #888; margin-bottom: 16px;">markdown supported</p>
       <button class="save-btn" type="submit">save</button>
@@ -113,6 +112,9 @@
   <script>
     function confirmDelete() {
       if (confirm('Are you sure you want to kill the note?')) {
+        try {
+          localStorage.removeItem(`draft:{{ day.strftime('%Y-%m-%d') }}`);
+        } catch(e) {}
         document.getElementById('delete-form').submit();
       }
     }
@@ -146,484 +148,92 @@
       });
     });
 
-    // WYSIWYG Editor
-    const noteTextarea = document.querySelector('.note-textarea');
-    const wysiwygEditor = document.querySelector('.wysiwyg-editor');
+    // Tiptap Editor Setup
+    const noteTextarea = document.getElementById('note-textarea');
     const entryDate = "{{ day.strftime('%Y-%m-%d') }}";
     const draftKey = `draft:${entryDate}`;
-    const REMOVE_EMPTY_LINES = true;
-    const hasMarked = typeof marked !== 'undefined';
-    const hasTurndown = typeof TurndownService !== 'undefined';
-    const normalizeMarkdown = (typeof FormattingUtils !== 'undefined' && FormattingUtils.normalizeMarkdown)
-      ? (markdown) => FormattingUtils.normalizeMarkdown(markdown, { removeEmptyLines: REMOVE_EMPTY_LINES })
-      : (markdown) => (markdown || '').trim();
-    const domUtils = (typeof FormattingDomUtils !== 'undefined') ? FormattingDomUtils : null;
-    const hasRichFormatting = (domUtils && domUtils.hasRichFormatting)
-      ? domUtils.hasRichFormatting
-      : (root) => !!(root && root.querySelector && root.querySelector('strong, b, em, i, u, s, del, strike, a, h1, h2, h3, h4, h5, h6, ul, ol, li, blockquote, pre, code'));
-    const extractPlainText = (domUtils && domUtils.extractPlainText)
-      ? domUtils.extractPlainText
-      : (root) => (root && (root.textContent || root.innerText) ? (root.textContent || root.innerText) : '');
+    let tiptapEditor = null;
 
-    if (noteTextarea && wysiwygEditor) {
-      function loadDraft() {
-        try {
-          const raw = localStorage.getItem(draftKey);
-          return raw ? JSON.parse(raw) : null;
-        } catch (e) {
-          return null;
-        }
+    // Draft management functions
+    function loadDraft() {
+      try {
+        const raw = localStorage.getItem(draftKey);
+        return raw ? JSON.parse(raw) : null;
+      } catch (e) {
+        return null;
       }
+    }
 
-      function saveDraft(markdown) {
-        try {
-          if (!markdown || !markdown.trim()) {
-            localStorage.removeItem(draftKey);
-            return;
-          }
-          localStorage.setItem(draftKey, JSON.stringify({
-            content: markdown,
-            updatedAt: Date.now()
-          }));
-        } catch (e) {
-          // Ignore storage errors (quota, private mode, etc.)
-        }
-      }
-
-      function clearDraft() {
-        try {
+    function saveDraft(markdown) {
+      try {
+        if (!markdown || !markdown.trim()) {
           localStorage.removeItem(draftKey);
-        } catch (e) {
-          // Ignore
-        }
-      }
-
-      let draftTimer = null;
-      function scheduleDraftSave(markdown) {
-        if (draftTimer) {
-          clearTimeout(draftTimer);
-        }
-        draftTimer = setTimeout(() => saveDraft(markdown), 300);
-      }
-      if (hasMarked) {
-        marked.setOptions({
-          breaks: true,
-          gfm: true
-        });
-      }
-
-      // Initialize editor with existing content (render markdown to HTML)
-      const initialContent = noteTextarea.value;
-      const draft = loadDraft();
-      if (draft && draft.content) {
-        if (draft.content === initialContent) {
-          clearDraft();
-        } else {
-          noteTextarea.value = draft.content;
-        }
-      }
-      const normalizedInitial = normalizeMarkdown(noteTextarea.value);
-      if (normalizedInitial.trim()) {
-        noteTextarea.value = normalizedInitial;
-        if (hasMarked) {
-          let html = marked.parse(normalizedInitial);
-
-          // Clean up marked.js output: remove wrapper <p> tags if content is simple
-          const tempDiv = document.createElement('div');
-          tempDiv.innerHTML = html;
-
-          // If there's only one <p> tag with no other block elements, unwrap it
-          if (tempDiv.children.length === 1 && tempDiv.children[0].tagName === 'P') {
-            // Check if the <p> contains only inline elements or text
-            const p = tempDiv.children[0];
-            let hasBlockElements = false;
-            for (let child of p.children) {
-              const tag = child.tagName.toLowerCase();
-              if (['div', 'p', 'h1', 'h2', 'h3', 'ul', 'ol', 'blockquote'].includes(tag)) {
-                hasBlockElements = true;
-                break;
-              }
-            }
-            if (!hasBlockElements) {
-              html = p.innerHTML;
-            }
-          }
-
-          wysiwygEditor.innerHTML = html;
-          normalizeEditorDom(wysiwygEditor);
-
-          // Make existing links clickable with Ctrl+Click
-          wysiwygEditor.querySelectorAll('a').forEach(link => {
-            link.setAttribute('target', '_blank');
-            link.setAttribute('rel', 'noopener noreferrer');
-          });
-        } else {
-          wysiwygEditor.textContent = normalizedInitial;
-        }
-      }
-
-      // Handle clicks on links in editor (Ctrl/Cmd + Click to open)
-      wysiwygEditor.addEventListener('click', function(e) {
-        if (e.target.tagName === 'A') {
-          if (e.ctrlKey || e.metaKey) {
-            // Ctrl/Cmd + Click opens the link
-            e.preventDefault();
-            window.open(e.target.href, '_blank');
-          } else {
-            // Regular click - prevent navigation, allow editing
-            e.preventDefault();
-          }
-        }
-      });
-
-      const turndownService = hasTurndown ? new TurndownService({
-        headingStyle: 'atx',
-        bulletListMarker: '-',
-        codeBlockStyle: 'fenced',
-        emDelimiter: '*',
-        strongDelimiter: '**',
-        br: '',
-        blankReplacement: function() {
-          return '';
-        },
-        defaultReplacement: function(content, node) {
-          if (node.isBlock) {
-            const cleaned = content.replace(/^\n+|\n+$/g, '');
-            return cleaned ? cleaned + '\n' : '';
-          }
-          return content;
-        }
-      }) : null;
-
-      if (turndownService) {
-        turndownService.addRule('tightParagraphs', {
-          filter: ['p', 'div'],
-          replacement: function(content) {
-            const cleaned = content.replace(/^\n+|\n+$/g, '');
-            return cleaned ? cleaned + '\n' : '';
-          }
-        });
-
-        turndownService.addRule('lineBreak', {
-          filter: 'br',
-          replacement: function() {
-            return '\n';
-          }
-        });
-
-        turndownService.addRule('strikethrough', {
-          filter: ['del', 's', 'strike'],
-          replacement: function(content) {
-            return content ? '~~' + content + '~~' : '';
-          }
-        });
-
-        turndownService.addRule('removeEmptyBlocks', {
-          filter: function(node) {
-            if (!node || node.nodeType !== 1) return false;
-            const tag = node.tagName.toLowerCase();
-            if (!['div', 'p', 'li', 'blockquote', 'ul', 'ol', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(tag)) {
-              return false;
-            }
-            const text = node.textContent.replace(/[\u00a0\u200B-\u200D\uFEFF]/g, '').trim();
-            if (text) return false;
-            const hasNonBr = Array.from(node.childNodes).some(child => (
-              child.nodeType === 1 && child.tagName.toLowerCase() !== 'br'
-            ));
-            return !hasNonBr;
-          },
-          replacement: function() {
-            return '';
-          }
-        });
-      }
-
-      function normalizeEditorDom(root) {
-        if (domUtils && domUtils.normalizeEditorDom) {
-          domUtils.normalizeEditorDom(root);
           return;
         }
+        localStorage.setItem(draftKey, JSON.stringify({
+          content: markdown,
+          updatedAt: Date.now()
+        }));
+      } catch (e) {
+        // Ignore storage errors
       }
+    }
 
-      function getNormalizedEditorHtml() {
-        if (domUtils && domUtils.getNormalizedEditorHtml) {
-          return domUtils.getNormalizedEditorHtml(wysiwygEditor);
-        }
-        return wysiwygEditor.innerHTML;
+    function clearDraft() {
+      try {
+        localStorage.removeItem(draftKey);
+      } catch (e) {
+        // Ignore
       }
+    }
 
-      // Convert HTML to Markdown
-      function htmlToMarkdown(html) {
-        if (turndownService) {
-          const raw = turndownService.turndown(html);
-          return normalizeMarkdown(raw);
-        }
-
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = html;
-        const fallback = tempDiv.textContent || '';
-        return normalizeMarkdown(fallback);
+    let draftTimer = null;
+    function scheduleDraftSave(markdown) {
+      if (draftTimer) {
+        clearTimeout(draftTimer);
       }
+      draftTimer = setTimeout(() => saveDraft(markdown), 300);
+    }
 
-      function syncMarkdown() {
-        let markdown = '';
-        if (!hasRichFormatting(wysiwygEditor)) {
-          const clone = wysiwygEditor.cloneNode(true);
-          normalizeEditorDom(clone);
-          const plainText = extractPlainText(clone);
-          markdown = normalizeMarkdown(plainText);
-        } else {
-          const htmlContent = getNormalizedEditorHtml();
-          markdown = htmlToMarkdown(htmlContent);
-        }
+    // Load initial content or draft
+    const initialContent = noteTextarea.value;
+    const draft = loadDraft();
+    let contentToLoad = initialContent;
+
+    if (draft && draft.content) {
+      if (draft.content === initialContent) {
+        clearDraft();
+      } else {
+        contentToLoad = draft.content;
+      }
+    }
+
+    // Initialize Tiptap editor
+    tiptapEditor = window.TiptapEditorUtils.initTiptapEditor({
+      elementId: 'tiptap-editor',
+      placeholderText: 'Write your note here...',
+      initialContent: contentToLoad,
+      onUpdate: (markdown, editor) => {
         noteTextarea.value = markdown;
         scheduleDraftSave(markdown);
       }
-
-      // Sync editor content to hidden textarea before form submission
-      editForm.addEventListener('submit', function() {
-        syncMarkdown();
-        clearDraft();
-      });
-
-      // Sync content on any change (store as markdown)
-      wysiwygEditor.addEventListener('input', function() {
-        syncMarkdown();
-      });
-    }
-
-    // Formatting toolbar functionality for WYSIWYG
-    const formatBtns = document.querySelectorAll('.format-btn');
-
-    function unwrapBlockquote(blockquote) {
-      if (!blockquote || !blockquote.parentNode) return;
-      const parent = blockquote.parentNode;
-      const frag = document.createDocumentFragment();
-      while (blockquote.firstChild) {
-        frag.appendChild(blockquote.firstChild);
-      }
-      parent.replaceChild(frag, blockquote);
-    }
-
-    function unwrapHeading(heading) {
-      if (!heading || !heading.parentNode) return;
-      const p = document.createElement('p');
-      while (heading.firstChild) {
-        p.appendChild(heading.firstChild);
-      }
-      heading.parentNode.replaceChild(p, heading);
-    }
-
-    function applyFormat(format) {
-      wysiwygEditor.focus();
-
-      // Check if heading/quote is already active - toggle it off
-      if (format === 'h1' || format === 'h2' || format === 'h3' || format === 'quote') {
-        const selection = window.getSelection();
-        if (selection.rangeCount > 0) {
-          let node = selection.anchorNode;
-
-          // If text node, get parent element
-          if (node.nodeType === 3) {
-            node = node.parentNode;
-          }
-
-          if (format === 'quote' && node && node.closest) {
-            const quoteNode = node.closest('blockquote');
-            if (quoteNode && wysiwygEditor.contains(quoteNode)) {
-              unwrapBlockquote(quoteNode);
-              wysiwygEditor.dispatchEvent(new Event('input'));
-              setTimeout(updateToolbarState, 10);
-              return;
-            }
-          }
-
-          if (node && node.closest && (format === 'h1' || format === 'h2' || format === 'h3')) {
-            const headingNode = node.closest(format);
-            if (headingNode && wysiwygEditor.contains(headingNode)) {
-              unwrapHeading(headingNode);
-              wysiwygEditor.dispatchEvent(new Event('input'));
-              setTimeout(updateToolbarState, 10);
-              return;
-            }
-          }
-
-          // Find current block-level element
-          while (node && node !== wysiwygEditor) {
-            if (node.nodeType === 1) {
-              const tagName = node.tagName.toUpperCase();
-
-              // Toggle off if same format is clicked
-              if ((format === 'h1' && tagName === 'H1') ||
-                  (format === 'h2' && tagName === 'H2') ||
-                  (format === 'h3' && tagName === 'H3') ||
-                  (format === 'quote' && tagName === 'BLOCKQUOTE')) {
-                document.execCommand('formatBlock', false, 'p');
-                wysiwygEditor.dispatchEvent(new Event('input'));
-                setTimeout(updateToolbarState, 10);
-                return;
-              }
-            }
-            node = node.parentNode;
-          }
-        }
-      }
-
-      switch(format) {
-        case 'bold':
-          document.execCommand('bold', false, null);
-          break;
-        case 'italic':
-          document.execCommand('italic', false, null);
-          break;
-        case 'h1':
-          document.execCommand('formatBlock', false, '<h1>');
-          break;
-        case 'h2':
-          document.execCommand('formatBlock', false, '<h2>');
-          break;
-        case 'h3':
-          document.execCommand('formatBlock', false, '<h3>');
-          break;
-        case 'list':
-          document.execCommand('insertUnorderedList', false, null);
-          break;
-        case 'numbered':
-          document.execCommand('insertOrderedList', false, null);
-          break;
-        case 'link':
-          const selection = window.getSelection();
-          const selectedText = selection.toString();
-
-          if (!selectedText) {
-            alert('Please select text first to create a link');
-            return;
-          }
-
-          const url = prompt('Enter URL:', 'https://');
-          if (url && url.trim()) {
-            document.execCommand('createLink', false, url.trim());
-
-            // Make sure links open in new tab and are styled properly
-            setTimeout(() => {
-              const links = wysiwygEditor.querySelectorAll('a[href="' + url.trim() + '"]');
-              links.forEach(link => {
-                link.setAttribute('target', '_blank');
-                link.setAttribute('rel', 'noopener noreferrer');
-              });
-            }, 10);
-          }
-          break;
-        case 'quote':
-          document.execCommand('formatBlock', false, '<blockquote>');
-          break;
-      }
-
-      // Trigger input event to sync with hidden textarea
-      wysiwygEditor.dispatchEvent(new Event('input'));
-    }
-
-    formatBtns.forEach(btn => {
-      btn.addEventListener('click', function(e) {
-        e.preventDefault();
-        const format = this.dataset.format;
-        applyFormat(format);
-      });
     });
 
-    // Keyboard shortcuts
-    wysiwygEditor.addEventListener('keydown', function(e) {
-      if (e.ctrlKey || e.metaKey) {
-        if (e.key === 'b') {
-          e.preventDefault();
-          applyFormat('bold');
-        } else if (e.key === 'i') {
-          e.preventDefault();
-          applyFormat('italic');
-        }
-      }
-    });
-
-    // Update toolbar button states based on cursor position
-    function updateToolbarState() {
-      // Check for bold
-      const isBold = document.queryCommandState('bold');
-      const boldBtn = document.querySelector('[data-format="bold"]');
-      if (boldBtn) {
-        boldBtn.classList.toggle('active-format', isBold);
-      }
-
-      // Check for italic
-      const isItalic = document.queryCommandState('italic');
-      const italicBtn = document.querySelector('[data-format="italic"]');
-      if (italicBtn) {
-        italicBtn.classList.toggle('active-format', isItalic);
-      }
-
-      // Check for lists
-      const isUL = document.queryCommandState('insertUnorderedList');
-      const ulBtn = document.querySelector('[data-format="list"]');
-      if (ulBtn) {
-        ulBtn.classList.toggle('active-format', isUL);
-      }
-
-      const isOL = document.queryCommandState('insertOrderedList');
-      const olBtn = document.querySelector('[data-format="numbered"]');
-      if (olBtn) {
-        olBtn.classList.toggle('active-format', isOL);
-      }
-
-      // Check for heading levels and blockquote
-      const selection = window.getSelection();
-
-      // Reset all heading and quote buttons first
-      document.querySelectorAll('[data-format="h1"], [data-format="h2"], [data-format="h3"], [data-format="quote"]').forEach(btn => {
-        btn.classList.remove('active-format');
-      });
-
-      if (selection.rangeCount > 0) {
-        let node = selection.anchorNode;
-
-        // Traverse up to find block-level element
-        while (node && node !== wysiwygEditor) {
-          if (node.nodeType === 1) { // Element node
-            const tagName = node.tagName;
-
-            // Activate corresponding button
-            if (tagName === 'H1') {
-              const h1Btn = document.querySelector('[data-format="h1"]');
-              if (h1Btn) h1Btn.classList.add('active-format');
-              break;
-            } else if (tagName === 'H2') {
-              const h2Btn = document.querySelector('[data-format="h2"]');
-              if (h2Btn) h2Btn.classList.add('active-format');
-              break;
-            } else if (tagName === 'H3') {
-              const h3Btn = document.querySelector('[data-format="h3"]');
-              if (h3Btn) h3Btn.classList.add('active-format');
-              break;
-            } else if (tagName === 'BLOCKQUOTE') {
-              const quoteBtn = document.querySelector('[data-format="quote"]');
-              if (quoteBtn) quoteBtn.classList.add('active-format');
-              break;
-            }
-          }
-          node = node.parentNode;
-        }
-      }
+    // Setup toolbar buttons
+    const toolbar = document.querySelector('.formatting-toolbar');
+    if (tiptapEditor && toolbar) {
+      window.TiptapEditorUtils.setupToolbarButtons(tiptapEditor, toolbar);
     }
 
-    // Update toolbar on selection change or click
-    wysiwygEditor.addEventListener('mouseup', updateToolbarState);
-    wysiwygEditor.addEventListener('keyup', updateToolbarState);
-    wysiwygEditor.addEventListener('focus', updateToolbarState);
+    // Sync before form submission and clear draft
+    editForm.addEventListener('submit', function() {
+      if (tiptapEditor) {
+        const markdown = window.TiptapEditorUtils.getMarkdownFromEditor(tiptapEditor);
+        noteTextarea.value = markdown;
+      }
+      clearDraft();
+    });
 
-    // Update after applying format
-    const originalApplyFormat = applyFormat;
-    applyFormat = function(format) {
-      originalApplyFormat(format);
-      setTimeout(updateToolbarState, 10);
-    };
 
     // Form validation
     editForm.addEventListener('submit', function(e) {

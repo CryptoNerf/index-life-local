@@ -1,0 +1,175 @@
+/* ========== Tiptap Custom Styles (Times New Roman Theme) ========== */
+
+/* Main editor container */
+.tiptap-editor {
+  width: 100%;
+  min-height: 150px;
+  max-height: 400px;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 20px;
+  border: 1px solid #222;
+  border-top: none;
+  box-sizing: border-box;
+  overflow-y: auto;
+  background: #fff;
+  line-height: 1.6;
+}
+
+/* ProseMirror editor content */
+.ProseMirror {
+  padding: 8px;
+  outline: none;
+  min-height: 134px; /* 150px - 16px padding */
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+/* Placeholder text */
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: #999;
+  font-style: italic;
+  pointer-events: none;
+  height: 0;
+}
+
+/* ========== Typography Styles ========== */
+
+.ProseMirror p {
+  margin: 0;
+}
+
+.ProseMirror h1 {
+  font-size: 28px;
+  font-weight: bold;
+  margin: 12px 0 0 0;
+}
+
+.ProseMirror h2 {
+  font-size: 24px;
+  font-weight: bold;
+  margin: 10px 0 0 0;
+}
+
+.ProseMirror h3 {
+  font-size: 22px;
+  font-weight: bold;
+  margin: 8px 0 0 0;
+}
+
+/* Первый элемент без верхнего отступа */
+.ProseMirror > *:first-child {
+  margin-top: 0;
+}
+
+.ProseMirror ul,
+.ProseMirror ol {
+  margin: 0;
+  padding-left: 24px;
+}
+
+.ProseMirror li {
+  margin: 0;
+}
+
+.ProseMirror li p {
+  margin: 0;
+}
+
+.ProseMirror strong,
+.ProseMirror b {
+  font-weight: bold;
+}
+
+.ProseMirror em,
+.ProseMirror i {
+  font-style: italic;
+}
+
+.ProseMirror a {
+  color: #009AFA;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.ProseMirror blockquote {
+  border-left: 4px solid #222;
+  padding-left: 16px;
+  margin: 8px 0;
+  color: #555;
+}
+
+.ProseMirror hr {
+  border: none;
+  border-top: 1px solid #222;
+  margin: 16px 0;
+}
+
+.ProseMirror code {
+  background: #e8e8e8;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: 'Courier New', monospace;
+  font-size: 18px;
+}
+
+.ProseMirror pre {
+  background: #e8e8e8;
+  padding: 12px;
+  border-radius: 4px;
+  overflow-x: auto;
+  margin: 8px 0;
+  font-family: 'Courier New', monospace;
+  font-size: 16px;
+}
+
+.ProseMirror pre code {
+  background: none;
+  padding: 0;
+  font-size: inherit;
+}
+
+/* ========== Selection ========== */
+
+.ProseMirror ::selection {
+  background: #b4d5fe;
+}
+
+/* ========== Mobile Responsive ========== */
+
+@media (max-width: 600px) {
+  .tiptap-editor {
+    min-height: 100px;
+    max-height: 250px;
+    font-size: 18px;
+  }
+
+  .ProseMirror {
+    min-height: 84px;
+  }
+
+  .ProseMirror code {
+    font-size: 16px;
+  }
+
+  .ProseMirror pre {
+    font-size: 14px;
+  }
+}
+
+/* ========== Focus state (subtle) ========== */
+
+.ProseMirror:focus {
+  outline: none;
+}
+
+/* ========== Lists spacing ========== */
+
+.ProseMirror ul ul,
+.ProseMirror ul ol,
+.ProseMirror ol ul,
+.ProseMirror ol ol {
+  margin-top: 0;
+  margin-bottom: 0;
+}
