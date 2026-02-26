@@ -40,6 +40,7 @@ class UserProfile(db.Model):
     username = db.Column(db.String(100), nullable=False, default='User')
     email = db.Column(db.String(120), nullable=True)
     photo_filename = db.Column(db.String(255), nullable=True)
+    birthdate = db.Column(db.Date, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     def __repr__(self):

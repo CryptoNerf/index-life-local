@@ -1,0 +1,318 @@
+/* ========== Base ========== */
+body {
+  font-family: 'Times New Roman', Times, serif;
+  background: #fff;
+  margin: 0;
+  padding: 0;
+}
+
+.main-header { width: 100%; }
+
+.top-menu {
+  display: flex;
+  gap: 24px;
+  font-size: 20px;
+  margin-top: 60px;
+  margin-left: 70px;
+}
+
+.menu-link {
+  color: #222;
+  text-decoration: none;
+  font-family: inherit;
+  transition: color 0.2s;
+}
+.menu-link:hover { text-decoration: underline; }
+.index-link { color: #009AFA; }
+
+/* ========== Page Layout ========== */
+.life-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px 20px 60px;
+}
+
+.life-title {
+  font-size: 20px;
+  font-weight: normal;
+  margin-bottom: 32px;
+  text-align: center;
+}
+.life-title-print { display: none; }
+
+/* ========== No-birthdate form ========== */
+.birthdate-prompt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  margin-top: 60px;
+}
+
+.birthdate-prompt label {
+  font-size: 18px;
+  color: #444;
+}
+
+.birthdate-input {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 16px;
+  border: 1px solid #222;
+  padding: 8px 12px;
+  background: #fff;
+  outline: none;
+}
+
+.birthdate-input:focus { border-color: #000; }
+
+.life-btn {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 16px;
+  background: #000;
+  color: #fff;
+  border: none;
+  padding: 8px 24px;
+  cursor: pointer;
+}
+
+.life-btn-outline {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 14px;
+  background: #fff;
+  color: #222;
+  border: 1px solid #222;
+  padding: 6px 18px;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+}
+.life-btn-outline:hover { background: #222; color: #fff; }
+
+/* ========== Grid wrapper ========== */
+.life-grid-outer {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-bottom: 24px;
+}
+
+/* Week column labels row */
+.week-labels-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 2px;
+}
+
+.row-label-spacer {
+  width: 28px;
+  flex-shrink: 0;
+}
+
+.week-label-cell {
+  width: 11px;
+  height: 14px;
+  flex-shrink: 0;
+  font-size: 14px;
+  color: #888;
+  text-align: center;
+  line-height: 14px;
+  margin: 0 1px;
+}
+
+/* Each year row */
+.year-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 1px;
+}
+
+.year-label {
+  width: 28px;
+  font-size: 14px;
+  color: #888;
+  text-align: right;
+  padding-right: 4px;
+  flex-shrink: 0;
+  line-height: 11px;
+}
+
+/* Individual cell */
+.life-cell {
+  width: 11px;
+  height: 11px;
+  border: 1px solid #222;
+  flex-shrink: 0;
+  margin: 0 1px;
+  box-sizing: border-box;
+}
+
+.life-cell.lived {
+  background: #000;
+  border-color: #000;
+}
+
+.life-cell.current-week {
+  background: #009AFA;
+  border-color: #000000;
+}
+
+/* ========== Stats line ========== */
+.life-stats {
+  font-size: 14px;
+  color: #666;
+  margin-top: 4px;
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+/* ========== Actions ========== */
+.life-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+/* ========== Print ========== */
+@media print {
+  @page {
+    size: A4;
+    margin: 18mm;
+  }
+
+  body {
+    margin: 0;
+    background: #fff;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .life-page {
+    padding: 0;
+    margin: 0;
+  }
+
+  .life-title {
+    font-size: 14pt;
+    margin: 0 0 10mm 0;
+  }
+
+  .life-title-screen { display: none; }
+  .life-title-print { display: inline; }
+
+  .life-grid-outer {
+    align-items: center;
+    margin: 0;
+  }
+
+  .life-grid-outer {
+    --cell-size: 2mm;
+    --cell-gap: 0.7mm;
+    --label-width: 9mm;
+  }
+
+  .week-labels-row {
+    display: grid;
+    grid-template-columns: var(--label-width) repeat(52, var(--cell-size));
+    column-gap: var(--cell-gap);
+    align-items: end;
+    margin-bottom: var(--cell-gap);
+    justify-content: start;
+  }
+
+  .row-label-spacer {
+    width: var(--label-width);
+  }
+
+  .week-label-cell {
+    width: var(--cell-size);
+    height: 14px;
+    margin: 0;
+    font-size: 14px !important;
+    line-height: 1;
+    flex: 0 0 auto;
+    box-sizing: border-box;
+    color: #333;
+  }
+
+  .year-row {
+    display: grid;
+    grid-template-columns: var(--label-width) repeat(52, var(--cell-size));
+    column-gap: var(--cell-gap);
+    align-items: center;
+    margin-bottom: var(--cell-gap);
+    height: var(--cell-size);
+    justify-content: start;
+  }
+
+  .year-label {
+    width: var(--label-width);
+    padding-right: 2mm;
+    font-size: 14px !important;
+    color: #333;
+    line-height: 1;
+    height: var(--cell-size);
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    overflow: visible;
+  }
+
+  .life-cell {
+    width: var(--cell-size);
+    height: var(--cell-size);
+    margin: 0;
+    border: 0.25mm solid #000;
+    flex: 0 0 auto;
+    box-sizing: border-box;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .life-cell.lived {
+    background: #000;
+    border-color: #000;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .life-cell.current-week {
+    background: #fff;
+    border-color: #000;
+  }
+}
+
+/* ========== Mobile ========== */
+@media (max-width: 768px) {
+  .top-menu {
+    flex-direction: column;
+    align-items: center;
+    margin-left: 0;
+    margin-top: 30px;
+    padding: 0 20px;
+  }
+
+  .life-cell {
+    width: 6px;
+    height: 6px;
+    margin: 0;
+  }
+
+  .week-label-cell {
+    width: 6px;
+    margin: 0;
+    font-size: 7px;
+  }
+
+  .year-label {
+    font-size: 8px;
+    width: 20px;
+  }
+
+  .row-label-spacer { width: 20px; }
+}
+
+
