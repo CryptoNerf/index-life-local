@@ -73,6 +73,15 @@ body {
   padding: 10px 0;
   flex-shrink: 0;
 }
+.footer-link {
+  color: #666;
+  text-decoration: none;
+  font-size: 14px;
+  letter-spacing: 0.2px;
+}
+.footer-link:hover {
+  text-decoration: underline;
+}
 
 /* Полностью скрываем стандартный input file */
 .input-file {

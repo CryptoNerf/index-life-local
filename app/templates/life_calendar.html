@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>life in weeks</title>
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
+  <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='images/apple-touch-icon.png') }}">
+  <link rel="manifest" href="{{ url_for('static', filename='images/site.webmanifest') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/life_calendar.css') }}">
+</head>
+<body>
+  <header class="main-header no-print">
+    <nav class="top-menu">
+      <a href="{{ url_for('main.mood_grid') }}" class="menu-link index-link">index.life</a>
+      <a href="{{ url_for('main.life_calendar') }}" class="menu-link">life in weeks</a>
+      <a href="{{ url_for('main.account') }}" class="menu-link">account</a>
+    </nav>
+  </header>
+
+  <div class="life-page">
+
+    {% if not birthdate or show_change_form %}
+      <!-- No birthdate set OR user clicked "change": show prompt -->
+      <p class="life-title">
+        <span class="life-title-screen">Life in weeks</span>
+        <span class="life-title-print">Your life in weeks.</span>
+      </p>
+      <form class="birthdate-prompt" method="POST" action="{{ url_for('main.life_set_birthdate') }}">
+        <label for="birthdate-input">
+          {% if show_change_form %}change your date of birth{% else %}enter your date of birth{% endif %}
+        </label>
+        <input
+          type="date"
+          id="birthdate-input"
+          name="birthdate"
+          class="birthdate-input"
+          value="{{ birthdate.strftime('%Y-%m-%d') if birthdate else '' }}"
+          required
+        >
+        <button type="submit" class="life-btn">save</button>
+        {% if show_change_form %}
+          <a href="{{ url_for('main.life_calendar') }}" class="menu-link" style="font-size:14px;color:#888;">cancel</a>
+        {% endif %}
+      </form>
+
+    {% else %}
+      <!-- Birthdate set: show grid then buttons below -->
+      <p class="life-title">
+        <span class="life-title-screen">Life in weeks</span>
+        <span class="life-title-print">Your life in weeks.</span>
+      </p>
+      
+      <div class="life-grid-outer">
+        <!-- Week column labels row -->
+        <div class="week-labels-row">
+          <div class="row-label-spacer"></div>
+          {% for week in range(52) %}
+            <div class="week-label-cell">
+              {% if (week + 1) % 5 == 0 %}{{ week + 1 }}{% endif %}
+            </div>
+          {% endfor %}
+        </div>
+
+        <!-- Year rows -->
+        {% for year in range(80) %}
+          <div class="year-row">
+            <div class="year-label">
+              {% if (year + 1) % 5 == 0 %}{{ year + 1 }}{% endif %}
+            </div>
+            {% for week in range(52) %}
+              {% set idx = year * 52 + week %}
+              <div class="life-cell
+                {%- if weeks_lived is not none and idx < weeks_lived %} lived
+                {%- elif current_week_index is not none and idx == current_week_index %} current-week
+                {%- endif %}"></div>
+            {% endfor %}
+          </div>
+        {% endfor %}
+      </div>
+
+      <!-- Stats and actions below the grid -->
+      {% if weeks_lived is not none %}
+        <p class="life-stats no-print">
+          {{ weeks_lived }} weeks lived &nbsp;·&nbsp; {{ (weeks_lived / 52.18) | round(1) }} years
+        </p>
+      {% endif %}
+
+      <div class="life-actions no-print">
+        <button class="life-btn" onclick="window.print()">print</button>
+        <a href="{{ url_for('main.life_calendar', change=1) }}" class="life-btn-outline">change birthdate</a>
+      </div>
+
+    {% endif %}
+
+  </div>
+</body>
+</html>

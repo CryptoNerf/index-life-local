@@ -29,8 +29,8 @@
   <header class="main-header">
     <nav class="top-menu">
       <a href="{{ url_for('main.mood_grid') }}" class="menu-link index-link">index.life</a>
+      <a href="{{ url_for('main.life_calendar') }}" class="menu-link">life in weeks</a>
       <a href="{{ url_for('main.account') }}" class="menu-link">account</a>
-      <a href="{{ url_for('main.what_is_index') }}" class="menu-link">what is index.life?</a>
     </nav>
   </header>
   <div class="center-account-block">
@@ -75,6 +75,11 @@
       <div style="margin-bottom:16px;">
         <label style="display:block;margin-bottom:8px;">Email (optional):</label>
         <input type="email" name="email" value="{{ profile.email or '' }}" class="text-input" style="width:100%;max-width:300px;padding:8px;font-size:16px;">
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <label style="display:block;margin-bottom:8px;">Date of birth (for life calendar):</label>
+        <input type="date" name="birthdate" value="{{ profile.birthdate.strftime('%Y-%m-%d') if profile.birthdate else '' }}" class="text-input" style="width:100%;max-width:300px;padding:8px;font-size:16px;">
       </div>
 
       <div class="file-input-container" style="margin-bottom:16px;">
@@ -137,5 +142,8 @@
       }
     </script>
   </div>
+  <footer class="main-footer">
+    <a href="{{ url_for('main.what_is_index') }}" class="footer-link">what is index.life?</a>
+  </footer>
 </body>
 </html>

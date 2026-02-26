@@ -264,6 +264,16 @@ def account():
         profile.username = request.form.get('username', 'User')
         profile.email = request.form.get('email', '')
 
+        # Handle birthdate
+        birthdate_str = request.form.get('birthdate', '').strip()
+        if birthdate_str:
+            try:
+                profile.birthdate = datetime.strptime(birthdate_str, '%Y-%m-%d').date()
+            except ValueError:
+                flash('Invalid birth date format', 'error')
+        else:
+            profile.birthdate = None
+
         # Handle photo upload
         if 'photo' in request.files:
             file = request.files['photo']
@@ -337,6 +347,57 @@ def stats():
                          avg_rating=avg_rating,
                          monthly_stats=monthly_stats,
                          year=year)
+
+
+@bp.route('/life')
+def life_calendar():
+    """Life in weeks calendar page"""
+    profile = UserProfile.query.first()
+    birthdate = profile.birthdate if profile else None
+
+    weeks_lived = None
+    current_week_index = None
+
+    if birthdate:
+        today = date.today()
+        if birthdate <= today:
+            days = (today - birthdate).days
+            weeks_lived = days // 7
+            current_week_index = min(weeks_lived, 80 * 52 - 1)
+
+    show_change_form = 'change' in request.args
+
+    return render_template('life_calendar.html',
+                           birthdate=birthdate,
+                           weeks_lived=weeks_lived,
+                           current_week_index=current_week_index,
+                           show_change_form=show_change_form)
+
+
+@bp.route('/life/set-birthdate', methods=['POST'])
+def life_set_birthdate():
+    """Save birthdate from the life calendar prompt form"""
+    birthdate_str = request.form.get('birthdate', '').strip()
+    if birthdate_str:
+        try:
+            bd = datetime.strptime(birthdate_str, '%Y-%m-%d').date()
+        except ValueError:
+            flash('Invalid date format', 'error')
+            return redirect(url_for('main.life_calendar'))
+
+        profile = UserProfile.query.first()
+        if not profile:
+            profile = UserProfile(username='User', email='')
+            db.session.add(profile)
+
+        profile.birthdate = bd
+        try:
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error saving birthdate: {e}', 'error')
+
+    return redirect(url_for('main.life_calendar'))
 
 
 @bp.route('/export/markdown')

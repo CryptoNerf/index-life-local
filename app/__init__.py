@@ -29,6 +29,15 @@ def create_app(config_class='config.Config'):
     with app.app_context():
         db.create_all()
 
+        # Migrate: add birthdate column if it doesn't exist (for existing DBs)
+        from sqlalchemy import inspect, text
+        inspector = inspect(db.engine)
+        columns = [col['name'] for col in inspector.get_columns('user_profile')]
+        if 'birthdate' not in columns:
+            with db.engine.connect() as conn:
+                conn.execute(text('ALTER TABLE user_profile ADD COLUMN birthdate DATE'))
+                conn.commit()
+
         # Create default user profile if not exists
         from app.models import UserProfile
         if not UserProfile.query.first():
