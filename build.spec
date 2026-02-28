@@ -9,9 +9,33 @@ block_cipher = None
 import sys
 import os
 from pathlib import Path
+from PyInstaller.utils.hooks import collect_submodules
 
 # Get the root directory
 root_dir = Path(SPECPATH)
+
+
+def module_datas():
+    datas = []
+    modules_root = root_dir / 'app' / 'modules'
+    if not modules_root.exists():
+        return datas
+
+    for path in modules_root.rglob('*'):
+        if path.is_dir():
+            continue
+        rel = path.relative_to(root_dir)
+
+        # Exclude cached files
+        if '__pycache__' in rel.parts:
+            continue
+
+        # Exclude large model files (keep README.md)
+        if 'models' in rel.parts and path.name.lower() != 'readme.md':
+            continue
+
+        datas.append((str(path), str(rel.parent)))
+    return datas
 
 a = Analysis(
     ['run.py'],
@@ -21,7 +45,11 @@ a = Analysis(
         ('app/templates', 'app/templates'),
         ('app/static', 'app/static'),
         ('config.py', '.'),
-    ],
+        ('MODULES.md', '.'),
+        ('install_modules.bat', '.'),
+        ('install_modules.sh', '.'),
+        ('tools/install_modules.py', 'tools'),
+    ] + module_datas(),
     hiddenimports=[
         'flask',
         'flask_sqlalchemy',
@@ -29,7 +57,7 @@ a = Analysis(
         'PIL',
         'PIL._imagingtk',
         'PIL._webp',
-    ],
+    ] + collect_submodules('app.modules'),
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

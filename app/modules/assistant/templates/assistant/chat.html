@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ai psychologist</title>
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
+  <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='images/apple-touch-icon.png') }}">
+  <link rel="manifest" href="{{ url_for('static', filename='images/site.webmanifest') }}">
+  <link rel="stylesheet" href="{{ url_for('assistant.static', filename='css/chat.css') }}">
+</head>
+<body>
+  <header class="main-header">
+    <nav class="top-menu">
+      <a href="{{ url_for('main.mood_grid') }}" class="menu-link index-link">index.life</a>
+      <a href="{{ url_for('main.life_calendar') }}" class="menu-link">life in weeks</a>
+      <a href="{{ url_for('assistant.chat') }}" class="menu-link">ai psychologist</a>
+      <a href="{{ url_for('main.account') }}" class="menu-link">account</a>
+    </nav>
+  </header>
+
+  <div class="chat-container">
+    <div class="chat-toolbar">
+      <span class="chat-status" id="chat-status"></span>
+      <button class="chat-tool-btn" id="btn-clear-chat" title="Clear chat history">clear chat</button>
+      <button class="chat-tool-btn" id="btn-reindex" title="Reindex all diary entries">reindex</button>
+      <button class="chat-tool-btn" id="btn-reset-profile" title="Reset psychological profile">reset profile</button>
+    </div>
+
+    <div class="chat-messages" id="chat-messages">
+      {% if history %}
+        {% for msg in history %}
+          <div class="chat-msg chat-msg-{{ msg.role }}">{{ msg.content }}</div>
+        {% endfor %}
+      {% else %}
+        <div class="chat-msg chat-msg-assistant">Привет. Я твой AI-психолог. У меня есть доступ к твоему дневнику настроения. Я могу помочь разобраться в чувствах и мыслях. Как ты себя чувствуешь сегодня?</div>
+      {% endif %}
+    </div>
+
+    <div class="chat-input-area">
+      <textarea id="chat-input" placeholder="Напиши сообщение..." rows="2"></textarea>
+      <button id="chat-send-btn" type="button">Send</button>
+    </div>
+  </div>
+
+  <script src="{{ url_for('assistant.static', filename='js/marked.umd.js') }}"></script>
+  <script src="{{ url_for('assistant.static', filename='js/chat.js') }}"></script>
+</body>
+</html>

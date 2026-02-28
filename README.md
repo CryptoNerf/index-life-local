@@ -1,11 +1,11 @@
-# index.life - Local Mood Diary
+﻿# index.life - Local Mood Diary
 
-> **English version** | [🇷🇺 Русская версия](README.ru.md)
+> **English version** | [Русская версия](README.ru.md)
 
 A mood tracker app designed to help people remember and become more aware of themselves and their time.
 
 ![Version](https://img.shields.io/badge/version-2.1.0-blue)
-![Python](https://img.shields.io/badge/python-3.8+-green)
+![Python](https://img.shields.io/badge/python-3.8%2B-green)
 ![Flask](https://img.shields.io/badge/flask-3.0.0-lightgrey)
 ![License](https://img.shields.io/badge/license-MIT-yellow)
 
@@ -15,7 +15,7 @@ A mood tracker app designed to help people remember and become more aware of the
 
 ### Option 1: Pre-built Releases (Recommended)
 
-Download the ready-to-use version for your operating system from [Releases](https://github.com/CryptoNerf/index-life-local/releases/latest):
+Download the ready-to-use version for your operating system from Releases:
 
 **Windows:**
 1. Download `index-life_windows_x64.zip`
@@ -46,6 +46,10 @@ Download the ready-to-use version for your operating system from [Releases](http
    ./index-life_linux_x86_64.AppImage
    ```
 
+**Optional modules (AI + Voice):**
+- In the release folder, run `install_modules.bat` (Windows) or `install_modules.sh` (macOS/Linux).
+- Python 3.10 is recommended. On Windows the installer auto-installs Python if missing.
+
 ### Option 2: Installation via Scripts (From Source)
 
 If you want to run from source code:
@@ -63,7 +67,9 @@ chmod +x install.sh start.sh
 ./start.sh    # Subsequent runs
 ```
 
-The scripts will automatically install Python and all dependencies if they're not present on your system.
+**Optional modules (AI + Voice):**
+- Run `install_modules.bat` / `install_modules.sh`
+- See `MODULES.md` for details
 
 ---
 
@@ -76,6 +82,7 @@ The scripts will automatically install Python and all dependencies if they're no
 - 100% privacy - all data stored locally (SQLite)
 - Works completely offline
 - Simple web interface
+- Optional AI psychologist chat and voice dictation (after installing modules)
 
 ---
 
@@ -83,18 +90,19 @@ The scripts will automatically install Python and all dependencies if they're no
 
 ```
 index-life-local/
-├── app/
-│   ├── __init__.py          # Flask app initialization
-│   ├── models.py            # Database models
-│   ├── routes.py            # Application routes
-│   ├── templates/           # HTML templates
-│   └── static/              # Static files (CSS, images)
-├── config.py                # Configuration
-├── run.py                   # Application entry point
-├── requirements.txt         # Python dependencies
-├── install.bat/sh           # Installation scripts
-├── start.bat/sh             # Startup scripts
-└── diary.db                 # SQLite database (created on first run)
+├─ app/
+│  ├─ modules/            # Optional modules (assistant, voice)
+│  ├─ templates/          # HTML templates
+│  └─ static/             # Static files (CSS, JS, images)
+├─ tools/                 # Helper scripts (module installer)
+├─ config.py              # Configuration
+├─ run.py                 # Application entry point
+├─ requirements.txt       # Python dependencies
+├─ install.bat/.sh        # Base installation
+├─ start.bat/.sh          # App launch
+├─ install_modules.bat/.sh# Module installer
+├─ MODULES.md             # Modules guide
+└─ diary.db               # SQLite database (created on first run)
 ```
 
 ---
@@ -105,6 +113,7 @@ index-life-local/
 - **Database**: SQLite (via Flask-SQLAlchemy)
 - **Frontend**: HTML, CSS, Vanilla JavaScript
 - **Images**: Pillow (Python Imaging Library)
+- **Optional**: llama-cpp-python, sentence-transformers, faster-whisper
 
 ---
 
@@ -127,6 +136,12 @@ Yes, all data is stored in standard SQLite format in the `diary.db` file, which 
 
 **Do I need to register or log in?**
 No, just launch the application and start using it. No accounts or passwords required.
+
+**How do I enable AI and voice modules?**
+Run `install_modules.bat` (Windows) or `install_modules.sh` (macOS/Linux) and follow the prompts.
+
+**Which Python version is required?**
+Python 3.10 is recommended. The app also works with Python 3.8+.
 
 ---
 

@@ -34,6 +34,9 @@
     <nav class="top-menu">
       <a href="{{ url_for('main.mood_grid') }}" class="menu-link index-link">index.life</a>
       <a href="{{ url_for('main.life_calendar') }}" class="menu-link">life in weeks</a>
+      {% if module_active('assistant') %}
+        <a href="{{ url_for('assistant.chat') }}" class="menu-link">ai psychologist</a>
+      {% endif %}
       <a href="{{ url_for('main.account') }}" class="menu-link">account</a>
     </nav>
   </header>
@@ -88,6 +91,11 @@
           <button type="button" class="format-btn" data-format="quote" title="Quote">
             "
           </button>
+          {% if module_active('voice') %}
+            <button type="button" class="mic-btn" id="voice-mic-btn" title="Voice dictation">
+              mic.
+            </button>
+          {% endif %}
         </div>
         <!-- Hidden textarea for form submission -->
         <textarea name="note" id="note-textarea" class="note-textarea" rows="6" style="display: none;">{{ entry.note if entry else '' }}</textarea>
@@ -219,6 +227,9 @@
       }
     });
 
+    // Expose editor globally for voice module
+    window.tiptapEditor = tiptapEditor;
+
     // Setup toolbar buttons
     const toolbar = document.querySelector('.formatting-toolbar');
     if (tiptapEditor && toolbar) {
@@ -268,5 +279,9 @@
       }
     });
   </script>
+  {% if module_active('voice') %}
+    <link rel="stylesheet" href="{{ url_for('voice.static', filename='css/voice.css') }}">
+    <script src="{{ url_for('voice.static', filename='js/voice-recorder.js') }}"></script>
+  {% endif %}
 </body>
 </html>

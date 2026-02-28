@@ -14,6 +14,9 @@
     <nav class="top-menu">
       <a href="{{ url_for('main.mood_grid') }}" class="menu-link index-link">index.life</a>
       <a href="{{ url_for('main.life_calendar') }}" class="menu-link">life in weeks</a>
+      {% if module_active('assistant') %}
+        <a href="{{ url_for('assistant.chat') }}" class="menu-link">ai psychologist</a>
+      {% endif %}
       <a href="{{ url_for('main.account') }}" class="menu-link">account</a>
     </nav>
   </header>
