@@ -63,6 +63,9 @@ import_data.py
 # Claude Code settings
 .claude/
 
+# Local module environment (for optional modules)
+modules_venv/
+
 # Developer documentation (not needed for end users)
 CHANGELOG.md
 GITHUB_SETUP.md
@@ -83,3 +86,7 @@ check_database.py
 create_2025_database.py
 TIPTAP_MIGRATION.md
 NATIVE_MARKDOWN_MIGRATION.md
+
+# Module model files (large AI models)
+app/modules/*/models/**
+!app/modules/*/models/README.md

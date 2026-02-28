@@ -1,0 +1,309 @@
+body {
+  font-family: 'Times New Roman', Times, serif;
+  background: #fff;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ========== Header ========== */
+.main-header {
+  top: 0;
+  left: 0;
+  width: 100%;
+  flex-shrink: 0;
+}
+.top-menu {
+  display: flex;
+  gap: 24px;
+  font-size: 20px;
+  margin-top: 60px;
+  margin-left: 70px;
+}
+.menu-link {
+  color: #222;
+  text-decoration: none;
+  font-family: inherit;
+  transition: color 0.2s;
+}
+.menu-link:hover {
+  text-decoration: underline;
+}
+.index-link {
+  color: #009AFA;
+}
+
+/* ========== Toolbar ========== */
+.chat-toolbar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e0e0e0;
+  margin-bottom: 8px;
+}
+
+.chat-status {
+  font-size: 13px;
+  color: #888;
+  margin-right: auto;
+}
+
+.chat-tool-btn {
+  background: none;
+  border: 1px solid #ccc;
+  padding: 4px 10px;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 13px;
+  color: #666;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+}
+.chat-tool-btn:hover {
+  border-color: #222;
+  color: #222;
+}
+
+/* ========== Chat layout ========== */
+.chat-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  max-width: 720px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 24px 20px 20px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+/* ========== Messages ========== */
+.chat-msg {
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  font-size: 17px;
+  line-height: 1.6;
+  word-wrap: break-word;
+}
+
+.chat-msg-user {
+  background: #f5f5f5;
+  border-left: 3px solid #222;
+  white-space: pre-wrap;
+}
+
+.chat-msg-assistant {
+  background: #fff;
+  border-left: 3px solid #009AFA;
+  white-space: normal;
+}
+
+.chat-msg-error {
+  color: #c00;
+  border-left-color: #c00;
+}
+
+/* ========== Think blocks (collapsible) ========== */
+.think-block {
+  margin: 8px 0;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  font-size: 14px;
+  color: #888;
+}
+.think-block summary {
+  cursor: pointer;
+  padding: 4px 10px;
+  color: #999;
+  font-style: italic;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.think-block summary:hover {
+  color: #666;
+}
+.think-block .think-content {
+  padding: 8px 10px;
+  border-top: 1px solid #e0e0e0;
+  white-space: pre-wrap;
+  color: #888;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.think-streaming summary {
+  color: #009AFA;
+}
+
+/* Markdown styling for assistant messages */
+.chat-msg-assistant p {
+  margin: 8px 0;
+}
+.chat-msg-assistant h1 {
+  font-size: 24px;
+  margin: 10px 0 6px;
+  font-weight: bold;
+}
+.chat-msg-assistant h2 {
+  font-size: 22px;
+  margin: 10px 0 6px;
+  font-weight: bold;
+}
+.chat-msg-assistant h3 {
+  font-size: 20px;
+  margin: 8px 0 4px;
+  font-weight: bold;
+}
+.chat-msg-assistant ul,
+.chat-msg-assistant ol {
+  margin: 6px 0 6px 18px;
+  padding-left: 16px;
+}
+.chat-msg-assistant li {
+  margin: 4px 0;
+}
+.chat-msg-assistant li p {
+  margin: 4px 0;
+}
+.chat-msg-assistant strong,
+.chat-msg-assistant b {
+  font-weight: bold;
+}
+.chat-msg-assistant em,
+.chat-msg-assistant i {
+  font-style: italic;
+}
+.chat-msg-assistant a {
+  color: #009AFA;
+  text-decoration: underline;
+}
+.chat-msg-assistant code {
+  background: #f0f0f0;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: "Courier New", monospace;
+  font-size: 0.95em;
+}
+.chat-msg-assistant pre {
+  background: #f0f0f0;
+  padding: 10px 12px;
+  border-radius: 4px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+.chat-msg-assistant pre code {
+  background: none;
+  padding: 0;
+}
+.chat-msg-assistant blockquote {
+  border-left: 4px solid #222;
+  padding-left: 12px;
+  margin: 8px 0;
+  color: #555;
+}
+.chat-msg-assistant hr {
+  border: none;
+  border-top: 1px solid #e0e0e0;
+  margin: 12px 0;
+}
+.chat-msg-assistant table {
+  border-collapse: collapse;
+  margin: 8px 0;
+  width: 100%;
+  font-size: 0.95em;
+}
+.chat-msg-assistant th,
+.chat-msg-assistant td {
+  border: 1px solid #e0e0e0;
+  padding: 6px 8px;
+}
+.chat-msg-assistant th {
+  background: #f7f7f7;
+  text-align: left;
+}
+.chat-continue-indicator {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #888;
+  font-style: italic;
+}
+
+/* ========== Input area ========== */
+.chat-input-area {
+  flex-shrink: 0;
+  display: flex;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid #e0e0e0;
+}
+
+#chat-input {
+  flex: 1;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 17px;
+  padding: 10px 14px;
+  border: 1px solid #ccc;
+  resize: none;
+  outline: none;
+  line-height: 1.5;
+  box-sizing: border-box;
+}
+#chat-input:focus {
+  border-color: #222;
+}
+
+#chat-send-btn {
+  background: #000;
+  color: #fff;
+  border: none;
+  padding: 10px 24px;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 17px;
+  cursor: pointer;
+  transition: background 0.2s;
+  align-self: flex-end;
+}
+#chat-send-btn:hover {
+  background: #333;
+}
+#chat-send-btn:disabled {
+  background: #999;
+  cursor: default;
+}
+
+/* ========== Mobile ========== */
+@media (max-width: 768px) {
+  .top-menu {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    margin-left: 0;
+    margin-top: 30px;
+    gap: 24px;
+    padding: 0 20px;
+  }
+  .chat-container {
+    padding: 16px 12px 12px;
+  }
+  .chat-msg {
+    font-size: 16px;
+    padding: 10px 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .top-menu {
+    margin-top: 20px;
+    gap: 24px;
+    padding: 0 15px;
+  }
+}

@@ -1,86 +1,57 @@
 @echo off
-REM Installation script for index.life local application (Windows)
-REM Now with automatic Python installation!
+setlocal
 
-echo ========================================
-echo   index.life - Installation
-echo ========================================
-echo.
-
-REM Check Python installation
-python --version >nul 2>&1
-if errorlevel 1 (
-    echo Python is not installed. Starting automatic installation...
+if exist "venv\Scripts\python.exe" (
+  set "PY=venv\Scripts\python.exe"
+) else (
+  call :ensure_python
+  if errorlevel 1 (
     echo.
-    echo This will download and install Python 3.10 automatically.
-    echo Installation will take a few minutes.
-    echo.
-    set /p CONFIRM="Continue with automatic Python installation? (Y/N): "
-    if /i not "%CONFIRM%"=="Y" (
-        echo.
-        echo Installation cancelled. Please install Python manually from:
-        echo https://www.python.org/downloads/
-        pause
-        exit /b 1
-    )
-
-    call :install_python
-    if errorlevel 1 (
-        echo.
-        echo ERROR: Python installation failed
-        echo Please install Python manually from:
-        echo https://www.python.org/downloads/
-        pause
-        exit /b 1
-    )
+    echo ERROR: Python is required to install modules.
+    pause
+    exit /b 1
+  )
+  set "PY=python"
+  if "%INDEXLIFE_MODULES_VENV%"=="" (
+    set "INDEXLIFE_MODULES_VENV=modules_venv"
+  )
 )
 
-echo Python found:
-python --version
+%PY% tools\install_modules.py %*
+
 echo.
-
-REM Create virtual environment
-if exist "venv\" (
-    echo Virtual environment already exists.
-    set /p RECREATE="Recreate virtual environment? (Y/N): "
-    if /i "%RECREATE%"=="Y" (
-        echo Removing old virtual environment...
-        rmdir /s /q venv
-    )
-)
-
-if not exist "venv\" (
-    echo Creating virtual environment...
-    python -m venv venv
-    echo.
-)
-
-REM Activate virtual environment
-echo Activating virtual environment...
-call venv\Scripts\activate
-
-REM Upgrade pip
-echo Upgrading pip...
-python -m pip install --upgrade pip
-echo.
-
-REM Install dependencies
-echo Installing dependencies...
-pip install -r requirements.txt
-echo.
-
-echo ========================================
-echo Installation completed successfully!
-echo ========================================
-echo.
-echo To start the application, run:
-echo   start.bat
-echo.
-echo Or simply double-click start.bat
-echo.
-
 pause
+endlocal
 exit /b 0
+
+REM ========================================
+REM Function: Ensure Python is installed
+REM ========================================
+:ensure_python
+python --version >nul 2>&1
+if not errorlevel 1 (
+  exit /b 0
+)
+
+echo Python is not installed. Starting automatic installation...
+echo.
+echo This will download and install Python 3.10 automatically.
+echo Installation will take a few minutes.
+echo.
+
+call :install_python
+if errorlevel 1 (
+  echo.
+  echo ERROR: Python installation failed
+  exit /b 1
+)
+
+echo.
+echo Python has been installed successfully!
+echo Please close this window and run install_modules.bat again.
+echo.
+pause
+exit /b 1
 
 REM ========================================
 REM Function: Install Python automatically
@@ -149,12 +120,4 @@ REM ========================================
     del "%INSTALLER_NAME%"
     echo.
 
-    echo Python has been installed successfully!
-    echo.
-    echo IMPORTANT: Please close this window and run install.bat again
-    echo to continue with the installation.
-    echo.
-    pause
     exit /b 0
-
-goto :eof

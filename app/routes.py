@@ -221,6 +221,16 @@ def edit_day(day):
 
         try:
             db.session.commit()
+
+            # Trigger background processing if assistant module is active
+            from flask import current_app
+            if 'assistant' in current_app.config.get('ACTIVE_MODULES', []):
+                try:
+                    from app.modules.assistant.background import process_entry_async
+                    process_entry_async(current_app._get_current_object(), entry.id)
+                except ImportError:
+                    pass
+
             # Redirect to the year of the edited entry (no flash message needed - visual confirmation on calendar is enough)
             return redirect(url_for('main.mood_grid', year=day_date.year))
         except Exception as e:

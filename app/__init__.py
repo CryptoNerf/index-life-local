@@ -25,8 +25,28 @@ def create_app(config_class='config.Config'):
     from app import routes
     app.register_blueprint(routes.bp)
 
-    # Create database tables
+    # Register optional modules (voice, assistant)
+    from app.modules import register_modules
+    register_modules(app)
+
+    # Warm up assistant module on startup (if enabled)
+    if 'assistant' in app.config.get('ACTIVE_MODULES', []):
+        try:
+            from app.modules.assistant.background import warmup_async
+            warmup_async(app)
+        except Exception:
+            pass
+
+    # Context processor: makes module_active() available in all templates
+    @app.context_processor
+    def inject_modules():
+        return {
+            'module_active': lambda name: name in app.config.get('ACTIVE_MODULES', [])
+        }
+
+    # Create database tables (import all models so create_all sees them)
     with app.app_context():
+        from app import models  # noqa: F401
         db.create_all()
 
         # Migrate: add birthdate column if it doesn't exist (for existing DBs)

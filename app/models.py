@@ -69,3 +69,64 @@ class UserProfile(db.Model):
             'avg_rating': self.avg_rating,
             'total_entries': self.total_entries
         }
+
+
+# ── AI Psychologist memory layers ──────────────────────────────
+
+class EntrySummary(db.Model):
+    """Layer 3: short summary of each diary entry"""
+    __tablename__ = 'entry_summaries'
+
+    id = db.Column(db.Integer, primary_key=True)
+    entry_id = db.Column(db.Integer, db.ForeignKey('mood_entries.id'), unique=True, index=True)
+    summary = db.Column(db.Text)
+    themes = db.Column(db.Text)  # JSON list: ["работа", "тревога"]
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    entry = db.relationship('MoodEntry', backref=db.backref('summary_obj', uselist=False))
+
+
+class PeriodSummary(db.Model):
+    """Layer 3: monthly/weekly emotional overviews"""
+    __tablename__ = 'period_summaries'
+
+    id = db.Column(db.Integer, primary_key=True)
+    period_type = db.Column(db.String(10), nullable=False)  # 'month'
+    period_key = db.Column(db.String(10), nullable=False, unique=True, index=True)  # '2025-01'
+    summary = db.Column(db.Text)
+    avg_rating = db.Column(db.Float)
+    entry_count = db.Column(db.Integer)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class EntryEmbedding(db.Model):
+    """Layer 2: vector embeddings for semantic search"""
+    __tablename__ = 'entry_embeddings'
+
+    id = db.Column(db.Integer, primary_key=True)
+    entry_id = db.Column(db.Integer, db.ForeignKey('mood_entries.id'), unique=True, index=True)
+    embedding = db.Column(db.LargeBinary)  # numpy float32 array as bytes
+    text_hash = db.Column(db.String(32))   # MD5 of source text for change detection
+
+    entry = db.relationship('MoodEntry', backref=db.backref('embedding_obj', uselist=False))
+
+
+class UserPsychProfile(db.Model):
+    """Layer 4: structured psychological profile (JSON)"""
+    __tablename__ = 'user_psych_profile'
+
+    id = db.Column(db.Integer, primary_key=True)
+    profile_json = db.Column(db.Text, default='{}')
+    version = db.Column(db.Integer, default=0)
+    entries_analyzed = db.Column(db.Integer, default=0)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class ChatMessage(db.Model):
+    """Persistent chat history between sessions"""
+    __tablename__ = 'chat_messages'
+
+    id = db.Column(db.Integer, primary_key=True)
+    role = db.Column(db.String(20), nullable=False)  # 'user' or 'assistant'
+    content = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)

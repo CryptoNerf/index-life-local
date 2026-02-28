@@ -83,7 +83,7 @@ install_python() {
 
     else
         echo "ERROR: Unsupported operating system"
-        echo "Please install Python 3.8+ manually"
+        echo "Please install Python 3.10+ manually (3.8+ supported)"
         return 1
     fi
 

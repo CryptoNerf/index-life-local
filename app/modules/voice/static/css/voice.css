@@ -1,0 +1,38 @@
+/* Mic button in toolbar */
+.mic-btn {
+  background: none;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 4px 8px;
+  font-size: 16px;
+  line-height: 1;
+  transition: all 0.2s;
+  margin-left: 8px;
+}
+
+.mic-btn:hover {
+  background: #f0f0f0;
+  border-color: #999;
+}
+
+/* Recording state: red pulse */
+.mic-btn.recording {
+  background: #ff4444;
+  border-color: #ff4444;
+  color: #fff;
+  animation: mic-pulse 1s infinite;
+}
+
+@keyframes mic-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* Processing state: grey spinner feel */
+.mic-btn.processing {
+  background: #eee;
+  border-color: #ccc;
+  opacity: 0.7;
+  cursor: wait;
+}
