@@ -53,7 +53,6 @@ def main():
                 sys.stdout.reconfigure(encoding='utf-8')
         except:
             pass
-
     # Print beautiful banner
     print(BANNER)
     print(f"  Version: {Config.APP_VERSION}")
