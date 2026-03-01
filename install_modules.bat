@@ -98,9 +98,10 @@ REM ========================================
     set "PY310="
 
     REM Try py launcher first (most reliable on Windows)
+    REM Resolve to full path so it works in quotes
     py -3.10 --version >nul 2>&1
     if not errorlevel 1 (
-        set "PY310=py -3.10"
+        for /f "delims=" %%R in ('py -3.10 -c "import sys; print(sys.executable)"') do set "PY310=%%R"
         exit /b 0
     )
 
@@ -121,7 +122,7 @@ REM ========================================
     for /f "tokens=2 delims= " %%V in ('python --version 2^>nul') do (
         echo %%V | findstr /b "3.10." >nul
         if not errorlevel 1 (
-            set "PY310=python"
+            for /f "delims=" %%R in ('python -c "import sys; print(sys.executable)"') do set "PY310=%%R"
             exit /b 0
         )
     )
