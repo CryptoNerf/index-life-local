@@ -225,14 +225,16 @@ jobs:
 
       - name: Install Vulkan SDK
         run: |
-          $ver = "1.4.313.0"
-          $installer = "VulkanSDK-$ver-Installer.exe"
-          $url = "https://sdk.lunarg.com/sdk/download/$ver/windows/$installer"
-          Write-Host "Downloading Vulkan SDK $ver..."
-          Invoke-WebRequest -Uri $url -OutFile $installer
+          $url = "https://sdk.lunarg.com/sdk/download/latest/windows/vulkan_sdk.exe"
+          Write-Host "Downloading latest Vulkan SDK..."
+          Invoke-WebRequest -Uri $url -OutFile vulkan_sdk.exe
           Write-Host "Installing Vulkan SDK..."
-          Start-Process -FilePath ".\$installer" -ArgumentList "--accept-licenses --default-answer --confirm-command install" -Wait
-          $sdkPath = "C:\VulkanSDK\$ver"
+          Start-Process -FilePath .\vulkan_sdk.exe -ArgumentList "--accept-licenses --default-answer --confirm-command install" -Wait
+          # Find installed SDK version
+          $sdkRoot = "C:\VulkanSDK"
+          $sdkVer = (Get-ChildItem $sdkRoot -Directory | Sort-Object Name -Descending | Select-Object -First 1).Name
+          $sdkPath = "$sdkRoot\$sdkVer"
+          Write-Host "Vulkan SDK installed: $sdkPath"
           echo "VULKAN_SDK=$sdkPath" >> $env:GITHUB_ENV
           echo "$sdkPath\Bin" >> $env:GITHUB_PATH
 
