@@ -32,6 +32,15 @@ jobs:
         run: |
           python -m PyInstaller build.spec --clean
 
+      - name: Copy install_modules.bat to distribution root
+        run: |
+          # PyInstaller 6+ puts data files in _internal/; copy bat to top level for user access
+          if (Test-Path "dist\index-life\_internal\install_modules.bat") {
+            Copy-Item "dist\index-life\_internal\install_modules.bat" "dist\index-life\install_modules.bat"
+          } elseif (Test-Path "install_modules.bat") {
+            Copy-Item "install_modules.bat" "dist\index-life\install_modules.bat"
+          }
+
       - name: Create zip archive
         run: |
           Compress-Archive -Path dist\index-life\* -DestinationPath index-life_windows_x64.zip
