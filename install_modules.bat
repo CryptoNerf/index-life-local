@@ -50,8 +50,6 @@ if defined EXE_DIR (
             pause
             exit /b 1
         )
-        echo Upgrading pip...
-        "%EXE_DIR%modules_venv\Scripts\python" -m pip install --upgrade pip
         echo.
     )
 
