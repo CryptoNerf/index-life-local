@@ -25,8 +25,19 @@ import urllib.request
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[1]
-MODULES_DIR = ROOT / "app" / "modules"
+# Detect context: EXE distribution or source checkout.
+# Source: <project>/tools/install_modules.py  → parent is project root
+# EXE:    <exe_dir>/_internal/tools/install_modules.py → parent is _internal
+_script_parent = Path(__file__).resolve().parent.parent  # _internal/ or project root
+
+if _script_parent.name == "_internal":
+    # EXE distribution
+    ROOT = _script_parent.parent                          # <exe_dir>/
+    MODULES_DIR = _script_parent / "app" / "modules"      # _internal/app/modules/
+else:
+    # Source checkout
+    ROOT = _script_parent
+    MODULES_DIR = ROOT / "app" / "modules"
 
 # Pre-built CUDA wheels (bundle their own CUDA runtime, no toolkit needed)
 CUDA_INDEX_URL = "https://abetlen.github.io/llama-cpp-python/whl/cu124"
