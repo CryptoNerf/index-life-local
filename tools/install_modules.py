@@ -334,8 +334,18 @@ def install_assistant_vulkan_prebuilt() -> None:
     # Download and install pre-built wheel
     url, filename = _get_vulkan_wheel_url()
     wheel_dest = ROOT / "tmp" / filename
-    download_file(url, wheel_dest, description="pre-built Vulkan wheel")
-    run_pip(["install", str(wheel_dest)])
+
+    try:
+        download_file(url, wheel_dest, description="pre-built Vulkan wheel")
+        run_pip(["install", str(wheel_dest)])
+    except Exception as exc:
+        print()
+        print(f"WARNING: Could not download pre-built Vulkan wheel: {exc}")
+        print()
+        print("Falling back to CPU-only llama-cpp-python...")
+        print("(You can re-run with --profile vulkan-source to build with Vulkan SDK)")
+        print()
+        run_pip(["install", "llama-cpp-python>=0.2.0,!=0.3.16", "--no-cache-dir"])
 
 
 def install_assistant_vulkan_source() -> None:

@@ -249,13 +249,15 @@ jobs:
 
       - name: Build llama-cpp-python wheel with Vulkan
         run: |
-          python -m pip install --upgrade pip setuptools wheel cmake scikit-build-core[pyproject]
+          python -m pip install --upgrade pip setuptools wheel cmake ninja scikit-build-core[pyproject]
           $env:CMAKE_ARGS = "-DGGML_VULKAN=ON -DLLAMA_CURL=OFF"
           $env:FORCE_CMAKE = "1"
-          pip wheel llama-cpp-python==0.3.15 --no-deps --no-cache-dir --no-build-isolation -w wheelhouse/
+          pip wheel llama-cpp-python==0.3.15 --no-cache-dir -w wheelhouse/
 
-      - name: List built wheels
+      - name: Keep only llama-cpp-python wheel
         run: |
+          # Remove dependency wheels, keep only llama_cpp_python
+          Get-ChildItem wheelhouse/ -Exclude "llama_cpp_python*" | Remove-Item -Force
           Get-ChildItem wheelhouse/
 
       - name: Upload wheel artifact
@@ -285,26 +287,24 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install Vulkan SDK and build dependencies
+      - name: Install Vulkan development dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake build-essential
-          # Install Vulkan SDK from LunarG apt repo
-          wget -qO- https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo tee /etc/apt/trusted.gpg.d/lunarg.asc
-          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-noble.list https://packages.lunarg.com/vulkan/lunarg-vulkan-noble.list
-          sudo apt-get update
-          sudo apt-get install -y vulkan-sdk
+          sudo apt-get install -y cmake build-essential libvulkan-dev glslang-tools
 
       - name: Build llama-cpp-python wheel with Vulkan
         env:
           CMAKE_ARGS: "-DGGML_VULKAN=ON -DLLAMA_CURL=OFF"
           FORCE_CMAKE: "1"
         run: |
-          python3 -m pip install --upgrade pip setuptools wheel cmake scikit-build-core[pyproject]
-          pip wheel llama-cpp-python==0.3.15 --no-deps --no-cache-dir --no-build-isolation -w wheelhouse/
+          python3 -m pip install --upgrade pip setuptools wheel cmake ninja scikit-build-core[pyproject]
+          pip wheel llama-cpp-python==0.3.15 --no-cache-dir -w wheelhouse/
 
-      - name: List built wheels
-        run: ls -lh wheelhouse/
+      - name: Keep only llama-cpp-python wheel
+        run: |
+          # Remove dependency wheels, keep only llama_cpp_python
+          find wheelhouse/ -type f ! -name 'llama_cpp_python*' -delete
+          ls -lh wheelhouse/
 
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v4
