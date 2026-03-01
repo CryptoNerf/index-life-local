@@ -96,36 +96,40 @@ REM Sets PY310 variable if found
 REM ========================================
 :find_python310
     set "PY310="
+    set "_tmppy=%TEMP%\indexlife_py310.txt"
 
     REM Try py launcher first (most reliable on Windows)
-    REM Resolve to full path so it works in quotes
-    py -3.10 --version >nul 2>&1
+    py -3.10 -c "import sys;print(sys.executable)" >"%_tmppy%" 2>nul
     if not errorlevel 1 (
-        for /f "delims=" %%R in ('py -3.10 -c "import sys; print(sys.executable)"') do set "PY310=%%R"
+        set /p PY310=<"%_tmppy%"
+        del "%_tmppy%" 2>nul
+        if defined PY310 exit /b 0
+    )
+    del "%_tmppy%" 2>nul
+
+    REM Try common install paths
+    if exist "%LocalAppData%\Programs\Python\Python310\python.exe" (
+        set "PY310=%LocalAppData%\Programs\Python\Python310\python.exe"
+        exit /b 0
+    )
+    if exist "C:\Python310\python.exe" (
+        set "PY310=C:\Python310\python.exe"
+        exit /b 0
+    )
+    if exist "C:\Program Files\Python310\python.exe" (
+        set "PY310=C:\Program Files\Python310\python.exe"
         exit /b 0
     )
 
-    REM Try common install paths
-    for %%P in (
-        "%LocalAppData%\Programs\Python\Python310\python.exe"
-        "C:\Python310\python.exe"
-        "C:\Program Files\Python310\python.exe"
-        "C:\Program Files (x86)\Python310\python.exe"
-    ) do (
-        if exist %%P (
-            set "PY310=%%~P"
-            exit /b 0
-        )
+    REM Try python in PATH and check if it's 3.10
+    python -c "import sys;exit(0 if sys.version_info[:2]==(3,10) else 1)" >nul 2>&1
+    if not errorlevel 1 (
+        python -c "import sys;print(sys.executable)" >"%_tmppy%" 2>nul
+        set /p PY310=<"%_tmppy%"
+        del "%_tmppy%" 2>nul
+        if defined PY310 exit /b 0
     )
-
-    REM Try python in PATH and check version
-    for /f "tokens=2 delims= " %%V in ('python --version 2^>nul') do (
-        echo %%V | findstr /b "3.10." >nul
-        if not errorlevel 1 (
-            for /f "delims=" %%R in ('python -c "import sys; print(sys.executable)"') do set "PY310=%%R"
-            exit /b 0
-        )
-    )
+    del "%_tmppy%" 2>nul
 
     exit /b 1
 
