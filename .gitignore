@@ -90,3 +90,6 @@ NATIVE_MARKDOWN_MIGRATION.md
 # Module model files (large AI models)
 app/modules/*/models/**
 !app/modules/*/models/README.md
+
+# Temporary downloads (wheels, etc.)
+tmp/

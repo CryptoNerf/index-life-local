@@ -166,7 +166,7 @@ def _warmup(app):
             try:
                 _get_llm()
             except Exception as e:
-                log.warning(f'LLM warmup failed: {e}')
+                log.warning(f'LLM warmup failed: {e}', exc_info=True)
             try:
                 from .memory import _get_embed_model
                 _get_embed_model()

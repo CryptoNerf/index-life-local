@@ -13,20 +13,22 @@ from app.models import ChatMessage, UserPsychProfile, MoodEntry
 from .prompts import CRISIS_KEYWORDS, CRISIS_RESPONSE, SYSTEM_PROMPT
 from . import bp
 
-# Ensure CUDA runtime DLLs are findable on Windows
+# Ensure CUDA runtime DLLs are findable on Windows (not needed for Vulkan/CPU)
 if os.name == 'nt':
-    _cuda_path = os.environ.get('CUDA_PATH', '')
-    if not _cuda_path:
-        # Fallback: scan common CUDA install location
-        _cuda_base = Path(r'C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA')
-        if _cuda_base.is_dir():
-            _versions = sorted(_cuda_base.iterdir(), reverse=True)
-            if _versions:
-                _cuda_path = str(_versions[0])
-    if _cuda_path:
-        _cuda_bin = Path(_cuda_path) / 'bin' / 'x64'
-        if _cuda_bin.is_dir() and str(_cuda_bin) not in os.environ.get('PATH', ''):
-            os.environ['PATH'] = str(_cuda_bin) + ';' + os.environ.get('PATH', '')
+    try:
+        _cuda_path = os.environ.get('CUDA_PATH', '')
+        if not _cuda_path:
+            _cuda_base = Path(r'C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA')
+            if _cuda_base.is_dir():
+                _versions = sorted(_cuda_base.iterdir(), reverse=True)
+                if _versions:
+                    _cuda_path = str(_versions[0])
+        if _cuda_path:
+            _cuda_bin = Path(_cuda_path) / 'bin' / 'x64'
+            if _cuda_bin.is_dir() and str(_cuda_bin) not in os.environ.get('PATH', ''):
+                os.environ['PATH'] = str(_cuda_bin) + ';' + os.environ.get('PATH', '')
+    except Exception:
+        pass  # CUDA not available; Vulkan/CPU will work without it
 
 _llm = None
 _llm_n_ctx = None
@@ -44,7 +46,7 @@ _llm_loading = False
 #   LLM_GPU_FIRST (true/false) - try reduced GPU contexts before CPU fallback
 #   LLM_GPU_CTX_STEP (int) - step size for GPU context fallback
 #   LLM_MIN_GPU_CTX (int) - minimum GPU context for fallback
-_DEFAULT_GPU_CTX = 4096
+_DEFAULT_GPU_CTX = 8192
 _DEFAULT_CPU_CTX = 8192
 _DEFAULT_GPU_LAYER_CANDIDATES = [-1, 35, 28, 25, 20, 15]
 
@@ -398,74 +400,74 @@ def _trim_messages_to_fit(llm, messages: list[dict]) -> list[dict]:
 
 def _get_llm():
     """Lazy-load the GGUF model on first request. Tries GPU, falls back to CPU."""
-    global _llm
-    global _llm_n_ctx
-    if _llm is None:
-        with _llm_lock:
-            if _llm is not None:
-                return _llm
-            global _llm_loading
-            _llm_loading = True
-        import logging
-        import inspect
-        log = logging.getLogger(__name__)
-        from llama_cpp import Llama
-        import llama_cpp
-
-        profile_name = _auto_select_profile()
-        if profile_name:
-            log.info(f'LLM hardware profile applied: {profile_name}')
-
-        model_dir = Path(__file__).parent / 'models'
-        gguf_files = list(model_dir.glob('*.gguf'))
-        if not gguf_files:
-            raise FileNotFoundError(
-                f'No .gguf model file found in {model_dir}. '
-                'Place a GGUF model file there.'
-            )
-        model_path = str(gguf_files[0])
-
-        def filter_kwargs(kwargs: dict) -> dict:
-            try:
-                sig = inspect.signature(Llama.__init__)
-            except (TypeError, ValueError):
-                return kwargs
-            if any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()):
-                return kwargs
-            params = set(sig.parameters)
-            return {k: v for k, v in kwargs.items() if k in params}
-
-        def build_kwargs(n_ctx: int, n_gpu_layers: int) -> dict:
-            cpu_count = os.cpu_count() or 4
-            n_threads = _env_int('LLM_N_THREADS', max(4, cpu_count), min_value=1)
-            n_threads_batch = _env_int('LLM_N_THREADS_BATCH', n_threads, min_value=1)
-            use_gpu = n_gpu_layers != 0
-            n_batch_default = 256 if use_gpu else 128
-            n_ubatch_default = 128 if use_gpu else 32
-            kwargs = {
-                'model_path': model_path,
-                'n_ctx': n_ctx,
-                'n_threads': n_threads,
-                'n_threads_batch': n_threads_batch,
-                'n_batch': _env_int('LLM_N_BATCH', n_batch_default, min_value=1),
-                'n_ubatch': _env_int('LLM_N_UBATCH', n_ubatch_default, min_value=1),
-                'n_gpu_layers': n_gpu_layers,
-                'f16_kv': _env_bool('LLM_F16_KV', True),
-                'use_mmap': _env_bool('LLM_USE_MMAP', True),
-                'use_mlock': _env_bool('LLM_USE_MLOCK', False),
-                'verbose': False,
-            }
-            return filter_kwargs(kwargs)
-
-        # Resolve context sizes
-        gpu_ctx = _env_int('LLM_N_CTX', _DEFAULT_GPU_CTX, min_value=256)
-        cpu_ctx = _env_int('LLM_CPU_N_CTX', _DEFAULT_CPU_CTX, min_value=256)
-
+    global _llm, _llm_n_ctx, _llm_loading
+    if _llm is not None:
+        return _llm
+    with _llm_lock:
+        # Double-check after acquiring lock
+        if _llm is not None:
+            return _llm
+        _llm_loading = True
         try:
-            require_gpu = _env_bool('LLM_REQUIRE_GPU', False)
+            import logging
+            import inspect
+            log = logging.getLogger(__name__)
+            from llama_cpp import Llama
+            import llama_cpp
+
+            profile_name = _auto_select_profile()
+            if profile_name:
+                log.info(f'LLM hardware profile applied: {profile_name}')
+
+            model_dir = Path(__file__).parent / 'models'
+            gguf_files = list(model_dir.glob('*.gguf'))
+            if not gguf_files:
+                raise FileNotFoundError(
+                    f'No .gguf model file found in {model_dir}. '
+                    'Place a GGUF model file there.'
+                )
+            model_path = str(gguf_files[0])
+
+            def filter_kwargs(kwargs: dict) -> dict:
+                try:
+                    sig = inspect.signature(Llama.__init__)
+                except (TypeError, ValueError):
+                    return kwargs
+                if any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()):
+                    return kwargs
+                params = set(sig.parameters)
+                return {k: v for k, v in kwargs.items() if k in params}
+
+            def build_kwargs(n_ctx: int, n_gpu_layers: int) -> dict:
+                cpu_count = os.cpu_count() or 4
+                n_threads = _env_int('LLM_N_THREADS', max(4, cpu_count), min_value=1)
+                n_threads_batch = _env_int('LLM_N_THREADS_BATCH', n_threads, min_value=1)
+                use_gpu = n_gpu_layers != 0
+                n_batch_default = 256 if use_gpu else 128
+                n_ubatch_default = 128 if use_gpu else 32
+                kwargs = {
+                    'model_path': model_path,
+                    'n_ctx': n_ctx,
+                    'n_threads': n_threads,
+                    'n_threads_batch': n_threads_batch,
+                    'n_batch': _env_int('LLM_N_BATCH', n_batch_default, min_value=1),
+                    'n_ubatch': _env_int('LLM_N_UBATCH', n_ubatch_default, min_value=1),
+                    'n_gpu_layers': n_gpu_layers,
+                    'f16_kv': _env_bool('LLM_F16_KV', True),
+                    'use_mmap': _env_bool('LLM_USE_MMAP', True),
+                    'use_mlock': _env_bool('LLM_USE_MLOCK', False),
+                    'verbose': False,
+                }
+                return filter_kwargs(kwargs)
+
+            # Resolve context sizes
+            gpu_ctx = _env_int('LLM_N_CTX', _DEFAULT_GPU_CTX, min_value=256)
+            cpu_ctx = _env_int('LLM_CPU_N_CTX', _DEFAULT_CPU_CTX, min_value=256)
+
+            gpu_offload = llama_cpp.llama_supports_gpu_offload()
 
             # Try GPU configs if CUDA is available
-            if llama_cpp.llama_supports_gpu_offload():
+            if gpu_offload:
                 raw_gpu_layers = os.environ.get('LLM_N_GPU_LAYERS')
                 if raw_gpu_layers:
                     try:
@@ -477,7 +479,6 @@ def _get_llm():
                     gpu_layer_candidates = _DEFAULT_GPU_LAYER_CANDIDATES
 
                 ctx_candidates = _gpu_ctx_candidates(gpu_ctx)
-                # Prefer keeping more layers on GPU by shrinking context first.
                 for n_gpu in gpu_layer_candidates:
                     for ctx in ctx_candidates:
                         try:
@@ -488,9 +489,6 @@ def _get_llm():
                         except Exception as e:
                             log.warning(f'GPU config (n_gpu_layers={n_gpu}, n_ctx={ctx}) failed: {e}')
                             _llm = None
-
-            if require_gpu and _llm is None:
-                raise RuntimeError('GPU offload required but GPU initialization failed.')
 
             # Fallback: CPU only
             _llm = Llama(**build_kwargs(cpu_ctx, 0))
