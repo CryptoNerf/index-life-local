@@ -167,11 +167,27 @@ for _finder in sys.meta_path:
 # --- 2. Patch importlib so importlib.resources works ---
 importlib.__path__.insert(0, r"{sl}\\importlib")
 
-# --- 3. Add DLL search dirs for native extensions (safetensors, tokenizers) ---
+# --- 3. Add DLL search dirs for native extensions ---
 if hasattr(os, "add_dll_directory"):
+    # System Python dirs (for _ctypes, _ssl, etc.)
     for _d in [r"{ph}", r"{ph}\\DLLs"]:
         if os.path.isdir(_d):
             os.add_dll_directory(_d)
+
+    # Scan modules_venv site-packages for package DLL dirs
+    # (torch/lib, *.libs, ctranslate2/, etc.)
+    _sp = os.path.dirname(os.path.abspath(__file__))
+    for _entry in os.listdir(_sp):
+        _full = os.path.join(_sp, _entry)
+        if not os.path.isdir(_full):
+            continue
+        # torch/lib — main DLL directory for PyTorch
+        _lib = os.path.join(_full, "lib")
+        if os.path.isdir(_lib):
+            os.add_dll_directory(_lib)
+        # *.libs dirs (e.g. numpy.libs, tokenizers.libs)
+        if _entry.endswith(".libs"):
+            os.add_dll_directory(_full)
 ''',
         encoding="utf-8",
     )
