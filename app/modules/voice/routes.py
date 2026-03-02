@@ -1,6 +1,7 @@
 """Voice transcription endpoint."""
 import tempfile
 import os
+import sys
 from pathlib import Path
 from flask import request, jsonify
 from . import bp
@@ -12,6 +13,18 @@ _model = None
 def _get_model():
     global _model
     if _model is None:
+        # In frozen exe, torch may fail to fully initialize (DLL/stdlib issues)
+        # leaving a broken partial module in sys.modules.  CTranslate2 (used by
+        # faster_whisper) imports torch optionally — a clean ImportError is fine,
+        # but a partial module causes "has no attribute 'autograd'" errors.
+        # Pre-test torch and clean up if it fails, so ctranslate2 skips it.
+        if getattr(sys, 'frozen', False) and 'torch' not in sys.modules:
+            try:
+                import torch  # noqa: F401
+            except Exception:
+                for key in [k for k in sys.modules if k == 'torch' or k.startswith('torch.')]:
+                    del sys.modules[key]
+
         from faster_whisper import WhisperModel
 
         model_dir = Path(__file__).parent / 'models'
