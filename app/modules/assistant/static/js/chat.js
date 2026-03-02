@@ -69,24 +69,40 @@
       });
   });
 
+  var llmReady = false;
   loadStatus();
   warmupModel();
+
+  function formatLoadingStage(stage, progress) {
+    if (!stage) return 'загрузка модели...';
+    if (stage === 'importing') return 'импорт библиотек...';
+    if (stage === 'detecting') return 'определение оборудования...';
+    if (stage.startsWith('gpu:')) return 'загрузка на GPU (' + progress + '%)';
+    if (stage.startsWith('cpu:')) return 'загрузка на CPU (' + progress + '%)';
+    return 'загрузка модели (' + progress + '%)';
+  }
 
   function loadStatus() {
     fetch('/assistant/status')
       .then(function (r) { return r.json(); })
       .then(function (data) {
+        llmReady = data.llm_ready;
+        var parts = [];
+        if (data.llm_loading) {
+          parts.push(formatLoadingStage(data.llm_loading_stage, data.llm_loading_progress));
+        }
         if (data.total_entries > 0) {
-          var parts = [];
-          if (data.llm_loading) {
-            parts.push('model loading...');
-          }
           parts.push(data.embedded + '/' + data.total_entries + ' embedded');
           parts.push(data.summarized + '/' + data.total_entries + ' summarized');
           if (data.profile_version > 0) {
             parts.push('profile v' + data.profile_version);
           }
-          statusEl.textContent = parts.join(' · ');
+        }
+        statusEl.textContent = parts.join(' · ');
+
+        // Keep polling while model is loading
+        if (data.llm_loading) {
+          setTimeout(loadStatus, 1500);
         }
       })
       .catch(function () {});
@@ -299,6 +315,23 @@
 
     var assistantDiv = appendMessage('assistant', '');
     var fullText = '';
+    var loadingHintInterval = null;
+
+    // Show loading hint if model is not ready yet
+    if (!llmReady) {
+      assistantDiv.innerHTML = '<span style="color:#999;font-style:italic;">Загрузка модели, пожалуйста подождите...</span>';
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      loadingHintInterval = setInterval(function () {
+        fetch('/assistant/status')
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (data.llm_loading && !fullText) {
+              assistantDiv.innerHTML = '<span style="color:#999;font-style:italic;">' +
+                formatLoadingStage(data.llm_loading_stage, data.llm_loading_progress) + '</span>';
+            }
+          }).catch(function () {});
+      }, 1500);
+    }
 
     fetch('/assistant/stream', {
       method: 'POST',
@@ -335,6 +368,11 @@
               try {
                 var data = JSON.parse(payload);
                 if (data.token) {
+                  if (!fullText && loadingHintInterval) {
+                    clearInterval(loadingHintInterval);
+                    loadingHintInterval = null;
+                    llmReady = true;
+                  }
                   fullText += data.token;
                   // Render with think block handling
                   renderAssistantMessage(assistantDiv, fullText);
@@ -369,9 +407,14 @@
       });
 
     function finish() {
+      if (loadingHintInterval) {
+        clearInterval(loadingHintInterval);
+        loadingHintInterval = null;
+      }
       isStreaming = false;
       sendBtn.disabled = false;
       sendBtn.textContent = 'Send';
+      llmReady = true;
       // Final render to ensure closed think blocks
       if (fullText) {
         if (assistantDiv.dataset) {

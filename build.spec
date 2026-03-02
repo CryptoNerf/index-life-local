@@ -54,9 +54,12 @@ a = Analysis(
         'flask',
         'flask_sqlalchemy',
         'sqlalchemy.sql.default_comparator',
-        'PIL',
-        'PIL._imagingtk',
-        'PIL._webp',
+        # PIL intentionally excluded — loaded from modules_venv to avoid conflicts
+        # stdlib modules needed by heavy deps loaded from modules_venv
+        'pickletools',
+        'ipaddress',
+        'importlib.resources',
+        'importlib.metadata',
     ] + collect_submodules('app.modules'),
     hookspath=[],
     hooksconfig={},

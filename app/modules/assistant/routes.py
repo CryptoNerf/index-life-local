@@ -34,6 +34,8 @@ _llm = None
 _llm_n_ctx = None
 _llm_lock = threading.Lock()
 _llm_loading = False
+_llm_loading_stage = ''  # e.g. 'importing', 'gpu:35/8192', 'cpu:8192'
+_llm_loading_progress = 0  # 0-100
 
 # Default configs; can be overridden via env:
 #   LLM_N_CTX, LLM_CPU_N_CTX, LLM_N_GPU_LAYERS
@@ -400,7 +402,7 @@ def _trim_messages_to_fit(llm, messages: list[dict]) -> list[dict]:
 
 def _get_llm():
     """Lazy-load the GGUF model on first request. Tries GPU, falls back to CPU."""
-    global _llm, _llm_n_ctx, _llm_loading
+    global _llm, _llm_n_ctx, _llm_loading, _llm_loading_stage, _llm_loading_progress
     if _llm is not None:
         return _llm
     with _llm_lock:
@@ -408,6 +410,8 @@ def _get_llm():
         if _llm is not None:
             return _llm
         _llm_loading = True
+        _llm_loading_stage = 'importing'
+        _llm_loading_progress = 5
         try:
             import logging
             import inspect
@@ -415,6 +419,8 @@ def _get_llm():
             from llama_cpp import Llama
             import llama_cpp
 
+            _llm_loading_stage = 'detecting'
+            _llm_loading_progress = 10
             profile_name = _auto_select_profile()
             if profile_name:
                 log.info(f'LLM hardware profile applied: {profile_name}')
@@ -479,11 +485,18 @@ def _get_llm():
                     gpu_layer_candidates = _DEFAULT_GPU_LAYER_CANDIDATES
 
                 ctx_candidates = _gpu_ctx_candidates(gpu_ctx)
+                total_attempts = len(gpu_layer_candidates) * len(ctx_candidates)
+                attempt = 0
                 for n_gpu in gpu_layer_candidates:
                     for ctx in ctx_candidates:
+                        attempt += 1
+                        _llm_loading_stage = f'gpu:{n_gpu}/{ctx}'
+                        _llm_loading_progress = 15 + int(65 * attempt / max(total_attempts, 1))
                         try:
                             _llm = Llama(**build_kwargs(ctx, n_gpu))
                             _llm_n_ctx = ctx
+                            _llm_loading_progress = 100
+                            _llm_loading_stage = 'ready'
                             log.info(f'Model loaded with GPU: n_gpu_layers={n_gpu}, n_ctx={ctx}')
                             return _llm
                         except Exception as e:
@@ -491,8 +504,12 @@ def _get_llm():
                             _llm = None
 
             # Fallback: CPU only
+            _llm_loading_stage = f'cpu:{cpu_ctx}'
+            _llm_loading_progress = 85
             _llm = Llama(**build_kwargs(cpu_ctx, 0))
             _llm_n_ctx = cpu_ctx
+            _llm_loading_progress = 100
+            _llm_loading_stage = 'ready'
             log.info(f'Model loaded on CPU: n_ctx={cpu_ctx}')
         finally:
             _llm_loading = False
@@ -699,4 +716,7 @@ def status():
         'profile_version': profile.version if profile else 0,
         'profile_entries_analyzed': profile.entries_analyzed if profile else 0,
         'llm_loading': _llm_loading,
+        'llm_loading_stage': _llm_loading_stage if _llm_loading else '',
+        'llm_loading_progress': _llm_loading_progress if _llm_loading else 0,
+        'llm_ready': _llm is not None,
     })
