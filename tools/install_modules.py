@@ -188,6 +188,21 @@ if hasattr(os, "add_dll_directory"):
         # *.libs dirs (e.g. numpy.libs, tokenizers.libs)
         if _entry.endswith(".libs"):
             os.add_dll_directory(_full)
+
+# --- 4. Block torch import (not needed, breaks in frozen exe) ---
+# CTranslate2 (used by faster_whisper) optionally imports torch.
+# In frozen exe torch fails to fully init, leaving a broken partial module
+# in sys.modules that causes "has no attribute autograd" errors.
+# Block it so CTranslate2 gets a clean ImportError and uses CPU path.
+class _BlockTorch:
+    def find_module(self, name, path=None):
+        if name == "torch" or name.startswith("torch."):
+            return self
+        return None
+    def load_module(self, name):
+        raise ImportError(name + " is not available in packaged app")
+
+sys.meta_path.insert(0, _BlockTorch())
 ''',
         encoding="utf-8",
     )

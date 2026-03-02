@@ -66,14 +66,14 @@
   }
 
   function showProcessingHint() {
-    var editor = window.tiptapEditor;
-    if (editor && editor.commands) {
-      try {
-        editor.chain().focus().insertContent(
-          '<span class="voice-processing-hint" style="color:#999;font-style:italic;">Распознавание речи...</span>'
-        ).run();
-      } catch (e) { /* ignore */ }
-    }
+    removeProcessingHint();
+    var container = document.getElementById('tiptap-editor');
+    if (!container) return;
+    var hint = document.createElement('div');
+    hint.className = 'voice-processing-hint';
+    hint.style.cssText = 'color:#999;font-style:italic;padding:4px 8px;';
+    hint.textContent = 'Распознавание речи...';
+    container.parentNode.insertBefore(hint, container.nextSibling);
   }
 
   function removeProcessingHint() {
