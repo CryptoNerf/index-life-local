@@ -46,6 +46,33 @@ def _add_local_modules_site_packages() -> None:
         except Exception as exc:
             log.warning('Failed to inspect modules venv: %s', exc)
 
+    # In frozen exe, PyInstaller bundles a stripped stdlib.  Heavy deps like
+    # torch need modules that were excluded (pickletools, importlib.resources …).
+    # Use pyvenv.cfg "home" key to find the system Python and add its stdlib.
+    if getattr(sys, 'frozen', False) and cfg.exists():
+        try:
+            home_line = next(
+                (l for l in cfg.read_text(encoding='utf-8', errors='ignore').splitlines()
+                 if l.strip().lower().startswith('home')), ''
+            )
+            if home_line:
+                _, home_val = home_line.split('=', 1)
+                python_home = Path(home_val.strip())  # e.g. C:\Program Files\Python310
+                # pyvenv.cfg "home" points to the dir containing python.exe
+                # Windows: Lib is at same level  |  Linux: lib/python3.X
+                stdlib_win = python_home / 'Lib'
+                if stdlib_win.is_dir():
+                    sys.path.insert(0, str(stdlib_win))
+                    log.info('Added system stdlib: %s', stdlib_win)
+                else:
+                    for p in python_home.glob('lib/python3.*'):
+                        if p.is_dir():
+                            sys.path.insert(0, str(p))
+                            log.info('Added system stdlib: %s', p)
+                            break
+        except Exception as exc:
+            log.warning('Failed to add system stdlib: %s', exc)
+
     candidates = []
     win_site = venv_dir / 'Lib' / 'site-packages'
     if win_site.exists():

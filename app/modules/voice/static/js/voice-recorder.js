@@ -65,14 +65,34 @@
     micBtn.title = 'Processing...';
   }
 
+  function showProcessingHint() {
+    var editor = window.tiptapEditor;
+    if (editor && editor.commands) {
+      try {
+        editor.chain().focus().insertContent(
+          '<span class="voice-processing-hint" style="color:#999;font-style:italic;">Распознавание речи...</span>'
+        ).run();
+      } catch (e) { /* ignore */ }
+    }
+  }
+
+  function removeProcessingHint() {
+    var hint = document.querySelector('.voice-processing-hint');
+    if (hint) hint.remove();
+  }
+
   function sendAudio() {
     var blob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
     var formData = new FormData();
     formData.append('audio', blob, 'recording.webm');
 
+    showProcessingHint();
+
     fetch('/voice/transcribe', { method: 'POST', body: formData })
       .then(function (resp) { return resp.json(); })
       .then(function (data) {
+        removeProcessingHint();
+
         if (data.text && data.text.trim()) {
           var editor = window.tiptapEditor;
           if (editor && editor.commands) {
@@ -98,6 +118,7 @@
         }
       })
       .catch(function (err) {
+        removeProcessingHint();
         console.error('Failed to send audio:', err);
         alert('Failed to send audio to server.');
       })
