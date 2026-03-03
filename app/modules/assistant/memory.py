@@ -84,6 +84,47 @@ def _summary_invalid(text: str) -> bool:
     return False
 
 
+def _count_tokens(llm, text: str) -> int:
+    try:
+        tokens = llm.tokenize(text.encode('utf-8'))
+        return len(tokens)
+    except Exception:
+        return max(1, len(text) // 4)
+
+
+def _truncate_to_tokens(llm, text: str, max_tokens: int) -> str:
+    if max_tokens <= 0:
+        return ''
+    try:
+        tokens = llm.tokenize(text.encode('utf-8'))
+        if len(tokens) <= max_tokens:
+            return text
+        truncated = llm.detokenize(tokens[-max_tokens:])
+        if isinstance(truncated, bytes):
+            return truncated.decode('utf-8', errors='ignore')
+        if isinstance(truncated, str):
+            return truncated
+    except Exception:
+        pass
+    approx_chars = max(0, max_tokens * 4)
+    return text[-approx_chars:]
+
+
+def _get_llm_n_ctx(llm) -> int | None:
+    """Return LLM context window size if available."""
+    if llm is None:
+        return None
+    try:
+        value = getattr(llm, 'n_ctx', None)
+        if callable(value):
+            return int(value())
+        if isinstance(value, (int, float)):
+            return int(value)
+    except Exception:
+        return None
+    return None
+
+
 # ── Layer 2: Embeddings ─────────────────────────────────────────
 
 def update_embedding(entry: MoodEntry):
@@ -327,15 +368,54 @@ def update_profile(llm, force_rebuild: bool = False):
         lines.append(f'[{e.date.isoformat()}] {e.rating}/10. {safe_summary} Темы: {themes_str}')
     summaries_text = '\n'.join(lines)
 
-    # Truncate if too long (keep ~8000 tokens worth ≈ 16000 chars for Russian)
-    if len(summaries_text) > 16000:
-        summaries_text = summaries_text[-16000:]
+    # Token-aware truncation to fit model context window
+    try:
+        import os
+        n_ctx = _get_llm_n_ctx(llm)
+        if not n_ctx:
+            raw_ctx = os.environ.get('LLM_N_CTX') or os.environ.get('LLM_CPU_N_CTX')
+            n_ctx = int(raw_ctx) if raw_ctx else 4096
+        # Larger safety because chat template adds hidden tokens
+        safety = int(os.environ.get('LLM_PROFILE_PROMPT_SAFETY', '2048'))
+        min_output = int(os.environ.get('LLM_PROFILE_MIN_OUTPUT', '256'))
+        summary_cap = int(os.environ.get('LLM_PROFILE_SUMMARY_TOKEN_LIMIT', '2048'))
+        base_prompt = PROFILE_PROMPT.format(summaries_text='')
+        base_tokens = _count_tokens(llm, base_prompt)
+        if summary_cap > 0:
+            summaries_text = _truncate_to_tokens(llm, summaries_text, summary_cap)
+        # Ensure we leave room for a minimum output + safety.
+        available_for_prompt = max(0, int(n_ctx) - safety - min_output)
+        available_for_summaries = max(0, available_for_prompt - base_tokens)
+        if available_for_summaries > 0:
+            summaries_text = _truncate_to_tokens(llm, summaries_text, available_for_summaries)
+        # Final guard: ensure full prompt fits with min output budget.
+        limit = max(0, int(n_ctx) - safety - min_output)
+        for _ in range(3):
+            prompt = PROFILE_PROMPT.format(summaries_text=summaries_text)
+            prompt_tokens = _count_tokens(llm, prompt)
+            if prompt_tokens <= limit:
+                break
+            summ_tokens = _count_tokens(llm, summaries_text)
+            if summ_tokens <= 0:
+                summaries_text = ''
+                break
+            # Reduce summaries more aggressively to avoid decode failures.
+            new_limit = max(0, int(summ_tokens * 0.7))
+            summaries_text = _truncate_to_tokens(llm, summaries_text, new_limit)
+    except Exception:
+        # Fallback to rough char trimming
+        if len(summaries_text) > 16000:
+            summaries_text = summaries_text[-16000:]
 
     try:
         prompt = PROFILE_PROMPT.format(summaries_text=summaries_text)
+        prompt_tokens = _count_tokens(llm, prompt)
+        n_ctx = _get_llm_n_ctx(llm) or 4096
+        safety = int(os.environ.get('LLM_PROFILE_PROMPT_SAFETY', '2048'))
+        max_out = max(32, int(n_ctx) - prompt_tokens - safety)
         result = llm.create_chat_completion(
             messages=[{'role': 'user', 'content': prompt}],
-            max_tokens=2048,
+            max_tokens=min(2048, max_out),
             temperature=0.2,
         )
         raw = result['choices'][0]['message']['content'].strip()

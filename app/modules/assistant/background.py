@@ -4,6 +4,7 @@ Runs embedding, summarization, and profile updates in a separate thread.
 """
 import logging
 import threading
+import time
 
 from app import db
 from app.models import MoodEntry, EntrySummary
@@ -11,6 +12,31 @@ from app.models import MoodEntry, EntrySummary
 log = logging.getLogger(__name__)
 
 _lock = threading.Lock()
+_reindex_state_lock = threading.Lock()
+_reindex_in_progress = False
+_reindex_status = {
+    'running': False,
+    'phase': '',
+    'current': 0,
+    'total': 0,
+    'message': '',
+    'error': '',
+    'started_at': None,
+    'updated_at': None,
+}
+
+
+def _set_reindex_status(**updates):
+    with _reindex_state_lock:
+        for key, value in updates.items():
+            if key in _reindex_status:
+                _reindex_status[key] = value
+        _reindex_status['updated_at'] = time.time()
+
+
+def get_reindex_status():
+    with _reindex_state_lock:
+        return dict(_reindex_status)
 
 
 def process_entry_async(app, entry_id: int):
@@ -23,14 +49,30 @@ def process_entry_async(app, entry_id: int):
     thread.start()
 
 
-def reindex_all_async(app):
+def reindex_all_async(app) -> bool:
     """Spawn a background thread to reindex all entries from scratch."""
+    global _reindex_in_progress
+    with _reindex_state_lock:
+        if _reindex_in_progress:
+            log.warning('Reindex already running, skipping.')
+            return False
+        _reindex_in_progress = True
+        _reindex_status['running'] = True
+        _reindex_status['phase'] = 'starting'
+        _reindex_status['current'] = 0
+        _reindex_status['total'] = 0
+        _reindex_status['message'] = 'Reindex queued'
+        _reindex_status['error'] = ''
+        _reindex_status['started_at'] = time.time()
+        _reindex_status['updated_at'] = time.time()
+
     thread = threading.Thread(
         target=_reindex_all,
         args=(app,),
         daemon=True,
     )
     thread.start()
+    return True
 
 
 def warmup_async(app):
@@ -92,9 +134,11 @@ def _process_entry(app, entry_id: int):
 
 def _reindex_all(app):
     """Reindex all entries from scratch. Triggered manually."""
-    if not _lock.acquire(timeout=1):
-        log.info('Background processing already running, skipping reindex.')
-        return
+    global _reindex_in_progress
+    if _lock.locked():
+        log.warning('Background processing already running, waiting to start reindex.')
+        _set_reindex_status(phase='waiting', message='Waiting for background processing to finish')
+    _lock.acquire()
 
     try:
         with app.app_context():
@@ -103,17 +147,34 @@ def _reindex_all(app):
                 generate_month_summary, update_profile,
             )
             from .routes import _get_llm
+            from app.models import EntryEmbedding, EntrySummary, PeriodSummary, UserPsychProfile
 
             entries = MoodEntry.query.order_by(MoodEntry.date).all()
             total = len(entries)
             log.info(f'Reindex started: {total} entries')
+            _set_reindex_status(phase='starting', current=0, total=total, message='Reindex started')
+
+            # Full rebuild: clear assistant memory layers first
+            try:
+                EntryEmbedding.query.delete()
+                EntrySummary.query.delete()
+                PeriodSummary.query.delete()
+                UserPsychProfile.query.delete()
+                db.session.commit()
+                log.info('Cleared embeddings, summaries, period summaries, and profile')
+            except Exception as e:
+                db.session.rollback()
+                log.warning(f'Failed to clear assistant memory layers: {e}')
 
             # Phase 1: Embeddings (fast, no LLM)
+            _set_reindex_status(phase='embeddings', current=0, total=total, message='Embeddings')
             for i, entry in enumerate(entries):
                 try:
                     update_embedding(entry)
                 except Exception as e:
                     log.warning(f'Embedding failed for entry {entry.id}: {e}')
+                if (i + 1) % 5 == 0 or (i + 1) == total:
+                    _set_reindex_status(current=i + 1)
                 if (i + 1) % 50 == 0:
                     log.info(f'Embeddings: {i + 1}/{total}')
             log.info(f'Embeddings done: {total}')
@@ -125,11 +186,14 @@ def _reindex_all(app):
                 log.error(f'Cannot load LLM for summaries: {e}')
                 return
 
+            _set_reindex_status(phase='summaries', current=0, total=total, message='Summaries')
             for i, entry in enumerate(entries):
                 try:
                     generate_entry_summary(entry, llm)
                 except Exception as e:
                     log.warning(f'Summary failed for entry {entry.id}: {e}')
+                if (i + 1) % 3 == 0 or (i + 1) == total:
+                    _set_reindex_status(current=i + 1)
                 if (i + 1) % 20 == 0:
                     log.info(f'Summaries: {i + 1}/{total}')
             log.info('Summaries done')
@@ -138,23 +202,34 @@ def _reindex_all(app):
             months = set()
             for entry in entries:
                 months.add((entry.date.year, entry.date.month))
-            for year, month in sorted(months):
+            month_list = sorted(months)
+            _set_reindex_status(phase='monthly_summaries', current=0, total=len(month_list), message='Monthly summaries')
+            for i, (year, month) in enumerate(month_list):
                 try:
                     generate_month_summary(year, month, llm)
                 except Exception as e:
                     log.warning(f'Month summary failed for {year}-{month}: {e}')
+                _set_reindex_status(current=i + 1)
             log.info('Monthly summaries done')
 
             # Phase 4: Full profile rebuild
             try:
+                _set_reindex_status(phase='profile', current=0, total=1, message='Profile rebuild')
                 update_profile(llm, force_rebuild=True)
+                _set_reindex_status(current=1)
                 log.info('Profile rebuilt')
             except Exception as e:
                 log.warning(f'Profile rebuild failed: {e}')
+                _set_reindex_status(error=str(e))
 
             log.info('Reindex complete')
+            _set_reindex_status(phase='done', message='Reindex complete')
     finally:
         _lock.release()
+        with _reindex_state_lock:
+            _reindex_in_progress = False
+            _reindex_status['running'] = False
+            _reindex_status['updated_at'] = time.time()
 
 
 def _warmup(app):

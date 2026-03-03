@@ -67,6 +67,24 @@ body {
   border-color: #222;
   color: #222;
 }
+.chat-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #666;
+  cursor: pointer;
+  user-select: none;
+}
+.chat-toggle input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+}
+.chat-toggle span {
+  font-family: 'Times New Roman', Times, serif;
+  text-transform: lowercase;
+}
 
 /* ========== Chat layout ========== */
 .chat-container {
