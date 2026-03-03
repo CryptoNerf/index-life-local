@@ -130,3 +130,31 @@ class ChatMessage(db.Model):
     role = db.Column(db.String(20), nullable=False)  # 'user' or 'assistant'
     content = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+# ── Deep Mind: neural topic map ───────────────────────────────
+
+class MindCluster(db.Model):
+    """Topic cluster extracted from diary entry embeddings"""
+    __tablename__ = 'mind_clusters'
+
+    id = db.Column(db.Integer, primary_key=True)
+    label = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    emotional_weight = db.Column(db.Float, default=0.0)  # 0.0–1.0
+    centroid = db.Column(db.LargeBinary, nullable=True)   # float32 384-dim
+    entry_count = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class MindClusterEntry(db.Model):
+    """Associates a MoodEntry with a MindCluster"""
+    __tablename__ = 'mind_cluster_entries'
+
+    id = db.Column(db.Integer, primary_key=True)
+    cluster_id = db.Column(db.Integer, db.ForeignKey('mind_clusters.id'), index=True)
+    entry_id = db.Column(db.Integer, db.ForeignKey('mood_entries.id'), index=True)
+
+    cluster = db.relationship('MindCluster', backref=db.backref('member_entries', lazy='dynamic'))
+    entry = db.relationship('MoodEntry', backref=db.backref('mind_cluster', uselist=False))

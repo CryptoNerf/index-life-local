@@ -30,6 +30,9 @@
     <nav class="top-menu">
       <a href="{{ url_for('main.mood_grid') }}" class="menu-link index-link">index.life</a>
       <a href="{{ url_for('main.life_calendar') }}" class="menu-link">life in weeks</a>
+      {% if module_active('deep_mind') %}
+        <a href="{{ url_for('deep_mind.neural_map') }}" class="menu-link">neural map</a>
+      {% endif %}
       <a href="{{ url_for('main.account') }}" class="menu-link">account</a>
     </nav>
     </header>

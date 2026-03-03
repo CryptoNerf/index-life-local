@@ -15,6 +15,12 @@
   // Scroll to bottom on load
   messagesDiv.scrollTop = messagesDiv.scrollHeight;
 
+  // Focus textarea if pre-filled (e.g. from deep-mind topic handoff)
+  if (inputEl.value.trim()) {
+    inputEl.focus();
+    inputEl.setSelectionRange(inputEl.value.length, inputEl.value.length);
+  }
+
   // Process existing assistant messages (render think blocks + markdown)
   var existingMsgs = messagesDiv.querySelectorAll('.chat-msg-assistant');
   for (var i = 0; i < existingMsgs.length; i++) {

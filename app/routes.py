@@ -231,6 +231,13 @@ def edit_day(day):
                 except ImportError:
                     pass
 
+            if 'deep_mind' in current_app.config.get('ACTIVE_MODULES', []):
+                try:
+                    from app.modules.deep_mind.background import analyze_async
+                    analyze_async(current_app._get_current_object())
+                except ImportError:
+                    pass
+
             # Redirect to the year of the edited entry (no flash message needed - visual confirmation on calendar is enough)
             return redirect(url_for('main.mood_grid', year=day_date.year))
         except Exception as e:

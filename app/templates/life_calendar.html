@@ -17,6 +17,9 @@
       {% if module_active('assistant') %}
         <a href="{{ url_for('assistant.chat') }}" class="menu-link">ai psychologist</a>
       {% endif %}
+      {% if module_active('deep_mind') %}
+        <a href="{{ url_for('deep_mind.neural_map') }}" class="menu-link">neural map</a>
+      {% endif %}
       <a href="{{ url_for('main.account') }}" class="menu-link">account</a>
     </nav>
   </header>
