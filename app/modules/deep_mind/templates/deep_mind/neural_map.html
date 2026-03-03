@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>neural map</title>
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
+  <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='images/apple-touch-icon.png') }}">
+  <link rel="manifest" href="{{ url_for('static', filename='images/site.webmanifest') }}">
+  <link rel="stylesheet" href="{{ url_for('deep_mind.static', filename='css/neural_map.css') }}">
+</head>
+<body>
+  <header class="main-header">
+    <nav class="top-menu">
+      <a href="{{ url_for('main.mood_grid') }}" class="menu-link index-link">index.life</a>
+      <a href="{{ url_for('main.life_calendar') }}" class="menu-link">life in weeks</a>
+      {% if module_active('assistant') %}
+        <a href="{{ url_for('assistant.chat') }}" class="menu-link">ai psychologist</a>
+      {% endif %}
+      <a href="{{ url_for('deep_mind.neural_map') }}" class="menu-link">neural map</a>
+      <a href="{{ url_for('main.account') }}" class="menu-link">account</a>
+    </nav>
+  </header>
+
+  <div id="status-bar" class="status-bar"></div>
+
+  <div class="map-layout">
+    <div id="graph-container"></div>
+
+    <div id="detail-panel" class="detail-panel hidden">
+      <button id="detail-close" class="detail-close">&times;</button>
+      <h2 id="detail-label"></h2>
+      <p id="detail-description" class="detail-description"></p>
+      <div class="detail-meta">
+        <span id="detail-count"></span> &middot;
+        <span id="detail-weight"></span>
+      </div>
+      <div id="detail-entries" class="detail-entries"></div>
+      {% if module_active('assistant') %}
+        <button id="btn-discuss" class="btn-discuss">Обсудить с психологом</button>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="map-toolbar">
+    <button id="btn-analyze" class="tool-btn">Проанализировать</button>
+    <span id="analyze-status" class="analyze-status"></span>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+  <script>
+    if (typeof d3 === 'undefined') {
+      document.write('<script src="{{ url_for("deep_mind.static", filename="js/d3.v7.min.js") }}"><\/script>');
+    }
+  </script>
+  <script src="{{ url_for('deep_mind.static', filename='js/neural_map.js') }}"></script>
+</body>
+</html>

@@ -525,10 +525,36 @@ def _check_crisis(text: str) -> bool:
 @bp.route('/')
 def chat():
     """Render the chat page."""
-    # Load persistent chat history for display
     messages = ChatMessage.query.order_by(ChatMessage.created_at).all()
     history = [{'role': m.role, 'content': m.content} for m in messages]
-    return render_template('assistant/chat.html', history=history)
+
+    # Pre-load topic message when arriving from deep-mind neural map
+    preload_message = ''
+    topic_id = request.args.get('topic', type=int)
+    if topic_id:
+        try:
+            from app.models import MindCluster, MindClusterEntry
+            cluster = db.session.get(MindCluster, topic_id)
+            if cluster:
+                member_ids = [
+                    me.entry_id for me in
+                    MindClusterEntry.query.filter_by(cluster_id=topic_id).limit(5).all()
+                ]
+                entries = MoodEntry.query.filter(
+                    MoodEntry.id.in_(member_ids)
+                ).order_by(MoodEntry.date.desc()).all()
+                sample_dates = ', '.join(e.date.isoformat() for e in entries[:3])
+                preload_message = (
+                    f'Я хочу поговорить о теме "{cluster.label}". '
+                    f'{cluster.description or ""} '
+                    f'Эта тема прослеживается в моих записях от {sample_dates}. '
+                    f'Помоги мне глубже разобраться в этом.'
+                ).strip()
+        except Exception:
+            pass
+
+    return render_template('assistant/chat.html', history=history,
+                           preload_message=preload_message)
 
 
 @bp.route('/stream', methods=['POST'])
