@@ -25,6 +25,10 @@
   <div class="chat-container">
     <div class="chat-toolbar">
       <span class="chat-status" id="chat-status"></span>
+      <label class="chat-toggle" title="Toggle thinking mode">
+        <input type="checkbox" id="chat-thinking-toggle" {% if thinking_default %}checked{% endif %}>
+        <span>thinking</span>
+      </label>
       <button class="chat-tool-btn" id="btn-clear-chat" title="Clear chat history">clear chat</button>
       <button class="chat-tool-btn" id="btn-reindex" title="Reindex all diary entries">reindex</button>
       <button class="chat-tool-btn" id="btn-reset-profile" title="Reset psychological profile">reset profile</button>

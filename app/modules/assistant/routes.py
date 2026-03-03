@@ -48,8 +48,10 @@ _llm_loading_progress = 0  # 0-100
 #   LLM_GPU_FIRST (true/false) - try reduced GPU contexts before CPU fallback
 #   LLM_GPU_CTX_STEP (int) - step size for GPU context fallback
 #   LLM_MIN_GPU_CTX (int) - minimum GPU context for fallback
-_DEFAULT_GPU_CTX = 8192
-_DEFAULT_CPU_CTX = 8192
+#   LLM_ENABLE_THINKING (true/false) - enable <think> reasoning blocks for chat
+#   LLM_MAX_THINK_CHARS (int) - soft cap on think block length (when enabled)
+_DEFAULT_GPU_CTX = 6144
+_DEFAULT_CPU_CTX = 6144
 _DEFAULT_GPU_LAYER_CANDIDATES = [-1, 35, 28, 25, 20, 15]
 
 
@@ -73,9 +75,29 @@ def _env_bool(name: str, default: bool) -> bool:
     return raw.strip().lower() in {'1', 'true', 'yes', 'y', 'on'}
 
 
+_thinking_state = threading.local()
+
+
 def _set_default_env(name: str, value: str) -> None:
     if name not in os.environ or os.environ.get(name, '').strip() == '':
         os.environ[name] = value
+
+
+def _get_request_thinking(default: bool | None = None) -> bool:
+    if hasattr(_thinking_state, 'enabled'):
+        return bool(_thinking_state.enabled)
+    if default is None:
+        return _env_bool('LLM_ENABLE_THINKING', False)
+    return default
+
+
+def _set_request_thinking(value: bool | None) -> None:
+    _thinking_state.enabled = value
+
+
+def _clear_request_thinking() -> None:
+    if hasattr(_thinking_state, 'enabled'):
+        delattr(_thinking_state, 'enabled')
 
 
 def _apply_profile_settings(
@@ -297,6 +319,22 @@ def _get_continue_prompt() -> str:
     )
 
 
+def _get_final_answer_instruction() -> str:
+    return os.environ.get(
+        'LLM_FINAL_ANSWER_INSTRUCTION',
+        'Дай только итоговый ответ по сути запроса. Без рассуждений, без заголовков '
+        'вида "Thinking Process", без <think> и без перечисления правил.'
+    )
+
+
+def _get_thinking_instruction() -> str:
+    return os.environ.get(
+        'LLM_THINKING_INSTRUCTION',
+        'Если включены размышления, сначала дай их в теге <think>...</think>, '
+        'а затем отдельным абзацем дай итоговый ответ по сути запроса.'
+    )
+
+
 def _build_continuation_messages(llm, system_text: str, assistant_text: str) -> list[dict]:
     n_ctx = _llm_n_ctx or _env_int('LLM_N_CTX', _DEFAULT_GPU_CTX, min_value=256)
     reserve = _env_int('LLM_RESERVE_TOKENS', 512, min_value=0)
@@ -418,6 +456,38 @@ def _get_llm():
             log = logging.getLogger(__name__)
             from llama_cpp import Llama
             import llama_cpp
+
+            # Patch: enable per-request thinking mode for Qwen3.5
+            # The GGUF chat template checks `enable_thinking` but llama-cpp-python
+            # doesn't pass it to Jinja2 render, so thinking is always off.
+            # We patch Jinja2ChatFormatter to inject a per-request boolean.
+            try:
+                from llama_cpp.llama_chat_format import Jinja2ChatFormatter
+                if not getattr(Jinja2ChatFormatter.__call__, '_thinking_patched', False):
+                    _orig_jinja2_call = Jinja2ChatFormatter.__call__
+
+                    def _patched_jinja2_call(self, *args, **kwargs):
+                        env = getattr(self, '_environment', None)
+                        had_prev = False
+                        prev = None
+                        if env is not None and hasattr(env, 'globals'):
+                            had_prev = 'enable_thinking' in env.globals
+                            prev = env.globals.get('enable_thinking')
+                            env.globals['enable_thinking'] = _get_request_thinking()
+                        try:
+                            return _orig_jinja2_call(self, *args, **kwargs)
+                        finally:
+                            if env is not None and hasattr(env, 'globals'):
+                                if had_prev:
+                                    env.globals['enable_thinking'] = prev
+                                else:
+                                    env.globals.pop('enable_thinking', None)
+
+                    _patched_jinja2_call._thinking_patched = True
+                    Jinja2ChatFormatter.__call__ = _patched_jinja2_call
+                    log.info('Patched Jinja2ChatFormatter for toggleable thinking mode')
+            except Exception as e:
+                log.warning('Could not patch thinking mode: %s', e)
 
             _llm_loading_stage = 'detecting'
             _llm_loading_progress = 10
@@ -553,8 +623,10 @@ def chat():
         except Exception:
             pass
 
+    thinking_default = _env_bool('LLM_ENABLE_THINKING', False)
     return render_template('assistant/chat.html', history=history,
-                           preload_message=preload_message)
+                           preload_message=preload_message,
+                           thinking_default=thinking_default)
 
 
 @bp.route('/stream', methods=['POST'])
@@ -562,6 +634,7 @@ def stream():
     """Streaming endpoint: streams AI response token by token."""
     data = request.get_json(silent=True) or {}
     user_message = data.get('message', '').strip()
+    enable_thinking = data.get('enable_thinking', None)
 
     if not user_message:
         return Response('data: [DONE]\n\n', content_type='text/event-stream')
@@ -585,11 +658,19 @@ def stream():
 
     def generate():
         try:
+            if enable_thinking is None:
+                _clear_request_thinking()
+            else:
+                _set_request_thinking(bool(enable_thinking))
+            thinking_enabled = _get_request_thinking()
             llm = _get_llm()
 
             # Build context using multi-layer memory
             from .memory import assemble_context
-            system = assemble_context(user_message)
+            system_base = assemble_context(user_message)
+            system = system_base
+            if thinking_enabled:
+                system = system + '\n\n' + _get_thinking_instruction()
 
             messages = [{'role': 'system', 'content': system}]
 
@@ -618,12 +699,62 @@ def stream():
             response = llm.create_chat_completion(**chat_kwargs)
 
             full_response = ''
+            # The Qwen3.5 chat template injects <think>\n into the prompt
+            # (not into the generated output), so we prepend <think> when
+            # thinking is enabled to wrap reasoning for the UI.
+            think_prefix_sent = False
             for chunk in response:
                 delta = chunk['choices'][0].get('delta', {})
                 token = delta.get('content', '')
                 if token:
+                    if thinking_enabled and not think_prefix_sent:
+                        if '<think>' not in token:
+                            token = '<think>' + token
+                        think_prefix_sent = True
                     full_response += token
                     yield f'data: {json.dumps({"token": token})}\n\n'
+
+            if thinking_enabled and '<think>' in full_response and '</think>' not in full_response:
+                close_token = '\n</think>\n'
+                full_response += close_token
+                yield f'data: {json.dumps({"token": close_token})}\n\n'
+
+            # If thinking mode produced only reasoning, request a final answer (non-streaming).
+            if thinking_enabled:
+                try:
+                    from .memory import _strip_think
+                    answer_only = _strip_think(full_response).strip()
+                except Exception:
+                    answer_only = ''
+                if len(answer_only) < 10:
+                    try:
+                        _set_request_thinking(False)
+                        final_system = system_base + '\n\n' + _get_final_answer_instruction()
+                        final_messages = list(messages)
+                        if final_messages:
+                            final_messages[0] = {'role': 'system', 'content': final_system}
+                        else:
+                            final_messages = [
+                                {'role': 'system', 'content': final_system},
+                                {'role': 'user', 'content': user_message},
+                            ]
+                        final_kwargs = {
+                            'messages': final_messages,
+                            'stream': False,
+                            'temperature': 0.3,
+                        }
+                        if max_tokens is not None:
+                            final_kwargs['max_tokens'] = max_tokens
+                        final_resp = llm.create_chat_completion(**final_kwargs)
+                        final_text = final_resp['choices'][0]['message']['content']
+                        if final_text:
+                            if full_response and not full_response.endswith('\n'):
+                                full_response += '\n'
+                                yield 'data: ' + json.dumps({"token": "\n"}) + '\n\n'
+                            full_response += final_text
+                            yield f'data: {json.dumps({"token": final_text})}\n\n'
+                    except Exception:
+                        pass
 
             auto_continue = _env_bool('LLM_AUTO_CONTINUE', False)
             max_cont = _env_int('LLM_MAX_CONTINUATIONS', 2, min_value=0)
@@ -652,6 +783,7 @@ def stream():
                 if not appended:
                     break
 
+
             # Save assistant response to DB
             if full_response:
                 db.session.add(ChatMessage(role='assistant', content=full_response))
@@ -665,6 +797,8 @@ def stream():
         except Exception as e:
             yield f'data: {json.dumps({"error": f"Model error: {e}"})}\n\n'
             yield 'data: [DONE]\n\n'
+        finally:
+            _clear_request_thinking()
 
     return Response(
         stream_with_context(generate()),
@@ -704,8 +838,10 @@ def warmup():
 def reindex():
     """Trigger full reindexing of all diary entries."""
     from .background import reindex_all_async
-    reindex_all_async(current_app._get_current_object())
-    return jsonify({'status': 'started', 'message': 'Reindexing started in background'})
+    started = reindex_all_async(current_app._get_current_object())
+    if started:
+        return jsonify({'status': 'started', 'message': 'Reindexing started in background'})
+    return jsonify({'status': 'busy', 'message': 'Reindex already running'})
 
 
 @bp.route('/reset-profile', methods=['POST'])
@@ -734,6 +870,8 @@ def status():
     embedded = EntryEmbedding.query.count()
     summarized = EntrySummary.query.count()
     profile = UserPsychProfile.query.first()
+    from .background import get_reindex_status
+    reindex_status = get_reindex_status()
 
     return jsonify({
         'total_entries': total_entries,
@@ -745,4 +883,5 @@ def status():
         'llm_loading_stage': _llm_loading_stage if _llm_loading else '',
         'llm_loading_progress': _llm_loading_progress if _llm_loading else 0,
         'llm_ready': _llm is not None,
+        'reindex': reindex_status,
     })

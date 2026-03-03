@@ -8,6 +8,7 @@
   var inputEl = document.getElementById('chat-input');
   var sendBtn = document.getElementById('chat-send-btn');
   var statusEl = document.getElementById('chat-status');
+  var thinkingToggle = document.getElementById('chat-thinking-toggle');
 
   var isStreaming = false;
   var thinkOpenState = new WeakMap();
@@ -49,6 +50,8 @@
     }
   });
 
+  initThinkingToggle();
+
   // Toolbar buttons
   document.getElementById('btn-clear-chat').addEventListener('click', function () {
     if (!confirm('Clear all chat history?')) return;
@@ -88,17 +91,35 @@
     return 'загрузка модели (' + progress + '%)';
   }
 
+  function formatReindexStatus(reindex) {
+    if (!reindex) return '';
+    if (!reindex.running && !reindex.phase) return '';
+    var phase = reindex.phase || 'reindex';
+    var label = phase.replace(/_/g, ' ');
+    var current = reindex.current || 0;
+    var total = reindex.total || 0;
+    var text = 'reindex ' + label;
+    if (total > 0) {
+      text += ' ' + current + '/' + total;
+    }
+    return text;
+  }
+
   function loadStatus() {
     fetch('/assistant/status')
       .then(function (r) { return r.json(); })
-      .then(function (data) {
-        llmReady = data.llm_ready;
-        var parts = [];
-        if (data.llm_loading) {
-          parts.push(formatLoadingStage(data.llm_loading_stage, data.llm_loading_progress));
-        }
-        if (data.total_entries > 0) {
-          parts.push(data.embedded + '/' + data.total_entries + ' embedded');
+        .then(function (data) {
+          llmReady = data.llm_ready;
+          var parts = [];
+          var reindexLabel = formatReindexStatus(data.reindex);
+          if (reindexLabel) {
+            parts.push(reindexLabel);
+          }
+          if (data.llm_loading) {
+            parts.push(formatLoadingStage(data.llm_loading_stage, data.llm_loading_progress));
+          }
+          if (data.total_entries > 0) {
+            parts.push(data.embedded + '/' + data.total_entries + ' embedded');
           parts.push(data.summarized + '/' + data.total_entries + ' summarized');
           if (data.profile_version > 0) {
             parts.push('profile v' + data.profile_version);
@@ -120,16 +141,29 @@
         .then(function (r) { return r.json(); })
         .then(function (data) {
           var parts = [];
+          var reindexLabel = formatReindexStatus(data.reindex);
+          if (reindexLabel) {
+            parts.push(reindexLabel);
+          }
           if (data.llm_loading) {
             parts.push('model loading...');
           }
           parts.push(data.embedded + '/' + data.total_entries + ' embedded');
           parts.push(data.summarized + '/' + data.total_entries + ' summarized');
           statusEl.textContent = parts.join(' В· ');
-          if (data.embedded >= data.total_entries && data.summarized >= data.total_entries) {
-            statusEl.textContent = 'Reindex complete';
-            clearInterval(interval);
-            setTimeout(function () { loadStatus(); }, 3000);
+          if (data.reindex && !data.reindex.running) {
+            if (data.reindex.phase === 'done') {
+              statusEl.textContent = 'Reindex complete';
+              clearInterval(interval);
+              setTimeout(function () { loadStatus(); }, 3000);
+              return;
+            }
+            if (data.reindex.phase === 'error') {
+              statusEl.textContent = 'Reindex error';
+              clearInterval(interval);
+              setTimeout(function () { loadStatus(); }, 3000);
+              return;
+            }
           }
         });
     }, 5000);
@@ -145,6 +179,21 @@
     streamResponse(text);
   }
 
+  function initThinkingToggle() {
+    if (!thinkingToggle) return;
+    try {
+      var stored = localStorage.getItem('assistant_thinking_enabled');
+      if (stored !== null) {
+        thinkingToggle.checked = stored === '1';
+      }
+      thinkingToggle.addEventListener('change', function () {
+        localStorage.setItem('assistant_thinking_enabled', thinkingToggle.checked ? '1' : '0');
+      });
+    } catch (e) {
+      // localStorage may be unavailable; ignore
+    }
+  }
+
   function appendMessage(role, content) {
     var div = document.createElement('div');
     div.className = 'chat-msg chat-msg-' + role;
@@ -155,11 +204,41 @@
   }
 
   /**
+   * Collapse runs of 2+ blank lines into a single blank line and trim edges.
+   */
+  function collapseBlankLines(text) {
+    if (!text) return '';
+    var lines = text.replace(/\r\n?/g, '\n').split('\n');
+    var output = [];
+    var lastBlank = false;
+
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i].replace(/[ \t]+$/g, '');
+      if (!line.trim()) {
+        if (lastBlank) continue;
+        lastBlank = true;
+        output.push('');
+        continue;
+      }
+      lastBlank = false;
+      output.push(line);
+    }
+
+    while (output.length && output[0] === '') output.shift();
+    while (output.length && output[output.length - 1] === '') output.pop();
+    return output.join('\n');
+  }
+
+  /**
    * Convert raw text with <think>...</think> to HTML with collapsible details.
    */
   function renderThinkBlocks(text) {
     var result = '';
-    var remaining = text;
+    var normalized = text || '';
+    if (normalized.indexOf('<think>') === -1 && normalized.indexOf('</think>') !== -1) {
+      normalized = '<think>' + normalized;
+    }
+    var remaining = normalized;
     var thinkIndex = 0;
 
     while (true) {
@@ -174,14 +253,14 @@
 
       if (closeIdx !== -1) {
         // Complete think block
-        var thinkContent = afterOpen.substring(0, closeIdx);
+        var thinkContent = collapseBlankLines(afterOpen.substring(0, closeIdx));
         result += '<details class="think-block" data-think-index="' + thinkIndex + '"><summary>thought process</summary><div class="think-content">' +
           renderMarkdown(thinkContent) + '</div></details>';
         remaining = afterOpen.substring(closeIdx + 8);
         thinkIndex += 1;
       } else {
         // Unclosed think block (still streaming) — hide content for now
-        var thinkContent = afterOpen;
+        var thinkContent = collapseBlankLines(afterOpen);
         result += '<details class="think-block think-streaming" data-think-index="' + thinkIndex + '"><summary>thinking...</summary><div class="think-content">' +
           renderMarkdown(thinkContent) + '</div></details>';
         remaining = '';
@@ -342,7 +421,10 @@
     fetch('/assistant/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: userMessage })
+      body: JSON.stringify({
+        message: userMessage,
+        enable_thinking: thinkingToggle ? !!thinkingToggle.checked : false
+      })
     })
       .then(function (response) {
         var reader = response.body.getReader();
