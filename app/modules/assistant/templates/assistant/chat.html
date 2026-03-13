@@ -25,13 +25,19 @@
   <div class="chat-container">
     <div class="chat-toolbar">
       <span class="chat-status" id="chat-status"></span>
+      <div class="chat-context-bar" id="context-bar" title="Заполненность контекстного окна">
+        <div class="context-bar-fill" id="context-bar-fill"></div>
+        <span class="context-bar-label" id="context-bar-label"></span>
+      </div>
       <label class="chat-toggle" title="Toggle thinking mode">
         <input type="checkbox" id="chat-thinking-toggle" {% if thinking_default %}checked{% endif %}>
         <span>thinking</span>
       </label>
-      <button class="chat-tool-btn" id="btn-clear-chat" title="Clear chat history">clear chat</button>
-      <button class="chat-tool-btn" id="btn-reindex" title="Reindex all diary entries">reindex</button>
-      <button class="chat-tool-btn" id="btn-reset-profile" title="Reset psychological profile">reset profile</button>
+      <button class="chat-tool-btn" id="btn-compress" title="Сжать контекст — оставить последние сообщения">compress</button>
+      <button class="chat-tool-btn" id="btn-clear-chat" title="Очистить всю историю чата">clear chat</button>
+      <button class="chat-tool-btn" id="btn-sync" title="Доиндексировать пропущенные записи">sync</button>
+      <button class="chat-tool-btn" id="btn-reindex" title="Полный реиндекс всех записей">reindex</button>
+      <button class="chat-tool-btn" id="btn-reset-profile" title="Пересобрать психологический профиль">rebuild profile</button>
     </div>
 
     <div class="chat-messages" id="chat-messages">

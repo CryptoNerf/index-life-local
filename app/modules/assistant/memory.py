@@ -16,7 +16,7 @@ import numpy as np
 from app import db
 from app.models import (
     MoodEntry, EntrySummary, PeriodSummary,
-    EntryEmbedding, UserPsychProfile,
+    EntryEmbedding, UserPsychProfile, ChatMessage,
 )
 from .prompts import (
     SUMMARY_PROMPT, PROFILE_PROMPT, MONTH_SUMMARY_PROMPT,
@@ -55,6 +55,46 @@ def embed_query(text: str) -> np.ndarray:
     """Create embedding for a search query."""
     model = _get_embed_model()
     return model.encode(f'query: {text}', normalize_embeddings=True)
+
+
+# ── Emotional tone detection ────────────────────────────────────
+
+_tone_anchors: dict[str, np.ndarray] | None = None
+
+_TONE_TEXTS = {
+    'distressed': 'Мне очень плохо, я не могу справиться, всё рушится, хочу плакать',
+    'sad': 'Мне грустно, одиноко, тоскливо, ничего не радует',
+    'anxious': 'Я тревожусь, волнуюсь, не могу успокоиться, страшно',
+    'neutral': 'Обычный день, ничего особенного, всё нормально',
+    'positive': 'Мне хорошо, радостно, доволен, отличное настроение',
+}
+
+
+def _get_tone_anchors() -> dict[str, np.ndarray]:
+    global _tone_anchors
+    if _tone_anchors is None:
+        _tone_anchors = {k: embed_query(v) for k, v in _TONE_TEXTS.items()}
+    return _tone_anchors
+
+
+def detect_emotional_tone(text: str) -> tuple[str, float]:
+    """Detect emotional tone of user message via cosine similarity to anchors.
+
+    Returns (tone_label, confidence_score).
+    """
+    try:
+        query_vec = embed_query(text)
+        anchors = _get_tone_anchors()
+        best_tone = 'neutral'
+        best_score = -1.0
+        for tone, anchor_vec in anchors.items():
+            score = float(np.dot(query_vec, anchor_vec))
+            if score > best_score:
+                best_score = score
+                best_tone = tone
+        return best_tone, best_score
+    except Exception:
+        return 'neutral', 0.0
 
 
 def _text_hash(text: str) -> str:
@@ -151,28 +191,53 @@ def update_embedding(entry: MoodEntry):
     db.session.commit()
 
 
-def search_relevant_entries(query: str, top_k: int = 5) -> list[MoodEntry]:
-    """Find most semantically relevant entries for a query."""
-    query_vec = embed_query(query)
+_embedding_cache: tuple[list[int], np.ndarray] | None = None
+_embedding_cache_count: int = 0
 
+
+def _get_embedding_matrix() -> tuple[list[int], np.ndarray] | None:
+    """Load and cache the embedding matrix. Invalidates on count change."""
+    global _embedding_cache, _embedding_cache_count
+    current_count = EntryEmbedding.query.count()
+    if _embedding_cache is not None and _embedding_cache_count == current_count:
+        return _embedding_cache
     all_embs = EntryEmbedding.query.all()
     if not all_embs:
+        _embedding_cache = None
+        _embedding_cache_count = 0
+        return None
+    entry_ids = [emb.entry_id for emb in all_embs]
+    matrix = np.stack([np.frombuffer(emb.embedding, dtype=np.float32)
+                       for emb in all_embs])
+    _embedding_cache = (entry_ids, matrix)
+    _embedding_cache_count = current_count
+    return _embedding_cache
+
+
+def search_relevant_entries(query: str, top_k: int = 5,
+                            min_score: float = 0.35) -> list[MoodEntry]:
+    """Find most semantically relevant entries for a query.
+
+    Only returns entries with cosine similarity >= min_score to avoid
+    polluting context with irrelevant noise. Uses cached embedding matrix.
+    """
+    query_vec = embed_query(query)
+
+    cached = _get_embedding_matrix()
+    if cached is None:
         return []
+    entry_ids, matrix = cached
 
-    entry_ids = []
-    scores = []
-    for emb in all_embs:
-        vec = np.frombuffer(emb.embedding, dtype=np.float32)
-        score = np.dot(query_vec, vec)  # cosine sim (vectors are normalized)
-        entry_ids.append(emb.entry_id)
-        scores.append(score)
-
-    scores = np.array(scores)
+    # Vectorized cosine similarity
+    scores = matrix @ query_vec
     top_indices = np.argsort(scores)[::-1][:top_k]
 
-    result_ids = [entry_ids[i] for i in top_indices]
+    # Filter by minimum similarity threshold
+    result_ids = [entry_ids[i] for i in top_indices if scores[i] >= min_score]
+    if not result_ids:
+        return []
+
     entries = MoodEntry.query.filter(MoodEntry.id.in_(result_ids)).all()
-    # Sort by relevance score
     id_to_entry = {e.id: e for e in entries}
     return [id_to_entry[eid] for eid in result_ids if eid in id_to_entry]
 
@@ -209,11 +274,10 @@ def generate_entry_summary(entry: MoodEntry, llm) -> EntrySummary | None:
             themes_list = []
     summary_text = _strip_think(summary_text)
     if not summary_text:
-        summary_text = note[:200] + ('...' if len(note) > 200 else '')
-
-    summary_text = _strip_think(summary_text)
+        note_text = (entry.note or '').strip()
+        summary_text = note_text[:200] + ('...' if len(note_text) > 200 else '')
     if not summary_text:
-        summary_text = f'{len(entries)} entries, avg rating {avg:.1f}/10.'
+        summary_text = f'Настроение {entry.rating}/10, без заметки.'
 
     if existing:
         existing.summary = summary_text
@@ -445,7 +509,7 @@ def update_profile(llm, force_rebuild: bool = False):
 
 
 def _extract_json(text: str) -> dict:
-    """Extract JSON object from LLM response text."""
+    """Extract JSON object from LLM response text, with regex fallback."""
     # Try direct parse
     try:
         return json.loads(text)
@@ -459,22 +523,160 @@ def _extract_json(text: str) -> dict:
             return json.loads(text[start:end + 1])
         except json.JSONDecodeError:
             pass
-    return {}
+    # Fallback: extract individual fields via regex
+    result = {}
+    for field in ('avg_rating', 'trend', 'risk_flags'):
+        m = re.search(rf'"{field}"\s*:\s*"?([^",\}}]+)"?', text)
+        if m:
+            val = m.group(1).strip()
+            if field == 'avg_rating':
+                try:
+                    result[field] = float(val)
+                except ValueError:
+                    pass
+            else:
+                result[field] = val
+    for field in ('main_themes', 'negative_triggers', 'positive_triggers',
+                  'coping', 'strengths', 'growth_areas', 'key_people'):
+        m = re.search(rf'"{field}"\s*:\s*\[(.*?)\]', text, re.DOTALL)
+        if m:
+            items = re.findall(r'"([^"]+)"', m.group(1))
+            result[field] = items
+    if result:
+        log.info('Profile JSON fallback extracted %d fields', len(result))
+    return result
 
 
 # ── Context assembly ────────────────────────────────────────────
 
-def assemble_context(user_message: str) -> str:
-    """Build the full system prompt from all 4 memory layers."""
+_GREETING_WORDS = {
+    'привет', 'здравствуй', 'здравствуйте', 'добрый', 'здарова',
+    'хай', 'хей', 'hello', 'hi', 'hey', 'приветик', 'салют', 'йо',
+}
 
-    # Layer 4: Profile
+
+def _is_light_message(text: str) -> bool:
+    """Detect greetings and very short messages that don't need full context."""
+    words = text.lower().split()
+    if len(words) > 5:
+        return False
+    return any(w.rstrip('!.,') in _GREETING_WORDS for w in words)
+
+
+_MONTHS_RU = {
+    'января': 1, 'февраля': 2, 'марта': 3, 'апреля': 4,
+    'мая': 5, 'июня': 6, 'июля': 7, 'августа': 8,
+    'сентября': 9, 'октября': 10, 'ноября': 11, 'декабря': 12,
+    'январь': 1, 'февраль': 2, 'март': 3, 'апрель': 4,
+    'май': 5, 'июнь': 6, 'июль': 7, 'август': 8,
+    'сентябрь': 9, 'октябрь': 10, 'ноябрь': 11, 'декабрь': 12,
+}
+
+_ORDINALS_RU = {
+    'первого': 1, 'второго': 2, 'третьего': 3, 'четвёртого': 4,
+    'четвертого': 4, 'пятого': 5, 'шестого': 6, 'седьмого': 7,
+    'восьмого': 8, 'девятого': 9, 'десятого': 10,
+    'одиннадцатого': 11, 'двенадцатого': 12, 'тринадцатого': 13,
+    'четырнадцатого': 14, 'пятнадцатого': 15, 'шестнадцатого': 16,
+    'семнадцатого': 17, 'восемнадцатого': 18, 'девятнадцатого': 19,
+    'двадцатого': 20, 'двадцать первого': 21, 'двадцать второго': 22,
+    'двадцать третьего': 23, 'двадцать четвёртого': 24,
+    'двадцать четвертого': 24, 'двадцать пятого': 25,
+    'двадцать шестого': 26, 'двадцать седьмого': 27,
+    'двадцать восьмого': 28, 'двадцать девятого': 29,
+    'тридцатого': 30, 'тридцать первого': 31,
+}
+
+
+def _extract_date_entries(text: str) -> list:
+    """Extract diary entries whose dates are mentioned in any format.
+
+    Supported:
+      - 2026-02-09  (ISO)
+      - 09.02.2026  (DD.MM.YYYY)
+      - 9 февраля 2026 / 9 февраля  (numeric day + Russian month)
+      - двенадцатого августа 2025 / двенадцатого августа  (ordinal + month)
+    """
+    from datetime import date as date_type
+    dates_found: list[date_type] = []
+
+    # 1) ISO: 2026-02-09
+    for m in re.finditer(r'\b(\d{4})-(\d{2})-(\d{2})\b', text):
+        try:
+            dates_found.append(date_type(int(m[1]), int(m[2]), int(m[3])))
+        except ValueError:
+            pass
+
+    # 2) DD.MM.YYYY
+    for m in re.finditer(r'\b(\d{1,2})\.(\d{2})\.(\d{4})\b', text):
+        try:
+            dates_found.append(date_type(int(m[3]), int(m[2]), int(m[1])))
+        except ValueError:
+            pass
+
+    # 3) "9 февраля 2026" or "9 февраля" (without year → current year)
+    month_names = '|'.join(_MONTHS_RU.keys())
+    for m in re.finditer(
+        rf'\b(\d{{1,2}})\s+({month_names})(?:\s+(\d{{4}}))?', text, re.IGNORECASE
+    ):
+        day = int(m[1])
+        month = _MONTHS_RU.get(m[2].lower())
+        year = int(m[3]) if m[3] else datetime.now().year
+        if month:
+            try:
+                dates_found.append(date_type(year, month, day))
+            except ValueError:
+                pass
+
+    # 4) "двенадцатого августа 2025" or "двенадцатого августа"
+    #    Handle compound ordinals like "двадцать первого"
+    ordinal_names = '|'.join(sorted(_ORDINALS_RU.keys(), key=len, reverse=True))
+    for m in re.finditer(
+        rf'\b({ordinal_names})\s+({month_names})(?:\s+(\d{{4}}))?',
+        text, re.IGNORECASE
+    ):
+        day = _ORDINALS_RU.get(m[1].lower())
+        month = _MONTHS_RU.get(m[2].lower())
+        year = int(m[3]) if m[3] else datetime.now().year
+        if day and month:
+            try:
+                dates_found.append(date_type(year, month, day))
+            except ValueError:
+                pass
+
+    if not dates_found:
+        return []
+
+    # Deduplicate and query
+    unique_dates = list(dict.fromkeys(dates_found))
+    entries = []
+    for d in unique_dates:
+        found = MoodEntry.query.filter_by(date=d).all()
+        entries.extend(found)
+    return entries
+
+
+def _estimate_tokens(text: str) -> int:
+    """Rough token estimate for Russian text (~2.5 chars per token)."""
+    return max(1, len(text) * 10 // 25)
+
+
+def assemble_context(user_message: str, max_system_tokens: int = 0) -> str:
+    """Build the full system prompt from all 4 memory layers.
+
+    For short greetings, reduces context to avoid overwhelming responses.
+    If max_system_tokens > 0, truncate sections to fit the budget.
+    """
+    light = _is_light_message(user_message)
+
+    # Layer 4: Profile (always include — background knowledge)
     profile = UserPsychProfile.query.first()
     if profile and profile.profile_json and profile.profile_json != '{}':
         profile_section = PROFILE_SECTION.format(profile_text=profile.profile_json)
     else:
         profile_section = ''
 
-    # Layer 3: Monthly timeline
+    # Layer 3: Monthly timeline (always include — lightweight)
     period_summaries = (PeriodSummary.query
                         .filter_by(period_type='month')
                         .order_by(PeriodSummary.period_key)
@@ -492,25 +694,86 @@ def assemble_context(user_message: str) -> str:
     else:
         timeline_section = ''
 
-    # Layer 2: Relevant entries via semantic search
-    try:
-        relevant_entries = search_relevant_entries(user_message, top_k=5)
-        if relevant_entries:
+    # Layer 2: Relevant entries via semantic search + date extraction
+    # Skip for greetings — search on "привет" returns noise
+    if light:
+        relevant_section = ''
+    else:
+        try:
+            relevant_entries = search_relevant_entries(user_message, top_k=5)
+        except Exception as exc:
+            log.warning(f'Vector search failed: {exc}')
+            relevant_entries = []
+
+        # Extract dates from current message AND recent USER messages
+        # Only scan user messages to avoid bloating context with every date
+        # the assistant mentioned in its analysis.
+        date_entries = _extract_date_entries(user_message)
+        if not date_entries:
+            recent_user_msgs = (ChatMessage.query
+                                .filter_by(role='user')
+                                .order_by(ChatMessage.created_at.desc())
+                                .limit(4).all())
+            seen_ids = set()
+            date_entries = []
+            for msg in recent_user_msgs:
+                found = _extract_date_entries(msg.content or '')
+                for entry in found:
+                    if entry.id not in seen_ids:
+                        seen_ids.add(entry.id)
+                        date_entries.append(entry)
+
+        # Include ±1 day entries for context continuity
+        if date_entries:
+            from datetime import timedelta
+            extra_dates = set()
+            for entry in date_entries:
+                extra_dates.add(entry.date - timedelta(days=1))
+                extra_dates.add(entry.date + timedelta(days=1))
+            for d in extra_dates:
+                found = MoodEntry.query.filter_by(date=d).all()
+                date_entries.extend(found)
+            log.info('Date extraction found %d entries (with neighbors): %s',
+                     len(date_entries),
+                     list(set(ent.date.isoformat() for ent in date_entries)))
+        else:
+            log.info('Date extraction found no entries for message: %s', user_message[:100])
+
+        # Merge: date entries first (full text), then semantic (truncated)
+        date_ids = set(entry.id for entry in date_entries)
+        seen_ids = set()
+        all_relevant = []
+        for entry in date_entries:
+            if entry.id not in seen_ids:
+                seen_ids.add(entry.id)
+                all_relevant.append(entry)
+        for entry in (relevant_entries or []):
+            if entry.id not in seen_ids:
+                seen_ids.add(entry.id)
+                all_relevant.append(entry)
+
+        if all_relevant:
             rel_lines = []
-            for e in relevant_entries:
-                note = (e.note or '').strip()
-                rel_lines.append(f'[{e.date.isoformat()}] {e.rating}/10. {note}')
+            max_semantic_chars = 400
+            for entry in all_relevant:
+                note = (entry.note or '').strip().replace('\n', ' ')
+                # Date-extracted entries get full text; semantic results truncated
+                if entry.id not in date_ids and len(note) > max_semantic_chars:
+                    note = note[:max_semantic_chars] + '...'
+                rel_lines.append(f'[{entry.date.isoformat()}] {entry.rating}/10. {note}')
             relevant_section = RELEVANT_SECTION.format(
                 entries_text='\n'.join(rel_lines)
             )
+            log.info('Relevant section: %d entries (%d by date, %d semantic), dates: %s',
+                     len(rel_lines), len(date_ids),
+                     len(rel_lines) - len(date_ids),
+                     [entry.date.isoformat() for entry in all_relevant])
         else:
             relevant_section = ''
-    except Exception as e:
-        log.warning(f'Vector search failed: {e}')
-        relevant_section = ''
 
-    # Layer 1: Recent raw entries (last 3)
-    recent = MoodEntry.query.order_by(MoodEntry.date.desc()).limit(3).all()
+    # Layer 1: Recent raw entries (1 for greetings, 3 normally)
+    recent_limit = 1 if light else 3
+    recent = MoodEntry.query.order_by(MoodEntry.date.desc()).limit(recent_limit).all()
     if recent:
         rec_lines = []
         for e in recent:
@@ -520,9 +783,40 @@ def assemble_context(user_message: str) -> str:
     else:
         recent_section = ''
 
-    return SYSTEM_PROMPT.format(
+    full_text = SYSTEM_PROMPT.format(
         profile_section=profile_section,
         timeline_section=timeline_section,
         relevant_section=relevant_section,
         recent_section=recent_section,
     )
+
+    # Truncate sections if system prompt exceeds token budget
+    if max_system_tokens > 0:
+        est = _estimate_tokens(full_text)
+        if est > max_system_tokens:
+            log.info('System prompt ~%d tokens exceeds budget %d, trimming',
+                     est, max_system_tokens)
+            # Priority: drop relevant → trim timeline → trim profile
+            if relevant_section and _estimate_tokens(relevant_section) > 200:
+                # Keep only first 3 entries
+                lines = relevant_section.split('\n')
+                relevant_section = '\n'.join(lines[:4])  # header + 3 entries
+                full_text = SYSTEM_PROMPT.format(
+                    profile_section=profile_section,
+                    timeline_section=timeline_section,
+                    relevant_section=relevant_section,
+                    recent_section=recent_section,
+                )
+            est = _estimate_tokens(full_text)
+            if est > max_system_tokens and timeline_section:
+                # Keep only last 3 months
+                lines = timeline_section.split('\n')
+                timeline_section = '\n'.join(lines[:1] + lines[-3:])
+                full_text = SYSTEM_PROMPT.format(
+                    profile_section=profile_section,
+                    timeline_section=timeline_section,
+                    relevant_section=relevant_section,
+                    recent_section=recent_section,
+                )
+
+    return full_text

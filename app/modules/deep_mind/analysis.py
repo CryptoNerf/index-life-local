@@ -4,6 +4,7 @@ Calls Qwen3 (borrowed from assistant module) to name each cluster
 and assess its emotional weight.
 """
 import logging
+import os
 import re
 
 import numpy as np
@@ -12,6 +13,19 @@ from app import db
 from app.models import MoodEntry, MindCluster, MindClusterEntry
 
 log = logging.getLogger(__name__)
+
+MIN_TOPIC_ENTRIES = max(2, int(os.getenv('DEEP_MIND_MIN_TOPIC_ENTRIES', '2')))
+MAX_TOPIC_ENTRIES = max(
+    MIN_TOPIC_ENTRIES,
+    int(os.getenv('DEEP_MIND_MAX_TOPIC_ENTRIES', '15')),
+)
+MAX_NOTE_CHARS = int(os.getenv('DEEP_MIND_TOPIC_NOTE_CHARS', '500'))
+
+FALLBACK_LABEL = 'Не удалось сформулировать тему'
+FALLBACK_DESCRIPTION = (
+    'Ответ модели не соответствовал формату. '
+    'Попробуйте повторить анализ.'
+)
 
 
 def _get_llm():
@@ -31,20 +45,33 @@ def _strip_think(text):
 
 
 def _parse_fields(text):
-    """Extract ТЕМА/ОПИСАНИЕ/ВЕС fields from text."""
+    """Extract THEME/DESCRIPTION/WEIGHT (and Russian equivalents) from text."""
     label = ''
     description = ''
     weight = 0.5
-    for line in text.split('\n'):
-        line = line.strip()
-        up = line.upper()
-        if up.startswith('ТЕМА:') or up.startswith('ТЕМА :'):
-            label = line.split(':', 1)[1].strip()
-        elif up.startswith('ОПИСАНИЕ:') or up.startswith('ОПИСАНИЕ :'):
-            description = line.split(':', 1)[1].strip()
-        elif up.startswith('ВЕС:') or up.startswith('ВЕС :'):
+
+    theme_re = re.compile(r'^(?:THEME|TOPIC|ТЕМА)\s*[:\-–—]\s*(.+)$', re.I)
+    desc_re = re.compile(r'^(?:DESCRIPTION|DESC|ОПИСАНИЕ)\s*[:\-–—]\s*(.+)$', re.I)
+    weight_re = re.compile(r'^(?:WEIGHT|ВЕС)\s*[:\-–—]\s*(.+)$', re.I)
+
+    for raw in text.split('\n'):
+        line = raw.strip()
+        if not line:
+            continue
+        # Allow bullet prefixes
+        line = line.lstrip('-•* ').strip()
+        m = theme_re.match(line)
+        if m:
+            label = m.group(1).strip()
+            continue
+        m = desc_re.match(line)
+        if m:
+            description = m.group(1).strip()
+            continue
+        m = weight_re.match(line)
+        if m:
             try:
-                weight = float(line.split(':', 1)[1].strip())
+                weight = float(m.group(1).strip())
                 weight = max(0.0, min(1.0, weight))
             except ValueError:
                 pass
@@ -63,50 +90,136 @@ def _parse_topic_response(text):
         # Try after stripping <think> blocks
         stripped = _strip_think(text)
         label, description, weight = _parse_fields(stripped)
-    if not label:
-        # Last resort: first non-empty line as label
-        for line in _strip_think(text).split('\n'):
-            line = line.strip()
-            if line:
-                label = line[:60]
-                break
-        if not label:
-            label = 'Тема'
     return label, description, weight
 
 
-def name_cluster(cluster_entry_ids, llm, max_entries=8):
+def _is_insufficient_label(label):
+    if not label:
+        return False
+    lower = label.strip().lower()
+    if 'not enough data' in lower or 'insufficient data' in lower:
+        return True
+    if 'недостаточно' in lower or 'не хватает' in lower:
+        return True
+    return False
+
+
+def _looks_like_template(label):
+    if not label:
+        return False
+    lower = label.strip().lower()
+    suspects = [
+        'template',
+        'filled template',
+        'example',
+        'sample',
+        'шаблон',
+        'пример',
+        'заполненн',
+    ]
+    return any(s in lower for s in suspects)
+
+
+def _select_representative_entries(entries, max_entries):
+    """Select entries that are both emotionally charged and textually rich."""
+    # Sort by emotional extremity
+    by_emotion = sorted(entries, key=lambda e: abs((e.rating or 5) - 5), reverse=True)
+    # Sort by note length (longer notes = more context)
+    by_length = sorted(entries, key=lambda e: len((e.note or '').strip()), reverse=True)
+
+    half = max(max_entries // 2, 1)
+    selected_ids = set()
+    selected = []
+
+    for e in by_emotion[:half]:
+        if e.id not in selected_ids:
+            selected_ids.add(e.id)
+            selected.append(e)
+
+    for e in by_length[:half]:
+        if e.id not in selected_ids:
+            selected_ids.add(e.id)
+            selected.append(e)
+
+    # Fill remaining slots from emotion-sorted
+    for e in by_emotion:
+        if len(selected) >= max_entries:
+            break
+        if e.id not in selected_ids:
+            selected_ids.add(e.id)
+            selected.append(e)
+
+    # Sort chronologically for coherent reading
+    selected.sort(key=lambda e: e.date)
+    return selected[:max_entries]
+
+
+def name_cluster(cluster_entry_ids, llm, max_entries=MAX_TOPIC_ENTRIES):
     """Call LLM to name a single cluster.
 
-    Selects the most emotionally charged entries (rating furthest from 5).
+    Selects representative entries by emotional charge and text richness.
     Returns ``(label, description, emotional_weight)``.
     """
-    from .prompts import TOPIC_NAMING_PROMPT
+    from .prompts import TOPIC_NAMING_PROMPT, TOPIC_NAMING_FORCED_PROMPT
 
     entries = MoodEntry.query.filter(MoodEntry.id.in_(cluster_entry_ids)).all()
     if not entries:
         return 'Неизвестная тема', '', 0.5
 
-    entries_sorted = sorted(entries, key=lambda e: abs((e.rating or 5) - 5), reverse=True)
-    selected = entries_sorted[:max_entries]
+    entry_count = len(entries)
+    selected = _select_representative_entries(entries, max_entries)
+
+    # Build context line with date range and average mood
+    dates = [e.date for e in entries]
+    avg_rating = sum(e.rating or 5 for e in entries) / len(entries)
+    context_line = (
+        f"Период: {min(dates).isoformat()} — {max(dates).isoformat()}. "
+        f"Всего записей: {entry_count}. "
+        f"Средняя оценка настроения: {avg_rating:.1f}/10."
+    )
 
     lines = []
     for e in selected:
-        note = (e.note or '').strip()[:300]
+        note = (e.note or '').strip()[:MAX_NOTE_CHARS]
         lines.append(f'[{e.date.isoformat()}] Настроение: {e.rating}/10. {note}')
-    entries_text = '\n'.join(lines)
+    entries_text = context_line + '\n\n' + '\n'.join(lines)
 
-    try:
+    def _call_prompt(prompt):
         result = llm.create_chat_completion(
             messages=[{
                 'role': 'user',
-                'content': TOPIC_NAMING_PROMPT.format(entries_text=entries_text),
+                'content': prompt.format(
+                    entries_text=entries_text,
+                    entry_count=entry_count,
+                ),
             }],
             max_tokens=512,
             temperature=0.4,
         )
         raw = result['choices'][0]['message']['content'].strip()
         return _parse_topic_response(raw)
+
+    try:
+        label, description, weight = _call_prompt(TOPIC_NAMING_PROMPT)
+        label = (label or '').strip()
+
+        # If LLM still says "insufficient" despite our prompt, force it
+        if _is_insufficient_label(label):
+            label, description, weight = _call_prompt(TOPIC_NAMING_FORCED_PROMPT)
+            label = (label or '').strip()
+
+        # Final fallback filters
+        if _is_insufficient_label(label):
+            # Still insufficient — use a generic but non-garbage label
+            return 'Формирующийся паттерн', 'Тема требует больше данных для точной формулировки.', 0.3
+        if _looks_like_template(label):
+            return FALLBACK_LABEL, FALLBACK_DESCRIPTION, min(weight, 0.4)
+        if not label:
+            return FALLBACK_LABEL, FALLBACK_DESCRIPTION, min(weight, 0.4)
+        if not description:
+            description = 'Тема сформулирована на основе заметок.'
+
+        return label, description, weight
     except Exception as e:
         log.warning('Topic naming failed for cluster (%d entries): %s',
                     len(cluster_entry_ids), e)

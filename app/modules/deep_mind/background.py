@@ -12,6 +12,8 @@ _status = {
     'stage': '',
     'progress': 0,
     'clusters_found': 0,
+    'clusters_visible': 0,
+    'clusters_hidden': 0,
     'last_run': None,
     'error': '',
 }
@@ -53,7 +55,8 @@ def _run(app):
 
             if n == 0:
                 _set(running=False, stage='done', progress=100,
-                     clusters_found=0, last_run=_now())
+                     clusters_found=0, clusters_visible=0,
+                     clusters_hidden=0, last_run=_now())
                 return
 
             _set(stage='loading_llm', progress=20)
@@ -66,8 +69,19 @@ def _run(app):
             _set(stage=f'naming:0/{n}', progress=25)
             saved = save_clusters_to_db(result, llm, progress_cb=on_progress)
 
+            from .analysis import MIN_TOPIC_ENTRIES, _is_insufficient_label
+            visible = [
+                c for c in saved
+                if (c.entry_count or 0) >= MIN_TOPIC_ENTRIES
+                and not _is_insufficient_label(c.label)
+            ]
+            hidden = max(0, len(saved) - len(visible))
+
             _set(running=False, stage='done', progress=100,
-                 clusters_found=len(saved), last_run=_now())
+                 clusters_found=len(saved),
+                 clusters_visible=len(visible),
+                 clusters_hidden=hidden,
+                 last_run=_now())
             log.info('deep-mind analysis complete')
 
     except Exception as e:
