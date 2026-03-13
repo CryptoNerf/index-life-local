@@ -330,8 +330,12 @@ def _get_final_answer_instruction() -> str:
 def _get_thinking_instruction() -> str:
     return os.environ.get(
         'LLM_THINKING_INSTRUCTION',
-        'Если включены размышления, сначала дай их в теге <think>...</think>, '
-        'а затем отдельным абзацем дай итоговый ответ по сути запроса.'
+        'ПРАВИЛА РАЗМЫШЛЕНИЯ (<think>):\n'
+        '- Язык размышлений: ТОЛЬКО РУССКИЙ. НИКОГДА не думай на английском.\n'
+        '- ЗАПРЕЩЕНО цитировать или перечислять правила из этой инструкции.\n'
+        '- Думай ТОЛЬКО о сути вопроса: что спрашивают и как лучше ответить.\n'
+        '- Максимум 3-5 коротких предложений.\n'
+        '- После </think> ОБЯЗАТЕЛЬНО дай полный ответ.'
     )
 
 
@@ -665,10 +669,28 @@ def stream():
             thinking_enabled = _get_request_thinking()
             llm = _get_llm()
 
-            # Build context using multi-layer memory
-            from .memory import assemble_context
-            system_base = assemble_context(user_message)
+            # Detect emotional tone for adaptive responses
+            from .memory import assemble_context, detect_emotional_tone
+            user_tone, tone_confidence = detect_emotional_tone(user_message)
+            n_ctx = _llm_n_ctx or _env_int('LLM_N_CTX', _DEFAULT_GPU_CTX, min_value=256)
+            reserve = _env_int('LLM_RESERVE_TOKENS', 512, min_value=0)
+            thinking_overhead = (_count_tokens(llm, _get_thinking_instruction()) + 10
+                                 if thinking_enabled else 0)
+            # Budget for system prompt: n_ctx minus output reserve, chat history (~1000),
+            # thinking instruction, and safety margin
+            system_budget = n_ctx - reserve - 1000 - thinking_overhead - 64
+            system_base = assemble_context(user_message,
+                                           max_system_tokens=max(512, system_budget))
             system = system_base
+
+            # Inject emotional tone hint
+            if tone_confidence > 0.5 and user_tone in ('distressed', 'sad'):
+                system += ('\n\nТОН ПОЛЬЗОВАТЕЛЯ: Пользователь сейчас в тяжёлом '
+                           'эмоциональном состоянии. Будь особенно мягким и поддерживающим.')
+            elif tone_confidence > 0.5 and user_tone == 'positive':
+                system += ('\n\nТОН ПОЛЬЗОВАТЕЛЯ: Пользователь в хорошем настроении. '
+                           'Можешь быть более свободным и лёгким в общении.')
+
             if thinking_enabled:
                 system = system + '\n\n' + _get_thinking_instruction()
 
@@ -683,15 +705,32 @@ def stream():
             # Skip the last one (it's the current user message we just saved)
             for msg in recent_chat[:-1]:
                 messages.append({'role': msg.role, 'content': msg.content})
-            messages.append({'role': 'user', 'content': user_message})
+            if thinking_enabled:
+                messages.append({'role': 'user', 'content':
+                    user_message + '\n\n[Думай на РУССКОМ. Макс 3-5 предложений.]'})
+            else:
+                messages.append({'role': 'user', 'content': user_message})
 
             messages = _trim_messages_to_fit(llm, messages)
+
+            # Calculate context usage and send to client
+            total_ctx_tokens = sum(_count_tokens(llm, m.get('content', '')) + 4
+                                   for m in messages)
+            ctx_n_ctx = _llm_n_ctx or _env_int('LLM_N_CTX', _DEFAULT_GPU_CTX, min_value=256)
+            ctx_pct = min(100, int(total_ctx_tokens * 100 / ctx_n_ctx))
+            yield f'data: {json.dumps({"context": {"used": total_ctx_tokens, "max": ctx_n_ctx, "pct": ctx_pct, "msgs": len(messages) - 1}})}\n\n'
+
+            # Adaptive temperature based on emotional tone
+            if thinking_enabled:
+                temperature = 0.4 if user_tone in ('distressed', 'sad') else 0.5
+            else:
+                temperature = 0.5 if user_tone in ('distressed', 'sad') else 0.7
 
             max_tokens = _get_max_tokens()
             chat_kwargs = {
                 'messages': messages,
                 'stream': True,
-                'temperature': 0.7,
+                'temperature': temperature,
             }
             if max_tokens is not None:
                 chat_kwargs['max_tokens'] = max_tokens
@@ -784,18 +823,30 @@ def stream():
                     break
 
 
-            # Save assistant response to DB
+            # Save assistant response to DB (strip think blocks to save context tokens)
             if full_response:
-                db.session.add(ChatMessage(role='assistant', content=full_response))
+                from .memory import _strip_think
+                save_text = _strip_think(full_response).strip() or full_response
+                db.session.add(ChatMessage(role='assistant', content=save_text))
                 db.session.commit()
 
             yield 'data: [DONE]\n\n'
 
         except FileNotFoundError as e:
-            yield f'data: {json.dumps({"error": str(e)})}\n\n'
+            yield f'data: {json.dumps({"error": f"Модель не найдена: {e}", "error_type": "model_missing"})}\n\n'
+            yield 'data: [DONE]\n\n'
+        except MemoryError:
+            yield f'data: {json.dumps({"error": "Недостаточно памяти. Попробуйте перезапустить приложение или закрыть другие программы.", "error_type": "memory"})}\n\n'
             yield 'data: [DONE]\n\n'
         except Exception as e:
-            yield f'data: {json.dumps({"error": f"Model error: {e}"})}\n\n'
+            error_msg = str(e).lower()
+            if 'context' in error_msg or 'token' in error_msg:
+                msg = 'Контекст слишком длинный. Попробуйте очистить чат или задать более короткий вопрос.'
+            elif 'memory' in error_msg or 'allocat' in error_msg:
+                msg = 'Недостаточно памяти для генерации ответа. Попробуйте перезапустить приложение.'
+            else:
+                msg = f'Ошибка модели: {e}'
+            yield f'data: {json.dumps({"error": msg, "error_type": "general"})}\n\n'
             yield 'data: [DONE]\n\n'
         finally:
             _clear_request_thinking()
@@ -844,14 +895,38 @@ def reindex():
     return jsonify({'status': 'busy', 'message': 'Reindex already running'})
 
 
+@bp.route('/sync', methods=['POST'])
+def sync():
+    """Process only entries missing embeddings or summaries."""
+    from .background import sync_missing_async
+    started = sync_missing_async(current_app._get_current_object())
+    if started:
+        return jsonify({'status': 'started', 'message': 'Sync started'})
+    return jsonify({'status': 'busy', 'message': 'Background processing busy'})
+
+
 @bp.route('/reset-profile', methods=['POST'])
 def reset_profile():
-    """Delete the psychological profile so it gets rebuilt."""
-    profile = UserPsychProfile.query.first()
-    if profile:
-        db.session.delete(profile)
-        db.session.commit()
-    return jsonify({'status': 'ok', 'message': 'Profile reset. It will rebuild on next entry.'})
+    """Delete and rebuild the psychological profile."""
+    from .background import rebuild_profile_async
+    rebuild_profile_async(current_app._get_current_object())
+    return jsonify({'status': 'started', 'message': 'Profile rebuilding...'})
+
+
+@bp.route('/compress-chat', methods=['POST'])
+def compress_chat():
+    """Keep only the last 4 chat messages (2 exchanges) to free context."""
+    keep = 4
+    all_msgs = (ChatMessage.query
+                .order_by(ChatMessage.created_at.desc())
+                .all())
+    if len(all_msgs) <= keep:
+        return jsonify({'status': 'ok', 'removed': 0, 'remaining': len(all_msgs)})
+    to_delete = all_msgs[keep:]
+    for msg in to_delete:
+        db.session.delete(msg)
+    db.session.commit()
+    return jsonify({'status': 'ok', 'removed': len(to_delete), 'remaining': keep})
 
 
 @bp.route('/clear-chat', methods=['POST'])
@@ -873,6 +948,9 @@ def status():
     from .background import get_reindex_status
     reindex_status = get_reindex_status()
 
+    # Chat message count for context indicator
+    chat_count = ChatMessage.query.count()
+
     return jsonify({
         'total_entries': total_entries,
         'embedded': embedded,
@@ -884,4 +962,6 @@ def status():
         'llm_loading_progress': _llm_loading_progress if _llm_loading else 0,
         'llm_ready': _llm is not None,
         'reindex': reindex_status,
+        'chat_messages': chat_count,
+        'n_ctx': _llm_n_ctx or _env_int('LLM_N_CTX', _DEFAULT_GPU_CTX, min_value=256),
     })

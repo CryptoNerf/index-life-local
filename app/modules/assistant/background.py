@@ -86,9 +86,13 @@ def warmup_async(app):
 
 
 def _process_entry(app, entry_id: int):
-    """Process a single entry: embedding + summary + maybe profile update."""
-    if not _lock.acquire(timeout=1):
-        log.info('Background processing already running, skipping.')
+    """Process a single entry: embedding + summary + maybe profile update.
+
+    Waits up to 120s for the lock (previous entry processing or reindex)
+    so that entries are never silently skipped.
+    """
+    if not _lock.acquire(timeout=120):
+        log.warning('Background lock held for >120s, skipping entry %d', entry_id)
         return
 
     try:
@@ -230,6 +234,93 @@ def _reindex_all(app):
             _reindex_in_progress = False
             _reindex_status['running'] = False
             _reindex_status['updated_at'] = time.time()
+
+
+def sync_missing_async(app) -> bool:
+    """Spawn a background thread to process only entries missing embeddings/summaries."""
+    if _lock.locked():
+        return False
+    thread = threading.Thread(target=_sync_missing, args=(app,), daemon=True)
+    thread.start()
+    return True
+
+
+def rebuild_profile_async(app):
+    """Spawn a background thread to rebuild the psychological profile."""
+    thread = threading.Thread(target=_rebuild_profile, args=(app,), daemon=True)
+    thread.start()
+
+
+def _sync_missing(app):
+    """Process only entries that are missing embeddings or summaries."""
+    if not _lock.acquire(timeout=5):
+        log.info('Lock busy, skipping sync')
+        return
+
+    try:
+        with app.app_context():
+            from .memory import update_embedding, generate_entry_summary
+            from .routes import _get_llm
+            from app.models import EntryEmbedding, EntrySummary
+
+            all_entries = MoodEntry.query.all()
+            embedded_ids = {e.entry_id for e in EntryEmbedding.query.all()}
+            summarized_ids = {s.entry_id for s in EntrySummary.query.all()}
+
+            missing = [e for e in all_entries
+                       if e.id not in embedded_ids or e.id not in summarized_ids]
+
+            if not missing:
+                log.info('sync: all entries up to date')
+                return
+
+            log.info('sync: %d entries need processing', len(missing))
+            llm = None
+
+            for entry in missing:
+                if entry.id not in embedded_ids:
+                    try:
+                        update_embedding(entry)
+                        log.info(f'sync: embedded entry {entry.id}')
+                    except Exception as e:
+                        log.warning(f'sync: embedding failed for {entry.id}: {e}')
+
+                if entry.id not in summarized_ids:
+                    try:
+                        if llm is None:
+                            llm = _get_llm()
+                        generate_entry_summary(entry, llm)
+                        log.info(f'sync: summarized entry {entry.id}')
+                    except Exception as e:
+                        log.warning(f'sync: summary failed for {entry.id}: {e}')
+
+            log.info('sync: done')
+    finally:
+        _lock.release()
+
+
+def _rebuild_profile(app):
+    """Delete and rebuild the psychological profile."""
+    if not _lock.acquire(timeout=30):
+        log.warning('Lock busy, cannot rebuild profile')
+        return
+
+    try:
+        with app.app_context():
+            from .memory import update_profile
+            from .routes import _get_llm
+            from app.models import UserPsychProfile
+
+            UserPsychProfile.query.delete()
+            db.session.commit()
+
+            llm = _get_llm()
+            update_profile(llm, force_rebuild=True)
+            log.info('Profile rebuilt successfully')
+    except Exception as e:
+        log.warning(f'Profile rebuild failed: {e}')
+    finally:
+        _lock.release()
 
 
 def _warmup(app):

@@ -10,17 +10,40 @@
   var statusEl = document.getElementById('chat-status');
   var thinkingToggle = document.getElementById('chat-thinking-toggle');
 
+  var contextBarFill = document.getElementById('context-bar-fill');
+  var contextBarLabel = document.getElementById('context-bar-label');
   var isStreaming = false;
   var thinkOpenState = new WeakMap();
+  // If user scrolled up to read, we stop auto-scrolling during generation
+  var pinnedToBottom = true;
 
   // Scroll to bottom on load
   messagesDiv.scrollTop = messagesDiv.scrollHeight;
 
-  // Focus textarea if pre-filled (e.g. from deep-mind topic handoff)
+  // Track whether user has scrolled away from the bottom
+  messagesDiv.addEventListener('scroll', function () {
+    var distanceFromBottom = messagesDiv.scrollHeight - messagesDiv.scrollTop - messagesDiv.clientHeight;
+    pinnedToBottom = distanceFromBottom <= 80;
+  });
+
+  // Restore draft from localStorage (unless pre-filled by deep-mind handoff)
+  if (!inputEl.value.trim()) {
+    try {
+      var draft = localStorage.getItem('assistant_draft');
+      if (draft) {
+        inputEl.value = draft;
+      }
+    } catch (e) {}
+  }
   if (inputEl.value.trim()) {
     inputEl.focus();
     inputEl.setSelectionRange(inputEl.value.length, inputEl.value.length);
   }
+
+  // Auto-save draft on input
+  inputEl.addEventListener('input', function () {
+    try { localStorage.setItem('assistant_draft', inputEl.value); } catch (e) {}
+  });
 
   // Process existing assistant messages (render think blocks + markdown)
   var existingMsgs = messagesDiv.querySelectorAll('.chat-msg-assistant');
@@ -52,29 +75,74 @@
 
   initThinkingToggle();
 
+  // Context bar update
+  function updateContextBar(pct) {
+    contextBarFill.style.width = pct + '%';
+    contextBarLabel.textContent = pct + '%';
+    contextBarFill.classList.remove('ctx-warning', 'ctx-danger');
+    if (pct >= 85) {
+      contextBarFill.classList.add('ctx-danger');
+    } else if (pct >= 65) {
+      contextBarFill.classList.add('ctx-warning');
+    }
+    try { localStorage.setItem('assistant_ctx_pct', pct); } catch (e) {}
+  }
+
+  // Restore context bar from localStorage
+  try {
+    var savedPct = localStorage.getItem('assistant_ctx_pct');
+    if (savedPct) updateContextBar(parseInt(savedPct, 10));
+  } catch (e) {}
+
   // Toolbar buttons
+  document.getElementById('btn-compress').addEventListener('click', function () {
+    fetch('/assistant/compress-chat', { method: 'POST' })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.removed > 0) {
+          statusEl.textContent = 'Удалено ' + data.removed + ' сообщений';
+          setTimeout(function () { location.reload(); }, 1000);
+        } else {
+          statusEl.textContent = 'Контекст уже минимален';
+          setTimeout(function () { statusEl.textContent = ''; }, 2000);
+        }
+      });
+  });
+
   document.getElementById('btn-clear-chat').addEventListener('click', function () {
-    if (!confirm('Clear all chat history?')) return;
+    if (!confirm('Очистить всю историю чата?')) return;
     fetch('/assistant/clear-chat', { method: 'POST' })
       .then(function () { location.reload(); });
   });
 
+  document.getElementById('btn-sync').addEventListener('click', function () {
+    fetch('/assistant/sync', { method: 'POST' })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        statusEl.textContent = data.message || 'Синхронизация...';
+        if (data.status === 'started') {
+          setTimeout(function () { loadStatus(); }, 5000);
+        }
+      });
+  });
+
   document.getElementById('btn-reindex').addEventListener('click', function () {
-    if (!confirm('Reindex all diary entries? This may take a while.')) return;
+    if (!confirm('Полный реиндекс всех записей? Это займёт время.')) return;
     fetch('/assistant/reindex', { method: 'POST' })
       .then(function (r) { return r.json(); })
       .then(function (data) {
-        statusEl.textContent = data.message || 'Reindexing...';
+        statusEl.textContent = data.message || 'Реиндексация...';
         pollStatus();
       });
   });
 
   document.getElementById('btn-reset-profile').addEventListener('click', function () {
-    if (!confirm('Reset psychological profile? It will rebuild automatically.')) return;
+    if (!confirm('Пересобрать психологический профиль?')) return;
     fetch('/assistant/reset-profile', { method: 'POST' })
-      .then(function () {
-        statusEl.textContent = 'Profile reset';
-        setTimeout(function () { statusEl.textContent = ''; }, 3000);
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        statusEl.textContent = data.message || 'Пересборка профиля...';
+        setTimeout(function () { loadStatus(); }, 10000);
       });
   });
 
@@ -169,12 +237,22 @@
     }, 5000);
   }
 
+  // Auto-resize textarea as user types
+  function resizeInput() {
+    inputEl.style.height = 'auto';
+    inputEl.style.height = inputEl.scrollHeight + 'px';
+  }
+  inputEl.addEventListener('input', resizeInput);
+
   function sendMessage() {
     var text = inputEl.value.trim();
     if (!text || isStreaming) return;
 
     appendMessage('user', text);
     inputEl.value = '';
+    try { localStorage.removeItem('assistant_draft'); } catch (e) {}
+    inputEl.style.height = ''; // reset to CSS min-height
+    inputEl.focus();
 
     streamResponse(text);
   }
@@ -194,12 +272,20 @@
     }
   }
 
+  function scrollIfPinned() {
+    if (pinnedToBottom) {
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+  }
+
   function appendMessage(role, content) {
     var div = document.createElement('div');
     div.className = 'chat-msg chat-msg-' + role;
     div.textContent = content;
     messagesDiv.appendChild(div);
+    // Always scroll when appending a new message (user sent or assistant started)
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    pinnedToBottom = true;
     return div;
   }
 
@@ -401,21 +487,39 @@
     var assistantDiv = appendMessage('assistant', '');
     var fullText = '';
     var loadingHintInterval = null;
+    var dotCount = 0;
 
-    // Show loading hint if model is not ready yet
+    // Always show a waiting indicator until the first token arrives
+    function showWaitingHint(text) {
+      if (!fullText) {
+        assistantDiv.innerHTML = '<span class="chat-waiting-hint">' + text + '</span>';
+        scrollIfPinned();
+      }
+    }
+
     if (!llmReady) {
-      assistantDiv.innerHTML = '<span style="color:#999;font-style:italic;">Загрузка модели, пожалуйста подождите...</span>';
-      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      showWaitingHint('Загрузка модели, пожалуйста подождите...');
       loadingHintInterval = setInterval(function () {
         fetch('/assistant/status')
           .then(function (r) { return r.json(); })
           .then(function (data) {
-            if (data.llm_loading && !fullText) {
-              assistantDiv.innerHTML = '<span style="color:#999;font-style:italic;">' +
-                formatLoadingStage(data.llm_loading_stage, data.llm_loading_progress) + '</span>';
+            if (fullText) return;
+            if (data.llm_loading) {
+              showWaitingHint(formatLoadingStage(data.llm_loading_stage, data.llm_loading_progress));
+            } else {
+              showWaitingHint('Подготовка ответа...');
             }
           }).catch(function () {});
       }, 1500);
+    } else {
+      // Model is ready but context assembly + first token still takes time
+      showWaitingHint('Генерация ответа...');
+      loadingHintInterval = setInterval(function () {
+        if (fullText) return;
+        dotCount = (dotCount + 1) % 4;
+        var dots = '.'.repeat(dotCount || 1);
+        showWaitingHint('Генерация ответа' + dots);
+      }, 600);
     }
 
     fetch('/assistant/stream', {
@@ -455,6 +559,9 @@
 
               try {
                 var data = JSON.parse(payload);
+                if (data.context) {
+                  updateContextBar(data.context.pct);
+                }
                 if (data.token) {
                   if (!fullText && loadingHintInterval) {
                     clearInterval(loadingHintInterval);
@@ -464,15 +571,15 @@
                   fullText += data.token;
                   // Render with think block handling
                   renderAssistantMessage(assistantDiv, fullText);
-                  messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                  scrollIfPinned();
                 }
                 if (data.event === 'continuation') {
                   assistantDiv.dataset.continuation = '1';
                   renderAssistantMessage(assistantDiv, fullText);
-                  messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                  scrollIfPinned();
                 }
                 if (data.error) {
-                  assistantDiv.textContent = 'Error: ' + data.error;
+                  assistantDiv.textContent = data.error;
                   assistantDiv.classList.add('chat-msg-error');
                 }
               } catch (e) {
@@ -488,7 +595,7 @@
       })
       .catch(function (err) {
         if (!fullText) {
-          assistantDiv.textContent = 'Connection error. Is the model loaded?';
+          assistantDiv.textContent = 'Ошибка соединения. Проверьте, загружена ли модель.';
           assistantDiv.classList.add('chat-msg-error');
         }
         finish();

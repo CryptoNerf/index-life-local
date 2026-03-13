@@ -86,6 +86,42 @@ body {
   text-transform: lowercase;
 }
 
+/* ========== Context bar ========== */
+.chat-context-bar {
+  position: relative;
+  width: 80px;
+  height: 14px;
+  background: #f0f0f0;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.context-bar-fill {
+  height: 100%;
+  width: 0%;
+  background: #4a4a4a;
+  transition: width 0.3s, background 0.3s;
+}
+.context-bar-fill.ctx-warning {
+  background: #c97a00;
+}
+.context-bar-fill.ctx-danger {
+  background: #c93030;
+}
+.context-bar-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 10px;
+  line-height: 14px;
+  color: #fff;
+  font-family: 'Times New Roman', Times, serif;
+  mix-blend-mode: difference;
+}
+
 /* ========== Chat layout ========== */
 .chat-container {
   flex: 1;
@@ -129,6 +165,10 @@ body {
 .chat-msg-error {
   color: #c00;
   border-left-color: #c00;
+}
+.chat-waiting-hint {
+  color: #999;
+  font-style: italic;
 }
 
 /* ========== Think blocks (collapsible) ========== */
@@ -274,6 +314,9 @@ body {
   outline: none;
   line-height: 1.5;
   box-sizing: border-box;
+  min-height: 46px;
+  max-height: 220px;
+  overflow-y: auto;
 }
 #chat-input:focus {
   border-color: #222;

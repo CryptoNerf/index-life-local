@@ -13,6 +13,9 @@
   var detailDesc     = document.getElementById('detail-description');
   var detailCount    = document.getElementById('detail-count');
   var detailWeight   = document.getElementById('detail-weight');
+  var detailConfidence = document.getElementById('detail-confidence');
+  var detailDataNote = document.getElementById('detail-data-note');
+  var detailEvidence = document.getElementById('detail-evidence');
   var detailEntries  = document.getElementById('detail-entries');
   var btnDiscuss     = document.getElementById('btn-discuss');
   var btnAnalyze     = document.getElementById('btn-analyze');
@@ -418,6 +421,36 @@
     detailDesc.textContent = d.description || '';
     detailCount.textContent = d.size + ' записей';
     detailWeight.textContent = 'вес: ' + Math.round(d.weight * 100) + '%';
+    if (detailConfidence) {
+      detailConfidence.textContent = '\u0443\u0432\u0435\u0440\u0435\u043d\u043d\u043e\u0441\u0442\u044c: ' + (d.confidence_label || '\u2014');
+    }
+    if (detailDataNote) {
+      detailDataNote.textContent = d.data_note || '';
+      detailDataNote.style.display = d.data_note ? 'block' : 'none';
+    }
+    if (detailEvidence) {
+      detailEvidence.innerHTML = '';
+      if (d.evidence && d.evidence.length) {
+        var title = document.createElement('div');
+        title.className = 'detail-evidence-title';
+        title.textContent = '\u041e\u0441\u043d\u043e\u0432\u0430\u043d\u0438\u0435';
+        detailEvidence.appendChild(title);
+        d.evidence.forEach(function (ev) {
+          var item = document.createElement('div');
+          item.className = 'detail-evidence-item';
+          var meta = '<span class="detail-evidence-meta">' + ev.date + '</span>';
+          if (ev.rating != null) {
+            meta += '<span class="detail-evidence-meta">' + ev.rating + '/10</span>';
+          }
+          item.innerHTML = meta + '<span class="detail-evidence-snippet">' + escapeHtml(ev.snippet) + '</span>';
+          detailEvidence.appendChild(item);
+        });
+        detailEvidence.style.display = 'block';
+      } else {
+        detailEvidence.style.display = 'none';
+      }
+    }
+    detailPanel.classList.toggle('low-data', !!d.low_data);
 
     detailEntries.innerHTML = '';
     (d.entries || []).forEach(function (e) {
@@ -435,6 +468,7 @@
 
   function hideDetail() {
     detailPanel.classList.add('hidden');
+    detailPanel.classList.remove('low-data');
     currentClusterId = null;
     activeNode = null;
   }
@@ -479,7 +513,13 @@
             pollTimer = null;
             if (btnAnalyze) btnAnalyze.disabled = false;
             if (s.stage === 'done') {
-              analyzeStatus.textContent = 'Готово. Найдено тем: ' + s.clusters_found;
+              var total = (s.clusters_found != null) ? s.clusters_found : 0;
+              var visible = (s.clusters_visible != null) ? s.clusters_visible : total;
+              if (visible !== total && total > 0) {
+                analyzeStatus.textContent = 'Готово. Тем: ' + visible + ' из ' + total;
+              } else {
+                analyzeStatus.textContent = 'Готово. Найдено тем: ' + visible;
+              }
               loadGraph();
             } else if (s.stage === 'error') {
               analyzeStatus.textContent = 'Ошибка: ' + s.error;
