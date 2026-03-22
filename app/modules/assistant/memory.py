@@ -10,6 +10,7 @@ import hashlib
 import json
 import logging
 import re
+import threading
 from datetime import datetime
 
 import numpy as np
@@ -29,12 +30,17 @@ log = logging.getLogger(__name__)
 # ── Embedding model (lazy-loaded) ───────────────────────────────
 
 _embed_model = None
+_embed_lock = threading.Lock()
 
 
 def _get_embed_model():
-    """Lazy-load the sentence-transformers model."""
+    """Lazy-load the sentence-transformers model (thread-safe)."""
     global _embed_model
-    if _embed_model is None:
+    if _embed_model is not None:
+        return _embed_model
+    with _embed_lock:
+        if _embed_model is not None:
+            return _embed_model
         from sentence_transformers import SentenceTransformer
         _embed_model = SentenceTransformer(
             'intfloat/multilingual-e5-small',
@@ -261,11 +267,13 @@ def generate_entry_summary(entry: MoodEntry, llm) -> EntrySummary | None:
             note=note,
         )
         try:
-            result = llm.create_chat_completion(
-                messages=[{'role': 'user', 'content': prompt}],
-                max_tokens=320,
-                temperature=0.3,
-            )
+            from .routes import _llm_inference_lock
+            with _llm_inference_lock:
+                result = llm.create_chat_completion(
+                    messages=[{'role': 'user', 'content': prompt}],
+                    max_tokens=320,
+                    temperature=0.3,
+                )
             response_text = result['choices'][0]['message']['content'].strip()
             summary_text, themes_list = _parse_summary_response(response_text)
         except Exception as e:
@@ -355,11 +363,13 @@ def generate_month_summary(year: int, month: int, llm) -> PeriodSummary | None:
             month_label=month_label,
             entries_text=entries_text,
         )
-        result = llm.create_chat_completion(
-            messages=[{'role': 'user', 'content': prompt}],
-            max_tokens=384,
-            temperature=0.3,
-        )
+        from .routes import _llm_inference_lock
+        with _llm_inference_lock:
+            result = llm.create_chat_completion(
+                messages=[{'role': 'user', 'content': prompt}],
+                max_tokens=384,
+                temperature=0.3,
+            )
         summary_text = result['choices'][0]['message']['content'].strip()
     except Exception as e:
         log.warning(f'Failed to generate month summary for {period_key}: {e}')
@@ -477,11 +487,13 @@ def update_profile(llm, force_rebuild: bool = False):
         n_ctx = _get_llm_n_ctx(llm) or 4096
         safety = int(os.environ.get('LLM_PROFILE_PROMPT_SAFETY', '2048'))
         max_out = max(32, int(n_ctx) - prompt_tokens - safety)
-        result = llm.create_chat_completion(
-            messages=[{'role': 'user', 'content': prompt}],
-            max_tokens=min(2048, max_out),
-            temperature=0.2,
-        )
+        from .routes import _llm_inference_lock
+        with _llm_inference_lock:
+            result = llm.create_chat_completion(
+                messages=[{'role': 'user', 'content': prompt}],
+                max_tokens=min(2048, max_out),
+                temperature=0.2,
+            )
         raw = result['choices'][0]['message']['content'].strip()
         raw = _strip_think(raw)
         # Extract JSON from response

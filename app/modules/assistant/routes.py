@@ -33,6 +33,7 @@ if os.name == 'nt':
 _llm = None
 _llm_n_ctx = None
 _llm_lock = threading.Lock()
+_llm_inference_lock = threading.Lock()  # Protects all create_chat_completion calls
 _llm_loading = False
 _llm_loading_stage = ''  # e.g. 'importing', 'gpu:35/8192', 'cpu:8192'
 _llm_loading_progress = 0  # 0-100
@@ -628,9 +629,20 @@ def chat():
             pass
 
     thinking_default = _env_bool('LLM_ENABLE_THINKING', False)
+
+    # User avatar URL
+    from app.models import UserProfile
+    profile = UserProfile.query.first()
+    user_avatar = '/static/images/usernophoto.png'
+    if profile and profile.photo_filename:
+        photo_path = Path(current_app.config.get('UPLOAD_FOLDER', '')) / profile.photo_filename
+        if photo_path.is_file():
+            user_avatar = f'/static/profile_photos/{profile.photo_filename}'
+
     return render_template('assistant/chat.html', history=history,
                            preload_message=preload_message,
-                           thinking_default=thinking_default)
+                           thinking_default=thinking_default,
+                           user_avatar=user_avatar)
 
 
 @bp.route('/stream', methods=['POST'])
@@ -735,92 +747,98 @@ def stream():
             if max_tokens is not None:
                 chat_kwargs['max_tokens'] = max_tokens
 
-            response = llm.create_chat_completion(**chat_kwargs)
+            # Acquire inference lock to prevent concurrent LLM access
+            # (llama-cpp-python is not thread-safe)
+            _llm_inference_lock.acquire()
+            try:
+                response = llm.create_chat_completion(**chat_kwargs)
 
-            full_response = ''
-            # The Qwen3.5 chat template injects <think>\n into the prompt
-            # (not into the generated output), so we prepend <think> when
-            # thinking is enabled to wrap reasoning for the UI.
-            think_prefix_sent = False
-            for chunk in response:
-                delta = chunk['choices'][0].get('delta', {})
-                token = delta.get('content', '')
-                if token:
-                    if thinking_enabled and not think_prefix_sent:
-                        if '<think>' not in token:
-                            token = '<think>' + token
-                        think_prefix_sent = True
-                    full_response += token
-                    yield f'data: {json.dumps({"token": token})}\n\n'
-
-            if thinking_enabled and '<think>' in full_response and '</think>' not in full_response:
-                close_token = '\n</think>\n'
-                full_response += close_token
-                yield f'data: {json.dumps({"token": close_token})}\n\n'
-
-            # If thinking mode produced only reasoning, request a final answer (non-streaming).
-            if thinking_enabled:
-                try:
-                    from .memory import _strip_think
-                    answer_only = _strip_think(full_response).strip()
-                except Exception:
-                    answer_only = ''
-                if len(answer_only) < 10:
-                    try:
-                        _set_request_thinking(False)
-                        final_system = system_base + '\n\n' + _get_final_answer_instruction()
-                        final_messages = list(messages)
-                        if final_messages:
-                            final_messages[0] = {'role': 'system', 'content': final_system}
-                        else:
-                            final_messages = [
-                                {'role': 'system', 'content': final_system},
-                                {'role': 'user', 'content': user_message},
-                            ]
-                        final_kwargs = {
-                            'messages': final_messages,
-                            'stream': False,
-                            'temperature': 0.3,
-                        }
-                        if max_tokens is not None:
-                            final_kwargs['max_tokens'] = max_tokens
-                        final_resp = llm.create_chat_completion(**final_kwargs)
-                        final_text = final_resp['choices'][0]['message']['content']
-                        if final_text:
-                            if full_response and not full_response.endswith('\n'):
-                                full_response += '\n'
-                                yield 'data: ' + json.dumps({"token": "\n"}) + '\n\n'
-                            full_response += final_text
-                            yield f'data: {json.dumps({"token": final_text})}\n\n'
-                    except Exception:
-                        pass
-
-            auto_continue = _env_bool('LLM_AUTO_CONTINUE', False)
-            max_cont = _env_int('LLM_MAX_CONTINUATIONS', 2, min_value=0)
-            cont_count = 0
-            while auto_continue and cont_count < max_cont and _needs_continuation(llm, full_response):
-                cont_count += 1
-                yield f'data: {json.dumps({"event": "continuation", "count": cont_count})}\n\n'
-                continuation_messages = _build_continuation_messages(llm, system, full_response)
-                continue_kwargs = {
-                    'messages': continuation_messages,
-                    'stream': True,
-                    'temperature': 0.7,
-                }
-                if max_tokens is not None:
-                    continue_kwargs['max_tokens'] = max_tokens
-
-                response = llm.create_chat_completion(**continue_kwargs)
-                appended = False
+                full_response = ''
+                # The Qwen3.5 chat template injects <think>\n into the prompt
+                # (not into the generated output), so we prepend <think> when
+                # thinking is enabled to wrap reasoning for the UI.
+                think_prefix_sent = False
                 for chunk in response:
                     delta = chunk['choices'][0].get('delta', {})
                     token = delta.get('content', '')
                     if token:
-                        appended = True
+                        if thinking_enabled and not think_prefix_sent:
+                            if '<think>' not in token:
+                                token = '<think>' + token
+                            think_prefix_sent = True
                         full_response += token
                         yield f'data: {json.dumps({"token": token})}\n\n'
-                if not appended:
-                    break
+
+                if thinking_enabled and '<think>' in full_response and '</think>' not in full_response:
+                    close_token = '\n</think>\n'
+                    full_response += close_token
+                    yield f'data: {json.dumps({"token": close_token})}\n\n'
+
+                # If thinking mode produced only reasoning, request a final answer (non-streaming).
+                if thinking_enabled:
+                    try:
+                        from .memory import _strip_think
+                        answer_only = _strip_think(full_response).strip()
+                    except Exception:
+                        answer_only = ''
+                    if len(answer_only) < 10:
+                        try:
+                            _set_request_thinking(False)
+                            final_system = system_base + '\n\n' + _get_final_answer_instruction()
+                            final_messages = list(messages)
+                            if final_messages:
+                                final_messages[0] = {'role': 'system', 'content': final_system}
+                            else:
+                                final_messages = [
+                                    {'role': 'system', 'content': final_system},
+                                    {'role': 'user', 'content': user_message},
+                                ]
+                            final_kwargs = {
+                                'messages': final_messages,
+                                'stream': False,
+                                'temperature': 0.3,
+                            }
+                            if max_tokens is not None:
+                                final_kwargs['max_tokens'] = max_tokens
+                            final_resp = llm.create_chat_completion(**final_kwargs)
+                            final_text = final_resp['choices'][0]['message']['content']
+                            if final_text:
+                                if full_response and not full_response.endswith('\n'):
+                                    full_response += '\n'
+                                    yield 'data: ' + json.dumps({"token": "\n"}) + '\n\n'
+                                full_response += final_text
+                                yield f'data: {json.dumps({"token": final_text})}\n\n'
+                        except Exception:
+                            pass
+
+                auto_continue = _env_bool('LLM_AUTO_CONTINUE', False)
+                max_cont = _env_int('LLM_MAX_CONTINUATIONS', 2, min_value=0)
+                cont_count = 0
+                while auto_continue and cont_count < max_cont and _needs_continuation(llm, full_response):
+                    cont_count += 1
+                    yield f'data: {json.dumps({"event": "continuation", "count": cont_count})}\n\n'
+                    continuation_messages = _build_continuation_messages(llm, system, full_response)
+                    continue_kwargs = {
+                        'messages': continuation_messages,
+                        'stream': True,
+                        'temperature': 0.7,
+                    }
+                    if max_tokens is not None:
+                        continue_kwargs['max_tokens'] = max_tokens
+
+                    response = llm.create_chat_completion(**continue_kwargs)
+                    appended = False
+                    for chunk in response:
+                        delta = chunk['choices'][0].get('delta', {})
+                        token = delta.get('content', '')
+                        if token:
+                            appended = True
+                            full_response += token
+                            yield f'data: {json.dumps({"token": token})}\n\n'
+                    if not appended:
+                        break
+            finally:
+                _llm_inference_lock.release()
 
 
             # Save assistant response to DB (strip think blocks to save context tokens)
@@ -935,6 +953,23 @@ def clear_chat():
     ChatMessage.query.delete()
     db.session.commit()
     return jsonify({'status': 'ok'})
+
+
+@bp.route('/context-usage')
+def context_usage():
+    """Estimate current context window fill level from chat history."""
+    n_ctx = _llm_n_ctx or _env_int('LLM_N_CTX', _DEFAULT_GPU_CTX, min_value=256)
+    chat_msgs = (ChatMessage.query
+                 .order_by(ChatMessage.created_at.desc())
+                 .limit(20).all())
+    chat_msgs.reverse()
+    # Rough estimate: system prompt ~800 tokens + chat messages
+    tokens = 800
+    for msg in chat_msgs:
+        content = msg.content or ''
+        tokens += max(1, len(content) // 3) + 4  # ~3 chars/token for Russian
+    pct = min(100, int(tokens * 100 / n_ctx))
+    return jsonify({'pct': pct, 'used': tokens, 'max': n_ctx, 'msgs': len(chat_msgs)})
 
 
 @bp.route('/status')

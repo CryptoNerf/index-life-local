@@ -40,17 +40,32 @@ body {
 .chat-toolbar {
   flex-shrink: 0;
   display: flex;
-  align-items: center;
-  gap: 12px;
+  flex-direction: column;
+  gap: 6px;
   padding-bottom: 8px;
   border-bottom: 1px solid #e0e0e0;
   margin-bottom: 8px;
 }
+.chat-toolbar-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.chat-toolbar-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
 
 .chat-status {
-  font-size: 13px;
-  color: #888;
+  font-size: 12px;
+  color: #aaa;
   margin-right: auto;
+}
+.chat-context-label {
+  font-size: 12px;
+  color: #aaa;
+  white-space: nowrap;
 }
 
 .chat-tool-btn {
@@ -141,30 +156,54 @@ body {
   padding: 8px 0;
 }
 
-/* ========== Messages ========== */
-.chat-msg {
+/* ========== Messages (messenger layout) ========== */
+.chat-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
   margin-bottom: 16px;
+}
+.chat-row-user {
+  justify-content: flex-end;
+}
+.chat-row-assistant {
+  justify-content: flex-start;
+}
+
+.chat-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  margin-bottom: 2px;
+}
+
+.chat-bubble {
+  max-width: 75%;
   padding: 12px 16px;
   font-size: 17px;
   line-height: 1.6;
   word-wrap: break-word;
+  border-radius: 16px;
 }
 
-.chat-msg-user {
-  background: #f5f5f5;
-  border-left: 3px solid #222;
+.chat-bubble-user {
+  background: #f0f0f0;
+  border-radius: 16px 16px 4px 16px;
   white-space: pre-wrap;
 }
 
-.chat-msg-assistant {
+.chat-bubble-assistant {
   background: #fff;
-  border-left: 3px solid #009AFA;
+  border: 1px solid #e5e5e5;
+  border-radius: 16px 16px 16px 4px;
   white-space: normal;
 }
 
-.chat-msg-error {
+.chat-bubble-error {
   color: #c00;
-  border-left-color: #c00;
+  border-color: #c00;
 }
 .chat-waiting-hint {
   color: #999;
@@ -203,88 +242,88 @@ body {
 }
 
 /* Markdown styling for assistant messages */
-.chat-msg-assistant p {
+.chat-bubble-assistant p {
   margin: 8px 0;
 }
-.chat-msg-assistant h1 {
+.chat-bubble-assistant h1 {
   font-size: 24px;
   margin: 10px 0 6px;
   font-weight: bold;
 }
-.chat-msg-assistant h2 {
+.chat-bubble-assistant h2 {
   font-size: 22px;
   margin: 10px 0 6px;
   font-weight: bold;
 }
-.chat-msg-assistant h3 {
+.chat-bubble-assistant h3 {
   font-size: 20px;
   margin: 8px 0 4px;
   font-weight: bold;
 }
-.chat-msg-assistant ul,
-.chat-msg-assistant ol {
+.chat-bubble-assistant ul,
+.chat-bubble-assistant ol {
   margin: 6px 0 6px 18px;
   padding-left: 16px;
 }
-.chat-msg-assistant li {
+.chat-bubble-assistant li {
   margin: 4px 0;
 }
-.chat-msg-assistant li p {
+.chat-bubble-assistant li p {
   margin: 4px 0;
 }
-.chat-msg-assistant strong,
-.chat-msg-assistant b {
+.chat-bubble-assistant strong,
+.chat-bubble-assistant b {
   font-weight: bold;
 }
-.chat-msg-assistant em,
-.chat-msg-assistant i {
+.chat-bubble-assistant em,
+.chat-bubble-assistant i {
   font-style: italic;
 }
-.chat-msg-assistant a {
+.chat-bubble-assistant a {
   color: #009AFA;
   text-decoration: underline;
 }
-.chat-msg-assistant code {
+.chat-bubble-assistant code {
   background: #f0f0f0;
   padding: 2px 6px;
   border-radius: 3px;
   font-family: "Courier New", monospace;
   font-size: 0.95em;
 }
-.chat-msg-assistant pre {
+.chat-bubble-assistant pre {
   background: #f0f0f0;
   padding: 10px 12px;
   border-radius: 4px;
   overflow-x: auto;
   margin: 8px 0;
 }
-.chat-msg-assistant pre code {
+.chat-bubble-assistant pre code {
   background: none;
   padding: 0;
 }
-.chat-msg-assistant blockquote {
+.chat-bubble-assistant blockquote {
   border-left: 4px solid #222;
   padding-left: 12px;
   margin: 8px 0;
   color: #555;
 }
-.chat-msg-assistant hr {
+.chat-bubble-assistant hr {
   border: none;
   border-top: 1px solid #e0e0e0;
   margin: 12px 0;
 }
-.chat-msg-assistant table {
+.chat-bubble-assistant table {
   border-collapse: collapse;
   margin: 8px 0;
   width: 100%;
   font-size: 0.95em;
 }
-.chat-msg-assistant th,
-.chat-msg-assistant td {
+.chat-bubble-assistant th,
+.chat-bubble-assistant td {
   border: 1px solid #e0e0e0;
   padding: 6px 8px;
 }
-.chat-msg-assistant th {
+.chat-bubble-assistant th {
   background: #f7f7f7;
   text-align: left;
 }
@@ -355,9 +394,14 @@ body {
   .chat-container {
     padding: 16px 12px 12px;
   }
-  .chat-msg {
+  .chat-bubble {
     font-size: 16px;
     padding: 10px 12px;
+    max-width: 85%;
+  }
+  .chat-avatar {
+    width: 30px;
+    height: 30px;
   }
 }
 
@@ -366,5 +410,12 @@ body {
     margin-top: 20px;
     gap: 24px;
     padding: 0 15px;
+  }
+  .chat-bubble {
+    max-width: 90%;
+  }
+  .chat-avatar {
+    width: 26px;
+    height: 26px;
   }
 }

@@ -24,29 +24,41 @@
 
   <div class="chat-container">
     <div class="chat-toolbar">
-      <span class="chat-status" id="chat-status"></span>
-      <div class="chat-context-bar" id="context-bar" title="Заполненность контекстного окна">
-        <div class="context-bar-fill" id="context-bar-fill"></div>
-        <span class="context-bar-label" id="context-bar-label"></span>
+      <div class="chat-toolbar-top">
+        <span class="chat-status" id="chat-status"></span>
+        <span class="chat-context-label">Заполненность контекста:</span>
+        <div class="chat-context-bar" id="context-bar" title="Заполненность контекстного окна">
+          <div class="context-bar-fill" id="context-bar-fill"></div>
+          <span class="context-bar-label" id="context-bar-label"></span>
+        </div>
       </div>
-      <label class="chat-toggle" title="Toggle thinking mode">
-        <input type="checkbox" id="chat-thinking-toggle" {% if thinking_default %}checked{% endif %}>
-        <span>thinking</span>
-      </label>
-      <button class="chat-tool-btn" id="btn-compress" title="Сжать контекст — оставить последние сообщения">compress</button>
-      <button class="chat-tool-btn" id="btn-clear-chat" title="Очистить всю историю чата">clear chat</button>
-      <button class="chat-tool-btn" id="btn-sync" title="Доиндексировать пропущенные записи">sync</button>
-      <button class="chat-tool-btn" id="btn-reindex" title="Полный реиндекс всех записей">reindex</button>
-      <button class="chat-tool-btn" id="btn-reset-profile" title="Пересобрать психологический профиль">rebuild profile</button>
+      <div class="chat-toolbar-btns">
+        <button class="chat-tool-btn" id="btn-compress" title="Сжать контекст — оставить последние сообщения">compress</button>
+        <button class="chat-tool-btn" id="btn-clear-chat" title="Очистить всю историю чата">clear chat</button>
+        <button class="chat-tool-btn" id="btn-sync" title="Доиндексировать пропущенные записи">sync</button>
+        <button class="chat-tool-btn" id="btn-reindex" title="Полный реиндекс всех записей">reindex</button>
+        <button class="chat-tool-btn" id="btn-reset-profile" title="Пересобрать психологический профиль">rebuild profile</button>
+      </div>
     </div>
 
     <div class="chat-messages" id="chat-messages">
       {% if history %}
         {% for msg in history %}
-          <div class="chat-msg chat-msg-{{ msg.role }}">{{ msg.content }}</div>
+          <div class="chat-row chat-row-{{ msg.role }}">
+            {% if msg.role == 'assistant' %}
+              <img class="chat-avatar" src="{{ url_for('static', filename='images/model.png') }}" alt="AI">
+            {% endif %}
+            <div class="chat-bubble chat-bubble-{{ msg.role }}">{{ msg.content }}</div>
+            {% if msg.role == 'user' %}
+              <img class="chat-avatar" src="{{ user_avatar }}" alt="You">
+            {% endif %}
+          </div>
         {% endfor %}
       {% else %}
-        <div class="chat-msg chat-msg-assistant">Привет. Я твой AI-психолог. У меня есть доступ к твоему дневнику настроения. Я могу помочь разобраться в чувствах и мыслях. Как ты себя чувствуешь сегодня?</div>
+        <div class="chat-row chat-row-assistant">
+          <img class="chat-avatar" src="{{ url_for('static', filename='images/model.png') }}" alt="AI">
+          <div class="chat-bubble chat-bubble-assistant">Привет. Я твой AI-психолог. У меня есть доступ к твоему дневнику настроения. Я могу помочь разобраться в чувствах и мыслях. Как ты себя чувствуешь сегодня?</div>
+        </div>
       {% endif %}
     </div>
 
@@ -56,6 +68,12 @@
     </div>
   </div>
 
+  <script>
+    window.CHAT_AVATARS = {
+      model: "{{ url_for('static', filename='images/model.png') }}",
+      user: "{{ user_avatar }}"
+    };
+  </script>
   <script src="{{ url_for('assistant.static', filename='js/marked.umd.js') }}"></script>
   <script src="{{ url_for('assistant.static', filename='js/chat.js') }}"></script>
 </body>

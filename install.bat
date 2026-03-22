@@ -70,13 +70,29 @@ pip install -r requirements.txt
 echo.
 
 echo ========================================
-echo Installation completed successfully!
+echo   Base installation completed!
+echo ========================================
+echo.
+echo The base application is ready. To enable AI modules
+echo (AI Psychologist, Neural Map, Voice input), you need
+echo to install them separately.
+echo.
+set /p INSTALL_MODULES="Install AI modules now? (Y/N): "
+if /i "%INSTALL_MODULES%"=="Y" (
+    echo.
+    call install_modules.bat --all --assistant-profile auto
+    echo.
+)
+
+echo ========================================
+echo   Setup complete!
 echo ========================================
 echo.
 echo To start the application, run:
 echo   start.bat
 echo.
-echo Or simply double-click start.bat
+echo To install or update AI modules later:
+echo   install_modules.bat --all --assistant-profile auto
 echo.
 
 pause

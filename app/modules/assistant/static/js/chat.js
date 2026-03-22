@@ -46,7 +46,7 @@
   });
 
   // Process existing assistant messages (render think blocks + markdown)
-  var existingMsgs = messagesDiv.querySelectorAll('.chat-msg-assistant');
+  var existingMsgs = messagesDiv.querySelectorAll('.chat-bubble-assistant');
   for (var i = 0; i < existingMsgs.length; i++) {
     var raw = existingMsgs[i].textContent;
     renderAssistantMessage(existingMsgs[i], raw);
@@ -57,7 +57,7 @@
     if (!target || !target.classList || !target.classList.contains('think-block')) {
       return;
     }
-    var container = target.closest('.chat-msg-assistant');
+    var container = target.closest('.chat-bubble-assistant');
     if (!container) return;
     var state = getThinkState(container);
     var index = target.getAttribute('data-think-index');
@@ -88,11 +88,14 @@
     try { localStorage.setItem('assistant_ctx_pct', pct); } catch (e) {}
   }
 
-  // Restore context bar from localStorage
-  try {
-    var savedPct = localStorage.getItem('assistant_ctx_pct');
-    if (savedPct) updateContextBar(parseInt(savedPct, 10));
-  } catch (e) {}
+  // Fetch actual context usage from server
+  function fetchContextUsage() {
+    fetch('/assistant/context-usage')
+      .then(function (r) { return r.json(); })
+      .then(function (data) { if (data.pct != null) updateContextBar(data.pct); })
+      .catch(function () {});
+  }
+  fetchContextUsage();
 
   // Toolbar buttons
   document.getElementById('btn-compress').addEventListener('click', function () {
@@ -106,13 +109,17 @@
           statusEl.textContent = 'Контекст уже минимален';
           setTimeout(function () { statusEl.textContent = ''; }, 2000);
         }
+        fetchContextUsage();
       });
   });
 
   document.getElementById('btn-clear-chat').addEventListener('click', function () {
     if (!confirm('Очистить всю историю чата?')) return;
     fetch('/assistant/clear-chat', { method: 'POST' })
-      .then(function () { location.reload(); });
+      .then(function () {
+        updateContextBar(0);
+        location.reload();
+      });
   });
 
   document.getElementById('btn-sync').addEventListener('click', function () {
@@ -279,14 +286,32 @@
   }
 
   function appendMessage(role, content) {
-    var div = document.createElement('div');
-    div.className = 'chat-msg chat-msg-' + role;
-    div.textContent = content;
-    messagesDiv.appendChild(div);
-    // Always scroll when appending a new message (user sent or assistant started)
+    var avatars = window.CHAT_AVATARS || {};
+    var row = document.createElement('div');
+    row.className = 'chat-row chat-row-' + role;
+
+    var bubble = document.createElement('div');
+    bubble.className = 'chat-bubble chat-bubble-' + role;
+    bubble.textContent = content;
+
+    var avatar = document.createElement('img');
+    avatar.className = 'chat-avatar';
+    avatar.alt = role === 'user' ? 'You' : 'AI';
+    avatar.src = role === 'user' ? (avatars.user || '/static/images/usernophoto.png')
+                                 : (avatars.model || '/static/images/model.png');
+
+    if (role === 'assistant') {
+      row.appendChild(avatar);
+      row.appendChild(bubble);
+    } else {
+      row.appendChild(bubble);
+      row.appendChild(avatar);
+    }
+
+    messagesDiv.appendChild(row);
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
     pinnedToBottom = true;
-    return div;
+    return bubble;
   }
 
   /**
@@ -580,7 +605,7 @@
                 }
                 if (data.error) {
                   assistantDiv.textContent = data.error;
-                  assistantDiv.classList.add('chat-msg-error');
+                  assistantDiv.classList.add('chat-bubble-error');
                 }
               } catch (e) {
                 // ignore parse errors
@@ -596,7 +621,7 @@
       .catch(function (err) {
         if (!fullText) {
           assistantDiv.textContent = 'Ошибка соединения. Проверьте, загружена ли модель.';
-          assistantDiv.classList.add('chat-msg-error');
+          assistantDiv.classList.add('chat-bubble-error');
         }
         finish();
       });

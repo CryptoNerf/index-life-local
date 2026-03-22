@@ -185,17 +185,19 @@ def name_cluster(cluster_entry_ids, llm, max_entries=MAX_TOPIC_ENTRIES):
     entries_text = context_line + '\n\n' + '\n'.join(lines)
 
     def _call_prompt(prompt):
-        result = llm.create_chat_completion(
-            messages=[{
-                'role': 'user',
-                'content': prompt.format(
-                    entries_text=entries_text,
-                    entry_count=entry_count,
-                ),
-            }],
-            max_tokens=512,
-            temperature=0.4,
-        )
+        from app.modules.assistant.routes import _llm_inference_lock
+        with _llm_inference_lock:
+            result = llm.create_chat_completion(
+                messages=[{
+                    'role': 'user',
+                    'content': prompt.format(
+                        entries_text=entries_text,
+                        entry_count=entry_count,
+                    ),
+                }],
+                max_tokens=512,
+                temperature=0.4,
+            )
         raw = result['choices'][0]['message']['content'].strip()
         return _parse_topic_response(raw)
 

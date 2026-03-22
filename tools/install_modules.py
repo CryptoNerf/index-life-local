@@ -43,8 +43,8 @@ else:
 CUDA_INDEX_URL = "https://abetlen.github.io/llama-cpp-python/whl/cu124"
 
 # Model download
-MODEL_HF_REPO = "Qwen/Qwen3-8B-GGUF"
-MODEL_FILENAME = "Qwen3-8B-Q4_K_M.gguf"
+MODEL_HF_REPO = "unsloth/Qwen3.5-9B-GGUF"
+MODEL_FILENAME = "Qwen3.5-9B-Q4_K_M.gguf"
 MODEL_URL = f"https://huggingface.co/{MODEL_HF_REPO}/resolve/main/{MODEL_FILENAME}"
 
 # Pre-built Vulkan wheel (GitHub Release — no Vulkan SDK needed for users)
