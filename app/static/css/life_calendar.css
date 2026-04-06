@@ -16,6 +16,23 @@ body {
   margin-left: 70px;
 }
 
+/* Ноутбучные экраны */
+@media (max-height: 960px) and (min-width: 769px) {
+  .top-menu {
+    margin-top: 40px;
+    margin-left: 0;
+    justify-content: center;
+    font-size: 22px;
+    gap: 20px;
+  }
+  .life-page {
+    padding: 24px 20px 40px;
+  }
+  .life-title {
+    margin-bottom: 20px;
+  }
+}
+
 .menu-link {
   color: #222;
   text-decoration: none;
@@ -23,7 +40,7 @@ body {
   transition: color 0.2s;
 }
 .menu-link:hover { text-decoration: underline; }
-.index-link { color: #009AFA; }
+.active-link { color: #009AFA; }
 
 /* ========== Page Layout ========== */
 .life-page {

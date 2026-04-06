@@ -23,6 +23,37 @@ body {
   margin-top: 60px;
   margin-left: 70px;
 }
+
+/* Ноутбучные экраны */
+@media (max-height: 960px) and (min-width: 769px) {
+  .top-menu {
+    margin-top: 40px;
+    margin-left: 0;
+    justify-content: center;
+    font-size: 22px;
+    gap: 20px;
+  }
+  .chat-container {
+    padding: 14px 20px 14px;
+  }
+  .chat-toolbar {
+    padding-bottom: 6px;
+    margin-bottom: 6px;
+  }
+  .chat-bubble {
+    font-size: 16px;
+    padding: 10px 14px;
+  }
+  #chat-input {
+    font-size: 16px;
+    min-height: 42px;
+    padding: 8px 12px;
+  }
+  #chat-send-btn {
+    font-size: 16px;
+    padding: 8px 20px;
+  }
+}
 .menu-link {
   color: #222;
   text-decoration: none;
@@ -32,7 +63,7 @@ body {
 .menu-link:hover {
   text-decoration: underline;
 }
-.index-link {
+.active-link {
   color: #009AFA;
 }
 

@@ -1,0 +1,209 @@
+/* ========== Base ========== */
+body {
+  font-family: 'Times New Roman', Times, serif;
+  background: #fff;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ========== Header ========== */
+header { width: 100%; }
+.main-header { width: 100%; }
+.top-menu {
+  display: flex;
+  gap: 24px;
+  font-size: 20px;
+  margin-top: 60px;
+  margin-left: 70px;
+}
+
+/* Ноутбучные экраны */
+@media (max-height: 960px) and (min-width: 769px) {
+  .top-menu {
+    margin-top: 40px;
+    margin-left: 0;
+    justify-content: center;
+    font-size: 22px;
+    gap: 20px;
+  }
+}
+
+.menu-link {
+  color: #222;
+  text-decoration: none;
+  font-family: inherit;
+  transition: color 0.2s;
+}
+.menu-link:hover { text-decoration: underline; }
+.active-link { color: #009AFA; }
+
+/* ========== Page ========== */
+.sync-page {
+  flex: 1;
+  max-width: 640px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 40px 20px 60px;
+  box-sizing: border-box;
+}
+
+.sync-section {
+  margin-bottom: 40px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid #e0e0e0;
+}
+.sync-section:last-child { border-bottom: none; }
+
+.sync-section h2 {
+  font-size: 20px;
+  font-weight: normal;
+  margin: 0 0 16px;
+}
+
+.sync-meta {
+  font-size: 14px;
+  color: #888;
+  margin-bottom: 8px;
+}
+.sync-meta code {
+  background: #f5f5f5;
+  padding: 2px 6px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+}
+
+/* ========== Form ========== */
+.sync-form {
+  margin: 16px 0;
+}
+.sync-form label {
+  display: block;
+  font-size: 15px;
+  color: #444;
+  margin-bottom: 8px;
+}
+.sync-row {
+  display: flex;
+  gap: 8px;
+}
+.sync-input {
+  flex: 1;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 15px;
+  padding: 8px 12px;
+  border: 1px solid #ccc;
+  outline: none;
+}
+.sync-input:focus { border-color: #222; }
+
+/* ========== Buttons ========== */
+.sync-btn {
+  background: #000;
+  color: #fff;
+  border: none;
+  padding: 8px 18px;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 15px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.sync-btn:hover { background: #333; }
+.sync-btn-primary { background: #009AFA; }
+.sync-btn-primary:hover { background: #007acc; }
+.sync-btn-small {
+  padding: 4px 12px;
+  font-size: 13px;
+}
+
+.sync-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+/* ========== Flash messages ========== */
+.flash-msg {
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  font-size: 15px;
+}
+.flash-success { background: #d4edda; color: #155724; }
+.flash-error { background: #f8d7da; color: #721c24; }
+
+/* ========== Conflicts ========== */
+.conflict-list { margin-top: 12px; }
+.conflict-item {
+  display: flex;
+  gap: 16px;
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 14px;
+  color: #444;
+}
+.conflict-date { font-weight: bold; }
+.conflict-winner { color: #888; }
+.conflict-time { color: #aaa; margin-left: auto; }
+
+/* ========== Backups ========== */
+.backup-list { margin-top: 16px; }
+.backup-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 14px;
+}
+.backup-name {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  color: #444;
+}
+.backup-size { color: #888; }
+.backup-date { color: #aaa; margin-left: auto; }
+
+/* ========== Footer ========== */
+.main-footer {
+  width: 100%;
+  text-align: center;
+  color: #222;
+  font-size: 16px;
+  background: #fff;
+  padding: 10px 0;
+  flex-shrink: 0;
+}
+.footer-link {
+  color: #666;
+  text-decoration: none;
+  font-size: 14px;
+}
+.footer-link:hover { text-decoration: underline; }
+
+/* ========== Mobile ========== */
+@media (max-width: 768px) {
+  .top-menu {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    margin-left: 0;
+    margin-top: 30px;
+    gap: 24px;
+    padding: 0 20px;
+  }
+  .sync-page { padding: 24px 16px 40px; }
+  .sync-row { flex-direction: column; }
+  .sync-actions { flex-wrap: wrap; }
+  .backup-item { flex-wrap: wrap; gap: 8px; }
+  .backup-date { margin-left: 0; }
+}
+
+@media (max-width: 480px) {
+  .top-menu {
+    margin-top: 20px;
+    gap: 24px;
+    padding: 0 15px;
+  }
+}

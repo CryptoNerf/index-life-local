@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sync & Backup</title>
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='images/favicon-32x32.png') }}">
+  <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='images/apple-touch-icon.png') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/sync.css') }}">
+</head>
+<body>
+  <header class="main-header">
+    <nav class="top-menu">
+      <a href="{{ url_for('main.mood_grid') }}" class="menu-link">index.life</a>
+      <a href="{{ url_for('main.life_calendar') }}" class="menu-link">life in weeks</a>
+      {% if module_active('assistant') %}
+        <a href="{{ url_for('assistant.chat') }}" class="menu-link">ai psychologist</a>
+      {% endif %}
+      {% if module_active('deep_mind') %}
+        <a href="{{ url_for('deep_mind.neural_map') }}" class="menu-link">neural map</a>
+      {% endif %}
+      <a href="{{ url_for('main.account') }}" class="menu-link">account</a>
+      <a href="{{ url_for('sync.sync_page') }}" class="menu-link active-link">sync</a>
+      <a href="{{ url_for('modules.modules_page') }}" class="menu-link">modules</a>
+    </nav>
+  </header>
+
+  <div class="sync-page">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="flash-msg flash-{{ category }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <!-- Sync Section -->
+    <section class="sync-section">
+      <h2>Sync</h2>
+      <div class="sync-meta">Device ID: <code>{{ device_id[:8] }}…</code></div>
+      {% if last_sync %}
+        <div class="sync-meta">Last sync: {{ last_sync.strftime('%Y-%m-%d %H:%M') }}</div>
+      {% endif %}
+
+      <form method="post" action="{{ url_for('sync.sync_settings') }}" class="sync-form">
+        <label>Sync folder (Dropbox, iCloud, Google Drive…):</label>
+        <div class="sync-row">
+          <input type="text" name="sync_folder" value="{{ sync_folder }}" placeholder="/Users/you/Dropbox/index-life-sync" class="sync-input">
+          <button type="submit" class="sync-btn">Save</button>
+        </div>
+      </form>
+
+      {% if sync_folder %}
+        <div class="sync-actions">
+          <form method="post" action="{{ url_for('sync.sync_now') }}" style="display:inline">
+            <button class="sync-btn sync-btn-primary">Sync now</button>
+          </form>
+          <form method="post" action="{{ url_for('sync.sync_export') }}" style="display:inline">
+            <button class="sync-btn">Export</button>
+          </form>
+          <form method="post" action="{{ url_for('sync.sync_import') }}" style="display:inline">
+            <button class="sync-btn">Import</button>
+          </form>
+        </div>
+      {% endif %}
+    </section>
+
+    <!-- Conflicts -->
+    {% if conflicts %}
+    <section class="sync-section">
+      <h2>Conflicts</h2>
+      <div class="conflict-list">
+        {% for c in conflicts %}
+          <div class="conflict-item">
+            <span class="conflict-date">{{ c.entry_date.strftime('%Y-%m-%d') }}</span>
+            <span class="conflict-winner">{{ c.winner }} version kept</span>
+            <span class="conflict-time">{{ c.resolved_at.strftime('%Y-%m-%d %H:%M') }}</span>
+          </div>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    <!-- Backup Section -->
+    <section class="sync-section">
+      <h2>Backups</h2>
+      <form method="post" action="{{ url_for('sync.backup_create') }}" style="display:inline">
+        <button class="sync-btn">Create backup now</button>
+      </form>
+
+      {% if backups %}
+        <div class="backup-list">
+          {% for b in backups %}
+            <div class="backup-item">
+              <span class="backup-name">{{ b.filename }}</span>
+              <span class="backup-size">{{ b.size_kb }} KB</span>
+              <span class="backup-date">{{ b.created.strftime('%Y-%m-%d %H:%M') }}</span>
+              <form method="post" action="{{ url_for('sync.backup_restore') }}" style="display:inline"
+                    onsubmit="return confirm('Restore database from this backup? Current data will be overwritten.')">
+                <input type="hidden" name="backup_path" value="{{ b.path }}">
+                <button class="sync-btn sync-btn-small">Restore</button>
+              </form>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="sync-meta" style="margin-top:12px">No backups yet</div>
+      {% endif %}
+    </section>
+  </div>
+
+  <footer class="main-footer">
+    <a href="{{ url_for('main.what_is_index') }}" class="footer-link">what is index.life?</a>
+  </footer>
+</body>
+</html>

@@ -82,6 +82,12 @@ jobs:
         run: |
           python3 -m PyInstaller build_macos.spec --clean
 
+      - name: Copy helper scripts next to .app for DMG
+        run: |
+          cp "First Launch.command" dist/
+          cp "Install Modules.command" dist/
+          chmod +x "dist/First Launch.command" "dist/Install Modules.command"
+
       - name: Install create-dmg
         run: brew install create-dmg
 
@@ -91,11 +97,13 @@ jobs:
           create-dmg \
             --volname "index.life" \
             --window-pos 200 120 \
-            --window-size 600 400 \
+            --window-size 600 450 \
             --icon-size 100 \
-            --icon "index.life.app" 175 190 \
+            --icon "index.life.app" 150 170 \
             --hide-extension "index.life.app" \
-            --app-drop-link 425 190 \
+            --app-drop-link 400 170 \
+            --icon "First Launch.command" 150 330 \
+            --icon "Install Modules.command" 400 330 \
             --no-internet-enable \
             "index-life_macos.dmg" \
             "dist/"
@@ -335,24 +343,31 @@ jobs:
 
             ---
 
-            ## Downloads
+            ## Installation
+
+            ### macOS (Apple Silicon M1–M4)
+            1. Download `index-life_macos.dmg`
+            2. Open DMG → drag **index.life** to Applications
+            3. Double-click **First Launch.command** (removes macOS Gatekeeper block and opens the app)
+            4. *(Optional)* To add AI modules: double-click **Install Modules.command** in the DMG
 
             ### Windows
-            Download `index-life_windows_x64.zip`, unzip and run `index-life.exe`
-
-            ### macOS
-            Download `index-life_macos.dmg`, open it and drag to Applications
+            1. Download `index-life_windows_x64.zip` and unzip to any folder
+            2. Run `index-life.exe` (if SmartScreen warns — click "More info" → "Run anyway")
+            3. *(Optional)* To add AI modules: double-click `install_modules.bat` next to the exe
 
             ### Linux
-            Download `index-life_linux_x86_64.AppImage`, make executable and run:
             ```bash
             chmod +x index-life_linux_x86_64.AppImage
             ./index-life_linux_x86_64.AppImage
             ```
 
-            ### AI Assistant (GPU acceleration)
-            Vulkan wheels for GPU acceleration are included in this release.
-            Run `install_modules.bat --module assistant --profile auto` to install automatically.
+            ### AI Modules
+            - **AI Psychologist** — chat with an AI that understands your diary (Qwen3.5-9B, ~5 GB)
+            - **Neural Map** — visualize emotional themes from your entries
+            - **Voice Dictation** — dictate entries with your voice (Whisper)
+
+            Modules can be managed from the **Modules** page inside the app.
 
             ---
 

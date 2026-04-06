@@ -28,7 +28,7 @@
   <body>
     <header class="main-header">
     <nav class="top-menu">
-      <a href="{{ url_for('main.mood_grid') }}" class="menu-link index-link">index.life</a>
+      <a href="{{ url_for('main.mood_grid') }}" class="menu-link">index.life</a>
       <a href="{{ url_for('main.life_calendar') }}" class="menu-link">life in weeks</a>
       {% if module_active('assistant') %}
         <a href="{{ url_for('assistant.chat') }}" class="menu-link">ai psychologist</a>
@@ -37,6 +37,8 @@
         <a href="{{ url_for('deep_mind.neural_map') }}" class="menu-link">neural map</a>
       {% endif %}
       <a href="{{ url_for('main.account') }}" class="menu-link">account</a>
+      <a href="{{ url_for('sync.sync_page') }}" class="menu-link">sync</a>
+      <a href="{{ url_for('modules.modules_page') }}" class="menu-link">modules</a>
     </nav>
     </header>
   <h1 style="margin-top:64px;">What is index.life?</h1>

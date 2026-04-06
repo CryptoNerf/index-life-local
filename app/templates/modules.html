@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Modules</title>
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='images/favicon-32x32.png') }}">
+  <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='images/apple-touch-icon.png') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/modules.css') }}">
+</head>
+<body>
+  <header class="main-header">
+    <nav class="top-menu">
+      <a href="{{ url_for('main.mood_grid') }}" class="menu-link">index.life</a>
+      <a href="{{ url_for('main.life_calendar') }}" class="menu-link">life in weeks</a>
+      {% if module_active('assistant') %}
+        <a href="{{ url_for('assistant.chat') }}" class="menu-link">ai psychologist</a>
+      {% endif %}
+      {% if module_active('deep_mind') %}
+        <a href="{{ url_for('deep_mind.neural_map') }}" class="menu-link">neural map</a>
+      {% endif %}
+      <a href="{{ url_for('main.account') }}" class="menu-link">account</a>
+      <a href="{{ url_for('sync.sync_page') }}" class="menu-link">sync</a>
+      <a href="{{ url_for('modules.modules_page') }}" class="menu-link active-link">modules</a>
+    </nav>
+  </header>
+
+  <div class="modules-page">
+    <h1>Modules</h1>
+    <p class="modules-subtitle">Optional features you can add to index.life</p>
+
+    <div class="module-list">
+      {% for mod in modules %}
+        <div class="module-card {{ 'module-active' if mod.active else 'module-inactive' }}" id="card-{{ mod.name }}">
+          <div class="module-header">
+            <span class="module-status">{{ '●' if mod.active else '○' }}</span>
+            <span class="module-title">{{ mod.title }}</span>
+            {% if mod.active %}
+              <span class="module-badge">installed</span>
+            {% endif %}
+          </div>
+          {% if mod.description %}
+            <p class="module-desc">{{ mod.description }}</p>
+          {% endif %}
+          {% if not mod.active %}
+            {% if mod.size %}
+              <span class="module-size">{{ mod.size }}</span>
+            {% endif %}
+            <div class="module-install-row">
+              <button class="install-btn"
+                      onclick="startInstall('{{ mod.name }}')"
+                      id="btn-{{ mod.name }}"
+                      {% if install_running %}disabled{% endif %}>
+                Install
+              </button>
+            </div>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+
+    <!-- Install terminal output -->
+    <div id="install-terminal" class="install-terminal" style="display:none">
+      <div class="terminal-header">
+        <span id="terminal-title">Installing...</span>
+        <button class="terminal-close" onclick="closeTerminal()">✕</button>
+      </div>
+      <pre id="terminal-output" class="terminal-output"></pre>
+    </div>
+
+    <!-- Manual install instructions -->
+    {% set has_inactive = modules | selectattr('active', 'false') | list | length > 0 %}
+    {% if has_inactive %}
+      <div class="install-section">
+        <h2>Alternative: manual install</h2>
+        <p class="install-platform">{{ install.platform }}</p>
+        <div class="install-step">
+          <span class="step-num">1</span>
+          <span>{{ install.method }}</span>
+        </div>
+        <div class="install-step">
+          <span class="step-num">2</span>
+          <span>Restart index.life — modules will appear in the navigation.</span>
+        </div>
+        {% if install.alt %}
+          <p class="install-alt">{{ install.alt }}</p>
+        {% endif %}
+      </div>
+    {% else %}
+      <div class="install-section">
+        <p class="all-installed">All available modules are installed.</p>
+      </div>
+    {% endif %}
+  </div>
+
+  <footer class="main-footer">
+    <a href="{{ url_for('main.what_is_index') }}" class="footer-link">what is index.life?</a>
+  </footer>
+
+  <script>
+    const PROFILE = '{{ profile }}';
+
+    function startInstall(moduleName) {
+      // Disable all install buttons
+      document.querySelectorAll('.install-btn').forEach(b => b.disabled = true);
+
+      const btn = document.getElementById('btn-' + moduleName);
+      btn.textContent = 'Installing...';
+
+      // Show terminal
+      const terminal = document.getElementById('install-terminal');
+      const output = document.getElementById('terminal-output');
+      const title = document.getElementById('terminal-title');
+      terminal.style.display = 'block';
+      output.textContent = '';
+      title.textContent = 'Installing ' + moduleName + '...';
+
+      // POST to start install
+      const form = new FormData();
+      form.append('module', moduleName);
+      form.append('profile', PROFILE);
+
+      fetch('/modules/install', { method: 'POST', body: form })
+        .then(r => r.json())
+        .then(data => {
+          if (data.error) {
+            output.textContent = 'Error: ' + data.error;
+            btn.textContent = 'Install';
+            btn.disabled = false;
+            return;
+          }
+          // Start SSE stream
+          streamOutput(moduleName);
+        })
+        .catch(err => {
+          output.textContent = 'Error: ' + err;
+          btn.textContent = 'Install';
+          btn.disabled = false;
+        });
+    }
+
+    function streamOutput(moduleName) {
+      const output = document.getElementById('terminal-output');
+      const title = document.getElementById('terminal-title');
+      const source = new EventSource('/modules/install/stream');
+
+      source.onmessage = function(e) {
+        output.textContent += e.data + '\n';
+        output.scrollTop = output.scrollHeight;
+      };
+
+      source.addEventListener('done', function(e) {
+        source.close();
+        const btn = document.getElementById('btn-' + moduleName);
+        if (e.data === 'success') {
+          title.textContent = 'Installation complete!';
+          btn.textContent = 'Restart to activate';
+          btn.disabled = false;
+          btn.onclick = function() { location.reload(); };
+        } else {
+          title.textContent = 'Installation failed';
+          btn.textContent = 'Retry';
+          btn.disabled = false;
+          document.querySelectorAll('.install-btn').forEach(b => b.disabled = false);
+        }
+      });
+
+      source.onerror = function() {
+        source.close();
+        title.textContent = 'Connection lost';
+        document.querySelectorAll('.install-btn').forEach(b => b.disabled = false);
+      };
+    }
+
+    function closeTerminal() {
+      document.getElementById('install-terminal').style.display = 'none';
+    }
+  </script>
+</body>
+</html>

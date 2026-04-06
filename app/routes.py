@@ -11,7 +11,7 @@ import os
 import re
 
 from app import db
-from app.models import MoodEntry, UserProfile
+from app.models import MoodEntry, UserProfile, SyncMeta
 
 bp = Blueprint('main', __name__)
 
@@ -172,6 +172,21 @@ def delete_day(day):
     if entry:
         entry_year = entry.date.year
         try:
+            # Soft-delete for sync, then hard-delete
+            entry.deleted = True
+            entry.updated_at = datetime.utcnow()
+            db.session.commit()
+
+            # Export deletion to sync folder
+            try:
+                from app.sync import get_sync_folder, write_changeset_to_folder
+                sync_folder = get_sync_folder()
+                if sync_folder:
+                    write_changeset_to_folder(sync_folder)
+            except Exception:
+                pass
+
+            # Now hard-delete locally
             db.session.delete(entry)
             db.session.commit()
             return redirect(url_for('main.mood_grid', year=entry_year))
@@ -205,17 +220,24 @@ def edit_day(day):
             flash('Please select your day mood rating (1-10) before saving', 'error')
             return redirect(url_for('main.edit_day', day=day))
 
+        # Get device_id for sync
+        device_id_row = db.session.get(SyncMeta, 'device_id')
+        _device_id = device_id_row.value if device_id_row else None
+
         if entry:
             # Update existing entry
             entry.rating = rating
             entry.note = note
             entry.updated_at = datetime.utcnow()
+            if _device_id:
+                entry.device_id = _device_id
         else:
             # Create new entry
             entry = MoodEntry(
                 date=day_date,
                 rating=rating,
-                note=note
+                note=note,
+                device_id=_device_id,
             )
             db.session.add(entry)
 
@@ -237,6 +259,15 @@ def edit_day(day):
                     analyze_async(current_app._get_current_object())
                 except ImportError:
                     pass
+
+            # Export change-set to sync folder (if configured)
+            try:
+                from app.sync import get_sync_folder, write_changeset_to_folder
+                sync_folder = get_sync_folder()
+                if sync_folder:
+                    write_changeset_to_folder(sync_folder)
+            except Exception:
+                pass
 
             # Redirect to the year of the edited entry (no flash message needed - visual confirmation on calendar is enough)
             return redirect(url_for('main.mood_grid', year=day_date.year))

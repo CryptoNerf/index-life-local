@@ -1,0 +1,266 @@
+/* ========== Base ========== */
+body {
+  font-family: 'Times New Roman', Times, serif;
+  background: #fff;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ========== Header ========== */
+header { width: 100%; }
+.main-header { width: 100%; }
+.top-menu {
+  display: flex;
+  gap: 24px;
+  font-size: 20px;
+  margin-top: 60px;
+  margin-left: 70px;
+}
+
+/* Ноутбучные экраны */
+@media (max-height: 960px) and (min-width: 769px) {
+  .top-menu {
+    margin-top: 40px;
+    margin-left: 0;
+    justify-content: center;
+    font-size: 22px;
+    gap: 20px;
+  }
+}
+
+.menu-link {
+  color: #222;
+  text-decoration: none;
+  font-family: inherit;
+  transition: color 0.2s;
+}
+.menu-link:hover { text-decoration: underline; }
+.active-link { color: #009AFA; }
+
+/* ========== Page ========== */
+.modules-page {
+  flex: 1;
+  max-width: 600px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 40px 20px 60px;
+  box-sizing: border-box;
+}
+
+.modules-page h1 {
+  font-size: 22px;
+  font-weight: normal;
+  margin: 0 0 8px;
+}
+
+.modules-subtitle {
+  font-size: 15px;
+  color: #888;
+  margin: 0 0 32px;
+}
+
+/* ========== Module cards ========== */
+.module-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 40px;
+}
+
+.module-card {
+  border: 1px solid #e0e0e0;
+  padding: 20px;
+}
+
+.module-active {
+  border-color: #222;
+}
+
+.module-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.module-status {
+  font-size: 14px;
+}
+.module-active .module-status { color: #009AFA; }
+.module-inactive .module-status { color: #ccc; }
+
+.module-title {
+  font-size: 18px;
+}
+
+.module-badge {
+  font-size: 12px;
+  color: #009AFA;
+  border: 1px solid #009AFA;
+  padding: 2px 8px;
+  margin-left: auto;
+}
+
+.module-desc {
+  font-size: 15px;
+  color: #555;
+  margin: 0 0 6px;
+  line-height: 1.5;
+}
+
+.module-size {
+  font-size: 13px;
+  color: #999;
+}
+
+/* ========== Install section ========== */
+.install-section {
+  border-top: 1px solid #e0e0e0;
+  padding-top: 24px;
+}
+
+.install-section h2 {
+  font-size: 18px;
+  font-weight: normal;
+  margin: 0 0 12px;
+}
+
+.install-platform {
+  font-size: 14px;
+  color: #888;
+  margin: 0 0 16px;
+}
+
+.install-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.step-num {
+  width: 24px;
+  height: 24px;
+  border: 1px solid #222;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.install-alt {
+  font-size: 13px;
+  color: #888;
+  margin-top: 16px;
+}
+
+.all-installed {
+  font-size: 15px;
+  color: #666;
+}
+
+/* ========== Install button ========== */
+.module-install-row {
+  margin-top: 12px;
+}
+
+.install-btn {
+  background: #000;
+  color: #fff;
+  border: none;
+  padding: 8px 24px;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 15px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.install-btn:hover { background: #333; }
+.install-btn:disabled {
+  background: #999;
+  cursor: not-allowed;
+}
+
+/* ========== Install terminal ========== */
+.install-terminal {
+  background: #1a1a1a;
+  color: #e0e0e0;
+  margin: 0 0 32px;
+  overflow: hidden;
+}
+
+.terminal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  background: #111;
+  font-size: 14px;
+  color: #aaa;
+}
+
+.terminal-close {
+  background: none;
+  border: none;
+  color: #666;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0 4px;
+}
+.terminal-close:hover { color: #fff; }
+
+.terminal-output {
+  padding: 16px;
+  margin: 0;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  max-height: 400px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* ========== Footer ========== */
+.main-footer {
+  width: 100%;
+  text-align: center;
+  color: #222;
+  font-size: 16px;
+  background: #fff;
+  padding: 10px 0;
+  flex-shrink: 0;
+}
+.footer-link {
+  color: #666;
+  text-decoration: none;
+  font-size: 14px;
+}
+.footer-link:hover { text-decoration: underline; }
+
+/* ========== Mobile ========== */
+@media (max-width: 768px) {
+  .top-menu {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    margin-left: 0;
+    margin-top: 30px;
+    gap: 24px;
+    padding: 0 20px;
+  }
+  .modules-page { padding: 24px 16px 40px; }
+}
+
+@media (max-width: 480px) {
+  .top-menu {
+    margin-top: 20px;
+    gap: 24px;
+    padding: 0 15px;
+  }
+}

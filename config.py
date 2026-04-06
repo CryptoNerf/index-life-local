@@ -29,7 +29,15 @@ class Config:
     # Auto-open browser on startup
     AUTO_OPEN_BROWSER = True
 
+    # Backup
+    DB_PATH = BASE_DIR / 'diary.db'
+    BACKUP_DIR = BASE_DIR / 'backups'
+    BACKUP_MAX_COUNT = 10
+
+    # Sync
+    SYNC_FOLDER = ''  # User sets this to a Dropbox/iCloud/Google Drive path
+
     # Server configuration
     HOST = '127.0.0.1'
-    PORT = 5000
+    PORT = 5001
     DEBUG = False  # Set to False for production build

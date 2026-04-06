@@ -25,16 +25,19 @@ Common commands:
 - `install_modules.bat --module assistant --profile cuda`
 - `install_modules.bat --module voice`
 
-### Install (macOS / Linux)
+### Install (macOS Apple Silicon — M1/M2/M3/M4)
 
-- `bash install_modules.sh`
+**DMG users:** double-click `Install Modules.command` next to the app — it handles everything automatically.
 
-Common commands:
+**Source users:**
+
+- `bash install_modules.sh --module assistant --profile metal`
+- `bash install_modules.sh --module voice`
+
+### Install (macOS Intel / Linux)
 
 - `bash install_modules.sh --module assistant --profile auto`
 - `bash install_modules.sh --module assistant --profile cpu`
-- `bash install_modules.sh --module assistant --profile vulkan`
-- `bash install_modules.sh --module assistant --profile metal`
 - `bash install_modules.sh --module voice`
 
 ### Assistant profiles
