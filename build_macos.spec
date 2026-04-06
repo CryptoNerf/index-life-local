@@ -48,7 +48,6 @@ a = Analysis(
         ('MODULES.md', '.'),
         ('install_modules.sh', '.'),
         ('Install Modules.command', '.'),
-        ('First Launch.command', '.'),
         ('tools/install_modules.py', 'tools'),
         ('app/static/images/icon.icns', 'Resources'),  # Explicitly copy icon to Resources folder
     ] + module_datas(),

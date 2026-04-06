@@ -32,26 +32,40 @@
 
     <div class="module-list">
       {% for mod in modules %}
-        <div class="module-card {{ 'module-active' if mod.active else 'module-inactive' }}" id="card-{{ mod.name }}">
+        <div class="module-card {{ 'module-active' if mod.active else ('module-restart' if mod.installed_needs_restart else 'module-inactive') }}" id="card-{{ mod.name }}">
           <div class="module-header">
-            <span class="module-status">{{ '●' if mod.active else '○' }}</span>
+            {% if mod.active %}
+              <span class="module-dot dot-active">●</span>
+            {% elif mod.installed_needs_restart %}
+              <span class="module-dot dot-restart">●</span>
+            {% else %}
+              <span class="module-dot dot-inactive">○</span>
+            {% endif %}
             <span class="module-title">{{ mod.title }}</span>
             {% if mod.active %}
-              <span class="module-badge">installed</span>
+              <span class="module-badge badge-active">active</span>
+            {% elif mod.installed_needs_restart %}
+              <span class="module-badge badge-restart">restart needed</span>
             {% endif %}
           </div>
           {% if mod.description %}
             <p class="module-desc">{{ mod.description }}</p>
           {% endif %}
-          {% if not mod.active %}
+
+          {% if mod.active %}
+            {# Module is loaded and working — nothing to do #}
+          {% elif mod.installed_needs_restart %}
+            <div class="module-action-row">
+              <span class="module-action-hint">Module installed. Restart the app to activate it.</span>
+            </div>
+          {% else %}
             {% if mod.size %}
               <span class="module-size">{{ mod.size }}</span>
             {% endif %}
-            <div class="module-install-row">
+            <div class="module-action-row">
               <button class="install-btn"
                       onclick="startInstall('{{ mod.name }}')"
-                      id="btn-{{ mod.name }}"
-                      {% if install_running %}disabled{% endif %}>
+                      id="btn-{{ mod.name }}">
                 Install
               </button>
             </div>
@@ -64,32 +78,19 @@
     <div id="install-terminal" class="install-terminal" style="display:none">
       <div class="terminal-header">
         <span id="terminal-title">Installing...</span>
-        <button class="terminal-close" onclick="closeTerminal()">✕</button>
+        <button class="terminal-close" onclick="closeTerminal()">×</button>
       </div>
       <pre id="terminal-output" class="terminal-output"></pre>
+      <div id="terminal-actions" class="terminal-actions" style="display:none"></div>
     </div>
 
-    <!-- Manual install instructions -->
-    {% set has_inactive = modules | selectattr('active', 'false') | list | length > 0 %}
-    {% if has_inactive %}
+    <!-- Manual install instructions (only if something is not installed) -->
+    {% set has_installable = modules | rejectattr('active') | rejectattr('installed_needs_restart') | list | length > 0 %}
+    {% if has_installable %}
       <div class="install-section">
         <h2>Alternative: manual install</h2>
         <p class="install-platform">{{ install.platform }}</p>
-        <div class="install-step">
-          <span class="step-num">1</span>
-          <span>{{ install.method }}</span>
-        </div>
-        <div class="install-step">
-          <span class="step-num">2</span>
-          <span>Restart index.life — modules will appear in the navigation.</span>
-        </div>
-        {% if install.alt %}
-          <p class="install-alt">{{ install.alt }}</p>
-        {% endif %}
-      </div>
-    {% else %}
-      <div class="install-section">
-        <p class="all-installed">All available modules are installed.</p>
+        <p class="install-alt">{{ install.method }}</p>
       </div>
     {% endif %}
   </div>
@@ -100,23 +101,31 @@
 
   <script>
     const PROFILE = '{{ profile }}';
+    let currentModule = null;
+    let eventSource = null;
+
+    // On page load: if install was running, reconnect to stream
+    {% if install_status.running %}
+      currentModule = '{{ install_status.module }}';
+      showTerminal('Installing {{ install_status.module }}...');
+      reconnectStream();
+    {% endif %}
 
     function startInstall(moduleName) {
+      if (currentModule) return; // already installing
+
+      currentModule = moduleName;
+
       // Disable all install buttons
-      document.querySelectorAll('.install-btn').forEach(b => b.disabled = true);
+      document.querySelectorAll('.install-btn').forEach(b => {
+        b.disabled = true;
+      });
 
       const btn = document.getElementById('btn-' + moduleName);
-      btn.textContent = 'Installing...';
+      if (btn) btn.textContent = 'Installing...';
 
-      // Show terminal
-      const terminal = document.getElementById('install-terminal');
-      const output = document.getElementById('terminal-output');
-      const title = document.getElementById('terminal-title');
-      terminal.style.display = 'block';
-      output.textContent = '';
-      title.textContent = 'Installing ' + moduleName + '...';
+      showTerminal('Installing ' + moduleName + '...');
 
-      // POST to start install
       const form = new FormData();
       form.append('module', moduleName);
       form.append('profile', PROFILE);
@@ -125,55 +134,163 @@
         .then(r => r.json())
         .then(data => {
           if (data.error) {
-            output.textContent = 'Error: ' + data.error;
-            btn.textContent = 'Install';
-            btn.disabled = false;
+            appendOutput('Error: ' + data.error + '\n');
+            handleError();
             return;
           }
-          // Start SSE stream
-          streamOutput(moduleName);
+          connectStream();
         })
         .catch(err => {
-          output.textContent = 'Error: ' + err;
-          btn.textContent = 'Install';
-          btn.disabled = false;
+          appendOutput('Network error: ' + err + '\n');
+          handleError();
         });
     }
 
-    function streamOutput(moduleName) {
+    function showTerminal(title) {
+      const terminal = document.getElementById('install-terminal');
       const output = document.getElementById('terminal-output');
-      const title = document.getElementById('terminal-title');
-      const source = new EventSource('/modules/install/stream');
+      const titleEl = document.getElementById('terminal-title');
+      const actions = document.getElementById('terminal-actions');
+      terminal.style.display = 'block';
+      output.textContent = '';
+      titleEl.textContent = title;
+      actions.style.display = 'none';
+      actions.innerHTML = '';
+    }
 
-      source.onmessage = function(e) {
-        output.textContent += e.data + '\n';
-        output.scrollTop = output.scrollHeight;
+    function appendOutput(text) {
+      const output = document.getElementById('terminal-output');
+      output.textContent += text;
+      output.scrollTop = output.scrollHeight;
+    }
+
+    function connectStream() {
+      if (eventSource) eventSource.close();
+
+      eventSource = new EventSource('/modules/install/stream');
+
+      eventSource.onmessage = function(e) {
+        appendOutput(e.data + '\n');
       };
 
-      source.addEventListener('done', function(e) {
-        source.close();
-        const btn = document.getElementById('btn-' + moduleName);
-        if (e.data === 'success') {
-          title.textContent = 'Installation complete!';
-          btn.textContent = 'Restart to activate';
-          btn.disabled = false;
-          btn.onclick = function() { location.reload(); };
+      eventSource.addEventListener('done', function(e) {
+        eventSource.close();
+        eventSource = null;
+
+        if (e.data === 'verified') {
+          handleVerified();
+        } else if (e.data === 'success') {
+          handleSuccess();
         } else {
-          title.textContent = 'Installation failed';
-          btn.textContent = 'Retry';
-          btn.disabled = false;
-          document.querySelectorAll('.install-btn').forEach(b => b.disabled = false);
+          handleError();
         }
       });
 
-      source.onerror = function() {
-        source.close();
-        title.textContent = 'Connection lost';
-        document.querySelectorAll('.install-btn').forEach(b => b.disabled = false);
+      eventSource.onerror = function() {
+        eventSource.close();
+        eventSource = null;
+        // Connection lost — fall back to polling
+        pollStatus();
       };
     }
 
+    function reconnectStream() {
+      connectStream();
+    }
+
+    function pollStatus() {
+      appendOutput('\n(Reconnecting...)\n');
+      const poll = setInterval(() => {
+        fetch('/modules/install/status')
+          .then(r => r.json())
+          .then(data => {
+            if (data.done) {
+              clearInterval(poll);
+              if (data.verified) {
+                handleVerified();
+              } else if (data.success) {
+                handleSuccess();
+              } else {
+                handleError();
+              }
+            } else if (!data.running) {
+              // Not running and not done — stale state
+              clearInterval(poll);
+              handleError();
+            }
+          })
+          .catch(() => {
+            // Still can't reach server — keep polling
+          });
+      }, 2000);
+    }
+
+    function handleVerified() {
+      const title = document.getElementById('terminal-title');
+      title.textContent = 'Installation complete!';
+
+      const actions = document.getElementById('terminal-actions');
+      actions.style.display = 'block';
+      actions.innerHTML = '<button class="install-btn install-btn-restart" onclick="location.reload()">Restart to activate</button>';
+
+      // Update the card to show "restart needed"
+      if (currentModule) {
+        const card = document.getElementById('card-' + currentModule);
+        if (card) {
+          card.className = 'module-card module-restart';
+          const btn = document.getElementById('btn-' + currentModule);
+          if (btn) btn.remove();
+        }
+      }
+      currentModule = null;
+    }
+
+    function handleSuccess() {
+      // Installed but couldn't verify (deps not importable yet — may need restart)
+      handleVerified(); // treat the same way
+    }
+
+    function handleError() {
+      const title = document.getElementById('terminal-title');
+      title.textContent = 'Installation failed';
+
+      const actions = document.getElementById('terminal-actions');
+      actions.style.display = 'block';
+      actions.innerHTML = '<button class="install-btn" onclick="retryInstall()">Retry</button>';
+
+      // Re-enable install buttons
+      document.querySelectorAll('.install-btn').forEach(b => {
+        b.disabled = false;
+      });
+
+      if (currentModule) {
+        const btn = document.getElementById('btn-' + currentModule);
+        if (btn) {
+          btn.textContent = 'Install';
+          btn.disabled = false;
+        }
+      }
+      currentModule = null;
+    }
+
+    function retryInstall() {
+      // Get module name from the last install status
+      fetch('/modules/install/status')
+        .then(r => r.json())
+        .then(data => {
+          if (data.module) {
+            startInstall(data.module);
+          } else {
+            location.reload();
+          }
+        });
+    }
+
     function closeTerminal() {
+      if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+      }
       document.getElementById('install-terminal').style.display = 'none';
     }
   </script>

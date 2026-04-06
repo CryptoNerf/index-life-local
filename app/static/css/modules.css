@@ -20,7 +20,6 @@ header { width: 100%; }
   margin-left: 70px;
 }
 
-/* Ноутбучные экраны */
 @media (max-height: 960px) and (min-width: 769px) {
   .top-menu {
     margin-top: 40px;
@@ -75,9 +74,8 @@ header { width: 100%; }
   padding: 20px;
 }
 
-.module-active {
-  border-color: #222;
-}
+.module-active { border-color: #222; }
+.module-restart { border-color: #e8a83e; }
 
 .module-header {
   display: flex;
@@ -86,22 +84,25 @@ header { width: 100%; }
   margin-bottom: 8px;
 }
 
-.module-status {
-  font-size: 14px;
-}
-.module-active .module-status { color: #009AFA; }
-.module-inactive .module-status { color: #ccc; }
+.module-dot { font-size: 14px; }
+.dot-active { color: #009AFA; }
+.dot-restart { color: #e8a83e; }
+.dot-inactive { color: #ccc; }
 
-.module-title {
-  font-size: 18px;
-}
+.module-title { font-size: 18px; }
 
 .module-badge {
   font-size: 12px;
-  color: #009AFA;
-  border: 1px solid #009AFA;
   padding: 2px 8px;
   margin-left: auto;
+}
+.badge-active {
+  color: #009AFA;
+  border: 1px solid #009AFA;
+}
+.badge-restart {
+  color: #e8a83e;
+  border: 1px solid #e8a83e;
 }
 
 .module-desc {
@@ -116,60 +117,14 @@ header { width: 100%; }
   color: #999;
 }
 
-/* ========== Install section ========== */
-.install-section {
-  border-top: 1px solid #e0e0e0;
-  padding-top: 24px;
-}
+.module-action-row { margin-top: 12px; }
 
-.install-section h2 {
-  font-size: 18px;
-  font-weight: normal;
-  margin: 0 0 12px;
-}
-
-.install-platform {
+.module-action-hint {
   font-size: 14px;
-  color: #888;
-  margin: 0 0 16px;
-}
-
-.install-step {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  margin-bottom: 12px;
-  font-size: 15px;
-  line-height: 1.5;
-}
-
-.step-num {
-  width: 24px;
-  height: 24px;
-  border: 1px solid #222;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 14px;
-  flex-shrink: 0;
-}
-
-.install-alt {
-  font-size: 13px;
-  color: #888;
-  margin-top: 16px;
-}
-
-.all-installed {
-  font-size: 15px;
-  color: #666;
+  color: #e8a83e;
 }
 
 /* ========== Install button ========== */
-.module-install-row {
-  margin-top: 12px;
-}
-
 .install-btn {
   background: #000;
   color: #fff;
@@ -184,6 +139,12 @@ header { width: 100%; }
 .install-btn:disabled {
   background: #999;
   cursor: not-allowed;
+}
+.install-btn-restart {
+  background: #e8a83e;
+}
+.install-btn-restart:hover {
+  background: #c9912e;
 }
 
 /* ========== Install terminal ========== */
@@ -208,9 +169,10 @@ header { width: 100%; }
   background: none;
   border: none;
   color: #666;
-  font-size: 16px;
+  font-size: 18px;
   cursor: pointer;
   padding: 0 4px;
+  font-family: inherit;
 }
 .terminal-close:hover { color: #fff; }
 
@@ -224,6 +186,36 @@ header { width: 100%; }
   overflow-y: auto;
   white-space: pre-wrap;
   word-break: break-all;
+}
+
+.terminal-actions {
+  padding: 12px 16px;
+  background: #111;
+  border-top: 1px solid #333;
+}
+
+/* ========== Install section (manual) ========== */
+.install-section {
+  border-top: 1px solid #e0e0e0;
+  padding-top: 24px;
+}
+
+.install-section h2 {
+  font-size: 18px;
+  font-weight: normal;
+  margin: 0 0 12px;
+}
+
+.install-platform {
+  font-size: 14px;
+  color: #888;
+  margin: 0 0 8px;
+}
+
+.install-alt {
+  font-size: 13px;
+  color: #888;
+  margin: 0;
 }
 
 /* ========== Footer ========== */

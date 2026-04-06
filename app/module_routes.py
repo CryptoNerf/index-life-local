@@ -3,11 +3,15 @@ Routes for the module status page.
 Shows which modules are installed/available and how to install missing ones.
 Supports in-app installation with live progress via SSE.
 """
+import importlib
 import logging
+import os
 import platform
+import shutil
 import subprocess
 import sys
 import threading
+import time
 from datetime import date
 from pathlib import Path
 
@@ -40,7 +44,7 @@ MODULE_INFO = {
     },
 }
 
-# Global install state
+# Global install state — survives across requests
 _install_lock = threading.Lock()
 _install_status = {
     'running': False,
@@ -48,33 +52,27 @@ _install_status = {
     'lines': [],
     'done': False,
     'success': False,
+    'verified': False,
     'error': None,
 }
 
 
+# ── Helpers ───────────────────────────────────────────────────
+
 def _detect_profile() -> str:
     """Auto-detect the best GPU profile for the current platform."""
-    system = platform.system()
-    arch = platform.machine()
-
-    if system == 'Darwin' and arch == 'arm64':
+    if platform.system() == 'Darwin' and platform.machine() == 'arm64':
         return 'metal'
-
-    # Check for NVIDIA GPU
-    import shutil
     if shutil.which('nvidia-smi'):
-        return 'vulkan'  # pre-built, no SDK needed
-
+        return 'vulkan'
     return 'cpu'
 
 
 def _find_python() -> str:
     """Find the Python executable to use for module installation."""
-    # In source context, use the same Python running Flask
     if not getattr(sys, 'frozen', False):
         return sys.executable
 
-    # In EXE context, try to find system Python
     candidates = []
     if platform.system() == 'Darwin':
         candidates = [
@@ -84,74 +82,69 @@ def _find_python() -> str:
             '/usr/local/bin/python3',
         ]
     elif platform.system() == 'Windows':
-        candidates = [
-            'py', 'python3', 'python',
-        ]
+        candidates = ['py', 'python3', 'python']
     else:
         candidates = ['python3', 'python']
 
-    import shutil
     for c in candidates:
         path = shutil.which(c)
         if path:
             return path
-
     return sys.executable
 
 
 def _find_install_script() -> Path:
     """Locate tools/install_modules.py."""
     if getattr(sys, 'frozen', False):
-        # EXE context
         base = Path(sys.executable).parent
         candidates = [
             base / '_internal' / 'tools' / 'install_modules.py',
             base / 'tools' / 'install_modules.py',
         ]
     else:
-        # Source context
         from config import BASE_DIR
-        candidates = [
-            BASE_DIR / 'tools' / 'install_modules.py',
-        ]
+        candidates = [BASE_DIR / 'tools' / 'install_modules.py']
 
     for c in candidates:
         if c.exists():
             return c
-
     raise FileNotFoundError('install_modules.py not found')
 
 
+def _check_module_deps(module_name: str) -> list[str]:
+    """Check if a module's dependencies are installed. Returns list of missing packages."""
+    try:
+        mod = importlib.import_module(f'app.modules.{module_name}')
+        if hasattr(mod, 'check_dependencies'):
+            return mod.check_dependencies() or []
+    except Exception:
+        pass
+    return ['unknown']
+
+
 def _get_install_instructions() -> dict:
-    """Platform-specific install instructions."""
+    """Platform-specific manual install instructions."""
     system = platform.system()
     arch = platform.machine()
 
     if system == 'Darwin' and arch == 'arm64':
         return {
             'platform': 'macOS Apple Silicon',
-            'method': 'Double-click "Install Modules.command" from the DMG or the app folder.',
-            'alt': 'Or run in Terminal: bash install_macos_arm.sh',
-        }
-    elif system == 'Darwin':
-        return {
-            'platform': 'macOS Intel',
-            'method': 'Run in Terminal: bash install.sh',
-            'alt': None,
+            'method': 'Run in Terminal: bash install_macos_arm.sh',
         }
     elif system == 'Windows':
         return {
             'platform': 'Windows',
-            'method': 'Double-click "Install Modules.bat" next to the application.',
-            'alt': 'Or run in PowerShell: python tools/install_modules.py --module assistant --module deep_mind',
+            'method': 'Run install_modules.bat next to the application.',
         }
     else:
         return {
             'platform': f'{system} ({arch})',
-            'method': 'Run: bash install.sh',
-            'alt': 'Or: python tools/install_modules.py --module assistant --module deep_mind',
+            'method': 'Run: python tools/install_modules.py --module assistant --profile auto',
         }
 
+
+# ── Routes ────────────────────────────────────────────────────
 
 @bp.route('/modules')
 def modules_page():
@@ -162,12 +155,15 @@ def modules_page():
     modules = []
     for name in discovered:
         info = MODULE_INFO.get(name, {})
+        # Check if deps are installed but module isn't active (needs restart)
+        deps_ok = len(_check_module_deps(name)) == 0
         modules.append({
             'name': name,
             'title': info.get('title', name.replace('_', ' ').title()),
             'description': info.get('description', ''),
             'size': info.get('size', ''),
             'active': name in active,
+            'installed_needs_restart': deps_ok and name not in active,
         })
 
     # Add known modules not yet discovered (folder doesn't exist)
@@ -179,6 +175,7 @@ def modules_page():
                 'description': info.get('description', ''),
                 'size': info.get('size', ''),
                 'active': False,
+                'installed_needs_restart': False,
             })
 
     install = _get_install_instructions()
@@ -187,7 +184,7 @@ def modules_page():
     return render_template('modules.html',
                            modules=modules,
                            install=install,
-                           install_running=_install_status['running'],
+                           install_status=_install_status,
                            profile=profile,
                            current_year=date.today().year)
 
@@ -197,26 +194,26 @@ def install_module_route():
     """Start installing a module. Returns immediately; progress via SSE."""
     global _install_status
 
-    if _install_status['running']:
-        return jsonify({'error': 'Installation already in progress'}), 409
-
-    module_name = request.form.get('module', '').strip()
-    if module_name not in MODULE_INFO:
-        return jsonify({'error': f'Unknown module: {module_name}'}), 400
-
-    profile = request.form.get('profile', 'auto')
-
     with _install_lock:
+        if _install_status['running']:
+            return jsonify({'error': 'Installation already in progress'}), 409
+
+        module_name = request.form.get('module', '').strip()
+        if module_name not in MODULE_INFO:
+            return jsonify({'error': f'Unknown module: {module_name}'}), 400
+
+        profile = request.form.get('profile', 'auto')
+
         _install_status = {
             'running': True,
             'module': module_name,
             'lines': [],
             'done': False,
             'success': False,
+            'verified': False,
             'error': None,
         }
 
-    # Run in background thread
     thread = threading.Thread(
         target=_run_install,
         args=(module_name, profile),
@@ -241,12 +238,12 @@ def _run_install(module_name: str, profile: str):
 
         _install_status['lines'].append(f'$ {" ".join(cmd)}\n')
 
-        env = None
-        # For Metal on macOS, set CMAKE flags
+        env = os.environ.copy()
         if profile == 'metal':
-            import os
-            env = os.environ.copy()
-            env['CMAKE_ARGS'] = env.get('CMAKE_ARGS', '') + ' -DGGML_METAL=on'
+            cmake = env.get('CMAKE_ARGS', '').strip()
+            if '-DGGML_METAL=on' not in cmake:
+                cmake = (cmake + ' -DGGML_METAL=on').strip()
+            env['CMAKE_ARGS'] = cmake
             env['FORCE_CMAKE'] = '1'
 
         proc = subprocess.Popen(
@@ -263,13 +260,32 @@ def _run_install(module_name: str, profile: str):
 
         proc.wait()
 
-        _install_status['success'] = proc.returncode == 0
-        if proc.returncode != 0:
+        if proc.returncode == 0:
+            # Verify deps are actually importable
+            _install_status['lines'].append('\nVerifying installation...\n')
+            missing = _check_module_deps(module_name)
+            if not missing:
+                _install_status['success'] = True
+                _install_status['verified'] = True
+                _install_status['lines'].append('All dependencies verified.\n')
+                _install_status['lines'].append('\nRestart the application to activate the module.\n')
+            else:
+                _install_status['success'] = False
+                _install_status['error'] = f'Missing after install: {", ".join(missing)}'
+                _install_status['lines'].append(f'\nSome dependencies are still missing: {", ".join(missing)}\n')
+                _install_status['lines'].append('Try installing again or use the manual method.\n')
+        else:
+            _install_status['success'] = False
             _install_status['error'] = f'Process exited with code {proc.returncode}'
             _install_status['lines'].append(f'\nInstallation failed (exit code {proc.returncode})\n')
-        else:
-            _install_status['lines'].append('\nInstallation complete! Restart the app to activate the module.\n')
+            _install_status['lines'].append('You can retry or use the manual install method.\n')
 
+    except FileNotFoundError as exc:
+        _install_status['success'] = False
+        _install_status['error'] = str(exc)
+        _install_status['lines'].append(f'\nError: {exc}\n')
+        if 'python' in str(exc).lower() or 'install_modules' in str(exc).lower():
+            _install_status['lines'].append('Python or install script not found. Use the manual install method.\n')
     except Exception as exc:
         _install_status['success'] = False
         _install_status['error'] = str(exc)
@@ -282,20 +298,23 @@ def _run_install(module_name: str, profile: str):
 @bp.route('/modules/install/stream')
 def install_stream():
     """SSE endpoint — streams install output to the browser."""
-    import time
-
     def generate():
         last_index = 0
         while True:
             lines = _install_status['lines']
             while last_index < len(lines):
-                line = lines[last_index].rstrip('\n')
+                # Escape newlines for SSE (each data line must be one SSE data field)
+                line = lines[last_index].rstrip('\n').replace('\r', '')
                 yield f'data: {line}\n\n'
                 last_index += 1
 
             if _install_status['done']:
-                status = 'success' if _install_status['success'] else 'error'
-                yield f'event: done\ndata: {status}\n\n'
+                if _install_status['verified']:
+                    yield f'event: done\ndata: verified\n\n'
+                elif _install_status['success']:
+                    yield f'event: done\ndata: success\n\n'
+                else:
+                    yield f'event: done\ndata: error\n\n'
                 break
 
             time.sleep(0.3)
@@ -311,13 +330,14 @@ def install_stream():
 
 
 @bp.route('/modules/install/status')
-def install_status():
+def install_status_route():
     """JSON endpoint for polling install status."""
     return jsonify({
         'running': _install_status['running'],
         'module': _install_status['module'],
         'done': _install_status['done'],
         'success': _install_status['success'],
+        'verified': _install_status['verified'],
         'error': _install_status['error'],
         'line_count': len(_install_status['lines']),
     })
