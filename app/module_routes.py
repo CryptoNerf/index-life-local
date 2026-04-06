@@ -76,10 +76,13 @@ def _find_python() -> str:
     candidates = []
     if platform.system() == 'Darwin':
         candidates = [
-            '/opt/homebrew/bin/python3.12',
             '/opt/homebrew/bin/python3.13',
+            '/opt/homebrew/bin/python3.12',
+            '/opt/homebrew/bin/python3.11',
+            '/opt/homebrew/bin/python3.10',
             '/opt/homebrew/bin/python3',
             '/usr/local/bin/python3',
+            '/usr/bin/python3',
         ]
     elif platform.system() == 'Windows':
         candidates = ['py', 'python3', 'python']
@@ -90,14 +93,25 @@ def _find_python() -> str:
         path = shutil.which(c)
         if path:
             return path
-    return sys.executable
+    raise FileNotFoundError(
+        'Python not found. Install Python 3.10+ from python.org or via Homebrew (brew install python).'
+    )
 
 
 def _find_install_script() -> Path:
     """Locate tools/install_modules.py."""
     if getattr(sys, 'frozen', False):
-        base = Path(sys.executable).parent
+        exe = Path(sys.executable)
+        base = exe.parent  # Contents/MacOS/ (macOS .app) or dist dir (Windows/Linux)
+
         candidates = [
+            # macOS .app bundle: Contents/Frameworks/_internal/tools/...
+            base.parent / 'Frameworks' / '_internal' / 'tools' / 'install_modules.py',
+            base.parent / 'Frameworks' / 'tools' / 'install_modules.py',
+            # macOS .app bundle: Contents/Resources/tools/...
+            base.parent / 'Resources' / '_internal' / 'tools' / 'install_modules.py',
+            base.parent / 'Resources' / 'tools' / 'install_modules.py',
+            # Windows/Linux one-dir: exe_dir/_internal/tools/...
             base / '_internal' / 'tools' / 'install_modules.py',
             base / 'tools' / 'install_modules.py',
         ]
@@ -108,7 +122,10 @@ def _find_install_script() -> Path:
     for c in candidates:
         if c.exists():
             return c
-    raise FileNotFoundError('install_modules.py not found')
+
+    # Log all checked paths for debugging
+    checked = '\n'.join(f'  - {c}' for c in candidates)
+    raise FileNotFoundError(f'install_modules.py not found. Checked:\n{checked}')
 
 
 def _check_module_deps(module_name: str) -> list[str]:
@@ -229,6 +246,9 @@ def _run_install(module_name: str, profile: str):
     global _install_status
 
     try:
+        if getattr(sys, 'frozen', False):
+            _install_status['lines'].append(f'App executable: {sys.executable}\n')
+
         python = _find_python()
         script = _find_install_script()
 
@@ -283,9 +303,18 @@ def _run_install(module_name: str, profile: str):
     except FileNotFoundError as exc:
         _install_status['success'] = False
         _install_status['error'] = str(exc)
-        _install_status['lines'].append(f'\nError: {exc}\n')
-        if 'python' in str(exc).lower() or 'install_modules' in str(exc).lower():
-            _install_status['lines'].append('Python or install script not found. Use the manual install method.\n')
+        msg = str(exc)
+        _install_status['lines'].append(f'\nError: {msg}\n')
+        if 'python not found' in msg.lower():
+            _install_status['lines'].append(
+                'Python is required for module installation.\n'
+                'Install Python 3.10+ from python.org or run: brew install python\n'
+            )
+        elif 'install_modules' in msg.lower():
+            _install_status['lines'].append(
+                'Install script not found in the application bundle.\n'
+                'Try reinstalling the application or use the manual install method.\n'
+            )
     except Exception as exc:
         _install_status['success'] = False
         _install_status['error'] = str(exc)

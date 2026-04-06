@@ -26,6 +26,16 @@ header {
   margin-left: 70px;
 }
 
+@media (max-height: 960px) and (min-width: 769px) {
+  .top-menu {
+    margin-top: 40px;
+    margin-left: 0;
+    justify-content: center;
+    font-size: 22px;
+    gap: 20px;
+  }
+}
+
 /* Мобильные устройства (до 768px) */
 @media (max-width: 768px) {
   .top-menu {
@@ -58,7 +68,7 @@ header {
 .menu-link:hover {
   text-decoration: underline;
 }
-.index-link {
+.index-link, .active-link {
   color: #009AFA;
 }
 
