@@ -1,6 +1,7 @@
 """AI Psychologist chat routes with streaming and multi-layer memory."""
 import json
 import os
+import sys
 import platform
 import shutil
 import subprocess
@@ -500,12 +501,26 @@ def _get_llm():
             if profile_name:
                 log.info(f'LLM hardware profile applied: {profile_name}')
 
-            model_dir = Path(__file__).parent / 'models'
-            gguf_files = list(model_dir.glob('*.gguf'))
+            # Search for model in user data dir first, then bundled location
+            gguf_files = []
+            _search_dirs = [Path(__file__).parent / 'models']
+            if getattr(sys, 'frozen', False):
+                if sys.platform == 'darwin':
+                    _data = Path.home() / 'Library' / 'Application Support' / 'index.life' / 'models' / 'assistant'
+                elif sys.platform == 'win32':
+                    _data = Path(os.environ.get('APPDATA', str(Path.home()))) / 'index.life' / 'models' / 'assistant'
+                else:
+                    _data = Path.home() / '.index-life' / 'models' / 'assistant'
+                _search_dirs.insert(0, _data)
+            for model_dir in _search_dirs:
+                if model_dir.exists():
+                    gguf_files = list(model_dir.glob('*.gguf'))
+                    if gguf_files:
+                        break
             if not gguf_files:
                 raise FileNotFoundError(
-                    f'No .gguf model file found in {model_dir}. '
-                    'Place a GGUF model file there.'
+                    f'No .gguf model file found. Searched: {[str(d) for d in _search_dirs]}. '
+                    'Install the assistant module from the Modules page.'
                 )
             model_path = str(gguf_files[0])
 

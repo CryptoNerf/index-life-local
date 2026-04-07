@@ -104,27 +104,46 @@
     let currentModule = null;
     let eventSource = null;
 
-    // On page load: if install was running, reconnect to stream
-    {% if install_status.running %}
-      currentModule = '{{ install_status.module }}';
-      showTerminal('Installing {{ install_status.module }}...');
-      reconnectStream();
-    {% endif %}
+    // On page load: check if install is running or recently finished
+    (function() {
+      fetch('/modules/install/status?lines=1')
+        .then(r => r.json())
+        .then(data => {
+          if (!data.running && !data.done) return; // nothing happening
+          if (data.running || data.done) {
+            currentModule = data.module;
+            showTerminal('Installing ' + (data.module || '') + '...', false);
+
+            // Show all buffered lines
+            if (data.lines) {
+              data.lines.forEach(line => appendOutput(line));
+            }
+
+            if (data.done) {
+              // Already finished while we were away
+              if (data.verified) handleVerified();
+              else if (data.success) handleSuccess();
+              else handleError();
+            } else {
+              // Still running — connect SSE for new lines
+              disableAllButtons();
+              connectStream(data.line_count);
+            }
+          }
+        })
+        .catch(() => {});
+    })();
 
     function startInstall(moduleName) {
-      if (currentModule) return; // already installing
+      if (currentModule) return;
 
       currentModule = moduleName;
-
-      // Disable all install buttons
-      document.querySelectorAll('.install-btn').forEach(b => {
-        b.disabled = true;
-      });
+      disableAllButtons();
 
       const btn = document.getElementById('btn-' + moduleName);
       if (btn) btn.textContent = 'Installing...';
 
-      showTerminal('Installing ' + moduleName + '...');
+      showTerminal('Installing ' + moduleName + '...', true);
 
       const form = new FormData();
       form.append('module', moduleName);
@@ -138,7 +157,7 @@
             handleError();
             return;
           }
-          connectStream();
+          connectStream(0);
         })
         .catch(err => {
           appendOutput('Network error: ' + err + '\n');
@@ -146,13 +165,17 @@
         });
     }
 
-    function showTerminal(title) {
+    function disableAllButtons() {
+      document.querySelectorAll('.install-btn').forEach(b => { b.disabled = true; });
+    }
+
+    function showTerminal(title, clear) {
       const terminal = document.getElementById('install-terminal');
       const output = document.getElementById('terminal-output');
       const titleEl = document.getElementById('terminal-title');
       const actions = document.getElementById('terminal-actions');
       terminal.style.display = 'block';
-      output.textContent = '';
+      if (clear) output.textContent = '';
       titleEl.textContent = title;
       actions.style.display = 'none';
       actions.innerHTML = '';
@@ -164,38 +187,35 @@
       output.scrollTop = output.scrollHeight;
     }
 
-    function connectStream() {
+    function connectStream(skipLines) {
       if (eventSource) eventSource.close();
+
+      // SSE always starts from line 0 on server; skip lines we already have
+      let serverIndex = 0;
 
       eventSource = new EventSource('/modules/install/stream');
 
       eventSource.onmessage = function(e) {
-        appendOutput(e.data + '\n');
+        serverIndex++;
+        if (serverIndex > skipLines) {
+          appendOutput(e.data + '\n');
+        }
       };
 
       eventSource.addEventListener('done', function(e) {
         eventSource.close();
         eventSource = null;
 
-        if (e.data === 'verified') {
-          handleVerified();
-        } else if (e.data === 'success') {
-          handleSuccess();
-        } else {
-          handleError();
-        }
+        if (e.data === 'verified') handleVerified();
+        else if (e.data === 'success') handleSuccess();
+        else handleError();
       });
 
       eventSource.onerror = function() {
         eventSource.close();
         eventSource = null;
-        // Connection lost — fall back to polling
         pollStatus();
       };
-    }
-
-    function reconnectStream() {
-      connectStream();
     }
 
     function pollStatus() {
@@ -206,34 +226,25 @@
           .then(data => {
             if (data.done) {
               clearInterval(poll);
-              if (data.verified) {
-                handleVerified();
-              } else if (data.success) {
-                handleSuccess();
-              } else {
-                handleError();
-              }
+              if (data.verified) handleVerified();
+              else if (data.success) handleSuccess();
+              else handleError();
             } else if (!data.running) {
-              // Not running and not done — stale state
               clearInterval(poll);
               handleError();
             }
           })
-          .catch(() => {
-            // Still can't reach server — keep polling
-          });
+          .catch(() => {});
       }, 2000);
     }
 
     function handleVerified() {
-      const title = document.getElementById('terminal-title');
-      title.textContent = 'Installation complete!';
+      document.getElementById('terminal-title').textContent = 'Installation complete!';
 
       const actions = document.getElementById('terminal-actions');
       actions.style.display = 'block';
       actions.innerHTML = '<button class="install-btn install-btn-restart" onclick="location.reload()">Restart to activate</button>';
 
-      // Update the card to show "restart needed"
       if (currentModule) {
         const card = document.getElementById('card-' + currentModule);
         if (card) {
@@ -246,51 +257,36 @@
     }
 
     function handleSuccess() {
-      // Installed but couldn't verify (deps not importable yet — may need restart)
-      handleVerified(); // treat the same way
+      handleVerified();
     }
 
     function handleError() {
-      const title = document.getElementById('terminal-title');
-      title.textContent = 'Installation failed';
+      document.getElementById('terminal-title').textContent = 'Installation failed';
 
       const actions = document.getElementById('terminal-actions');
       actions.style.display = 'block';
       actions.innerHTML = '<button class="install-btn" onclick="retryInstall()">Retry</button>';
 
-      // Re-enable install buttons
-      document.querySelectorAll('.install-btn').forEach(b => {
-        b.disabled = false;
-      });
+      document.querySelectorAll('.install-btn').forEach(b => { b.disabled = false; });
 
       if (currentModule) {
         const btn = document.getElementById('btn-' + currentModule);
-        if (btn) {
-          btn.textContent = 'Install';
-          btn.disabled = false;
-        }
+        if (btn) { btn.textContent = 'Install'; btn.disabled = false; }
       }
       currentModule = null;
     }
 
     function retryInstall() {
-      // Get module name from the last install status
       fetch('/modules/install/status')
         .then(r => r.json())
         .then(data => {
-          if (data.module) {
-            startInstall(data.module);
-          } else {
-            location.reload();
-          }
+          if (data.module) startInstall(data.module);
+          else location.reload();
         });
     }
 
     function closeTerminal() {
-      if (eventSource) {
-        eventSource.close();
-        eventSource = null;
-      }
+      if (eventSource) { eventSource.close(); eventSource = null; }
       document.getElementById('install-terminal').style.display = 'none';
     }
   </script>

@@ -315,17 +315,33 @@ def download_file(url: str, dest: Path, description: str = "") -> None:
         raise
 
 
+def _get_models_dir() -> Path:
+    """Return writable models directory."""
+    if _IS_FROZEN:
+        # Store models in user data dir (not inside .app bundle)
+        if sys.platform == "darwin":
+            base = Path.home() / "Library" / "Application Support" / "index.life"
+        elif sys.platform == "win32":
+            base = Path(os.environ.get("APPDATA", str(Path.home()))) / "index.life"
+        else:
+            base = Path.home() / ".index-life"
+        return base / "models" / "assistant"
+    return MODULES_DIR / "assistant" / "models"
+
+
 def download_model() -> None:
     """Download the GGUF model for the assistant module if not present."""
-    models_dir = MODULES_DIR / "assistant" / "models"
+    models_dir = _get_models_dir()
     dest = models_dir / MODEL_FILENAME
 
-    # Check if any .gguf file already exists
-    if models_dir.exists():
-        existing = list(models_dir.glob("*.gguf"))
-        if existing:
-            print(f"  Model already present: {existing[0].name}")
-            return
+    # Also check bundled models dir (backwards compat)
+    bundled_dir = MODULES_DIR / "assistant" / "models"
+    for check_dir in [models_dir, bundled_dir]:
+        if check_dir.exists():
+            existing = list(check_dir.glob("*.gguf"))
+            if existing:
+                print(f"  Model already present: {existing[0].name}")
+                return
 
     print()
     print("Downloading AI model (~4.7 GB, this may take a while)...")

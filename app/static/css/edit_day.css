@@ -308,10 +308,12 @@ textarea {
   text-decoration: underline;
 }
 .wysiwyg-editor blockquote {
-  border-left: 4px solid #222;
-  padding-left: 16px;
-  margin: 8px 0;
+  border-left: 4px solid #b0b0b0;
+  padding: 8px 16px;
+  margin: 12px 0;
   color: #555;
+  background: #f7f7f7;
+  border-radius: 0 4px 4px 0;
 }
 .wysiwyg-editor hr {
   border: none;
@@ -388,10 +390,12 @@ textarea {
   padding: 0;
 }
 .preview-block blockquote {
-  border-left: 4px solid #222;
-  padding-left: 16px;
-  margin: 8px 0;
+  border-left: 4px solid #b0b0b0;
+  padding: 8px 16px;
+  margin: 12px 0;
   color: #555;
+  background: #f7f7f7;
+  border-radius: 0 4px 4px 0;
 }
 .preview-block a {
   color: #009AFA;

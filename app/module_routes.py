@@ -395,7 +395,9 @@ def install_stream():
 @bp.route('/modules/install/status')
 def install_status_route():
     """JSON endpoint for polling install status."""
-    return jsonify({
+    # If ?lines=1, also include all buffered output lines
+    include_lines = request.args.get('lines', '0') == '1'
+    result = {
         'running': _install_status['running'],
         'module': _install_status['module'],
         'done': _install_status['done'],
@@ -403,4 +405,7 @@ def install_status_route():
         'verified': _install_status['verified'],
         'error': _install_status['error'],
         'line_count': len(_install_status['lines']),
-    })
+    }
+    if include_lines:
+        result['lines'] = _install_status['lines']
+    return jsonify(result)
