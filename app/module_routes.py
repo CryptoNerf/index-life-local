@@ -101,20 +101,26 @@ def _find_python() -> str:
 def _find_install_script() -> Path:
     """Locate tools/install_modules.py."""
     if getattr(sys, 'frozen', False):
-        exe = Path(sys.executable)
-        base = exe.parent  # Contents/MacOS/ (macOS .app) or dist dir (Windows/Linux)
+        exe = Path(sys.executable).resolve()  # resolve symlinks
+        base = exe.parent
 
         candidates = [
-            # macOS .app bundle: Contents/Frameworks/_internal/tools/...
-            base.parent / 'Frameworks' / '_internal' / 'tools' / 'install_modules.py',
-            base.parent / 'Frameworks' / 'tools' / 'install_modules.py',
-            # macOS .app bundle: Contents/Resources/tools/...
-            base.parent / 'Resources' / '_internal' / 'tools' / 'install_modules.py',
-            base.parent / 'Resources' / 'tools' / 'install_modules.py',
-            # Windows/Linux one-dir: exe_dir/_internal/tools/...
+            # macOS .app bundle: exe is in Contents/Frameworks/ (after symlink resolve)
             base / '_internal' / 'tools' / 'install_modules.py',
             base / 'tools' / 'install_modules.py',
+            # macOS .app bundle: exe symlink in Contents/MacOS/ → ../Frameworks/
+            base.parent / 'Frameworks' / '_internal' / 'tools' / 'install_modules.py',
+            base.parent / 'Frameworks' / 'tools' / 'install_modules.py',
+            base.parent / 'Resources' / '_internal' / 'tools' / 'install_modules.py',
+            base.parent / 'Resources' / 'tools' / 'install_modules.py',
         ]
+
+        # Also try sys._MEIPASS if available (PyInstaller one-file mode)
+        meipass = getattr(sys, '_MEIPASS', None)
+        if meipass:
+            mp = Path(meipass)
+            candidates.insert(0, mp / 'tools' / 'install_modules.py')
+            candidates.insert(1, mp / '_internal' / 'tools' / 'install_modules.py')
     else:
         from config import BASE_DIR
         candidates = [BASE_DIR / 'tools' / 'install_modules.py']

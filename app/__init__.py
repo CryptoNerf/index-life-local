@@ -173,6 +173,16 @@ def create_app(config_class='config.Config'):
     upload_folder = Path(app.config['UPLOAD_FOLDER'])
     upload_folder.mkdir(parents=True, exist_ok=True)
 
+    # Migrate profile photos from old location (app/static/profile_photos/)
+    old_photos = Path(app.root_path) / 'static' / 'profile_photos'
+    if old_photos.is_dir() and old_photos != upload_folder:
+        import shutil
+        for f in old_photos.iterdir():
+            if f.is_file() and f.name != '.gitkeep':
+                dest = upload_folder / f.name
+                if not dest.exists():
+                    shutil.copy2(f, dest)
+
     # Initialize extensions
     db.init_app(app)
 

@@ -33,6 +33,7 @@ index-life_exe/
 # User uploads
 app/static/profile_photos/*
 !app/static/profile_photos/.gitkeep
+profile_photos/
 
 # IDE
 .vscode/

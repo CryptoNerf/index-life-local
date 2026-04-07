@@ -2,7 +2,7 @@
 Routes for local diary application
 Single-user version (no authentication)
 """
-from flask import Blueprint, render_template, request, redirect, url_for, flash, make_response
+from flask import Blueprint, render_template, request, redirect, url_for, flash, make_response, send_from_directory, current_app
 from datetime import datetime, date
 import calendar
 from werkzeug.utils import secure_filename
@@ -14,6 +14,13 @@ from app import db
 from app.models import MoodEntry, UserProfile, SyncMeta
 
 bp = Blueprint('main', __name__)
+
+
+@bp.route('/profile_photos/<filename>')
+def profile_photo(filename):
+    """Serve profile photos from the data directory."""
+    upload_dir = Path(current_app.config['UPLOAD_FOLDER'])
+    return send_from_directory(upload_dir, filename)
 
 
 def allowed_file(filename, allowed_extensions):
