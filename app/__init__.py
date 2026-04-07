@@ -164,10 +164,47 @@ def _run_migrations(app):
 
 # ── App factory ───────────────────────────────────────────────
 
+def _get_data_dir() -> Path:
+    """Return writable data directory.
+
+    In frozen (PyInstaller) builds the .app/.exe bundle is often read-only,
+    so we store user data in a platform-specific user directory.
+    In source mode we keep everything in the project root.
+    """
+    import sys as _sys, os as _os
+    if getattr(_sys, 'frozen', False):
+        if _sys.platform == 'darwin':
+            d = Path.home() / 'Library' / 'Application Support' / 'index.life'
+        elif _sys.platform == 'win32':
+            d = Path(_os.environ.get('APPDATA', str(Path.home()))) / 'index.life'
+        else:
+            d = Path.home() / '.index-life'
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+    # Source checkout — project root
+    from config import BASE_DIR
+    return BASE_DIR
+
+
 def create_app(config_class='config.Config'):
     """Create and configure Flask application"""
     app = Flask(__name__)
     app.config.from_object(config_class)
+
+    # ── Override data paths for frozen builds ─────────────────
+    # config.py may resolve paths incorrectly inside a PyInstaller
+    # bundle, so we always recompute DATA_DIR here where sys.frozen
+    # is guaranteed to be set.
+    data_dir = _get_data_dir()
+    db_path = data_dir / 'diary.db'
+    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+    app.config['DB_PATH'] = db_path
+    app.config['BACKUP_DIR'] = data_dir / 'backups'
+    app.config['UPLOAD_FOLDER'] = data_dir / 'profile_photos'
+    app.config['DATA_DIR'] = data_dir
+
+    log.info('Data directory: %s', data_dir)
+    log.info('Database: %s', db_path)
 
     # Ensure upload folder exists
     upload_folder = Path(app.config['UPLOAD_FOLDER'])

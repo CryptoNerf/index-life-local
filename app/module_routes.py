@@ -100,37 +100,65 @@ def _find_python() -> str:
 
 def _find_install_script() -> Path:
     """Locate tools/install_modules.py."""
+    import logging
+    _log = logging.getLogger(__name__)
+
     if getattr(sys, 'frozen', False):
-        exe = Path(sys.executable).resolve()  # resolve symlinks
-        base = exe.parent
+        exe = Path(sys.executable)
+        exe_resolved = exe.resolve()  # resolve symlinks
+        _log.info('_find_install_script: sys.executable=%s resolved=%s', exe, exe_resolved)
 
-        candidates = [
-            # macOS .app bundle: exe is in Contents/Frameworks/ (after symlink resolve)
-            base / '_internal' / 'tools' / 'install_modules.py',
-            base / 'tools' / 'install_modules.py',
-            # macOS .app bundle: exe symlink in Contents/MacOS/ → ../Frameworks/
-            base.parent / 'Frameworks' / '_internal' / 'tools' / 'install_modules.py',
-            base.parent / 'Frameworks' / 'tools' / 'install_modules.py',
-            base.parent / 'Resources' / '_internal' / 'tools' / 'install_modules.py',
-            base.parent / 'Resources' / 'tools' / 'install_modules.py',
-        ]
+        candidates = []
 
-        # Also try sys._MEIPASS if available (PyInstaller one-file mode)
+        # Try sys._MEIPASS first (PyInstaller sets this)
         meipass = getattr(sys, '_MEIPASS', None)
         if meipass:
             mp = Path(meipass)
-            candidates.insert(0, mp / 'tools' / 'install_modules.py')
-            candidates.insert(1, mp / '_internal' / 'tools' / 'install_modules.py')
+            candidates.append(mp / 'tools' / 'install_modules.py')
+            candidates.append(mp / '_internal' / 'tools' / 'install_modules.py')
+
+        # Resolved exe location (Contents/Frameworks/ on macOS after symlink resolve)
+        for base in {exe_resolved.parent, exe.parent}:
+            candidates.extend([
+                base / '_internal' / 'tools' / 'install_modules.py',
+                base / 'tools' / 'install_modules.py',
+            ])
+
+        # Walk up to Contents/ and check all subdirectories
+        for base in {exe_resolved.parent, exe.parent}:
+            contents = base.parent  # likely Contents/
+            if contents.name == 'Contents' or contents.name == 'Frameworks':
+                if contents.name == 'Frameworks':
+                    contents = contents.parent
+                for subdir in ('Frameworks', 'Resources', 'MacOS'):
+                    d = contents / subdir
+                    candidates.extend([
+                        d / '_internal' / 'tools' / 'install_modules.py',
+                        d / 'tools' / 'install_modules.py',
+                    ])
+
+        # Deduplicate while preserving order
+        seen = set()
+        unique = []
+        for c in candidates:
+            s = str(c)
+            if s not in seen:
+                seen.add(s)
+                unique.append(c)
+        candidates = unique
+
     else:
         from config import BASE_DIR
         candidates = [BASE_DIR / 'tools' / 'install_modules.py']
 
     for c in candidates:
         if c.exists():
+            _log.info('_find_install_script: found at %s', c)
             return c
 
     # Log all checked paths for debugging
     checked = '\n'.join(f'  - {c}' for c in candidates)
+    _log.error('_find_install_script: NOT FOUND. Checked:\n%s', checked)
     raise FileNotFoundError(f'install_modules.py not found. Checked:\n{checked}')
 
 

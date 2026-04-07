@@ -35,7 +35,27 @@ def open_browser():
 
 
 def setup_logging():
-    """Configure logging to reduce Flask output noise"""
+    """Configure logging."""
+    # In frozen builds, write logs to a file for debugging
+    if getattr(sys, 'frozen', False):
+        if sys.platform == 'darwin':
+            log_dir = os.path.expanduser('~/Library/Application Support/index.life')
+        elif sys.platform == 'win32':
+            log_dir = os.path.join(os.environ.get('APPDATA', os.path.expanduser('~')), 'index.life')
+        else:
+            log_dir = os.path.expanduser('~/.index-life')
+        os.makedirs(log_dir, exist_ok=True)
+        log_file = os.path.join(log_dir, 'index-life.log')
+        logging.basicConfig(
+            filename=log_file,
+            level=logging.INFO,
+            format='%(asctime)s %(name)s %(levelname)s: %(message)s',
+        )
+        logging.info('=== index.life starting (frozen) ===')
+        logging.info('sys.executable: %s', sys.executable)
+        logging.info('sys.frozen: %s', getattr(sys, 'frozen', False))
+        logging.info('sys._MEIPASS: %s', getattr(sys, '_MEIPASS', 'not set'))
+
     # Disable Flask's default request logging
     log = logging.getLogger('werkzeug')
     log.setLevel(logging.ERROR)
