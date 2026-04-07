@@ -29,8 +29,9 @@ from pathlib import Path
 # Source:  <project>/tools/install_modules.py  → parent.parent is project root
 # EXE Win: <exe_dir>/_internal/tools/install_modules.py → parent.parent is _internal
 # EXE Mac: <app>/Contents/Frameworks/tools/install_modules.py → parent.parent is Frameworks
-_script_parent = Path(__file__).resolve().parent.parent  # _internal/ or Frameworks/ or project root
-_IS_FROZEN = _script_parent.name in ("_internal", "Frameworks")
+#          OR Contents/Resources/tools/install_modules.py (symlink resolved)
+_script_parent = Path(__file__).resolve().parent.parent  # _internal/ or Frameworks/ or Resources/ or project root
+_IS_FROZEN = _script_parent.name in ("_internal", "Frameworks", "Resources")
 
 if _IS_FROZEN:
     # EXE distribution
@@ -265,8 +266,8 @@ sys.meta_path.insert(0, _BlockTorch())
 # Download utilities
 # ---------------------------------------------------------------------------
 
-def download_file(url: str, dest: Path, description: str = "") -> None:
-    """Download a file with progress indicator. Skips if dest already exists."""
+def download_file(url: str, dest: Path, description: str = "", max_retries: int = 3) -> None:
+    """Download a file with progress indicator and retry on network errors."""
     if dest.exists():
         print(f"  Already exists: {dest.name}")
         return
@@ -278,41 +279,55 @@ def download_file(url: str, dest: Path, description: str = "") -> None:
     print(f"  Downloading {label}...")
     print(f"  URL: {url}")
 
+    import time as _time
+
     _last_pct = [-1]  # mutable container for closure
 
     def progress_hook(block_num: int, block_size: int, total_size: int) -> None:
         downloaded = block_num * block_size
         if total_size > 0:
             pct = min(100, downloaded * 100 // total_size)
-            # Only print when percentage changes (avoid spamming SSE terminal)
             if pct != _last_pct[0]:
                 _last_pct[0] = pct
                 mb_done = downloaded / (1024 * 1024)
                 mb_total = total_size / (1024 * 1024)
                 print(f"  [{pct:3d}%] {mb_done:.0f}/{mb_total:.0f} MB", flush=True)
 
-    try:
-        urllib.request.urlretrieve(url, str(tmp), reporthook=progress_hook)
-        print()  # newline after progress
-        # On Windows, file may be briefly locked after download; retry rename
-        import time
-        for attempt in range(5):
-            try:
-                shutil.move(str(tmp), str(dest))
-                break
-            except PermissionError:
-                if attempt < 4:
-                    time.sleep(1)
-                else:
-                    raise
-        print(f"  Saved: {dest.name}")
-    except Exception:
+    last_error = None
+    for attempt in range(1, max_retries + 1):
+        _last_pct[0] = -1
         try:
-            if tmp.exists():
-                tmp.unlink()
-        except PermissionError:
-            print(f"  (temp file locked, please delete manually: {tmp})")
-        raise
+            urllib.request.urlretrieve(url, str(tmp), reporthook=progress_hook)
+            print()
+            # On Windows, file may be briefly locked after download; retry rename
+            for rename_attempt in range(5):
+                try:
+                    shutil.move(str(tmp), str(dest))
+                    break
+                except PermissionError:
+                    if rename_attempt < 4:
+                        _time.sleep(1)
+                    else:
+                        raise
+            print(f"  Saved: {dest.name}")
+            return  # success
+        except Exception as exc:
+            last_error = exc
+            # Clean up partial download
+            try:
+                if tmp.exists():
+                    tmp.unlink()
+            except PermissionError:
+                pass
+
+            if attempt < max_retries:
+                wait = attempt * 5
+                print(f"\n  Download error: {exc}")
+                print(f"  Retrying in {wait}s (attempt {attempt}/{max_retries})...")
+                _time.sleep(wait)
+            else:
+                print(f"\n  Download failed after {max_retries} attempts: {exc}")
+                raise
 
 
 def _get_models_dir() -> Path:
