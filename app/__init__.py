@@ -2,6 +2,7 @@
 Flask application factory
 """
 import logging
+import sys
 import uuid as _uuid
 
 from flask import Flask
@@ -204,7 +205,35 @@ def create_app(config_class='config.Config'):
     app.config['DATA_DIR'] = data_dir
 
     log.info('Data directory: %s', data_dir)
+
+    # Add modules_venv site-packages to sys.path so we can import
+    # dependencies installed by the in-app module installer.
+    modules_venv = data_dir / 'modules_venv'
+    if modules_venv.is_dir():
+        import site as _site
+        if sys.platform == 'win32':
+            sp = modules_venv / 'Lib' / 'site-packages'
+        else:
+            # Find python3.X directory inside lib/
+            lib_dir = modules_venv / 'lib'
+            sp = None
+            if lib_dir.is_dir():
+                for d in sorted(lib_dir.iterdir(), reverse=True):
+                    candidate = d / 'site-packages'
+                    if candidate.is_dir():
+                        sp = candidate
+                        break
+        if sp and sp.is_dir() and str(sp) not in sys.path:
+            sys.path.insert(0, str(sp))
+            _site.addsitedir(str(sp))
+            log.info('Added modules_venv site-packages: %s', sp)
     log.info('Database: %s', db_path)
+
+    # In frozen builds, route Flask's own logger through the root logger
+    # (root logger already writes to file via basicConfig in run.py)
+    if getattr(sys, 'frozen', False):
+        app.logger.setLevel(logging.DEBUG)
+        app.logger.propagate = True  # let Flask errors reach root → file handler
 
     # Ensure upload folder exists
     upload_folder = Path(app.config['UPLOAD_FOLDER'])
@@ -253,6 +282,38 @@ def create_app(config_class='config.Config'):
         check_for_update(app)
     except Exception:
         pass
+
+    # Catch and log all unhandled exceptions; show traceback in browser for debugging
+    import traceback as _tb
+    from werkzeug.exceptions import HTTPException
+
+    @app.errorhandler(Exception)
+    def handle_exception(e):
+        tb = _tb.format_exc()
+        # Write directly to log file — bypass all logger machinery
+        try:
+            _log_path = _get_data_dir() / 'index-life.log'
+            with open(str(_log_path), 'a') as _f:
+                from datetime import datetime as _dt
+                _f.write(f'{_dt.now()} ERROR handle_exception: {type(e).__name__}: {e}\n{tb}\n')
+        except Exception:
+            pass
+        # Also try app.logger
+        app.logger.error('handle_exception: %s\n%s', e, tb)
+        # Show traceback in browser (remove after debugging is done)
+        return f'<pre style="font-size:12px;padding:20px">{type(e).__name__}: {e}\n\n{tb}</pre>', 500
+
+    @app.errorhandler(500)
+    def handle_500(e):
+        tb = _tb.format_exc()
+        try:
+            _log_path = _get_data_dir() / 'index-life.log'
+            with open(str(_log_path), 'a') as _f:
+                from datetime import datetime as _dt
+                _f.write(f'{_dt.now()} ERROR 500: {e}\n{tb}\n')
+        except Exception:
+            pass
+        return f'<pre style="font-size:12px;padding:20px">500 Error: {e}\n\n{tb}</pre>', 500
 
     # Context processor: makes module_active() and update info available in all templates
     @app.context_processor

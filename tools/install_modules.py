@@ -26,14 +26,21 @@ from pathlib import Path
 
 
 # Detect context: EXE distribution or source checkout.
-# Source: <project>/tools/install_modules.py  → parent is project root
-# EXE:    <exe_dir>/_internal/tools/install_modules.py → parent is _internal
-_script_parent = Path(__file__).resolve().parent.parent  # _internal/ or project root
+# Source:  <project>/tools/install_modules.py  → parent.parent is project root
+# EXE Win: <exe_dir>/_internal/tools/install_modules.py → parent.parent is _internal
+# EXE Mac: <app>/Contents/Frameworks/tools/install_modules.py → parent.parent is Frameworks
+_script_parent = Path(__file__).resolve().parent.parent  # _internal/ or Frameworks/ or project root
+_IS_FROZEN = _script_parent.name in ("_internal", "Frameworks")
 
-if _script_parent.name == "_internal":
+if _IS_FROZEN:
     # EXE distribution
-    ROOT = _script_parent.parent                          # <exe_dir>/
-    MODULES_DIR = _script_parent / "app" / "modules"      # _internal/app/modules/
+    ROOT = _script_parent.parent                          # <exe_dir>/ or Contents/
+    MODULES_DIR = _script_parent / "app" / "modules"      # _internal/app/modules/ or Frameworks/app/modules/
+    # macOS .app: also check Resources/ for module files
+    if not MODULES_DIR.exists():
+        _alt = ROOT / "Resources" / "app" / "modules"
+        if _alt.exists():
+            MODULES_DIR = _alt
 else:
     # Source checkout
     ROOT = _script_parent
@@ -82,8 +89,50 @@ def discover_modules() -> list[str]:
     return sorted(found)
 
 
+def _get_modules_venv() -> Path:
+    """Return path to a dedicated venv for module dependencies.
+
+    In EXE/frozen context we always create a venv so we never hit
+    PEP 668 'externally-managed-environment' errors with Homebrew Python.
+    In source context we use the currently-running interpreter (assumed to
+    be inside the project venv already).
+    """
+    if _IS_FROZEN:
+        # EXE distribution — put venv in user data dir (never inside .app bundle)
+        if sys.platform == "darwin":
+            base = Path.home() / "Library" / "Application Support" / "index.life"
+        elif sys.platform == "win32":
+            base = Path(os.environ.get("APPDATA", str(Path.home()))) / "index.life"
+        else:
+            base = Path.home() / ".index-life"
+    else:
+        # Source checkout — put venv in project root
+        base = ROOT
+    return base / "modules_venv"
+
+
+def _ensure_modules_venv() -> Path:
+    """Create modules venv if it doesn't exist. Returns path to venv python."""
+    venv_dir = _get_modules_venv()
+    if sys.platform == "win32":
+        venv_python = venv_dir / "Scripts" / "python.exe"
+    else:
+        venv_python = venv_dir / "bin" / "python3"
+
+    if not venv_python.exists():
+        print(f"Creating modules virtual environment at {venv_dir} ...")
+        subprocess.check_call([sys.executable, "-m", "venv", str(venv_dir)])
+        # Upgrade pip in the new venv
+        subprocess.check_call([str(venv_python), "-m", "pip", "install", "--upgrade", "pip"],
+                              stdout=subprocess.DEVNULL)
+        print("Virtual environment created.")
+
+    return venv_python
+
+
 def run_pip(args: list[str], env: dict | None = None) -> None:
-    cmd = [sys.executable, "-m", "pip"] + args
+    venv_python = _ensure_modules_venv()
+    cmd = [str(venv_python), "-m", "pip"] + args
     print(">", " ".join(cmd))
     subprocess.check_call(cmd, env=env)
 
@@ -229,13 +278,18 @@ def download_file(url: str, dest: Path, description: str = "") -> None:
     print(f"  Downloading {label}...")
     print(f"  URL: {url}")
 
+    _last_pct = [-1]  # mutable container for closure
+
     def progress_hook(block_num: int, block_size: int, total_size: int) -> None:
         downloaded = block_num * block_size
         if total_size > 0:
             pct = min(100, downloaded * 100 // total_size)
-            mb_done = downloaded / (1024 * 1024)
-            mb_total = total_size / (1024 * 1024)
-            print(f"\r  [{pct:3d}%] {mb_done:.0f}/{mb_total:.0f} MB", end="", flush=True)
+            # Only print when percentage changes (avoid spamming SSE terminal)
+            if pct != _last_pct[0]:
+                _last_pct[0] = pct
+                mb_done = downloaded / (1024 * 1024)
+                mb_total = total_size / (1024 * 1024)
+                print(f"  [{pct:3d}%] {mb_done:.0f}/{mb_total:.0f} MB", flush=True)
 
     try:
         urllib.request.urlretrieve(url, str(tmp), reporthook=progress_hook)

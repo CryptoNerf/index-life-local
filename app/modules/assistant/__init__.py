@@ -20,7 +20,11 @@ REQUIRED_IMPORTS = [
 def check_dependencies():
     missing = []
     for name in REQUIRED_IMPORTS:
-        if importlib.util.find_spec(name) is None:
+        try:
+            __import__(name)
+        except (ImportError, OSError):
+            # ImportError: package not installed
+            # OSError: package found but native .so/.dll missing (e.g. llama_cpp)
             missing.append(name)
     return missing
 
