@@ -37,13 +37,14 @@
     return output.join('\n');
   }
 
-  function normalizeMarkdown(markdown, options) {
-    const settings = options || {};
-    const removeEmptyLines = settings.removeEmptyLines !== false;
+  function normalizeMarkdown(markdown) {
     let result = (markdown || '')
       .replace(/[\u200B-\u200D\uFEFF]/g, '')
       .replace(/\u00a0/g, ' ')
       .replace(/\r\n?/g, '\n');
+
+    // Collapse 3+ newlines into 2 (one blank line max)
+    result = result.replace(/\n{3,}/g, '\n\n');
 
     // Collapse blank lines between list items (ordered or unordered)
     result = result.replace(
@@ -89,6 +90,7 @@
       return line.trim();
     });
 
+    // Keep structural blank lines but prevent consecutive blank lines
     let output = [];
     let inFence = false;
 
@@ -104,24 +106,24 @@
         continue;
       }
 
-      if (removeEmptyLines) {
-        if (line === '') continue;
-        output.push(line);
-        continue;
-      }
-
       if (line === '') {
-        if (output.length && output[output.length - 1] === '') continue;
-        output.push('');
+        // Keep one blank line, skip consecutive
+        if (output.length && output[output.length - 1] !== '') {
+          output.push('');
+        }
         continue;
       }
 
       output.push(line);
     }
 
+    // Remove trailing blank lines
+    while (output.length && output[output.length - 1] === '') {
+      output.pop();
+    }
+
     result = output.join('\n');
     result = result.replace(/[ \t]+\n/g, '\n');
-    result = result.replace(/\n{3,}/g, '\n\n');
     return result.trim();
   }
 

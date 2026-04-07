@@ -172,24 +172,25 @@ textarea {
 /* ========== Formatting Toolbar ========== */
 .formatting-toolbar {
   display: flex;
-  gap: 4px;
-  padding: 8px;
+  gap: 3px;
+  padding: 6px;
   background: #f5f5f5;
   border: 1px solid #222;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: center;
 }
 .format-btn {
   background: #fff;
   color: #222;
   border: 1px solid #222;
-  padding: 6px 10px;
+  padding: 5px 8px;
   font-family: 'Times New Roman', Times, serif;
-  font-size: 14px;
+  font-size: 13px;
   cursor: pointer;
   transition: all 0.2s;
   border-radius: 3px;
-  min-width: 36px;
+  min-width: 0;
+  white-space: nowrap;
 }
 .format-btn:hover {
   background: #222;
@@ -462,13 +463,13 @@ textarea {
     padding: 3px 8px;
   }
   .formatting-toolbar {
-    padding: 6px 4px;
-    gap: 3px;
+    padding: 4px 3px;
+    gap: 2px;
   }
   .format-btn {
-    font-size: 12px;
-    padding: 4px 6px;
-    min-width: 30px;
+    font-size: 11px;
+    padding: 3px 5px;
+    min-width: 0;
   }
   .wysiwyg-editor {
     min-height: 100px;

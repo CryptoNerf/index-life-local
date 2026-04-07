@@ -114,6 +114,15 @@ function setupToolbarButtons(editor, toolbarElement) {
         case 'quote':
           editor.chain().focus().toggleBlockquote().run();
           break;
+        case 'strike':
+          editor.chain().focus().toggleStrike().run();
+          break;
+        case 'code':
+          editor.chain().focus().toggleCode().run();
+          break;
+        case 'hr':
+          editor.chain().focus().setHorizontalRule().run();
+          break;
       }
     });
   });
@@ -137,6 +146,8 @@ function updateToolbarState(editor, buttons) {
       case 'numbered':isActive = editor.isActive('orderedList'); break;
       case 'quote':   isActive = editor.isActive('blockquote'); break;
       case 'link':    isActive = editor.isActive('link'); break;
+      case 'strike':  isActive = editor.isActive('strike'); break;
+      case 'code':    isActive = editor.isActive('code'); break;
     }
 
     btn.classList.toggle('active-format', isActive);

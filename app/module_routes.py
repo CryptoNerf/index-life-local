@@ -162,8 +162,44 @@ def _find_install_script() -> Path:
     raise FileNotFoundError(f'install_modules.py not found. Checked:\n{checked}')
 
 
+def _ensure_venv_on_path():
+    """Add modules_venv site-packages to sys.path if not already there.
+
+    This is needed when the venv was created *after* the app started
+    (i.e. by the in-app installer).  create_app() adds it at startup,
+    but if it didn't exist then, we must pick it up now.
+    """
+    import site as _site
+    data_dir = current_app.config.get('DATA_DIR')
+    if not data_dir:
+        return
+    modules_venv = Path(data_dir) / 'modules_venv'
+    if not modules_venv.is_dir():
+        return
+
+    if sys.platform == 'win32':
+        sp = modules_venv / 'Lib' / 'site-packages'
+    else:
+        lib_dir = modules_venv / 'lib'
+        sp = None
+        if lib_dir.is_dir():
+            for d in sorted(lib_dir.iterdir(), reverse=True):
+                candidate = d / 'site-packages'
+                if candidate.is_dir():
+                    sp = candidate
+                    break
+
+    if sp and sp.is_dir() and str(sp) not in sys.path:
+        sys.path.insert(0, str(sp))
+        _site.addsitedir(str(sp))
+        log.info('Added modules_venv to sys.path: %s', sp)
+
+
 def _check_module_deps(module_name: str) -> list[str]:
     """Check if a module's dependencies are installed. Returns list of missing packages."""
+    # Ensure freshly-created venv is visible to this process
+    _ensure_venv_on_path()
+
     try:
         mod = importlib.import_module(f'app.modules.{module_name}')
         if hasattr(mod, 'check_dependencies'):

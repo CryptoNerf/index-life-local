@@ -48,6 +48,11 @@ def normalize_note(note):
 
     cleaned = renumber_ordered_lists(cleaned)
 
+    # Collapse runs of 2+ blank lines into a single blank line,
+    # but keep structural blank lines that Markdown needs (around
+    # blockquotes, headings, horizontal rules, etc.).
+    cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)
+
     lines = cleaned.split('\n')
     output = []
     in_fence = False
@@ -62,10 +67,20 @@ def normalize_note(note):
             output.append(line.rstrip())
             continue
 
-        if not line.strip():
+        stripped = line.strip()
+
+        # Keep blank lines that separate block-level elements
+        if not stripped:
+            # Avoid leading blank lines or consecutive blank lines
+            if output and output[-1] != '':
+                output.append('')
             continue
 
         output.append(line.rstrip())
+
+    # Remove trailing blank line(s)
+    while output and output[-1] == '':
+        output.pop()
 
     return '\n'.join(output).strip()
 
