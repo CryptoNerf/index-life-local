@@ -8,6 +8,20 @@ import sys
 import os
 import logging
 
+# Force PyInstaller to bundle these stdlib C extensions.
+# They are needed by venv ML packages (torch needs cmath,
+# sklearn needs ctypes.util, etc.) but nothing in our own code
+# imports them, so PyInstaller would otherwise strip them.
+import cmath as _cmath  # noqa: F401
+import ctypes as _ctypes  # noqa: F401
+import ctypes.util as _ctypes_util  # noqa: F401
+import decimal as _decimal  # noqa: F401
+import pickle as _pickle  # noqa: F401
+import pickletools as _pickletools  # noqa: F401
+import csv as _csv  # noqa: F401
+import statistics as _statistics  # noqa: F401
+import fractions as _fractions  # noqa: F401
+
 from app import create_app
 from config import Config
 
