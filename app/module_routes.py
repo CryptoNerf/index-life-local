@@ -7,6 +7,7 @@ import importlib
 import logging
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -44,6 +45,12 @@ MODULE_INFO = {
     },
 }
 
+# Maximum number of lines kept in terminal buffer (prevent memory bloat)
+_MAX_LINES = 2000
+
+# Regex to strip ANSI escape sequences from subprocess output
+_ANSI_RE = re.compile(r'\x1b\[[0-9;]*[A-Za-z]')
+
 # Global install state — survives across requests
 _install_lock = threading.Lock()
 _install_status = {
@@ -72,17 +79,14 @@ def _find_python() -> str:
     """Find a Python executable matching the frozen app's version.
 
     Native extensions (.so/.dylib) are ABI-specific, so the venv must
-    use the same major.minor Python as the frozen app.  If the exact
-    version isn't available we fall back to any Python 3.10+.
+    use the same major.minor Python as the frozen app.
     """
     if not getattr(sys, 'frozen', False):
         return sys.executable
 
-    # Version the frozen app was built with
     app_ver = f'{sys.version_info.major}.{sys.version_info.minor}'
 
     if platform.system() == 'Darwin':
-        # Try exact version first (Homebrew, then system)
         exact = [
             f'/opt/homebrew/bin/python{app_ver}',
             f'/usr/local/bin/python{app_ver}',
@@ -116,16 +120,17 @@ def _find_python() -> str:
             f'or via Homebrew (brew install python@{app_ver}).'
         )
 
-    # Warn if version doesn't match
+    # Warn if version doesn't match (native .so won't load)
     try:
-        out = subprocess.check_output([found, '--version'], text=True, stderr=subprocess.STDOUT).strip()
-        # "Python 3.12.13" → "3.12"
-        ver = out.split()[-1].rsplit('.', 1)[0]
+        out = subprocess.check_output(
+            [found, '--version'], text=True, stderr=subprocess.STDOUT,
+        ).strip()
+        ver = out.split()[-1].rsplit('.', 1)[0]  # "Python 3.12.13" → "3.12"
         if ver != app_ver:
             log.warning(
-                'Found Python %s but app requires %s. '
-                'Native modules may not load. Install: brew install python@%s',
-                ver, app_ver, app_ver,
+                'Found Python %s but app was built with %s — '
+                'native modules may not load.',
+                ver, app_ver,
             )
     except Exception:
         pass
@@ -135,35 +140,32 @@ def _find_python() -> str:
 
 def _find_install_script() -> Path:
     """Locate tools/install_modules.py."""
-    import logging
-    _log = logging.getLogger(__name__)
-
     if getattr(sys, 'frozen', False):
         exe = Path(sys.executable)
-        exe_resolved = exe.resolve()  # resolve symlinks
-        _log.info('_find_install_script: sys.executable=%s resolved=%s', exe, exe_resolved)
+        exe_resolved = exe.resolve()
+        log.info('_find_install_script: exe=%s resolved=%s', exe, exe_resolved)
 
         candidates = []
 
-        # Try sys._MEIPASS first (PyInstaller sets this)
+        # sys._MEIPASS (PyInstaller data dir)
         meipass = getattr(sys, '_MEIPASS', None)
         if meipass:
             mp = Path(meipass)
             candidates.append(mp / 'tools' / 'install_modules.py')
             candidates.append(mp / '_internal' / 'tools' / 'install_modules.py')
 
-        # Resolved exe location (Contents/Frameworks/ on macOS after symlink resolve)
+        # Exe dir (both resolved and unresolved)
         for base in {exe_resolved.parent, exe.parent}:
             candidates.extend([
                 base / '_internal' / 'tools' / 'install_modules.py',
                 base / 'tools' / 'install_modules.py',
             ])
 
-        # Walk up to Contents/ and check all subdirectories
+        # Walk up to Contents/ and check subdirs
         for base in {exe_resolved.parent, exe.parent}:
-            contents = base.parent  # likely Contents/
-            if contents.name == 'Contents' or contents.name == 'Frameworks':
-                if contents.name == 'Frameworks':
+            contents = base.parent
+            if contents.name in ('Contents', 'Frameworks', 'Resources'):
+                if contents.name != 'Contents':
                     contents = contents.parent
                 for subdir in ('Frameworks', 'Resources', 'MacOS'):
                     d = contents / subdir
@@ -172,7 +174,7 @@ def _find_install_script() -> Path:
                         d / 'tools' / 'install_modules.py',
                     ])
 
-        # Deduplicate while preserving order
+        # Deduplicate
         seen = set()
         unique = []
         for c in candidates:
@@ -181,29 +183,22 @@ def _find_install_script() -> Path:
                 seen.add(s)
                 unique.append(c)
         candidates = unique
-
     else:
         from config import BASE_DIR
         candidates = [BASE_DIR / 'tools' / 'install_modules.py']
 
     for c in candidates:
         if c.exists():
-            _log.info('_find_install_script: found at %s', c)
+            log.info('_find_install_script: found at %s', c)
             return c
 
-    # Log all checked paths for debugging
     checked = '\n'.join(f'  - {c}' for c in candidates)
-    _log.error('_find_install_script: NOT FOUND. Checked:\n%s', checked)
-    raise FileNotFoundError(f'install_modules.py not found. Checked:\n{checked}')
+    log.error('_find_install_script: NOT FOUND.\n%s', checked)
+    raise FileNotFoundError('Install script not found in the application bundle.')
 
 
 def _ensure_venv_on_path():
-    """Add modules_venv site-packages to sys.path if not already there.
-
-    This is needed when the venv was created *after* the app started
-    (i.e. by the in-app installer).  create_app() adds it at startup,
-    but if it didn't exist then, we must pick it up now.
-    """
+    """Add modules_venv site-packages to sys.path if not already there."""
     import site as _site
     data_dir = current_app.config.get('DATA_DIR')
     if not data_dir:
@@ -231,10 +226,8 @@ def _ensure_venv_on_path():
 
 
 def _check_module_deps(module_name: str) -> list[str]:
-    """Check if a module's dependencies are installed. Returns list of missing packages."""
-    # Ensure freshly-created venv is visible to this process
+    """Check if a module's dependencies are installed."""
     _ensure_venv_on_path()
-
     try:
         mod = importlib.import_module(f'app.modules.{module_name}')
         if hasattr(mod, 'check_dependencies'):
@@ -259,11 +252,19 @@ def _get_install_instructions() -> dict:
             'platform': 'Windows',
             'method': 'Run install_modules.bat next to the application.',
         }
-    else:
-        return {
-            'platform': f'{system} ({arch})',
-            'method': 'Run: python tools/install_modules.py --module assistant --profile auto',
-        }
+    return {
+        'platform': f'{system} ({arch})',
+        'method': 'Run: python tools/install_modules.py --module assistant --profile auto',
+    }
+
+
+def _append_line(text: str):
+    """Append a line to the install buffer, stripping ANSI codes and limiting size."""
+    cleaned = _ANSI_RE.sub('', text)
+    _install_status['lines'].append(cleaned)
+    # Keep buffer bounded
+    if len(_install_status['lines']) > _MAX_LINES:
+        _install_status['lines'] = _install_status['lines'][-_MAX_LINES:]
 
 
 # ── Routes ────────────────────────────────────────────────────
@@ -277,7 +278,6 @@ def modules_page():
     modules = []
     for name in discovered:
         info = MODULE_INFO.get(name, {})
-        # Check if deps are installed but module isn't active (needs restart)
         deps_ok = len(_check_module_deps(name)) == 0
         modules.append({
             'name': name,
@@ -314,8 +314,6 @@ def modules_page():
 @bp.route('/modules/install', methods=['POST'])
 def install_module_route():
     """Start installing a module. Returns immediately; progress via SSE."""
-    global _install_status
-
     with _install_lock:
         if _install_status['running']:
             return jsonify({'error': 'Installation already in progress'}), 409
@@ -326,7 +324,8 @@ def install_module_route():
 
         profile = request.form.get('profile', 'auto')
 
-        _install_status = {
+        # Reset state inside the lock — no race with readers
+        _install_status.update({
             'running': True,
             'module': module_name,
             'lines': [],
@@ -334,7 +333,7 @@ def install_module_route():
             'success': False,
             'verified': False,
             'error': None,
-        }
+        })
 
     thread = threading.Thread(
         target=_run_install,
@@ -348,11 +347,9 @@ def install_module_route():
 
 def _run_install(module_name: str, profile: str):
     """Run install_modules.py in a subprocess, capturing output line by line."""
-    global _install_status
-
     try:
         if getattr(sys, 'frozen', False):
-            _install_status['lines'].append(f'App executable: {sys.executable}\n')
+            _append_line(f'App executable: {sys.executable}\n')
 
         python = _find_python()
         script = _find_install_script()
@@ -361,7 +358,7 @@ def _run_install(module_name: str, profile: str):
         if module_name == 'assistant':
             cmd += ['--profile', profile]
 
-        _install_status['lines'].append(f'$ {" ".join(cmd)}\n')
+        _append_line(f'$ {" ".join(cmd)}\n')
 
         env = os.environ.copy()
         if profile == 'metal':
@@ -381,40 +378,33 @@ def _run_install(module_name: str, profile: str):
         )
 
         for line in proc.stdout:
-            _install_status['lines'].append(line)
+            _append_line(line)
 
         proc.wait()
 
         if proc.returncode == 0:
             _install_status['success'] = True
             _install_status['verified'] = True
-            _install_status['lines'].append('\nInstallation complete!\n')
-            _install_status['lines'].append('Quit and reopen the application to activate the module.\n')
+            _append_line('\nInstallation complete!\n')
         else:
             _install_status['success'] = False
             _install_status['error'] = f'Process exited with code {proc.returncode}'
-            _install_status['lines'].append(f'\nInstallation failed (exit code {proc.returncode})\n')
-            _install_status['lines'].append('You can retry or use the manual install method.\n')
+            _append_line(f'\nInstallation failed (exit code {proc.returncode})\n')
 
     except FileNotFoundError as exc:
         _install_status['success'] = False
         _install_status['error'] = str(exc)
         msg = str(exc)
-        _install_status['lines'].append(f'\nError: {msg}\n')
+        _append_line(f'\nError: {msg}\n')
         if 'python not found' in msg.lower():
-            _install_status['lines'].append(
+            _append_line(
                 'Python is required for module installation.\n'
                 'Install Python 3.10+ from python.org or run: brew install python\n'
-            )
-        elif 'install_modules' in msg.lower():
-            _install_status['lines'].append(
-                'Install script not found in the application bundle.\n'
-                'Try reinstalling the application or use the manual install method.\n'
             )
     except Exception as exc:
         _install_status['success'] = False
         _install_status['error'] = str(exc)
-        _install_status['lines'].append(f'\nError: {exc}\n')
+        _append_line(f'\nError: {exc}\n')
     finally:
         _install_status['done'] = True
         _install_status['running'] = False
@@ -428,18 +418,17 @@ def install_stream():
         while True:
             lines = _install_status['lines']
             while last_index < len(lines):
-                # Escape newlines for SSE (each data line must be one SSE data field)
                 line = lines[last_index].rstrip('\n').replace('\r', '')
                 yield f'data: {line}\n\n'
                 last_index += 1
 
             if _install_status['done']:
                 if _install_status['verified']:
-                    yield f'event: done\ndata: verified\n\n'
+                    yield 'event: done\ndata: verified\n\n'
                 elif _install_status['success']:
-                    yield f'event: done\ndata: success\n\n'
+                    yield 'event: done\ndata: success\n\n'
                 else:
-                    yield f'event: done\ndata: error\n\n'
+                    yield 'event: done\ndata: error\n\n'
                 break
 
             time.sleep(0.3)
@@ -457,7 +446,6 @@ def install_stream():
 @bp.route('/modules/install/status')
 def install_status_route():
     """JSON endpoint for polling install status."""
-    # If ?lines=1, also include all buffered output lines
     include_lines = request.args.get('lines', '0') == '1'
     result = {
         'running': _install_status['running'],
@@ -479,19 +467,17 @@ def restart_app():
     import signal
 
     def _do_restart():
-        time.sleep(0.5)  # let the response reach the browser
+        time.sleep(0.5)  # let the HTTP response reach the browser
         if sys.platform == 'darwin' and getattr(sys, 'frozen', False):
-            # macOS .app: find the .app bundle path and reopen it
             exe = Path(sys.executable).resolve()
-            # Walk up to find the .app directory
+            # Walk up to the .app bundle
             app_path = exe
             while app_path.parent != app_path:
-                if app_path.suffix == '.app':
+                if app_path.suffix == '.app' and app_path.is_dir():
                     break
                 app_path = app_path.parent
             if app_path.suffix == '.app':
                 subprocess.Popen(['open', '-n', str(app_path)])
-        # Shut down the current process
         os.kill(os.getpid(), signal.SIGTERM)
 
     thread = threading.Thread(target=_do_restart, daemon=True)

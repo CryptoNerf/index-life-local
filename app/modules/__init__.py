@@ -14,11 +14,21 @@ MODULES_DIR = Path(__file__).parent
 log = logging.getLogger(__name__)
 
 
+def _get_user_data_dir() -> Path:
+    """Return user data directory (same logic as app/__init__.py)."""
+    if sys.platform == 'darwin':
+        return Path.home() / 'Library' / 'Application Support' / 'index.life'
+    elif sys.platform == 'win32':
+        return Path(os.environ.get('APPDATA', str(Path.home()))) / 'index.life'
+    return Path.home() / '.index-life'
+
+
 def _add_local_modules_site_packages() -> None:
     """Allow optional module deps installed in a local venv to be discovered."""
     venv_raw = os.environ.get('INDEXLIFE_MODULES_VENV', '').strip()
     if getattr(sys, 'frozen', False):
-        base_dir = Path(sys.executable).resolve().parent
+        # Frozen builds store venv in user data dir, not inside .app bundle
+        base_dir = _get_user_data_dir()
     else:
         base_dir = MODULES_DIR.parent.parent
 
