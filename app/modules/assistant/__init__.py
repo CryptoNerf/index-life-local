@@ -1,4 +1,5 @@
 """AI Psychologist module using llama-cpp-python."""
+import sys
 from flask import Blueprint
 
 bp = Blueprint(
@@ -9,7 +10,7 @@ bp = Blueprint(
     static_url_path='/modules/assistant/static'
 )
 
-REQUIRED_IMPORTS = [
+REQUIRED_PACKAGES = [
     'llama_cpp',
     'sentence_transformers',
     'numpy',
@@ -17,14 +18,18 @@ REQUIRED_IMPORTS = [
 
 
 def check_dependencies():
-    """Check if required packages are actually importable."""
+    """Check if required packages are installed."""
+    if getattr(sys, 'frozen', False):
+        from app.modules import check_packages_in_venv
+        return check_packages_in_venv(REQUIRED_PACKAGES)
+
     import logging
     _log = logging.getLogger(__name__)
     missing = []
-    for name in REQUIRED_IMPORTS:
+    for name in REQUIRED_PACKAGES:
         try:
             __import__(name)
-        except (ImportError, OSError) as exc:
+        except Exception as exc:
             _log.warning('check_dependencies: %s failed: %s', name, exc)
             missing.append(name)
     return missing

@@ -1,4 +1,5 @@
 """Deep Mind — neural topic map visualization module."""
+import sys
 from flask import Blueprint
 
 bp = Blueprint(
@@ -9,15 +10,19 @@ bp = Blueprint(
     static_url_path='/modules/deep_mind/static',
 )
 
-REQUIRED_IMPORTS = ['numpy', 'sklearn']
+REQUIRED_PACKAGES = ['numpy', 'sklearn']
 
 
 def check_dependencies():
-    """Check if required packages are actually importable."""
+    """Check if required packages are installed."""
+    if getattr(sys, 'frozen', False):
+        from app.modules import check_packages_in_venv
+        return check_packages_in_venv(REQUIRED_PACKAGES)
+
     import logging
     _log = logging.getLogger(__name__)
     missing = []
-    for name in REQUIRED_IMPORTS:
+    for name in REQUIRED_PACKAGES:
         try:
             __import__(name)
         except (ImportError, OSError) as exc:

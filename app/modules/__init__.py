@@ -125,6 +125,44 @@ def _add_local_modules_site_packages() -> None:
         site.addsitedir(str(sp))
 
 
+def check_packages_in_venv(package_names: list[str]) -> list[str]:
+    """Check if packages exist in the modules_venv site-packages (frozen builds).
+
+    Returns list of missing package names.  Uses file-system checks only —
+    no imports — to avoid triggering heavy import chains that conflict
+    with PyInstaller's FrozenImporter.
+    """
+    data_dir = _get_user_data_dir()
+    venv = data_dir / 'modules_venv'
+    if not venv.is_dir():
+        return list(package_names)
+
+    sp = None
+    lib_dir = venv / 'lib'
+    if lib_dir.is_dir():
+        for d in sorted(lib_dir.iterdir(), reverse=True):
+            candidate = d / 'site-packages'
+            if candidate.is_dir():
+                sp = candidate
+                break
+    if sp is None:
+        sp = venv / 'Lib' / 'site-packages'
+    if not sp.is_dir():
+        return list(package_names)
+
+    missing = []
+    for name in package_names:
+        pkg_dir = sp / name
+        has_dir = pkg_dir.is_dir()
+        has_file = (sp / f'{name}.py').exists()
+        # Handle dashes vs underscores in dist-info names
+        has_dist = any(sp.glob(f'{name.replace("_", "[-_]")}*dist-info'))
+        if not (has_dir or has_file or has_dist):
+            log.info('check_packages_in_venv: %s NOT found in %s', name, sp)
+            missing.append(name)
+    return missing
+
+
 def discover_modules():
     """Return list of module names whose folders exist."""
     found = []
