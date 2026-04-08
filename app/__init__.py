@@ -163,6 +163,58 @@ def _run_migrations(app):
             conn.commit()
 
 
+def _add_system_stdlib(venv_dir: Path):
+    """Add system Python stdlib to sys.path for frozen builds.
+
+    PyInstaller strips stdlib modules (pickletools, etc.) that heavy
+    venv packages like torch/diskcache need.  We read the venv's
+    pyvenv.cfg to locate the system Python and add its stdlib.
+    """
+    cfg = venv_dir / 'pyvenv.cfg'
+    if not cfg.exists():
+        log.warning('_add_system_stdlib: pyvenv.cfg not found in %s', venv_dir)
+        return
+    try:
+        cfg_text = cfg.read_text(encoding='utf-8', errors='ignore')
+        home_line = next(
+            (l for l in cfg_text.splitlines()
+             if l.strip().lower().startswith('home')), ''
+        )
+        if not home_line:
+            log.warning('_add_system_stdlib: no "home" key in pyvenv.cfg')
+            return
+
+        _, home_val = home_line.split('=', 1)
+        python_home = Path(home_val.strip())  # e.g. /opt/homebrew/opt/python@3.12/bin
+        log.info('_add_system_stdlib: python_home=%s', python_home)
+
+        search_roots = [python_home.parent, python_home]
+
+        # macOS Homebrew: Frameworks/Python.framework/Versions/3.X/lib/
+        fw = python_home.parent / 'Frameworks' / 'Python.framework'
+        if fw.is_dir():
+            for ver_dir in sorted(fw.glob('Versions/3.*'), reverse=True):
+                search_roots.insert(0, ver_dir)
+
+        for root in search_roots:
+            # Windows: root/Lib
+            win_lib = root / 'Lib'
+            if win_lib.is_dir() and (win_lib / 'os.py').exists():
+                sys.path.insert(0, str(win_lib))
+                log.info('Added system stdlib: %s', win_lib)
+                return
+            # Unix: root/lib/python3.X
+            for p in sorted(root.glob('lib/python3.*'), reverse=True):
+                if p.is_dir() and (p / 'os.py').exists():
+                    sys.path.insert(0, str(p))
+                    log.info('Added system stdlib: %s', p)
+                    return
+
+        log.warning('_add_system_stdlib: could not find stdlib from home=%s', python_home)
+    except Exception as exc:
+        log.warning('_add_system_stdlib failed: %s', exc)
+
+
 # ── App factory ───────────────────────────────────────────────
 
 def _get_data_dir() -> Path:
@@ -227,6 +279,13 @@ def create_app(config_class='config.Config'):
             sys.path.insert(0, str(sp))
             _site.addsitedir(str(sp))
             log.info('Added modules_venv site-packages: %s', sp)
+
+        # In frozen builds PyInstaller strips stdlib modules that venv
+        # packages need (pickletools, jinja2.meta, etc.).  Add the
+        # system Python's stdlib from the venv's pyvenv.cfg "home" key.
+        if getattr(sys, 'frozen', False):
+            _add_system_stdlib(modules_venv)
+
     log.info('Database: %s', db_path)
 
     # In frozen builds, route Flask's own logger through the root logger

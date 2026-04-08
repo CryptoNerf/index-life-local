@@ -59,12 +59,17 @@ def _add_local_modules_site_packages() -> None:
     # In frozen exe, PyInstaller bundles a stripped stdlib.  Heavy deps like
     # torch need modules that were excluded (pickletools, importlib.resources …).
     # Use pyvenv.cfg "home" key to find the system Python and add its stdlib.
-    if getattr(sys, 'frozen', False) and cfg.exists():
+    _is_frozen = getattr(sys, 'frozen', False)
+    _cfg_ok = cfg.exists()
+    log.info('stdlib patch: frozen=%s cfg_exists=%s venv_dir=%s', _is_frozen, _cfg_ok, venv_dir)
+    if _is_frozen and _cfg_ok:
         try:
+            cfg_text = cfg.read_text(encoding='utf-8', errors='ignore')
             home_line = next(
-                (l for l in cfg.read_text(encoding='utf-8', errors='ignore').splitlines()
+                (l for l in cfg_text.splitlines()
                  if l.strip().lower().startswith('home')), ''
             )
+            log.info('stdlib patch: home_line=%r', home_line)
             if home_line:
                 _, home_val = home_line.split('=', 1)
                 python_home = Path(home_val.strip())
@@ -82,6 +87,8 @@ def _add_local_modules_site_packages() -> None:
                 if fw.is_dir():
                     for ver_dir in sorted(fw.glob('Versions/3.*'), reverse=True):
                         search_roots.insert(0, ver_dir)
+
+                log.info('stdlib patch: search_roots=%s', search_roots)
 
                 for root in search_roots:
                     # Windows: root/Lib
