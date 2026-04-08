@@ -67,19 +67,42 @@ def _add_local_modules_site_packages() -> None:
             )
             if home_line:
                 _, home_val = home_line.split('=', 1)
-                python_home = Path(home_val.strip())  # e.g. C:\Program Files\Python310
-                # pyvenv.cfg "home" points to the dir containing python.exe
-                # Windows: Lib is at same level  |  Linux: lib/python3.X
-                stdlib_win = python_home / 'Lib'
-                if stdlib_win.is_dir():
-                    sys.path.insert(0, str(stdlib_win))
-                    log.info('Added system stdlib: %s', stdlib_win)
-                else:
-                    for p in python_home.glob('lib/python3.*'):
-                        if p.is_dir():
+                python_home = Path(home_val.strip())
+                # pyvenv.cfg "home" points to the bin/ dir containing python exe.
+                # Stdlib locations vary by platform:
+                #   Windows:  home/../Lib/
+                #   macOS:    home/../lib/python3.X/
+                #   Linux:    home/../lib/python3.X/
+                # Also check Homebrew Frameworks path on macOS.
+                stdlib_found = False
+                search_roots = [python_home.parent, python_home]
+
+                # macOS Homebrew: Frameworks/Python.framework/Versions/3.X/lib/
+                fw = python_home.parent / 'Frameworks' / 'Python.framework'
+                if fw.is_dir():
+                    for ver_dir in sorted(fw.glob('Versions/3.*'), reverse=True):
+                        search_roots.insert(0, ver_dir)
+
+                for root in search_roots:
+                    # Windows: root/Lib
+                    win_lib = root / 'Lib'
+                    if win_lib.is_dir() and (win_lib / 'os.py').exists():
+                        sys.path.insert(0, str(win_lib))
+                        log.info('Added system stdlib: %s', win_lib)
+                        stdlib_found = True
+                        break
+                    # Unix: root/lib/python3.X
+                    for p in sorted(root.glob('lib/python3.*'), reverse=True):
+                        if p.is_dir() and (p / 'os.py').exists():
                             sys.path.insert(0, str(p))
                             log.info('Added system stdlib: %s', p)
+                            stdlib_found = True
                             break
+                    if stdlib_found:
+                        break
+
+                if not stdlib_found:
+                    log.warning('Could not find system stdlib from pyvenv.cfg home=%s', python_home)
         except Exception as exc:
             log.warning('Failed to add system stdlib: %s', exc)
 
