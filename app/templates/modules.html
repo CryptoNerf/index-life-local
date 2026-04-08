@@ -243,7 +243,7 @@
 
       const actions = document.getElementById('terminal-actions');
       actions.style.display = 'block';
-      actions.innerHTML = '<button class="install-btn install-btn-restart" onclick="location.reload()">Restart to activate</button>';
+      actions.innerHTML = '<button class="install-btn install-btn-restart" onclick="restartApp()">Restart app</button>';
 
       if (currentModule) {
         const card = document.getElementById('card-' + currentModule);
@@ -258,6 +258,33 @@
 
     function handleSuccess() {
       handleVerified();
+    }
+
+    function restartApp() {
+      const btn = event.target;
+      btn.disabled = true;
+      btn.textContent = 'Restarting...';
+      fetch('/modules/restart', { method: 'POST' })
+        .then(() => {
+          appendOutput('\nRestarting application...\n');
+          // Wait a bit then try to reconnect
+          setTimeout(() => { tryReconnect(0); }, 2000);
+        })
+        .catch(() => {
+          appendOutput('\nCould not restart automatically.\nPlease quit and reopen the application manually.\n');
+          btn.textContent = 'Restart app';
+          btn.disabled = false;
+        });
+    }
+
+    function tryReconnect(attempt) {
+      if (attempt > 15) {
+        appendOutput('Could not reconnect. Please reopen the application manually.\n');
+        return;
+      }
+      fetch('/modules')
+        .then(r => { if (r.ok) window.location.href = '/modules'; else throw new Error(); })
+        .catch(() => { setTimeout(() => tryReconnect(attempt + 1), 1000); });
     }
 
     function handleError() {

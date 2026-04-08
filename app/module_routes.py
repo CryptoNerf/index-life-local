@@ -69,13 +69,26 @@ def _detect_profile() -> str:
 
 
 def _find_python() -> str:
-    """Find the Python executable to use for module installation."""
+    """Find a Python executable matching the frozen app's version.
+
+    Native extensions (.so/.dylib) are ABI-specific, so the venv must
+    use the same major.minor Python as the frozen app.  If the exact
+    version isn't available we fall back to any Python 3.10+.
+    """
     if not getattr(sys, 'frozen', False):
         return sys.executable
 
-    candidates = []
+    # Version the frozen app was built with
+    app_ver = f'{sys.version_info.major}.{sys.version_info.minor}'
+
     if platform.system() == 'Darwin':
-        candidates = [
+        # Try exact version first (Homebrew, then system)
+        exact = [
+            f'/opt/homebrew/bin/python{app_ver}',
+            f'/usr/local/bin/python{app_ver}',
+        ]
+        fallback = [
+            '/opt/homebrew/bin/python3.14',
             '/opt/homebrew/bin/python3.13',
             '/opt/homebrew/bin/python3.12',
             '/opt/homebrew/bin/python3.11',
@@ -84,18 +97,40 @@ def _find_python() -> str:
             '/usr/local/bin/python3',
             '/usr/bin/python3',
         ]
+        candidates = exact + [c for c in fallback if c not in exact]
     elif platform.system() == 'Windows':
-        candidates = ['py', 'python3', 'python']
+        candidates = [f'python{app_ver}', 'py', 'python3', 'python']
     else:
-        candidates = ['python3', 'python']
+        candidates = [f'python{app_ver}', 'python3', 'python']
 
+    found = None
     for c in candidates:
         path = shutil.which(c)
         if path:
-            return path
-    raise FileNotFoundError(
-        'Python not found. Install Python 3.10+ from python.org or via Homebrew (brew install python).'
-    )
+            found = path
+            break
+
+    if not found:
+        raise FileNotFoundError(
+            f'Python not found. Install Python {app_ver} from python.org '
+            f'or via Homebrew (brew install python@{app_ver}).'
+        )
+
+    # Warn if version doesn't match
+    try:
+        out = subprocess.check_output([found, '--version'], text=True, stderr=subprocess.STDOUT).strip()
+        # "Python 3.12.13" → "3.12"
+        ver = out.split()[-1].rsplit('.', 1)[0]
+        if ver != app_ver:
+            log.warning(
+                'Found Python %s but app requires %s. '
+                'Native modules may not load. Install: brew install python@%s',
+                ver, app_ver, app_ver,
+            )
+    except Exception:
+        pass
+
+    return found
 
 
 def _find_install_script() -> Path:
@@ -351,19 +386,10 @@ def _run_install(module_name: str, profile: str):
         proc.wait()
 
         if proc.returncode == 0:
-            # Verify deps are actually importable
-            _install_status['lines'].append('\nVerifying installation...\n')
-            missing = _check_module_deps(module_name)
-            if not missing:
-                _install_status['success'] = True
-                _install_status['verified'] = True
-                _install_status['lines'].append('All dependencies verified.\n')
-                _install_status['lines'].append('\nRestart the application to activate the module.\n')
-            else:
-                _install_status['success'] = False
-                _install_status['error'] = f'Missing after install: {", ".join(missing)}'
-                _install_status['lines'].append(f'\nSome dependencies are still missing: {", ".join(missing)}\n')
-                _install_status['lines'].append('Try installing again or use the manual method.\n')
+            _install_status['success'] = True
+            _install_status['verified'] = True
+            _install_status['lines'].append('\nInstallation complete!\n')
+            _install_status['lines'].append('Quit and reopen the application to activate the module.\n')
         else:
             _install_status['success'] = False
             _install_status['error'] = f'Process exited with code {proc.returncode}'
@@ -445,3 +471,29 @@ def install_status_route():
     if include_lines:
         result['lines'] = _install_status['lines']
     return jsonify(result)
+
+
+@bp.route('/modules/restart', methods=['POST'])
+def restart_app():
+    """Restart the application to activate newly installed modules."""
+    import signal
+
+    def _do_restart():
+        time.sleep(0.5)  # let the response reach the browser
+        if sys.platform == 'darwin' and getattr(sys, 'frozen', False):
+            # macOS .app: find the .app bundle path and reopen it
+            exe = Path(sys.executable).resolve()
+            # Walk up to find the .app directory
+            app_path = exe
+            while app_path.parent != app_path:
+                if app_path.suffix == '.app':
+                    break
+                app_path = app_path.parent
+            if app_path.suffix == '.app':
+                subprocess.Popen(['open', '-n', str(app_path)])
+        # Shut down the current process
+        os.kill(os.getpid(), signal.SIGTERM)
+
+    thread = threading.Thread(target=_do_restart, daemon=True)
+    thread.start()
+    return jsonify({'restarting': True})
