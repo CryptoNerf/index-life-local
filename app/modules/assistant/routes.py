@@ -652,7 +652,8 @@ def chat():
     if profile and profile.photo_filename:
         photo_path = Path(current_app.config.get('UPLOAD_FOLDER', '')) / profile.photo_filename
         if photo_path.is_file():
-            user_avatar = f'/static/profile_photos/{profile.photo_filename}'
+            from flask import url_for
+            user_avatar = url_for('main.profile_photo', filename=profile.photo_filename)
 
     return render_template('assistant/chat.html', history=history,
                            preload_message=preload_message,
