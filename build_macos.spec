@@ -55,7 +55,8 @@ a = Analysis(
         'flask',
         'flask_sqlalchemy',
         'sqlalchemy.sql.default_comparator',
-    ] + collect_submodules('app.modules'),
+    ] + collect_submodules('app.modules')
+      + collect_submodules('jinja2'),
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

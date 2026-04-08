@@ -215,6 +215,41 @@ def _add_system_stdlib(venv_dir: Path):
         log.warning('_add_system_stdlib failed: %s', exc)
 
 
+def _unfreeze_venv_packages(site_packages: Path):
+    """Patch frozen packages so missing submodules can be found in the venv.
+
+    PyInstaller bundles packages like jinja2 for Flask but may strip
+    submodules (e.g. jinja2.meta) that ML dependencies need.  Rather than
+    evicting already-loaded modules (which would break Flask), we extend
+    the frozen package's __path__ to include the venv copy so that
+    'import jinja2.meta' finds the file in the venv.
+    """
+    if not site_packages or not site_packages.is_dir():
+        return
+
+    # Packages that commonly conflict: frozen bundle has partial copy,
+    # venv has the full version needed by ML dependencies.
+    conflict_candidates = ['jinja2', 'markupsafe', 'packaging', 'certifi']
+
+    for pkg_name in conflict_candidates:
+        venv_pkg_dir = site_packages / pkg_name
+        if not venv_pkg_dir.is_dir():
+            continue
+
+        mod = sys.modules.get(pkg_name)
+        if mod is None:
+            continue
+
+        pkg_path = getattr(mod, '__path__', None)
+        if pkg_path is None:
+            continue
+
+        venv_path_str = str(venv_pkg_dir)
+        if venv_path_str not in pkg_path:
+            pkg_path.append(venv_path_str)
+            log.info('Extended %s.__path__ with venv: %s', pkg_name, venv_path_str)
+
+
 # ── App factory ───────────────────────────────────────────────
 
 def _get_data_dir() -> Path:
@@ -275,16 +310,18 @@ def create_app(config_class='config.Config'):
                     if candidate.is_dir():
                         sp = candidate
                         break
-        if sp and sp.is_dir() and str(sp) not in sys.path:
-            sys.path.insert(0, str(sp))
-            _site.addsitedir(str(sp))
-            log.info('Added modules_venv site-packages: %s', sp)
+        if sp and sp.is_dir():
+            if str(sp) not in sys.path:
+                sys.path.insert(0, str(sp))
+                _site.addsitedir(str(sp))
+                log.info('Added modules_venv site-packages: %s', sp)
 
-        # In frozen builds PyInstaller strips stdlib modules that venv
-        # packages need (pickletools, jinja2.meta, etc.).  Add the
-        # system Python's stdlib from the venv's pyvenv.cfg "home" key.
-        if getattr(sys, 'frozen', False):
-            _add_system_stdlib(modules_venv)
+            # In frozen builds PyInstaller strips stdlib modules that venv
+            # packages need (pickletools, jinja2.meta, etc.).  Add the
+            # system Python's stdlib from the venv's pyvenv.cfg "home" key.
+            if getattr(sys, 'frozen', False):
+                _add_system_stdlib(modules_venv)
+                _unfreeze_venv_packages(sp)
 
     log.info('Database: %s', db_path)
 

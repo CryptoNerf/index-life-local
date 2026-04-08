@@ -18,11 +18,14 @@ REQUIRED_IMPORTS = [
 
 def check_dependencies():
     """Check if required packages are actually importable."""
+    import logging
+    _log = logging.getLogger(__name__)
     missing = []
     for name in REQUIRED_IMPORTS:
         try:
             __import__(name)
-        except (ImportError, OSError):
+        except (ImportError, OSError) as exc:
+            _log.warning('check_dependencies: %s failed: %s', name, exc)
             missing.append(name)
     return missing
 
