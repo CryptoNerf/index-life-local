@@ -198,7 +198,12 @@ def _find_install_script() -> Path:
 
 
 def _ensure_venv_on_path():
-    """Add modules_venv site-packages to sys.path if not already there."""
+    """Add modules_venv site-packages to sys.path if not already there.
+
+    Also applies stdlib and frozen-package fixes needed for PyInstaller
+    builds — identical to what create_app() does at startup, but callable
+    mid-session after an install creates the venv.
+    """
     import site as _site
     data_dir = current_app.config.get('DATA_DIR')
     if not data_dir:
@@ -219,10 +224,16 @@ def _ensure_venv_on_path():
                     sp = candidate
                     break
 
-    if sp and sp.is_dir() and str(sp) not in sys.path:
-        sys.path.insert(0, str(sp))
-        _site.addsitedir(str(sp))
-        log.info('Added modules_venv to sys.path: %s', sp)
+    if sp and sp.is_dir():
+        if str(sp) not in sys.path:
+            sys.path.insert(0, str(sp))
+            _site.addsitedir(str(sp))
+            log.info('Added modules_venv to sys.path: %s', sp)
+
+        if getattr(sys, 'frozen', False):
+            from app import _add_system_stdlib, _unfreeze_venv_packages
+            _add_system_stdlib(modules_venv)
+            _unfreeze_venv_packages(sp)
 
 
 def _check_module_deps(module_name: str) -> list[str]:
@@ -477,7 +488,17 @@ def restart_app():
                     break
                 app_path = app_path.parent
             if app_path.suffix == '.app':
-                subprocess.Popen(['open', '-n', str(app_path)])
+                log.info('Restart: launching %s after 2s delay', app_path)
+                # Spawn a shell that waits for us to die, then relaunches.
+                # This avoids a port conflict (old process must release the
+                # port before the new one tries to bind it).
+                subprocess.Popen(
+                    ['bash', '-c', f'sleep 2 && open "{app_path}"'],
+                    start_new_session=True,
+                )
+            else:
+                log.warning('Restart: could not find .app bundle from %s', exe)
+        log.info('Restart: sending SIGTERM to pid %d', os.getpid())
         os.kill(os.getpid(), signal.SIGTERM)
 
     thread = threading.Thread(target=_do_restart, daemon=True)
