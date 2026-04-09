@@ -293,6 +293,11 @@ def download_file(url: str, dest: Path, description: str = "", max_retries: int 
                 mb_total = total_size / (1024 * 1024)
                 print(f"  [{pct:3d}%] {mb_done:.0f}/{mb_total:.0f} MB", flush=True)
 
+    # Build a proper opener with User-Agent header to avoid 403/429 from CDNs
+    opener = urllib.request.build_opener()
+    opener.addheaders = [("User-Agent", "index-life/2.0 (https://github.com/CryptoNerf/index-life-local)")]
+    urllib.request.install_opener(opener)
+
     last_error = None
     for attempt in range(1, max_retries + 1):
         _last_pct[0] = -1
@@ -360,6 +365,28 @@ def download_model() -> None:
 
     print()
     print("Downloading AI model (~4.7 GB, this may take a while)...")
+
+    # Prefer huggingface_hub (installed via sentence-transformers).
+    # It handles rate-limits, resumable downloads, and proper auth headers.
+    venv_python = _ensure_modules_venv()
+    try:
+        subprocess.check_call([
+            str(venv_python), "-c",
+            f"from huggingface_hub import hf_hub_download; "
+            f"hf_hub_download("
+            f"  repo_id='{MODEL_HF_REPO}',"
+            f"  filename='{MODEL_FILENAME}',"
+            f"  local_dir=r'{models_dir}',"
+            f")"
+        ])
+        if dest.exists():
+            print(f"  Model download complete: {dest.name}")
+            return
+    except Exception as exc:
+        print(f"  huggingface_hub download failed: {exc}")
+        print("  Falling back to direct URL download...")
+
+    # Fallback: direct download with User-Agent header
     download_file(MODEL_URL, dest, description=f"{MODEL_FILENAME} ({MODEL_HF_REPO})")
     print("  Model download complete!")
 
@@ -559,7 +586,7 @@ def install_assistant_vulkan_prebuilt() -> None:
 
     try:
         download_file(url, wheel_dest, description="pre-built Vulkan wheel")
-        run_pip(["install", str(wheel_dest)])
+        run_pip(["install", str(wheel_dest), "--force-reinstall", "--no-deps"])
     except Exception as exc:
         print()
         print(f"WARNING: Could not download pre-built Vulkan wheel: {exc}")

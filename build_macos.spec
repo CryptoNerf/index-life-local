@@ -68,9 +68,18 @@ a = Analysis(
         'statistics',
         'fractions',
         'numbers',
+        # pywebview (native WKWebView window)
+        'webview',
+        'webview.platforms',
+        'webview.platforms.cocoa',
+        'webview.event',
+        'webview.util',
+        'webview.window',
+        'proxy_tools',
     ] + collect_submodules('app.modules')
-      + collect_submodules('jinja2'),
-    hookspath=[],
+      + collect_submodules('jinja2')
+      + collect_submodules('webview'),
+    hookspath=[str(Path(__import__('webview').__file__).parent / '__pyinstaller')],
     hooksconfig={},
     runtime_hooks=[],
     excludes=[],

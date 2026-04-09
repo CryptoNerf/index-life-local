@@ -1,12 +1,13 @@
 """
 Entry point for local index.life diary application
-Starts Flask server and opens browser automatically
+Starts Flask server and opens a native WKWebView window (pywebview).
+Falls back to browser if pywebview is not installed (dev mode without it).
 """
-import webbrowser
-from threading import Timer
 import sys
 import os
 import logging
+import threading
+import time
 
 # Force PyInstaller to bundle these stdlib C extensions.
 # They are needed by venv ML packages (torch needs cmath,
@@ -29,10 +30,10 @@ from config import Config
 # ASCII Art Banner
 BANNER = """
 
-  ,,                    ,,                         ,,    ,,      ,...     
-  db                  `7MM                       `7MM    db    .d' ""     
-                        MM                         MM          dM`        
-`7MM  `7MMpMMMb.   ,M""bMM  .gP"Ya `7M'   `MF'     MM  `7MM   mMMmm.gP"Ya 
+  ,,                    ,,                         ,,    ,,      ,...
+  db                  `7MM                       `7MM    db    .d' ""
+                        MM                         MM          dM`
+`7MM  `7MMpMMMb.   ,M""bMM  .gP"Ya `7M'   `MF'     MM  `7MM   mMMmm.gP"Ya
   MM    MM    MM ,AP    MM ,M'   Yb  `VA ,V'       MM    MM    MM ,M'   Yb
   MM    MM    MM 8MI    MM 8M""""""    XMX         MM    MM    MM 8M""""""
   MM    MM    MM `Mb    MM YM.    ,  ,V' VA.  ,,   MM    MM    MM YM.    ,
@@ -41,16 +42,8 @@ BANNER = """
 """
 
 
-def open_browser():
-    """Open browser after a short delay"""
-    url = f'http://{Config.HOST}:{Config.PORT}'
-    print(f"\n  [>] Opening browser at {url}\n")
-    webbrowser.open(url)
-
-
 def setup_logging():
     """Configure logging."""
-    # In frozen builds, write logs to a file for debugging
     if getattr(sys, 'frozen', False):
         if sys.platform == 'darwin':
             log_dir = os.path.expanduser('~/Library/Application Support/index.life')
@@ -70,9 +63,34 @@ def setup_logging():
         logging.info('sys.frozen: %s', getattr(sys, 'frozen', False))
         logging.info('sys._MEIPASS: %s', getattr(sys, '_MEIPASS', 'not set'))
 
-    # Disable Flask's default request logging
-    log = logging.getLogger('werkzeug')
-    log.setLevel(logging.ERROR)
+    # Suppress Flask request logging
+    logging.getLogger('werkzeug').setLevel(logging.ERROR)
+
+
+def _wait_for_flask(url: str, timeout: float = 15.0) -> bool:
+    """Poll until Flask is accepting connections."""
+    import urllib.request
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            urllib.request.urlopen(url, timeout=1)
+            return True
+        except Exception:
+            time.sleep(0.15)
+    return False
+
+
+def _run_flask(app) -> None:
+    """Run Flask server in a background daemon thread."""
+    try:
+        app.run(
+            host=Config.HOST,
+            port=Config.PORT,
+            debug=False,
+            use_reloader=False,
+        )
+    except Exception as exc:
+        logging.getLogger(__name__).error('Flask thread error: %s', exc)
 
 
 def main():
@@ -80,14 +98,12 @@ def main():
     # Enable UTF-8 output for Windows console
     if sys.platform == 'win32':
         try:
-            # Set console to UTF-8 mode
             os.system('chcp 65001 > nul')
-            # Also set stdout encoding
             if hasattr(sys.stdout, 'reconfigure'):
                 sys.stdout.reconfigure(encoding='utf-8')
-        except:
+        except Exception:
             pass
-    # Print beautiful banner
+
     print(BANNER)
     print(f"  Version: {Config.APP_VERSION}")
     print(f"  Database: {os.path.basename(Config.SQLALCHEMY_DATABASE_URI.replace('sqlite:///', ''))}")
@@ -96,30 +112,58 @@ def main():
     print(f"  Press Ctrl+C to stop the server")
     print(f"  {'─' * 68}\n")
 
-    # Reduce Flask logging noise
     setup_logging()
 
-    # Create Flask app
-    app = create_app()
+    flask_app = create_app()
 
-    # Open browser after 1.5 seconds
-    if Config.AUTO_OPEN_BROWSER:
-        Timer(1.5, open_browser).start()
+    # Use 127.0.0.1 explicitly for the webview URL — WKWebView can stall
+    # on DNS resolution of "localhost" on some macOS configurations.
+    server_url = f'http://127.0.0.1:{Config.PORT}'
 
-    try:
-        # Run Flask development server
-        app.run(
-            host=Config.HOST,
-            port=Config.PORT,
-            debug=Config.DEBUG,
-            use_reloader=False  # Disable reloader to prevent double browser opening
-        )
-    except KeyboardInterrupt:
-        print("\n\n[Shutdown] Shutting down server...")
-        sys.exit(0)
-    except Exception as e:
-        print(f"\n[Error] Error starting server: {e}")
+    # Start Flask in a background daemon thread so the main thread
+    # is free for the macOS UI run-loop (required by WKWebView / AppKit).
+    flask_thread = threading.Thread(target=_run_flask, args=(flask_app,), daemon=True)
+    flask_thread.start()
+
+    # Give Flask a moment to bind the port before opening the window.
+    if not _wait_for_flask(server_url):
+        print('\n[Error] Flask did not start within timeout — check logs.')
         sys.exit(1)
+
+    # --- Native window via pywebview (macOS WKWebView / Windows WebView2) ---
+    try:
+        import webview  # type: ignore
+
+        webview.create_window(
+            'index.life',
+            server_url,
+            width=1280,
+            height=800,
+            min_size=(900, 600),
+            easy_drag=False,   # default True intercepts first click for window drag
+            text_select=True,  # allow text selection like in a browser
+        )
+
+        # webview.start() blocks the main thread (macOS AppKit run-loop).
+        # It returns when the last window is closed.
+        webview.start()
+
+        # Window closed — kill the process immediately.
+        # os._exit() is safe here because the AppKit event loop has already
+        # stopped and the Flask daemon thread doesn't need graceful shutdown.
+        os._exit(0)
+
+    except ImportError:
+        # pywebview not installed — fall back to browser (dev mode without it)
+        import webbrowser
+        print(f"\n  [>] Opening browser at {server_url}\n")
+        webbrowser.open(server_url)
+        # Block until Ctrl+C
+        try:
+            flask_thread.join()
+        except KeyboardInterrupt:
+            print('\n\n[Shutdown] Shutting down...')
+            sys.exit(0)
 
 
 if __name__ == '__main__':
