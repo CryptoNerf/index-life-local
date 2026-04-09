@@ -148,10 +148,8 @@ def main():
         # It returns when the last window is closed.
         webview.start()
 
-        # Window closed — kill the process immediately.
-        # os._exit() is safe here because the AppKit event loop has already
-        # stopped and the Flask daemon thread doesn't need graceful shutdown.
-        os._exit(0)
+        # Window closed — exit cleanly.
+        sys.exit(0)
 
     except ImportError:
         # pywebview not installed — fall back to browser (dev mode without it)
