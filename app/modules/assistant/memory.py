@@ -6,12 +6,17 @@ Layer 2 (Vector): Embeddings + semantic search
 Layer 3 (Summary): Per-entry summaries + monthly overviews
 Layer 4 (Profile): Structured psychological profile (JSON)
 """
+import base64
 import hashlib
 import json
 import logging
+import os
 import re
+import subprocess
+import sys
 import threading
 from datetime import datetime
+from pathlib import Path
 
 import numpy as np
 from app import db
@@ -27,14 +32,111 @@ from .prompts import (
 
 log = logging.getLogger(__name__)
 
-# ── Embedding model (lazy-loaded) ───────────────────────────────
+# ── Embedding via subprocess ─────────────────────────────────────
+# In frozen (PyInstaller) builds, sentence_transformers cannot be
+# imported because transformers' _LazyModule conflicts with the
+# FrozenImporter.  We run the embedding model in a persistent child
+# process that uses the modules_venv Python — zero frozen-env issues.
+
+_EMBED_WORKER_CODE = r'''
+import sys, json, base64
+import numpy as np
+from sentence_transformers import SentenceTransformer
+
+model = SentenceTransformer('intfloat/multilingual-e5-small', device='cpu')
+sys.stdout.write('READY\n')
+sys.stdout.flush()
+
+for line in sys.stdin:
+    line = line.strip()
+    if not line:
+        continue
+    try:
+        req = json.loads(line)
+        vec = model.encode(req['text'], normalize_embeddings=True)
+        data = base64.b64encode(vec.astype(np.float32).tobytes()).decode()
+        sys.stdout.write(json.dumps({'ok': True, 'data': data}) + '\n')
+    except Exception as e:
+        sys.stdout.write(json.dumps({'ok': False, 'error': str(e)}) + '\n')
+    sys.stdout.flush()
+'''
+
+
+def _find_venv_python() -> Path:
+    """Locate the modules_venv Python interpreter."""
+    if sys.platform == 'darwin':
+        base = Path.home() / 'Library' / 'Application Support' / 'index.life'
+    elif sys.platform == 'win32':
+        base = Path(os.environ.get('APPDATA', str(Path.home()))) / 'index.life'
+    else:
+        base = Path.home() / '.index-life'
+
+    venv = base / 'modules_venv'
+    if sys.platform == 'win32':
+        python = venv / 'Scripts' / 'python.exe'
+    else:
+        python = venv / 'bin' / 'python3'
+
+    if not python.exists():
+        raise FileNotFoundError(f'Venv Python not found: {python}')
+    return python
+
+
+class _SubprocessEmbedder:
+    """Runs sentence-transformers in a child process (venv Python).
+
+    Communication: one JSON line per request on stdin, one JSON line
+    response on stdout.  The child stays alive for the app lifetime.
+    """
+
+    def __init__(self):
+        venv_python = _find_venv_python()
+        self._lock = threading.Lock()
+        self._proc = subprocess.Popen(
+            [str(venv_python), '-c', _EMBED_WORKER_CODE],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+        )
+        # Wait for model to load (may take 10-30s first time — downloads ~90 MB)
+        ready = self._proc.stdout.readline().strip()
+        if ready != 'READY':
+            err = self._proc.stderr.read(4096)
+            raise RuntimeError(f'Embed worker failed: {err}')
+        log.info('Subprocess embedder started (pid=%d)', self._proc.pid)
+
+    def encode(self, text: str, normalize_embeddings: bool = True) -> np.ndarray:
+        """Send text, get back float32 numpy vector."""
+        with self._lock:
+            req = json.dumps({'text': text}) + '\n'
+            self._proc.stdin.write(req)
+            self._proc.stdin.flush()
+            resp_line = self._proc.stdout.readline()
+            if not resp_line:
+                raise RuntimeError('Embed worker died unexpectedly')
+            resp = json.loads(resp_line)
+        if not resp['ok']:
+            raise RuntimeError(resp['error'])
+        return np.frombuffer(base64.b64decode(resp['data']),
+                             dtype=np.float32).copy()
+
+    def close(self):
+        if self._proc.poll() is None:
+            self._proc.terminate()
+
 
 _embed_model = None
 _embed_lock = threading.Lock()
 
 
 def _get_embed_model():
-    """Lazy-load the sentence-transformers model (thread-safe)."""
+    """Lazy-load the embedding model (thread-safe).
+
+    Frozen builds: persistent subprocess with venv Python.
+    Dev builds: direct in-process SentenceTransformer.
+    """
     global _embed_model
     if _embed_model is not None:
         return _embed_model
@@ -42,44 +144,21 @@ def _get_embed_model():
         if _embed_model is not None:
             return _embed_model
 
-        import sys
-
-        # In frozen (PyInstaller) builds, temporarily remove the
-        # FrozenImporter from sys.meta_path.  transformers uses
-        # _LazyModule which calls importlib.import_module() —
-        # FrozenImporter intercepts this and breaks the lazy-load
-        # chain.  All ML packages live in modules_venv which is
-        # already on sys.path, so PathFinder will find them.
-        removed_finders = []
         if getattr(sys, 'frozen', False):
-            removed_finders = [
-                f for f in sys.meta_path
-                if type(f).__name__ == 'FrozenImporter'
-            ]
-            for f in removed_finders:
-                sys.meta_path.remove(f)
-            log.info('Temporarily removed %d FrozenImporter(s) for ML imports',
-                     len(removed_finders))
-
-        try:
+            _embed_model = _SubprocessEmbedder()
+        else:
             from sentence_transformers import SentenceTransformer
             _embed_model = SentenceTransformer(
                 'intfloat/multilingual-e5-small',
                 device='cpu',
             )
-            log.info('Embedding model loaded: multilingual-e5-small')
-        finally:
-            # Restore frozen finders so the rest of the app keeps working
-            for f in removed_finders:
-                sys.meta_path.append(f)
-
+        log.info('Embedding model ready')
     return _embed_model
 
 
 def embed_text(text: str) -> np.ndarray:
     """Create embedding for a text string."""
     model = _get_embed_model()
-    # multilingual-e5 expects "query: " or "passage: " prefix
     return model.encode(f'passage: {text}', normalize_embeddings=True)
 
 

@@ -139,13 +139,18 @@ def main():
     if webview is not None:
         import signal
 
-        # Cmd+Q on macOS triggers AppKit shutdown. During cleanup PyObjC
+        # Cmd+Q on macOS triggers AppKit shutdown.  During cleanup PyObjC
         # bridged objects are finalized after their ObjC counterparts are
         # already released → segfault → "quit unexpectedly" dialog.
-        # Prevent this by intercepting every exit path with os._exit()
-        # which skips Python's object finalization entirely.
-        signal.signal(signal.SIGINT, lambda *_: os._exit(0))
-        signal.signal(signal.SIGTERM, lambda *_: os._exit(0))
+        #
+        # Defence in depth — catch every possible exit path:
+        #   1. SIGINT / SIGTERM — normal termination signals
+        #   2. SIGSEGV / SIGABRT — native crash from PyObjC / AppKit
+        #   3. SystemExit — raised by sys.exit() inside pywebview
+        #   4. finally → os._exit(0) — last resort after webview.start()
+        for sig in (signal.SIGINT, signal.SIGTERM,
+                    signal.SIGSEGV, signal.SIGABRT):
+            signal.signal(sig, lambda *_: os._exit(0))
 
         webview.create_window(
             'index.life',
@@ -158,12 +163,10 @@ def main():
         )
 
         try:
-            # webview.start() blocks the main thread (macOS AppKit run-loop).
             webview.start()
         except SystemExit:
             pass
         finally:
-            # Skip Python finalization — daemon Flask thread dies automatically.
             os._exit(0)
     else:
         # pywebview not installed — fall back to browser (dev mode without it)
