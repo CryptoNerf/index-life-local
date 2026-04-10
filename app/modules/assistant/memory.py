@@ -41,12 +41,38 @@ def _get_embed_model():
     with _embed_lock:
         if _embed_model is not None:
             return _embed_model
-        from sentence_transformers import SentenceTransformer
-        _embed_model = SentenceTransformer(
-            'intfloat/multilingual-e5-small',
-            device='cpu',
-        )
-        log.info('Embedding model loaded: multilingual-e5-small')
+
+        import sys
+
+        # In frozen (PyInstaller) builds, temporarily remove the
+        # FrozenImporter from sys.meta_path.  transformers uses
+        # _LazyModule which calls importlib.import_module() —
+        # FrozenImporter intercepts this and breaks the lazy-load
+        # chain.  All ML packages live in modules_venv which is
+        # already on sys.path, so PathFinder will find them.
+        removed_finders = []
+        if getattr(sys, 'frozen', False):
+            removed_finders = [
+                f for f in sys.meta_path
+                if type(f).__name__ == 'FrozenImporter'
+            ]
+            for f in removed_finders:
+                sys.meta_path.remove(f)
+            log.info('Temporarily removed %d FrozenImporter(s) for ML imports',
+                     len(removed_finders))
+
+        try:
+            from sentence_transformers import SentenceTransformer
+            _embed_model = SentenceTransformer(
+                'intfloat/multilingual-e5-small',
+                device='cpu',
+            )
+            log.info('Embedding model loaded: multilingual-e5-small')
+        finally:
+            # Restore frozen finders so the rest of the app keeps working
+            for f in removed_finders:
+                sys.meta_path.append(f)
+
     return _embed_model
 
 
