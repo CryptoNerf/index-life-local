@@ -133,6 +133,19 @@ def main():
     # --- Native window via pywebview (macOS WKWebView / Windows WebView2) ---
     try:
         import webview  # type: ignore
+    except ImportError:
+        webview = None
+
+    if webview is not None:
+        import signal
+
+        # Cmd+Q on macOS triggers AppKit shutdown. During cleanup PyObjC
+        # bridged objects are finalized after their ObjC counterparts are
+        # already released → segfault → "quit unexpectedly" dialog.
+        # Prevent this by intercepting every exit path with os._exit()
+        # which skips Python's object finalization entirely.
+        signal.signal(signal.SIGINT, lambda *_: os._exit(0))
+        signal.signal(signal.SIGTERM, lambda *_: os._exit(0))
 
         webview.create_window(
             'index.life',
@@ -144,19 +157,19 @@ def main():
             text_select=True,  # allow text selection like in a browser
         )
 
-        # webview.start() blocks the main thread (macOS AppKit run-loop).
-        # It returns when the last window is closed.
-        webview.start()
-
-        # Window closed — exit cleanly.
-        sys.exit(0)
-
-    except ImportError:
+        try:
+            # webview.start() blocks the main thread (macOS AppKit run-loop).
+            webview.start()
+        except SystemExit:
+            pass
+        finally:
+            # Skip Python finalization — daemon Flask thread dies automatically.
+            os._exit(0)
+    else:
         # pywebview not installed — fall back to browser (dev mode without it)
         import webbrowser
         print(f"\n  [>] Opening browser at {server_url}\n")
         webbrowser.open(server_url)
-        # Block until Ctrl+C
         try:
             flask_thread.join()
         except KeyboardInterrupt:
