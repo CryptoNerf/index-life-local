@@ -138,21 +138,10 @@ def main():
 
     if webview is not None:
         import signal
+        signal.signal(signal.SIGINT, lambda *_: os._exit(0))
+        signal.signal(signal.SIGTERM, lambda *_: os._exit(0))
 
-        # Cmd+Q on macOS triggers AppKit shutdown.  During cleanup PyObjC
-        # bridged objects are finalized after their ObjC counterparts are
-        # already released → segfault → "quit unexpectedly" dialog.
-        #
-        # Defence in depth — catch every possible exit path:
-        #   1. SIGINT / SIGTERM — normal termination signals
-        #   2. SIGSEGV / SIGABRT — native crash from PyObjC / AppKit
-        #   3. SystemExit — raised by sys.exit() inside pywebview
-        #   4. finally → os._exit(0) — last resort after webview.start()
-        for sig in (signal.SIGINT, signal.SIGTERM,
-                    signal.SIGSEGV, signal.SIGABRT):
-            signal.signal(sig, lambda *_: os._exit(0))
-
-        webview.create_window(
+        window = webview.create_window(
             'index.life',
             server_url,
             width=1280,
@@ -161,6 +150,12 @@ def main():
             easy_drag=False,   # default True intercepts first click for window drag
             text_select=True,  # allow text selection like in a browser
         )
+
+        # Intercept window close BEFORE AppKit starts finalizing PyObjC
+        # objects.  The `closing` event fires while the window is still
+        # alive — calling os._exit(0) here kills the process cleanly
+        # before the crash-prone cleanup code runs.
+        window.events.closing += lambda: os._exit(0)
 
         try:
             webview.start()
