@@ -5,8 +5,7 @@ import math
 from datetime import date, timedelta
 from collections import Counter
 
-import numpy as np
-from flask import render_template, redirect, url_for, current_app
+from flask import render_template, redirect, url_for
 
 from app import db
 from app.models import MoodEntry
@@ -359,6 +358,404 @@ def spiral(year=None):
         dots=dots,
         month_marks=month_marks,
         today_dot=today_dot,
+    )
+
+
+# ── Rhythm: weekday × month heatmap ──────────────────────────
+
+@bp.route('/insights/rhythm')
+@bp.route('/insights/rhythm/<int:year>')
+def rhythm(year=None):
+    today = date.today()
+    if year is None:
+        year = today.year
+
+    available_years = _available_years(today)
+    if year != today.year and year not in available_years:
+        return redirect(url_for('insights.rhythm', year=today.year))
+
+    entries = MoodEntry.query.filter(
+        db.extract('year', MoodEntry.date) == year
+    ).all()
+
+    # Bucket: by_cell[weekday][month] = [ratings]
+    by_cell = [[[] for _ in range(12)] for _ in range(7)]
+    for e in entries:
+        by_cell[e.date.weekday()][e.date.month - 1].append(e.rating)
+
+    # Cell averages + collect valid for dynamic range
+    raw = [
+        [
+            (sum(by_cell[w][m]) / len(by_cell[w][m])) if by_cell[w][m] else None
+            for m in range(12)
+        ]
+        for w in range(7)
+    ]
+    valid_avgs = [v for row in raw for v in row if v is not None]
+
+    if valid_avgs:
+        lo_avg = min(valid_avgs)
+        hi_avg = max(valid_avgs)
+        pad = max(0.1, (hi_avg - lo_avg) * 0.05)
+        lo_scale = lo_avg - pad
+        hi_scale = hi_avg + pad
+        if hi_scale - lo_scale < 0.01:
+            lo_scale -= 0.5
+            hi_scale += 0.5
+    else:
+        lo_avg = hi_avg = 0.0
+        lo_scale = 0.0
+        hi_scale = 1.0
+
+    # Marginal averages — per weekday and per month
+    weekday_avgs = []
+    for w in range(7):
+        all_r = [r for m in range(12) for r in by_cell[w][m]]
+        weekday_avgs.append(round(sum(all_r) / len(all_r), 2) if all_r else None)
+
+    month_avgs = []
+    for m in range(12):
+        all_r = [r for w in range(7) for r in by_cell[w][m]]
+        month_avgs.append(round(sum(all_r) / len(all_r), 2) if all_r else None)
+
+    # Layout
+    cell_w = 70
+    cell_h = 46
+    pad_l = 54
+    pad_t = 38
+    pad_r = 70
+    pad_b = 44
+    width = pad_l + 12 * cell_w + pad_r
+    height = pad_t + 7 * cell_h + pad_b
+
+    month_names = ['01','02','03','04','05','06','07','08','09','10','11','12']
+    weekday_names = ['mon','tue','wed','thu','fri','sat','sun']
+
+    cells = []
+    for w in range(7):
+        for m in range(12):
+            avg = raw[w][m]
+            count = len(by_cell[w][m])
+            if avg is not None and hi_scale > lo_scale:
+                t = (avg - lo_scale) / (hi_scale - lo_scale)
+                t = max(0.0, min(1.0, t))
+                fill_opacity = round(1.0 - t * 0.85, 3)
+            else:
+                fill_opacity = None
+            cells.append({
+                'x': pad_l + m * cell_w,
+                'y': pad_t + w * cell_h,
+                'w': cell_w,
+                'h': cell_h,
+                'weekday': weekday_names[w],
+                'month': month_names[m],
+                'count': count,
+                'avg': round(avg, 2) if avg is not None else None,
+                'fill_opacity': fill_opacity,
+                'has_data': count > 0,
+                'is_weekend': w >= 5,
+            })
+
+    # Month labels (top)
+    month_labels = [
+        {'x': pad_l + m * cell_w + cell_w / 2, 'y': pad_t - 12, 'label': month_names[m]}
+        for m in range(12)
+    ]
+    # Month marginal row (bottom)
+    month_margin = [
+        {
+            'x': pad_l + m * cell_w + cell_w / 2,
+            'y': pad_t + 7 * cell_h + 20,
+            'label': ('%.1f' % month_avgs[m]) if month_avgs[m] is not None else '—',
+        }
+        for m in range(12)
+    ]
+
+    # Weekday labels (left) + weekday marginal (right)
+    weekday_labels = [
+        {'x': pad_l - 10, 'y': pad_t + w * cell_h + cell_h / 2, 'label': weekday_names[w]}
+        for w in range(7)
+    ]
+    weekday_margin = [
+        {
+            'x': pad_l + 12 * cell_w + 14,
+            'y': pad_t + w * cell_h + cell_h / 2,
+            'label': ('%.1f' % weekday_avgs[w]) if weekday_avgs[w] is not None else '—',
+        }
+        for w in range(7)
+    ]
+
+    total = len(entries)
+    overall_avg = round(sum(e.rating for e in entries) / total, 2) if total else None
+
+    return render_template(
+        'insights/insights_rhythm.html',
+        year=year, current_year=today.year,
+        available_years=available_years,
+        width=width, height=height,
+        cells=cells,
+        month_labels=month_labels, month_margin=month_margin,
+        weekday_labels=weekday_labels, weekday_margin=weekday_margin,
+        total=total, avg=overall_avg,
+        color_min=round(lo_avg, 2) if valid_avgs else None,
+        color_max=round(hi_avg, 2) if valid_avgs else None,
+    )
+
+
+# ── Polar rose: rating distribution by weekday ───────────────
+
+@bp.route('/insights/rose')
+@bp.route('/insights/rose/<int:year>')
+def rose(year=None):
+    today = date.today()
+    if year is None:
+        year = today.year
+
+    available_years = _available_years(today)
+    if year != today.year and year not in available_years:
+        return redirect(url_for('insights.rose', year=today.year))
+
+    entries = MoodEntry.query.filter(
+        db.extract('year', MoodEntry.date) == year
+    ).all()
+
+    by_weekday = [[] for _ in range(7)]
+    for e in entries:
+        by_weekday[e.date.weekday()].append(e.rating)
+
+    size = 720
+    cx = cy = size / 2
+    inner_r = 55
+    outer_r = 280
+    samples = 60
+    sigma_rating = 0.9
+    gap_rad = math.radians(4)
+    sector_width = (2 * math.pi / 7) - gap_rad
+    # Monday centered at top (-π/2)
+    first_alpha = -math.pi / 2 - sector_width / 2
+
+    names = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
+
+    # Precompute averages for dynamic color range (so narrow real-world spreads stay readable)
+    weekday_avgs = [(sum(r) / len(r)) if r else None for r in by_weekday]
+    valid_avgs = [a for a in weekday_avgs if a is not None]
+    if valid_avgs:
+        lo_avg = min(valid_avgs)
+        hi_avg = max(valid_avgs)
+        # Pad so max contrast petals don't sit at absolute extremes
+        pad = max(0.1, (hi_avg - lo_avg) * 0.05)
+        lo_scale = lo_avg - pad
+        hi_scale = hi_avg + pad
+        # If all equal, fall back to a tiny synthetic range centered on the value
+        if hi_scale - lo_scale < 0.01:
+            lo_scale -= 0.5
+            hi_scale += 0.5
+    else:
+        lo_avg = hi_avg = lo_scale = hi_scale = 0.0
+
+    petals = []
+
+    for i, (name, ratings) in enumerate(zip(names, by_weekday)):
+        count = len(ratings)
+        avg = weekday_avgs[i]
+
+        # Gaussian density over rating 1..10, evaluated at `samples` positions
+        dens = [0.0] * samples
+        for r in ratings:
+            for k in range(samples):
+                pos = 1.0 + (k / (samples - 1)) * 9
+                d = (pos - r) / sigma_rating
+                dens[k] += math.exp(-0.5 * d * d)
+        max_d = max(dens) if dens else 0.0
+        norm = [(v / max_d) if max_d > 0 else 0.0 for v in dens]
+
+        alpha_start = first_alpha + i * (sector_width + gap_rad)
+
+        # Outer density curve: angle sweeps across the sector, radius = inner + norm*(outer-inner)
+        outer_pts = []
+        for k, v in enumerate(norm):
+            alpha = alpha_start + (k / (samples - 1)) * sector_width
+            r = inner_r + v * (outer_r - inner_r)
+            outer_pts.append((
+                round(cx + r * math.cos(alpha), 2),
+                round(cy + r * math.sin(alpha), 2),
+            ))
+
+        # Inner arc (reverse angular direction) to close the shape
+        inner_pts = []
+        for k in range(samples - 1, -1, -1):
+            alpha = alpha_start + (k / (samples - 1)) * sector_width
+            inner_pts.append((
+                round(cx + inner_r * math.cos(alpha), 2),
+                round(cy + inner_r * math.sin(alpha), 2),
+            ))
+
+        # Label position — slightly outside outer_r at sector midpoint
+        mid_alpha = alpha_start + sector_width / 2
+        label_r = outer_r + 24
+        lx = cx + label_r * math.cos(mid_alpha)
+        ly = cy + label_r * math.sin(mid_alpha)
+
+        # Dynamic color: map this petal's avg to the range [lo_scale..hi_scale] of actual weekday averages.
+        # Low end (worst weekday) → black; high end (best weekday) → light.
+        if avg is not None and hi_scale > lo_scale:
+            t = (avg - lo_scale) / (hi_scale - lo_scale)  # 0 = worst, 1 = best
+            t = max(0.0, min(1.0, t))
+            fill_opacity = round(1.0 - t * 0.85, 3)
+        else:
+            fill_opacity = 0.05
+
+        petals.append({
+            'name': name,
+            'count': count,
+            'avg': round(avg, 2) if avg is not None else None,
+            'points': outer_pts + inner_pts,
+            'label_x': round(lx, 2),
+            'label_y': round(ly, 2),
+            'fill_opacity': fill_opacity,
+            'has_data': count > 0,
+        })
+
+    # Reference circles
+    ref_circles = [
+        {'r': inner_r},
+        {'r': inner_r + 0.5 * (outer_r - inner_r)},
+        {'r': outer_r},
+    ]
+
+    # Rating scale tick on the Monday sector (small "1" and "10" markers at petal edges)
+    mon_start = first_alpha
+    mon_end = first_alpha + sector_width
+    scale_ticks = [
+        {
+            'x': cx + (outer_r + 10) * math.cos(mon_start),
+            'y': cy + (outer_r + 10) * math.sin(mon_start),
+            'label': '1',
+        },
+        {
+            'x': cx + (outer_r + 10) * math.cos(mon_end),
+            'y': cy + (outer_r + 10) * math.sin(mon_end),
+            'label': '10',
+        },
+    ]
+
+    total = len(entries)
+    overall_avg = round(sum(e.rating for e in entries) / total, 2) if total else None
+
+    return render_template(
+        'insights/insights_rose.html',
+        year=year, current_year=today.year,
+        available_years=available_years,
+        size=size, cx=cx, cy=cy,
+        inner_r=inner_r, outer_r=outer_r,
+        petals=petals,
+        ref_circles=ref_circles,
+        scale_ticks=scale_ticks,
+        total=total, avg=overall_avg,
+        color_min=round(lo_avg, 2) if valid_avgs else None,
+        color_max=round(hi_avg, 2) if valid_avgs else None,
+    )
+
+
+# ── Ridgeline: rating distribution by month ──────────────────
+
+@bp.route('/insights/ridgeline')
+@bp.route('/insights/ridgeline/<int:year>')
+def ridgeline(year=None):
+    today = date.today()
+    if year is None:
+        year = today.year
+
+    available_years = _available_years(today)
+    if year != today.year and year not in available_years:
+        return redirect(url_for('insights.ridgeline', year=today.year))
+
+    # For each month, build a 10-bin histogram of ratings
+    entries = MoodEntry.query.filter(
+        db.extract('year', MoodEntry.date) == year
+    ).all()
+    by_month = [[] for _ in range(12)]
+    for e in entries:
+        by_month[e.date.month - 1].append(e.rating)
+
+    # Sampling grid: 50 evenly-spaced x positions mapped to rating 1..10
+    samples = 50
+    # Upsample each 10-bin histogram into `samples` points by gaussian smoothing
+    # of a finer grid (each bin becomes 5 mini-bins, rating 1..10 covers 50 positions)
+    ridges = []
+    month_names = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec']
+    for m in range(12):
+        ratings = by_month[m]
+        count = len(ratings)
+        # Build a 50-point distribution directly using gaussian kernel on each rating
+        # positions[k] corresponds to rating value 1 + k*(9/49) i.e. k in 0..49 → rating 1..10
+        dens = [0.0] * samples
+        sigma_rating = 0.9  # in rating units
+        step = 9.0 / (samples - 1)
+        for r in ratings:
+            for k in range(samples):
+                pos = 1.0 + k * step
+                d = (pos - r) / sigma_rating
+                dens[k] += math.exp(-0.5 * d * d)
+        # Per-month normalization so shape is comparable across sparse/dense months
+        max_d = max(dens) if dens else 0.0
+        norm = [(v / max_d) if max_d > 0 else 0.0 for v in dens]
+        avg = round(sum(ratings) / count, 2) if count else None
+        ridges.append({
+            'index': m,
+            'label': month_names[m],
+            'count': count,
+            'avg': avg,
+            'values': norm,
+        })
+
+    # Layout
+    w = 1040
+    pad_l = 70
+    pad_r = 90
+    pad_t = 36
+    pad_b = 44
+    row_step = 38
+    ridge_h = 58
+    plot_w = w - pad_l - pad_r
+    h = pad_t + 12 * row_step + ridge_h + pad_b
+
+    for r in ridges:
+        baseline = pad_t + r['index'] * row_step + ridge_h
+        # Build SVG path: move along x, y = baseline - v*ridge_h
+        pts = []
+        for k, v in enumerate(r['values']):
+            x = pad_l + (k / (samples - 1)) * plot_w
+            y = baseline - v * ridge_h
+            pts.append((round(x, 2), round(y, 2)))
+        r['path_points'] = pts
+        r['baseline'] = baseline
+        r['x_left'] = pad_l
+        r['x_right'] = pad_l + plot_w
+        r['label_x'] = pad_l - 12
+        r['label_y'] = baseline - 2
+        r['count_x'] = pad_l + plot_w + 14
+        r['count_y'] = baseline - 2
+
+    # X-axis ticks (rating 1,3,5,7,10)
+    x_ticks = []
+    for r in [1, 3, 5, 7, 10]:
+        x = pad_l + (r - 1) / 9 * plot_w
+        x_ticks.append({'x': x, 'label': r})
+    axis_y = pad_t + 12 * row_step + ridge_h + 8
+
+    total = len(entries)
+    overall_avg = round(sum(e.rating for e in entries) / total, 2) if total else None
+
+    return render_template(
+        'insights/insights_ridgeline.html',
+        year=year, current_year=today.year,
+        available_years=available_years,
+        ridges=ridges,
+        x_ticks=x_ticks,
+        axis_y=axis_y,
+        w=w, h=h, pad_l=pad_l,
+        total=total, avg=overall_avg,
     )
 
 

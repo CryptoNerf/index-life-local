@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ridgeline {{ year }}</title>
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/calendar.css') }}">
+  <link rel="stylesheet" href="{{ url_for('insights.static', filename='css/insights.css') }}">
+  <style>
+    .ridge-fill    { fill: rgba(255,255,255,0.92); }
+    .ridge-line    { fill: none; stroke: #000; stroke-width: 1.2; stroke-linejoin: round; }
+    .ridge-baseline{ stroke: #d8d8d8; stroke-width: 0.6; }
+    .ridge-label {
+      font-family: 'Times New Roman', serif;
+      font-size: 14px;
+      font-style: italic;
+      fill: #000;
+    }
+    .ridge-count {
+      font-family: 'Times New Roman', serif;
+      font-size: 12px;
+      fill: #999;
+      font-variant-numeric: tabular-nums;
+    }
+    .ridge-axis-tick {
+      font-family: 'Times New Roman', serif;
+      font-size: 13px;
+      fill: #666;
+      text-anchor: middle;
+    }
+  </style>
+</head>
+<body>
+  <header class="main-header">
+    <nav class="top-menu">
+      <a href="{{ url_for('main.mood_grid') }}" class="menu-link">index.life</a>
+      <a href="{{ url_for('main.life_calendar') }}" class="menu-link">life in weeks</a>
+      <a href="{{ url_for('insights.insights_page') }}" class="menu-link active-link">insights</a>
+      {% if module_active('assistant') %}
+        <a href="{{ url_for('assistant.chat') }}" class="menu-link">ai psychologist</a>
+      {% endif %}
+      {% if module_active('deep_mind') %}
+        <a href="{{ url_for('deep_mind.neural_map') }}" class="menu-link">neural map</a>
+      {% endif %}
+      <a href="{{ url_for('main.account') }}" class="menu-link">account</a>
+      <a href="{{ url_for('sync.sync_page') }}" class="menu-link">sync</a>
+      <a href="{{ url_for('modules.modules_page') }}" class="menu-link">modules</a>
+    </nav>
+  </header>
+
+  <main class="insights-main">
+    <div class="detail-header">
+      <a href="{{ url_for('insights.insights_page') }}" class="back-link">← insights</a>
+      <p class="insights-title">ridgeline<sup>{{ year }}</sup>{% if year != current_year %}<span class="archive-tag">(archive)</span>{% endif %}</p>
+      <p class="insights-summary">
+        {% if total %}
+          {{ total }} entries · average {{ '%.2f'|format(avg) }} / 10 — each row is one month's rating distribution, shape shows where your ratings clustered
+        {% else %}
+          no entries for this year
+        {% endif %}
+      </p>
+    </div>
+
+    <section class="chart-block">
+      <svg viewBox="0 0 {{ w }} {{ h }}" class="chart-svg" preserveAspectRatio="xMidYMid meet">
+        {% for r in ridges %}
+          {# Baseline — faint line across the ridge #}
+          <line x1="{{ r.x_left }}" y1="{{ r.baseline }}" x2="{{ r.x_right }}" y2="{{ r.baseline }}"
+                class="ridge-baseline"/>
+
+          {# Month label on the left #}
+          <text x="{{ r.label_x }}" y="{{ r.label_y }}" class="ridge-label" text-anchor="end">{{ r.label }}</text>
+
+          {% if r.count %}
+            {# Filled area under the ridge (opaque white — hides rows below) #}
+            <path d="M {{ r.x_left }} {{ r.baseline }}
+                     {% for p in r.path_points %}L {{ p[0] }} {{ p[1] }} {% endfor %}
+                     L {{ r.x_right }} {{ r.baseline }} Z"
+                  class="ridge-fill"/>
+            {# Outline of the ridge #}
+            <path d="M {{ r.x_left }} {{ r.baseline }}
+                     {% for p in r.path_points %}L {{ p[0] }} {{ p[1] }} {% endfor %}
+                     L {{ r.x_right }} {{ r.baseline }}"
+                  class="ridge-line"/>
+
+            {# Count + avg on the right #}
+            <text x="{{ r.count_x }}" y="{{ r.count_y }}" class="ridge-count" text-anchor="start">
+              {{ r.count }} · {{ '%.1f'|format(r.avg) }}
+            </text>
+          {% endif %}
+        {% endfor %}
+
+        {# X-axis labels (rating 1, 3, 5, 7, 10) #}
+        {% for t in x_ticks %}
+          <text x="{{ t.x }}" y="{{ axis_y + 12 }}" class="ridge-axis-tick">{{ t.label }}</text>
+        {% endfor %}
+      </svg>
+    </section>
+
+    {% if available_years|length > 1 %}
+      <nav class="years-nav">
+        {% for y in available_years %}
+          <a href="{{ url_for('insights.ridgeline', year=y) }}" class="year-link{% if y == year %} active{% endif %}">{{ y }}</a>
+        {% endfor %}
+      </nav>
+    {% endif %}
+  </main>
+</body>
+</html>

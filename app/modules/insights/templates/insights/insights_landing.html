@@ -75,6 +75,78 @@
         <p class="viz-card-desc">polar view of the year — each day as a point on an unwinding spiral, shaded by mood.</p>
       </a>
 
+      {# ── Rose (weekday distributions) ── #}
+      <a href="{{ url_for('insights.rose') }}" class="viz-card">
+        <div class="viz-preview">
+          <svg viewBox="0 0 120 120" preserveAspectRatio="xMidYMid meet">
+            {# 7 symbolic petals approximating the rose #}
+            {% set petal_paths = [
+              ['M60,60 Q52,40 58,18 Q60,14 62,18 Q70,42 60,60 Z', 0.75],
+              ['M60,60 Q80,48 102,40 Q106,42 102,46 Q82,58 60,60 Z', 0.50],
+              ['M60,60 Q92,66 108,86 Q108,90 104,90 Q82,82 60,60 Z', 0.35],
+              ['M60,60 Q74,78 80,104 Q78,108 74,106 Q62,84 60,60 Z', 0.85],
+              ['M60,60 Q44,78 38,100 Q40,106 44,104 Q58,82 60,60 Z', 0.65],
+              ['M60,60 Q38,72 16,92 Q12,90 16,86 Q38,68 60,60 Z', 0.55],
+              ['M60,60 Q38,52 14,42 Q12,44 14,48 Q36,56 60,60 Z', 0.40]
+            ] %}
+            <circle cx="60" cy="60" r="40" fill="none" stroke="#eaeaea" stroke-width="0.5"/>
+            {% for p in petal_paths %}
+              <path d="{{ p[0] }}" fill="rgba(0,0,0,{{ p[1] }})" stroke="#000" stroke-width="0.7"/>
+            {% endfor %}
+          </svg>
+        </div>
+        <p class="viz-card-title">rose</p>
+        <p class="viz-card-desc">seven petals, one per weekday — shape shows that weekday's rating distribution, darkness shows its average; reveals the rhythm of your week.</p>
+      </a>
+
+      {# ── Ridgeline ── #}
+      <a href="{{ url_for('insights.ridgeline') }}" class="viz-card">
+        <div class="viz-preview">
+          <svg viewBox="0 0 120 120" preserveAspectRatio="xMidYMid meet">
+            {% set ridges = [
+              [14, 'M5,14 Q20,14 30,10 Q42,4 55,8 Q70,14 85,10 Q100,4 115,12 L115,14 Z'],
+              [30, 'M5,30 Q22,30 32,22 Q48,10 62,18 Q76,26 90,18 Q102,10 115,28 L115,30 Z'],
+              [46, 'M5,46 Q18,46 28,40 Q42,30 58,34 Q72,38 86,30 Q100,22 115,44 L115,46 Z'],
+              [62, 'M5,62 Q20,62 32,54 Q46,44 60,46 Q76,50 90,42 Q102,34 115,60 L115,62 Z'],
+              [78, 'M5,78 Q22,78 34,72 Q50,64 64,66 Q78,68 92,62 Q104,56 115,76 L115,78 Z'],
+              [94, 'M5,94 Q24,94 36,88 Q52,80 66,82 Q80,84 94,78 Q106,72 115,92 L115,94 Z'],
+              [110, 'M5,110 Q26,110 38,104 Q54,98 68,100 Q82,102 96,96 Q108,90 115,108 L115,110 Z']
+            ] %}
+            {% for r in ridges %}
+              <path d="{{ r[1] }}" fill="rgba(255,255,255,0.9)" stroke="#000" stroke-width="0.7"/>
+            {% endfor %}
+          </svg>
+        </div>
+        <p class="viz-card-title">ridgeline</p>
+        <p class="viz-card-desc">twelve ridges, one per month — each ridge is that month's rating distribution; shape reveals the mood texture, not just the average.</p>
+      </a>
+
+      {# ── Rhythm (weekday × month heatmap) ── #}
+      <a href="{{ url_for('insights.rhythm') }}" class="viz-card">
+        <div class="viz-preview">
+          <svg viewBox="0 0 120 120" preserveAspectRatio="xMidYMid meet">
+            {% set rhythm_opacities = [
+              [0.70, 0.55, 0.40, 0.30, 0.50, 0.65, 0.75, 0.60, 0.45, 0.35, 0.55, 0.70],
+              [0.65, 0.50, 0.35, 0.25, 0.45, 0.60, 0.70, 0.55, 0.40, 0.30, 0.50, 0.65],
+              [0.60, 0.45, 0.30, 0.20, 0.40, 0.55, 0.65, 0.50, 0.35, 0.25, 0.45, 0.60],
+              [0.55, 0.40, 0.25, 0.15, 0.35, 0.50, 0.60, 0.45, 0.30, 0.20, 0.40, 0.55],
+              [0.50, 0.35, 0.20, 0.15, 0.30, 0.45, 0.55, 0.40, 0.25, 0.20, 0.35, 0.50],
+              [0.75, 0.60, 0.45, 0.35, 0.55, 0.70, 0.80, 0.65, 0.50, 0.40, 0.60, 0.75],
+              [0.80, 0.65, 0.50, 0.40, 0.60, 0.75, 0.85, 0.70, 0.55, 0.45, 0.65, 0.80]
+            ] %}
+            {% for row in rhythm_opacities %}
+              {% set ry = 10 + loop.index0 * 14 %}
+              {% for op in row %}
+                <rect x="{{ 6 + loop.index0 * 9 }}" y="{{ ry }}" width="8.5" height="13"
+                      fill="rgba(0,0,0,{{ op }})" stroke="#fff" stroke-width="0.6"/>
+              {% endfor %}
+            {% endfor %}
+          </svg>
+        </div>
+        <p class="viz-card-title">rhythm</p>
+        <p class="viz-card-desc">seven weekdays × twelve months — each cell is the average rating for that combination; reveals your weekly rhythm across the seasons.</p>
+      </a>
+
       {# ── Words ── #}
       <a href="{{ url_for('insights.words') }}" class="viz-card">
         <div class="viz-preview">

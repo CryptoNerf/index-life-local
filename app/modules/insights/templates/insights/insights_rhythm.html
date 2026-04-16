@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>rhythm {{ year }}</title>
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/calendar.css') }}">
+  <link rel="stylesheet" href="{{ url_for('insights.static', filename='css/insights.css') }}">
+  <style>
+    .rhythm-cell        { stroke: #fff; stroke-width: 1.2; }
+    .rhythm-cell.empty  { fill: #fff; stroke: #e4e4e4; stroke-dasharray: 2 3; }
+    .rhythm-axis-label {
+      font-family: 'Times New Roman', serif;
+      font-size: 14px;
+      fill: #000;
+      font-style: italic;
+    }
+    .rhythm-margin {
+      font-family: 'Times New Roman', serif;
+      font-size: 13px;
+      fill: #999;
+      font-variant-numeric: tabular-nums;
+    }
+    .rhythm-weekend-rule {
+      stroke: #d8d8d8;
+      stroke-width: 0.6;
+      stroke-dasharray: 2 3;
+    }
+  </style>
+</head>
+<body>
+  <header class="main-header">
+    <nav class="top-menu">
+      <a href="{{ url_for('main.mood_grid') }}" class="menu-link">index.life</a>
+      <a href="{{ url_for('main.life_calendar') }}" class="menu-link">life in weeks</a>
+      <a href="{{ url_for('insights.insights_page') }}" class="menu-link active-link">insights</a>
+      {% if module_active('assistant') %}
+        <a href="{{ url_for('assistant.chat') }}" class="menu-link">ai psychologist</a>
+      {% endif %}
+      {% if module_active('deep_mind') %}
+        <a href="{{ url_for('deep_mind.neural_map') }}" class="menu-link">neural map</a>
+      {% endif %}
+      <a href="{{ url_for('main.account') }}" class="menu-link">account</a>
+      <a href="{{ url_for('sync.sync_page') }}" class="menu-link">sync</a>
+      <a href="{{ url_for('modules.modules_page') }}" class="menu-link">modules</a>
+    </nav>
+  </header>
+
+  <main class="insights-main">
+    <div class="detail-header">
+      <a href="{{ url_for('insights.insights_page') }}" class="back-link">← insights</a>
+      <p class="insights-title">rhythm<sup>{{ year }}</sup>{% if year != current_year %}<span class="archive-tag">(archive)</span>{% endif %}</p>
+      <p class="insights-summary">
+        {% if total %}
+          {{ total }} entries · average {{ '%.2f'|format(avg) }} / 10 — every cell is the average rating for one (weekday, month) combination; the grid reveals your weekly rhythm across the seasons
+        {% else %}
+          no entries for this year
+        {% endif %}
+      </p>
+    </div>
+
+    <section class="chart-block">
+      <svg viewBox="0 0 {{ width }} {{ height }}" class="chart-svg" preserveAspectRatio="xMidYMid meet">
+        {# Separator line between weekdays and weekend for reading #}
+        {% set fri_row = cells|selectattr('weekday','equalto','fri')|first %}
+        {% if fri_row %}
+          <line x1="{{ fri_row.x }}" y1="{{ fri_row.y + fri_row.h }}"
+                x2="{{ fri_row.x + 12 * fri_row.w }}" y2="{{ fri_row.y + fri_row.h }}"
+                class="rhythm-weekend-rule"/>
+        {% endif %}
+
+        {# Heatmap cells #}
+        {% for c in cells %}
+          {% if c.has_data %}
+            <rect x="{{ c.x }}" y="{{ c.y }}" width="{{ c.w }}" height="{{ c.h }}"
+                  class="rhythm-cell"
+                  fill="rgba(0,0,0,{{ c.fill_opacity }})">
+              <title>{{ c.weekday }} · month {{ c.month }} · {{ c.count }} entries · avg {{ '%.2f'|format(c.avg) }}/10</title>
+            </rect>
+          {% else %}
+            <rect x="{{ c.x }}" y="{{ c.y }}" width="{{ c.w }}" height="{{ c.h }}"
+                  class="rhythm-cell empty">
+              <title>{{ c.weekday }} · month {{ c.month }} · no entries</title>
+            </rect>
+          {% endif %}
+        {% endfor %}
+
+        {# Month labels (top) #}
+        {% for m in month_labels %}
+          <text x="{{ m.x }}" y="{{ m.y }}" class="rhythm-axis-label" text-anchor="middle">{{ m.label }}</text>
+        {% endfor %}
+
+        {# Weekday labels (left) #}
+        {% for w in weekday_labels %}
+          <text x="{{ w.x }}" y="{{ w.y }}" class="rhythm-axis-label"
+                text-anchor="end" dominant-baseline="middle">{{ w.label }}</text>
+        {% endfor %}
+
+        {# Month marginal averages (bottom) #}
+        {% for m in month_margin %}
+          <text x="{{ m.x }}" y="{{ m.y }}" class="rhythm-margin" text-anchor="middle">{{ m.label }}</text>
+        {% endfor %}
+
+        {# Weekday marginal averages (right) #}
+        {% for w in weekday_margin %}
+          <text x="{{ w.x }}" y="{{ w.y }}" class="rhythm-margin"
+                text-anchor="start" dominant-baseline="middle">{{ w.label }}</text>
+        {% endfor %}
+      </svg>
+
+      <div class="spiral-legend">
+        <span class="legend-label">{% if color_min is not none %}{{ '%.2f'|format(color_min) }}{% else %}low{% endif %}</span>
+        <span class="legend-dot" style="width:11px;height:11px;background:rgba(0,0,0,1)"></span>
+        <span class="legend-dot" style="width:9px;height:9px;background:rgba(0,0,0,0.7)"></span>
+        <span class="legend-dot" style="width:7px;height:7px;background:rgba(0,0,0,0.45)"></span>
+        <span class="legend-dot" style="width:5px;height:5px;background:rgba(0,0,0,0.25);border:1px solid #d8d8d8"></span>
+        <span class="legend-label">{% if color_max is not none %}{{ '%.2f'|format(color_max) }}{% else %}high{% endif %}</span>
+      </div>
+      {% if color_min is not none and color_max is not none %}
+        <p style="text-align:center; color:#999; font-size:13px; font-family:'Times New Roman',serif; margin-top:6px;">
+          color scaled to the actual cell range: {{ '%.2f'|format(color_min) }} → {{ '%.2f'|format(color_max) }} · numbers on the margins are row/column averages
+        </p>
+      {% endif %}
+    </section>
+
+    {% if available_years|length > 1 %}
+      <nav class="years-nav">
+        {% for y in available_years %}
+          <a href="{{ url_for('insights.rhythm', year=y) }}" class="year-link{% if y == year %} active{% endif %}">{{ y }}</a>
+        {% endfor %}
+      </nav>
+    {% endif %}
+  </main>
+</body>
+</html>
