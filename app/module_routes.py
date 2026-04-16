@@ -28,6 +28,11 @@ bp = Blueprint('modules', __name__)
 
 # Human-readable descriptions for each module
 MODULE_INFO = {
+    'insights': {
+        'title': 'Insights',
+        'description': 'Minimalist visualizations of your mood data — heatmaps, trends and more. Some charts require the AI Psychologist module.',
+        'size': '—',
+    },
     'assistant': {
         'title': 'AI Psychologist',
         'description': 'Chat with an AI psychologist that understands your diary entries. Uses Qwen3.5-9B model with local GPU inference.',
@@ -359,6 +364,18 @@ def install_module_route():
 def _run_install(module_name: str, profile: str):
     """Run install_modules.py in a subprocess, capturing output line by line."""
     try:
+        # Insights has no pip deps — just create a sentinel file.
+        if module_name == 'insights':
+            from app.modules.insights import sentinel_path
+            p = sentinel_path()
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text('enabled\n')
+            _append_line(f'Enabled insights module (sentinel: {p})\n')
+            _install_status['success'] = True
+            _install_status['verified'] = True
+            _append_line('\nInstallation complete!\n')
+            return
+
         if getattr(sys, 'frozen', False):
             _append_line(f'App executable: {sys.executable}\n')
 

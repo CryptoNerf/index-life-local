@@ -81,7 +81,70 @@ main {
 /* ========== Calendar header section ========== */
 .calendar-header-section {
   text-align: center;
-  margin: 0 0 16px 0;
+  margin: 0 0 28px 0;
+}
+
+.calendar-title {
+  margin: 0 0 6px 0;
+}
+
+.calendar-years {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+.year-arrow,
+.year-select {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 15px;
+  padding: 6px 14px;
+  border: 1px solid #d8d8d8;
+  border-radius: 8px;
+  background: #fff;
+  color: #222;
+  line-height: 1.2;
+  transition: border-color 0.15s, color 0.15s;
+  box-sizing: border-box;
+}
+
+.year-arrow {
+  text-decoration: none;
+  display: inline-block;
+}
+
+.year-arrow:hover {
+  border-color: #009AFA;
+  color: #009AFA;
+}
+
+.year-arrow.disabled {
+  color: #bbb;
+  border-color: #eee;
+  cursor: default;
+  pointer-events: none;
+}
+
+.year-select {
+  padding-right: 32px;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%23666' stroke-width='1.4'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+}
+
+.year-select:hover {
+  border-color: #009AFA;
+}
+
+.year-select:focus {
+  outline: none;
+  border-color: #009AFA;
 }
 
 /* ========== Day Cube ========== */

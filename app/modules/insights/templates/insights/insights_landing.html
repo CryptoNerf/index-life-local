@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>insights</title>
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/calendar.css') }}">
+  <link rel="stylesheet" href="{{ url_for('insights.static', filename='css/insights.css') }}">
+</head>
+<body>
+  <header class="main-header">
+    <nav class="top-menu">
+      <a href="{{ url_for('main.mood_grid') }}" class="menu-link">index.life</a>
+      <a href="{{ url_for('main.life_calendar') }}" class="menu-link">life in weeks</a>
+      <a href="{{ url_for('insights.insights_page') }}" class="menu-link active-link">insights</a>
+      {% if module_active('assistant') %}
+        <a href="{{ url_for('assistant.chat') }}" class="menu-link">ai psychologist</a>
+      {% endif %}
+      {% if module_active('deep_mind') %}
+        <a href="{{ url_for('deep_mind.neural_map') }}" class="menu-link">neural map</a>
+      {% endif %}
+      <a href="{{ url_for('main.account') }}" class="menu-link">account</a>
+      <a href="{{ url_for('sync.sync_page') }}" class="menu-link">sync</a>
+      <a href="{{ url_for('modules.modules_page') }}" class="menu-link">modules</a>
+    </nav>
+  </header>
+
+  <main class="insights-main">
+    <div class="insights-header">
+      <p class="insights-title">insights</p>
+      <p class="insights-summary">visualizations of your mood data</p>
+    </div>
+
+    <div class="cards-grid">
+      {# ── Overview card ── #}
+      <a href="{{ url_for('insights.overview') }}" class="viz-card">
+        <div class="viz-preview">
+          <svg viewBox="0 0 {{ preview_heat.grid_w }} {{ preview_heat.grid_h }}"
+               preserveAspectRatio="xMidYMid meet">
+            {% for c in preview_heat.cells %}
+              {% if c.in_year %}
+                {% if c.rating %}
+                  <rect x="{{ c.x }}" y="{{ c.y }}" width="{{ preview_heat.cell }}" height="{{ preview_heat.cell }}"
+                        fill="rgba(0,0,0,{{ 1.0 - (c.rating - 1) / 9 * 0.85 }})"/>
+                {% else %}
+                  <rect x="{{ c.x }}" y="{{ c.y }}" width="{{ preview_heat.cell }}" height="{{ preview_heat.cell }}"
+                        fill="#fff" stroke="#d8d8d8" stroke-width="0.5"/>
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+          </svg>
+        </div>
+        <p class="viz-card-title">overview</p>
+        <p class="viz-card-desc">year heatmap, monthly averages and rating distribution — a condensed annual summary.</p>
+      </a>
+
+      {# ── Coming soon cards ── #}
+      <a href="{{ url_for('insights.spiral') }}" class="viz-card">
+        <div class="viz-preview">
+          <svg viewBox="0 0 120 120" preserveAspectRatio="xMidYMid meet">
+            <g fill="none" stroke="#000" stroke-width="1" opacity="0.75">
+              <circle cx="60" cy="60" r="8"/>
+              <circle cx="60" cy="60" r="20"/>
+              <circle cx="60" cy="60" r="32"/>
+              <circle cx="60" cy="60" r="44"/>
+            </g>
+            {% set pts = [[60,52],[68,56],[72,64],[64,72],[52,66],[48,54],[60,44],[76,50],[82,68],[70,82],[50,82],[38,64],[44,44],[62,32],[84,36],[96,58],[88,84],[60,96],[30,88],[20,62]] %}
+            {% for p in pts %}
+              <circle cx="{{ p[0] }}" cy="{{ p[1] }}" r="2" fill="#000"/>
+            {% endfor %}
+          </svg>
+        </div>
+        <p class="viz-card-title">spiral year</p>
+        <p class="viz-card-desc">polar view of the year — each day as a point on an unwinding spiral, shaded by mood.</p>
+      </a>
+
+      {# ── Words ── #}
+      <a href="{{ url_for('insights.words') }}" class="viz-card">
+        <div class="viz-preview">
+          <svg viewBox="0 0 120 120" preserveAspectRatio="xMidYMid meet">
+            {% set bars = [
+              [32, 22, 60, 0.45],
+              [28, 36, 48, 0.45],
+              [36, 50, 38, 0.45],
+              [40, 68, 42, 0.85],
+              [30, 82, 56, 0.85],
+              [34, 96, 44, 0.85]
+            ] %}
+            <line x1="60" y1="14" x2="60" y2="110" stroke="#ccc" stroke-width="0.4"/>
+            {% for b in bars %}
+              {% if loop.index <= 3 %}
+                <rect x="{{ 60 - b[2] }}" y="{{ b[1] - 4 }}" width="{{ b[2] }}" height="6" fill="rgba(0,0,0,{{ b[3] }})"/>
+              {% else %}
+                <rect x="60" y="{{ b[1] - 4 }}" width="{{ b[2] }}" height="6" fill="rgba(0,0,0,{{ b[3] }})"/>
+              {% endif %}
+            {% endfor %}
+          </svg>
+        </div>
+        <p class="viz-card-title">words</p>
+        <p class="viz-card-desc">which words appear on your best days and which appear on your worst — average rating for each recurring word in your notes.</p>
+      </a>
+
+      <a href="{{ url_for('insights.river') }}" class="viz-card">
+        <div class="viz-preview">
+          <svg viewBox="0 0 120 120" preserveAspectRatio="xMidYMid meet">
+            <path d="M0,100 C15,70 25,85 40,65 S70,45 85,60 S110,40 120,50"
+                  stroke="#000" stroke-width="1.2" fill="none"/>
+            <path d="M0,100 C15,70 25,85 40,65 S70,45 85,60 S110,40 120,50 L120,110 L0,110 Z"
+                  fill="rgba(0,0,0,0.08)" stroke="none"/>
+          </svg>
+        </div>
+        <p class="viz-card-title">river of mood</p>
+        <p class="viz-card-desc">continuous flowing line across time with 14-day rolling-average smoothing.</p>
+      </a>
+    </div>
+  </main>
+</body>
+</html>

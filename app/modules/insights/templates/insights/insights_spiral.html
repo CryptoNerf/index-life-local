@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>spiral year {{ year }}</title>
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/calendar.css') }}">
+  <link rel="stylesheet" href="{{ url_for('insights.static', filename='css/insights.css') }}">
+</head>
+<body>
+  <header class="main-header">
+    <nav class="top-menu">
+      <a href="{{ url_for('main.mood_grid') }}" class="menu-link">index.life</a>
+      <a href="{{ url_for('main.life_calendar') }}" class="menu-link">life in weeks</a>
+      <a href="{{ url_for('insights.insights_page') }}" class="menu-link active-link">insights</a>
+      {% if module_active('assistant') %}
+        <a href="{{ url_for('assistant.chat') }}" class="menu-link">ai psychologist</a>
+      {% endif %}
+      {% if module_active('deep_mind') %}
+        <a href="{{ url_for('deep_mind.neural_map') }}" class="menu-link">neural map</a>
+      {% endif %}
+      <a href="{{ url_for('main.account') }}" class="menu-link">account</a>
+      <a href="{{ url_for('sync.sync_page') }}" class="menu-link">sync</a>
+      <a href="{{ url_for('modules.modules_page') }}" class="menu-link">modules</a>
+    </nav>
+  </header>
+
+  <main class="insights-main">
+    <div class="detail-header">
+      <a href="{{ url_for('insights.insights_page') }}" class="back-link">← insights</a>
+      <p class="insights-title">spiral year<sup>{{ year }}</sup>{% if year != current_year %}<span class="archive-tag">(archive)</span>{% endif %}</p>
+      <p class="insights-summary">
+        {% if total %}
+          {{ total }} entries · average {{ '%.2f'|format(avg) }} / 10 · 12 turns, one per month
+        {% else %}
+          no entries for this year
+        {% endif %}
+      </p>
+    </div>
+
+    <section class="chart-block spiral-block">
+      <svg viewBox="0 0 {{ size }} {{ size }}" class="chart-svg spiral-svg" preserveAspectRatio="xMidYMid meet">
+        {# Faint spiral guide line #}
+        {% if guide %}
+          <polyline class="spiral-guide"
+            points="{% for g in guide %}{{ g[0] }},{{ g[1] }} {% endfor %}"/>
+        {% endif %}
+
+        {# Month markers #}
+        {% for m in month_marks %}
+          <circle cx="{{ m.x }}" cy="{{ m.y }}" r="1.5" class="spiral-month-mark"/>
+          <text x="{{ m.lx }}" y="{{ m.ly }}" class="spiral-month-label"
+                text-anchor="middle" dominant-baseline="middle">{{ m.label }}</text>
+        {% endfor %}
+
+        {# Data dots #}
+        {% for d in dots %}
+          <circle cx="{{ d.x }}" cy="{{ d.y }}" r="{{ d.radius }}"
+                  fill="rgba(0,0,0,{{ d.opacity }})"
+                  class="spiral-dot">
+            <title>{{ d.date.strftime('%Y-%m-%d') }} · {{ d.rating }}/10</title>
+          </circle>
+        {% endfor %}
+
+        {# Today marker #}
+        {% if today_dot %}
+          <circle cx="{{ today_dot.x }}" cy="{{ today_dot.y }}" r="8"
+                  class="spiral-today"/>
+        {% endif %}
+
+        {# Center label #}
+        <text x="{{ cx }}" y="{{ cy - 4 }}" class="spiral-center-label" text-anchor="middle">{{ year }}</text>
+        <text x="{{ cx }}" y="{{ cy + 18 }}" class="spiral-center-sub" text-anchor="middle">jan</text>
+      </svg>
+      <div class="spiral-legend">
+        <span class="legend-label">low</span>
+        <span class="legend-dot" style="width:11px;height:11px;background:rgba(0,0,0,1)"></span>
+        <span class="legend-dot" style="width:9px;height:9px;background:rgba(0,0,0,0.7)"></span>
+        <span class="legend-dot" style="width:7px;height:7px;background:rgba(0,0,0,0.45)"></span>
+        <span class="legend-dot" style="width:5px;height:5px;background:rgba(0,0,0,0.25);border:1px solid #d8d8d8"></span>
+        <span class="legend-label">high</span>
+      </div>
+    </section>
+
+    {% if available_years|length > 1 %}
+      <nav class="years-nav">
+        {% for y in available_years %}
+          <a href="{{ url_for('insights.spiral', year=y) }}" class="year-link{% if y == year %} active{% endif %}">{{ y }}</a>
+        {% endfor %}
+      </nav>
+    {% endif %}
+  </main>
+</body>
+</html>

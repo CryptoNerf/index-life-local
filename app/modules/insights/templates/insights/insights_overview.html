@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>overview {{ year }}</title>
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/calendar.css') }}">
+  <link rel="stylesheet" href="{{ url_for('insights.static', filename='css/insights.css') }}">
+</head>
+<body>
+  <header class="main-header">
+    <nav class="top-menu">
+      <a href="{{ url_for('main.mood_grid') }}" class="menu-link">index.life</a>
+      <a href="{{ url_for('main.life_calendar') }}" class="menu-link">life in weeks</a>
+      <a href="{{ url_for('insights.insights_page') }}" class="menu-link active-link">insights</a>
+      {% if module_active('assistant') %}
+        <a href="{{ url_for('assistant.chat') }}" class="menu-link">ai psychologist</a>
+      {% endif %}
+      {% if module_active('deep_mind') %}
+        <a href="{{ url_for('deep_mind.neural_map') }}" class="menu-link">neural map</a>
+      {% endif %}
+      <a href="{{ url_for('main.account') }}" class="menu-link">account</a>
+      <a href="{{ url_for('sync.sync_page') }}" class="menu-link">sync</a>
+      <a href="{{ url_for('modules.modules_page') }}" class="menu-link">modules</a>
+    </nav>
+  </header>
+
+  <main class="insights-main">
+    <div class="detail-header">
+      <a href="{{ url_for('insights.insights_page') }}" class="back-link">← insights</a>
+      <p class="insights-title">overview<sup>{{ year }}</sup>{% if year != current_year %}<span class="archive-tag">(archive)</span>{% endif %}</p>
+      <p class="insights-summary">
+        {% if total %}
+          {{ total }} entries · average {{ '%.2f'|format(avg) }} / 10
+        {% else %}
+          no entries for this year
+        {% endif %}
+      </p>
+    </div>
+
+    <section class="chart-block">
+      <p class="chart-title">year heatmap</p>
+      <div class="heatmap-wrap">
+        <svg viewBox="0 0 {{ heat_svg_w }} {{ heat_svg_h }}" class="chart-svg heatmap-svg" preserveAspectRatio="xMidYMid meet">
+          {% set weekday_labels = [(0,'Mon'),(2,'Wed'),(4,'Fri')] %}
+          {% for row, lbl in weekday_labels %}
+            <text x="{{ heat_pad_l - 6 }}"
+                  y="{{ heat_pad_t + row * (heat.cell + heat.gap) + heat.cell * 0.75 }}"
+                  class="axis-label" text-anchor="end">{{ lbl }}</text>
+          {% endfor %}
+          {% for m in heat.month_labels %}
+            <text x="{{ heat_pad_l + m.x }}" y="{{ heat_pad_t - 8 }}" class="axis-label">{{ m.label }}</text>
+          {% endfor %}
+          {% for c in heat.cells %}
+            {% if c.in_year %}
+              {% if c.rating %}
+                <rect x="{{ heat_pad_l + c.x }}" y="{{ heat_pad_t + c.y }}"
+                      width="{{ heat.cell }}" height="{{ heat.cell }}"
+                      fill="rgba(0,0,0,{{ 1.0 - (c.rating - 1) / 9 * 0.85 }})"
+                      class="heat-cell {% if c.is_today %}heat-today{% endif %}">
+                  <title>{{ c.date.strftime('%Y-%m-%d') }} · {{ c.rating }}/10</title>
+                </rect>
+              {% else %}
+                <rect x="{{ heat_pad_l + c.x }}" y="{{ heat_pad_t + c.y }}"
+                      width="{{ heat.cell }}" height="{{ heat.cell }}"
+                      class="heat-cell heat-empty {% if c.is_today %}heat-today{% endif %}">
+                  <title>{{ c.date.strftime('%Y-%m-%d') }} · —</title>
+                </rect>
+              {% endif %}
+            {% endif %}
+          {% endfor %}
+        </svg>
+      </div>
+      <div class="heat-legend">
+        <span class="legend-label">low</span>
+        <span class="legend-swatch" style="background: rgba(0,0,0,1)"></span>
+        <span class="legend-swatch" style="background: rgba(0,0,0,0.78)"></span>
+        <span class="legend-swatch" style="background: rgba(0,0,0,0.57)"></span>
+        <span class="legend-swatch" style="background: rgba(0,0,0,0.36)"></span>
+        <span class="legend-swatch" style="background: rgba(0,0,0,0.15); border: 1px solid #d8d8d8"></span>
+        <span class="legend-label">high</span>
+      </div>
+    </section>
+
+    <div class="chart-row-2">
+    <section class="chart-block">
+      <p class="chart-title">monthly average</p>
+      <svg viewBox="0 0 {{ bars_w }} {{ bars_h }}" class="chart-svg" preserveAspectRatio="xMidYMid meet">
+        <line x1="{{ bars_pad_l }}" y1="{{ bars_baseline_y }}" x2="{{ bars_w - 10 }}" y2="{{ bars_baseline_y }}" class="axis"/>
+        <line x1="{{ bars_pad_l }}" y1="{{ bars_pad_t + bars_plot_h * 0.5 }}" x2="{{ bars_w - 10 }}" y2="{{ bars_pad_t + bars_plot_h * 0.5 }}" class="axis-faint" stroke-dasharray="2 4"/>
+        {% for b in monthly_bars %}
+          {% if b.v is not none %}
+            <rect x="{{ b.x }}" y="{{ b.y }}" width="{{ b.w }}" height="{{ b.h }}" class="bar"/>
+            <text x="{{ b.x + b.w/2 }}" y="{{ b.y - 8 }}" class="bar-label" text-anchor="middle">{{ '%.1f'|format(b.v) }}</text>
+          {% endif %}
+          <text x="{{ b.x + b.w/2 }}" y="{{ bars_baseline_y + 20 }}" class="axis-label-lg" text-anchor="middle">{{ '%02d'|format(b.label) }}</text>
+        {% endfor %}
+        <text x="{{ bars_pad_l - 8 }}" y="{{ bars_pad_t + 6 }}" class="axis-label-lg" text-anchor="end">10</text>
+        <text x="{{ bars_pad_l - 8 }}" y="{{ bars_baseline_y }}" class="axis-label-lg" text-anchor="end">0</text>
+      </svg>
+    </section>
+
+    <section class="chart-block">
+      <p class="chart-title">distribution</p>
+      <svg viewBox="0 0 {{ dist_w }} {{ dist_h }}" class="chart-svg" preserveAspectRatio="xMidYMid meet">
+        <line x1="{{ dist_pad_l }}" y1="{{ dist_baseline_y }}" x2="{{ dist_w - 10 }}" y2="{{ dist_baseline_y }}" class="axis"/>
+        {% for b in dist_bars %}
+          {% if b.v > 0 %}
+            <rect x="{{ b.x }}" y="{{ b.y }}" width="{{ b.w }}" height="{{ b.h }}" class="bar"/>
+            <text x="{{ b.x + b.w/2 }}" y="{{ b.y - 8 }}" class="bar-label" text-anchor="middle">{{ b.v }}</text>
+          {% endif %}
+          <text x="{{ b.x + b.w/2 }}" y="{{ dist_baseline_y + 20 }}" class="axis-label-lg" text-anchor="middle">{{ b.label }}</text>
+        {% endfor %}
+      </svg>
+    </section>
+    </div>
+
+    {% if available_years|length > 1 %}
+      <nav class="years-nav">
+        {% for y in available_years %}
+          <a href="{{ url_for('insights.overview', year=y) }}" class="year-link{% if y == year %} active{% endif %}">{{ y }}</a>
+        {% endfor %}
+      </nav>
+    {% endif %}
+  </main>
+</body>
+</html>

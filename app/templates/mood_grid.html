@@ -29,6 +29,7 @@
     <nav class="top-menu">
       <a href="{{ url_for('main.mood_grid') }}" class="menu-link active-link">index.life</a>
       <a href="{{ url_for('main.life_calendar') }}" class="menu-link">life in weeks</a>
+      {% if module_active('insights') %}<a href="{{ url_for('insights.insights_page') }}" class="menu-link">insights</a>{% endif %}
       {% if module_active('assistant') %}
         <a href="{{ url_for('assistant.chat') }}" class="menu-link">ai psychologist</a>
       {% endif %}
@@ -49,6 +50,31 @@
             <span style="font-size: 16px; color: #888; margin-left: 10px;">(archive)</span>
           {% endif %}
         </p>
+        {% if available_years|length > 1 %}
+          {# available_years is sorted DESC: idx 0 = newest #}
+          {% set idx = available_years.index(year) %}
+          {% set newer = available_years[idx - 1] if idx > 0 else None %}
+          {% set older = available_years[idx + 1] if idx + 1 < available_years|length else None %}
+          <nav class="calendar-years">
+            {% if older %}
+              <a href="{{ url_for('main.mood_grid', year=older) }}" class="year-arrow">← {{ older }}</a>
+            {% else %}
+              <span class="year-arrow disabled">← older</span>
+            {% endif %}
+            <select class="year-select" onchange="window.location.href=this.value">
+              {% for y in available_years %}
+                <option value="{{ url_for('main.mood_grid', year=y) }}" {% if y == year %}selected{% endif %}>
+                  {{ y }}{% if y == current_year %} (current){% endif %}
+                </option>
+              {% endfor %}
+            </select>
+            {% if newer %}
+              <a href="{{ url_for('main.mood_grid', year=newer) }}" class="year-arrow">{{ newer }} →</a>
+            {% else %}
+              <span class="year-arrow disabled">newer →</span>
+            {% endif %}
+          </nav>
+        {% endif %}
       </div>
       <div class="calendar-grid">
       {% for month in months %}

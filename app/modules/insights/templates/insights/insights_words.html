@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>words</title>
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/calendar.css') }}">
+  <link rel="stylesheet" href="{{ url_for('insights.static', filename='css/insights.css') }}">
+  <style>
+    .words-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 48px;
+      max-width: 1040px;
+      margin: 0 auto;
+    }
+    @media (max-width: 760px) {
+      .words-grid { grid-template-columns: 1fr; gap: 32px; }
+    }
+    .words-col-title {
+      font-family: 'Times New Roman', serif;
+      font-size: 20px;
+      font-style: italic;
+      margin: 0 0 20px;
+      color: #000;
+    }
+    .words-col-title .sub {
+      font-style: normal;
+      color: #999;
+      font-size: 14px;
+      margin-left: 10px;
+    }
+    .word-row {
+      display: grid;
+      grid-template-columns: 120px 1fr 70px 50px;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 0;
+      border-bottom: 1px solid #f1f1f1;
+      font-family: 'Times New Roman', serif;
+    }
+    .word-row:last-child { border-bottom: none; }
+    .word-text {
+      font-size: 16px;
+      color: #000;
+      text-align: right;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .word-bar-track {
+      position: relative;
+      height: 10px;
+      background: transparent;
+    }
+    .word-bar-fill {
+      position: absolute;
+      top: 0;
+      height: 10px;
+      background: #000;
+    }
+    .word-bar-fill.drag  { background: #000; opacity: 0.85; }
+    .word-bar-fill.lift  { background: #000; opacity: 0.45; }
+    .word-avg {
+      font-size: 15px;
+      color: #000;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    .word-count {
+      font-size: 13px;
+      color: #999;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    .words-summary-row {
+      text-align: center;
+      color: #777;
+      font-size: 14px;
+      font-family: 'Times New Roman', serif;
+      margin-top: 28px;
+    }
+    .words-empty {
+      color: #999;
+      font-style: italic;
+      text-align: center;
+      padding: 40px 0;
+    }
+  </style>
+</head>
+<body>
+  <header class="main-header">
+    <nav class="top-menu">
+      <a href="{{ url_for('main.mood_grid') }}" class="menu-link">index.life</a>
+      <a href="{{ url_for('main.life_calendar') }}" class="menu-link">life in weeks</a>
+      <a href="{{ url_for('insights.insights_page') }}" class="menu-link active-link">insights</a>
+      {% if module_active('assistant') %}
+        <a href="{{ url_for('assistant.chat') }}" class="menu-link">ai psychologist</a>
+      {% endif %}
+      {% if module_active('deep_mind') %}
+        <a href="{{ url_for('deep_mind.neural_map') }}" class="menu-link">neural map</a>
+      {% endif %}
+      <a href="{{ url_for('main.account') }}" class="menu-link">account</a>
+      <a href="{{ url_for('sync.sync_page') }}" class="menu-link">sync</a>
+      <a href="{{ url_for('modules.modules_page') }}" class="menu-link">modules</a>
+    </nav>
+  </header>
+
+  <main class="insights-main">
+    <div class="detail-header">
+      <a href="{{ url_for('insights.insights_page') }}" class="back-link">← insights</a>
+      <p class="insights-title">words</p>
+      <p class="insights-summary">
+        {% if total_words > 0 %}
+          {{ total_words }} recurring words across {{ total_days }} entries — overall average {{ '%.2f'|format(global_avg) }} / 10
+        {% else %}
+          not enough entries with notes yet — need words that repeat at least 3 times
+        {% endif %}
+      </p>
+    </div>
+
+    {% if total_words > 0 %}
+      <div class="words-grid">
+        <section>
+          <p class="words-col-title">
+            lifts your day
+            <span class="sub">higher-rated days</span>
+          </p>
+          {% if lifts %}
+            {% for r in lifts %}
+              <div class="word-row">
+                <div class="word-text">{{ r.word }}</div>
+                <div class="word-bar-track">
+                  <div class="word-bar-fill lift"
+                       style="left: 0; width: {{ (r.delta / max_abs * 100)|round(1) }}%;"></div>
+                </div>
+                <div class="word-avg">{{ '%+.2f'|format(r.delta) }}</div>
+                <div class="word-count">{{ r.count }}×</div>
+              </div>
+            {% endfor %}
+          {% else %}
+            <div class="words-empty">nothing yet</div>
+          {% endif %}
+        </section>
+
+        <section>
+          <p class="words-col-title">
+            drags it down
+            <span class="sub">lower-rated days</span>
+          </p>
+          {% if drags %}
+            {% for r in drags %}
+              <div class="word-row">
+                <div class="word-text">{{ r.word }}</div>
+                <div class="word-bar-track">
+                  <div class="word-bar-fill drag"
+                       style="left: 0; width: {{ ((-r.delta) / max_abs * 100)|round(1) }}%;"></div>
+                </div>
+                <div class="word-avg">{{ '%+.2f'|format(r.delta) }}</div>
+                <div class="word-count">{{ r.count }}×</div>
+              </div>
+            {% endfor %}
+          {% else %}
+            <div class="words-empty">nothing yet</div>
+          {% endif %}
+        </section>
+      </div>
+
+      <p class="words-summary-row">
+        bars scaled to ±{{ '%.2f'|format(max_abs) }} · number after the bar is the word's average rating minus {{ '%.2f'|format(global_avg) }} (your overall average) · count shows how many days the word appears in
+      </p>
+    {% endif %}
+  </main>
+</body>
+</html>

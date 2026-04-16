@@ -1,0 +1,376 @@
+/* Override calendar.css desktop lock — allow scrolling on insights pages */
+html, body {
+  height: auto !important;
+  overflow: auto !important;
+}
+
+.insights-main {
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 24px 32px 80px;
+  box-sizing: border-box;
+  align-items: stretch !important;
+  align-self: stretch;
+  flex: none !important;
+  justify-content: flex-start !important;
+  overflow: visible !important;
+  margin-bottom: 0 !important;
+}
+
+.chart-row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 40px;
+  margin-bottom: 40px;
+}
+
+@media (max-width: 820px) {
+  .chart-row-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.chart-block {
+  width: 100%;
+}
+
+.chart-block > .chart-svg {
+  width: 100%;
+  height: auto;
+}
+
+.insights-header,
+.detail-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.detail-header {
+  position: relative;
+}
+
+.back-link {
+  position: absolute;
+  left: 0;
+  top: 8px;
+  color: #666;
+  text-decoration: none;
+  font-size: 16px;
+}
+
+.back-link:hover {
+  color: #009AFA;
+}
+
+.insights-title {
+  font-size: 28px;
+  color: #222;
+  margin: 0;
+  font-weight: normal;
+}
+
+.insights-title sup {
+  font-size: 15px;
+  margin-left: 4px;
+  color: #666;
+}
+
+.archive-tag {
+  font-size: 14px;
+  color: #888;
+  margin-left: 10px;
+}
+
+.insights-summary {
+  font-size: 17px;
+  color: #555;
+  margin: 8px 0 0;
+}
+
+/* ── Cards grid ── */
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 28px;
+  margin-top: 16px;
+}
+
+.viz-card {
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  border: 1px solid #222;
+  background: #fff;
+  color: #222;
+  text-decoration: none;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  cursor: pointer;
+}
+
+.viz-card:not(.disabled):hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+}
+
+.viz-card.disabled {
+  opacity: 0.55;
+  cursor: default;
+  border-style: dashed;
+}
+
+.soon-tag.needs-ai {
+  color: #009AFA;
+  opacity: 1;
+}
+
+.inline-link {
+  color: #009AFA;
+  text-decoration: none;
+}
+
+.inline-link:hover {
+  text-decoration: underline;
+}
+
+.viz-preview {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.viz-preview svg {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.viz-card-title {
+  font-size: 19px;
+  margin: 0 0 6px;
+  color: #222;
+}
+
+.viz-card-desc {
+  font-size: 14px;
+  color: #666;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.soon-tag {
+  font-size: 11px;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+/* ── Chart blocks (detail view) ── */
+.chart-block {
+  margin: 0 0 56px;
+}
+
+.chart-title {
+  font-size: 18px;
+  color: #222;
+  margin: 0 0 16px;
+}
+
+.chart-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  font-family: 'Times New Roman', Times, serif;
+}
+
+.heatmap-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.heatmap-svg {
+  min-width: 900px;
+}
+
+/* ── SVG primitives ── */
+.axis {
+  stroke: #222;
+  stroke-width: 1;
+  fill: none;
+}
+
+.axis-faint {
+  stroke: #c8c8c8;
+  stroke-width: 1;
+  fill: none;
+}
+
+.axis-label {
+  font-size: 11px;
+  fill: #888;
+  font-family: 'Times New Roman', Times, serif;
+}
+
+.axis-label-lg {
+  font-size: 18px;
+  fill: #666;
+  font-family: 'Times New Roman', Times, serif;
+}
+
+.bar-label {
+  font-size: 20px;
+  fill: #222;
+  font-family: 'Times New Roman', Times, serif;
+}
+
+.bar {
+  fill: #000;
+}
+
+/* ── River ── */
+.river-line {
+  fill: none;
+  stroke: #000;
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.river-area {
+  fill: rgba(0, 0, 0, 0.08);
+  stroke: none;
+}
+
+.river-raw-dot {
+  fill: #000;
+  opacity: 0.35;
+}
+
+.today-line {
+  stroke: #009AFA;
+  stroke-width: 1.4;
+  stroke-dasharray: 3 3;
+}
+
+/* ── Spiral ── */
+.spiral-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.spiral-svg {
+  max-width: 720px;
+  width: 100%;
+  height: auto;
+}
+
+.spiral-guide {
+  fill: none;
+  stroke: #d8d8d8;
+  stroke-width: 1;
+}
+
+.spiral-dot {
+  stroke: none;
+}
+
+.spiral-month-mark {
+  fill: #666;
+}
+
+.spiral-month-label {
+  font-size: 12px;
+  fill: #666;
+  font-family: 'Times New Roman', Times, serif;
+}
+
+.spiral-today {
+  fill: none;
+  stroke: #009AFA;
+  stroke-width: 1.6;
+}
+
+.spiral-center-label {
+  font-size: 22px;
+  fill: #222;
+  font-family: 'Times New Roman', Times, serif;
+}
+
+.spiral-center-sub {
+  font-size: 12px;
+  fill: #888;
+  font-family: 'Times New Roman', Times, serif;
+}
+
+.spiral-legend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 20px;
+  color: #888;
+  font-size: 14px;
+  font-family: 'Times New Roman', Times, serif;
+}
+
+.legend-dot {
+  display: inline-block;
+  border-radius: 50%;
+}
+
+/* ── Heatmap ── */
+.heat-cell { stroke: none; }
+
+.heat-empty {
+  fill: #fff;
+  stroke: #d8d8d8;
+  stroke-width: 1;
+}
+
+.heat-today {
+  stroke: #009AFA;
+  stroke-width: 1.5;
+}
+
+.heat-legend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 16px;
+  justify-content: flex-end;
+  font-size: 13px;
+  color: #888;
+  font-family: 'Times New Roman', Times, serif;
+}
+
+.legend-swatch {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+}
+
+.legend-label { margin: 0 6px; }
+
+/* ── years nav ── */
+.years-nav {
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-top: 32px;
+}
+
+.year-link {
+  color: #666;
+  text-decoration: none;
+  font-size: 16px;
+}
+
+.year-link:hover { text-decoration: underline; }
+
+.year-link.active { color: #009AFA; }

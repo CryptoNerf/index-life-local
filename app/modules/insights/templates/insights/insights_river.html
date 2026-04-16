@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>river of mood {{ year }}</title>
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/calendar.css') }}">
+  <link rel="stylesheet" href="{{ url_for('insights.static', filename='css/insights.css') }}">
+</head>
+<body>
+  <header class="main-header">
+    <nav class="top-menu">
+      <a href="{{ url_for('main.mood_grid') }}" class="menu-link">index.life</a>
+      <a href="{{ url_for('main.life_calendar') }}" class="menu-link">life in weeks</a>
+      <a href="{{ url_for('insights.insights_page') }}" class="menu-link active-link">insights</a>
+      {% if module_active('assistant') %}
+        <a href="{{ url_for('assistant.chat') }}" class="menu-link">ai psychologist</a>
+      {% endif %}
+      {% if module_active('deep_mind') %}
+        <a href="{{ url_for('deep_mind.neural_map') }}" class="menu-link">neural map</a>
+      {% endif %}
+      <a href="{{ url_for('main.account') }}" class="menu-link">account</a>
+      <a href="{{ url_for('sync.sync_page') }}" class="menu-link">sync</a>
+      <a href="{{ url_for('modules.modules_page') }}" class="menu-link">modules</a>
+    </nav>
+  </header>
+
+  <main class="insights-main">
+    <div class="detail-header">
+      <a href="{{ url_for('insights.insights_page') }}" class="back-link">← insights</a>
+      <p class="insights-title">river of mood<sup>{{ year }}</sup>{% if year != current_year %}<span class="archive-tag">(archive)</span>{% endif %}</p>
+      <p class="insights-summary">
+        {% if total %}
+          {{ total }} entries · average {{ '%.2f'|format(avg) }} / 10 · 14-day rolling mean
+        {% else %}
+          no entries for this year
+        {% endif %}
+      </p>
+    </div>
+
+    <section class="chart-block">
+      <svg viewBox="0 0 {{ w }} {{ h }}" class="chart-svg" preserveAspectRatio="xMidYMid meet">
+        {# horizontal gridlines at 2,4,6,8 #}
+        {% for v in [2,4,6,8] %}
+          <line x1="{{ pad_l }}" y1="{{ pad_t + plot_h * (10 - v) / 9 }}"
+                x2="{{ w - 10 }}" y2="{{ pad_t + plot_h * (10 - v) / 9 }}"
+                class="axis-faint" stroke-dasharray="2 4"/>
+          <text x="{{ pad_l - 10 }}" y="{{ pad_t + plot_h * (10 - v) / 9 + 5 }}"
+                class="axis-label-lg" text-anchor="end">{{ v }}</text>
+        {% endfor %}
+        {# baseline #}
+        <line x1="{{ pad_l }}" y1="{{ baseline_y }}" x2="{{ w - 10 }}" y2="{{ baseline_y }}" class="axis"/>
+
+        {# today marker #}
+        {% if today_x is not none %}
+          <line x1="{{ today_x }}" y1="{{ pad_t }}" x2="{{ today_x }}" y2="{{ baseline_y }}" class="today-line"/>
+        {% endif %}
+
+        {# smoothed area + line #}
+        {% if smooth_points %}
+          <polyline class="river-area"
+            points="{{ smooth_points[0][0] }},{{ baseline_y }} {% for p in smooth_points %}{{ p[0] }},{{ p[1] }} {% endfor %}{{ smooth_points[-1][0] }},{{ baseline_y }}"/>
+          <polyline class="river-line"
+            points="{% for p in smooth_points %}{{ p[0] }},{{ p[1] }} {% endfor %}"/>
+        {% endif %}
+
+        {# raw dots #}
+        {% for p in raw_points %}
+          <circle cx="{{ p[0] }}" cy="{{ p[1] }}" r="2.5" class="river-raw-dot"/>
+        {% endfor %}
+
+        {# month ticks #}
+        {% for mx, mnum in month_starts %}
+          <line x1="{{ mx }}" y1="{{ baseline_y }}" x2="{{ mx }}" y2="{{ baseline_y + 5 }}" class="axis"/>
+          <text x="{{ mx }}" y="{{ baseline_y + 24 }}" class="axis-label-lg" text-anchor="middle">{{ '%02d'|format(mnum) }}</text>
+        {% endfor %}
+
+        {# y bounds #}
+        <text x="{{ pad_l - 10 }}" y="{{ pad_t + 6 }}" class="axis-label-lg" text-anchor="end">10</text>
+        <text x="{{ pad_l - 10 }}" y="{{ baseline_y }}" class="axis-label-lg" text-anchor="end">1</text>
+      </svg>
+    </section>
+
+    {% if available_years|length > 1 %}
+      <nav class="years-nav">
+        {% for y in available_years %}
+          <a href="{{ url_for('insights.river', year=y) }}" class="year-link{% if y == year %} active{% endif %}">{{ y }}</a>
+        {% endfor %}
+      </nav>
+    {% endif %}
+  </main>
+</body>
+</html>
