@@ -58,17 +58,22 @@ MODEL_URL = f"https://huggingface.co/{MODEL_HF_REPO}/resolve/main/{MODEL_FILENAM
 # Pre-built Vulkan wheel (GitHub Release — no Vulkan SDK needed for users)
 GITHUB_REPO = "CryptoNerf/index-life-local"
 LLAMA_CPP_VERSION = "0.3.15"
-VULKAN_WHEEL_TAG = "v2.3.0"  # Release tag containing Vulkan wheels
+VULKAN_WHEEL_TAG = "v2.4.0"  # Release tag containing Vulkan wheels
 
 
 def _get_vulkan_wheel_url() -> tuple[str, str]:
-    """Return (url, filename) for the pre-built Vulkan wheel matching this OS."""
+    """Return (url, filename) for the pre-built Vulkan wheel matching this OS.
+
+    Py tag is derived from the current interpreter (sys.version_info), so the
+    same exe can upgrade Python versions without a hardcoded tag mismatch.
+    """
     ver = LLAMA_CPP_VERSION
     if sys.platform == "win32":
         plat = "win_amd64"
     else:
         plat = "linux_x86_64"
-    filename = f"llama_cpp_python-{ver}-cp310-cp310-{plat}.whl"
+    py_tag = f"cp{sys.version_info.major}{sys.version_info.minor}"
+    filename = f"llama_cpp_python-{ver}-{py_tag}-{py_tag}-{plat}.whl"
     url = f"https://github.com/{GITHUB_REPO}/releases/download/{VULKAN_WHEEL_TAG}/{filename}"
     return url, filename
 

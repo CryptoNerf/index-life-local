@@ -12,7 +12,7 @@ python --version >nul 2>&1
 if errorlevel 1 (
     echo Python is not installed. Starting automatic installation...
     echo.
-    echo This will download and install Python 3.10 automatically.
+    echo This will download and install Python 3.12 automatically.
     echo Installation will take a few minutes.
     echo.
     set /p CONFIRM="Continue with automatic Python installation? (Y/N): "
@@ -113,16 +113,16 @@ REM ========================================
     echo System architecture: %ARCH%
     echo.
 
-    REM Set Python download URL (Python 3.10.13 - stable)
+    REM Set Python download URL (Python 3.12.8 - matches bundled exe interpreter)
     if "%ARCH%"=="x64" (
-        set PYTHON_URL=https://www.python.org/ftp/python/3.10.13/python-3.10.13-amd64.exe
-        set INSTALLER_NAME=python-3.10.13-amd64.exe
+        set PYTHON_URL=https://www.python.org/ftp/python/3.12.8/python-3.12.8-amd64.exe
+        set INSTALLER_NAME=python-3.12.8-amd64.exe
     ) else (
-        set PYTHON_URL=https://www.python.org/ftp/python/3.10.13/python-3.10.13.exe
-        set INSTALLER_NAME=python-3.10.13.exe
+        set PYTHON_URL=https://www.python.org/ftp/python/3.12.8/python-3.12.8.exe
+        set INSTALLER_NAME=python-3.12.8.exe
     )
 
-    echo [2/4] Downloading Python 3.10...
+    echo [2/4] Downloading Python 3.12...
     echo URL: %PYTHON_URL%
     echo.
     echo Please wait, this may take a few minutes...

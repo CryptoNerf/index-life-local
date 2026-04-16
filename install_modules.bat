@@ -14,36 +14,36 @@ if defined EXE_DIR (
     echo ========================================
     echo.
 
-    REM Find Python 3.10 specifically
-    call :find_python310
-    if not defined PY310 (
-        echo Python 3.10 not found. Installing automatically...
-        call :install_python310
+    REM Find Python 3.12 specifically (must match bundled exe interpreter)
+    call :find_python312
+    if not defined PY312 (
+        echo Python 3.12 not found. Installing automatically...
+        call :install_python312
         if errorlevel 1 (
             echo.
-            echo ERROR: Failed to install Python 3.10.
-            echo Please install manually from https://www.python.org/downloads/release/python-31013/
+            echo ERROR: Failed to install Python 3.12.
+            echo Please install manually from https://www.python.org/downloads/release/python-3128/
             pause
             exit /b 1
         )
-        call :find_python310
+        call :find_python312
     )
 
-    if not defined PY310 (
-        echo ERROR: Python 3.10 still not found after installation.
-        echo Please restart this script or install Python 3.10 manually.
+    if not defined PY312 (
+        echo ERROR: Python 3.12 still not found after installation.
+        echo Please restart this script or install Python 3.12 manually.
         pause
         exit /b 1
     )
 
-    echo Using Python: !PY310!
-    "!PY310!" --version
+    echo Using Python: !PY312!
+    "!PY312!" --version
     echo.
 
     REM Create modules_venv next to exe if needed
     if not exist "%EXE_DIR%modules_venv\" (
         echo Creating modules environment...
-        "!PY310!" -m venv "%EXE_DIR%modules_venv"
+        "!PY312!" -m venv "%EXE_DIR%modules_venv"
         if errorlevel 1 (
             echo.
             echo ERROR: Failed to create virtual environment.
@@ -71,7 +71,7 @@ if defined EXE_DIR (
         if errorlevel 1 (
             echo.
             echo ERROR: Failed to create virtual environment.
-            echo Make sure Python 3.10+ is installed.
+            echo Make sure Python 3.12 is installed.
             pause
             exit /b 1
         )
@@ -89,65 +89,65 @@ endlocal
 exit /b 0
 
 REM ========================================
-REM Function: Find Python 3.10 executable
-REM Sets PY310 variable if found
+REM Function: Find Python 3.12 executable
+REM Sets PY312 variable if found
 REM ========================================
-:find_python310
-    set "PY310="
-    set "_tmppy=%TEMP%\indexlife_py310.txt"
+:find_python312
+    set "PY312="
+    set "_tmppy=%TEMP%\indexlife_py312.txt"
 
     REM Try py launcher first (most reliable on Windows)
-    py -3.10 -c "import sys;print(sys.executable)" >"%_tmppy%" 2>nul
+    py -3.12 -c "import sys;print(sys.executable)" >"%_tmppy%" 2>nul
     if not errorlevel 1 (
-        set /p PY310=<"%_tmppy%"
+        set /p PY312=<"%_tmppy%"
         del "%_tmppy%" 2>nul
-        if defined PY310 exit /b 0
+        if defined PY312 exit /b 0
     )
     del "%_tmppy%" 2>nul
 
     REM Try common install paths
-    if exist "%LocalAppData%\Programs\Python\Python310\python.exe" (
-        set "PY310=%LocalAppData%\Programs\Python\Python310\python.exe"
+    if exist "%LocalAppData%\Programs\Python\Python312\python.exe" (
+        set "PY312=%LocalAppData%\Programs\Python\Python312\python.exe"
         exit /b 0
     )
-    if exist "C:\Python310\python.exe" (
-        set "PY310=C:\Python310\python.exe"
+    if exist "C:\Python312\python.exe" (
+        set "PY312=C:\Python312\python.exe"
         exit /b 0
     )
-    if exist "C:\Program Files\Python310\python.exe" (
-        set "PY310=C:\Program Files\Python310\python.exe"
+    if exist "C:\Program Files\Python312\python.exe" (
+        set "PY312=C:\Program Files\Python312\python.exe"
         exit /b 0
     )
 
-    REM Try python in PATH and check if it's 3.10
-    python -c "import sys;exit(0 if sys.version_info[:2]==(3,10) else 1)" >nul 2>&1
+    REM Try python in PATH and check if it's 3.12
+    python -c "import sys;exit(0 if sys.version_info[:2]==(3,12) else 1)" >nul 2>&1
     if not errorlevel 1 (
         python -c "import sys;print(sys.executable)" >"%_tmppy%" 2>nul
-        set /p PY310=<"%_tmppy%"
+        set /p PY312=<"%_tmppy%"
         del "%_tmppy%" 2>nul
-        if defined PY310 exit /b 0
+        if defined PY312 exit /b 0
     )
     del "%_tmppy%" 2>nul
 
     exit /b 1
 
 REM ========================================
-REM Function: Download and install Python 3.10
+REM Function: Download and install Python 3.12
 REM ========================================
-:install_python310
+:install_python312
     echo.
-    echo Downloading Python 3.10.13...
+    echo Downloading Python 3.12.8...
 
     set "ARCH=x86"
     if "%PROCESSOR_ARCHITECTURE%"=="AMD64" set "ARCH=x64"
     if "%PROCESSOR_ARCHITEW6432%"=="AMD64" set "ARCH=x64"
 
     if "%ARCH%"=="x64" (
-        set "PY_URL=https://www.python.org/ftp/python/3.10.13/python-3.10.13-amd64.exe"
-        set "PY_INSTALLER=python-3.10.13-amd64.exe"
+        set "PY_URL=https://www.python.org/ftp/python/3.12.8/python-3.12.8-amd64.exe"
+        set "PY_INSTALLER=python-3.12.8-amd64.exe"
     ) else (
-        set "PY_URL=https://www.python.org/ftp/python/3.10.13/python-3.10.13.exe"
-        set "PY_INSTALLER=python-3.10.13.exe"
+        set "PY_URL=https://www.python.org/ftp/python/3.12.8/python-3.12.8.exe"
+        set "PY_INSTALLER=python-3.12.8.exe"
     )
 
     powershell -Command "& {[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri '!PY_URL!' -OutFile '!PY_INSTALLER!'}"
@@ -157,7 +157,7 @@ REM ========================================
         exit /b 1
     )
 
-    echo Installing Python 3.10 (this may take a minute)...
+    echo Installing Python 3.12 (this may take a minute)...
     "!PY_INSTALLER!" /quiet PrependPath=1 Include_test=0 InstallAllUsers=0 Include_pip=1 Include_launcher=1
 
     if errorlevel 1 (
@@ -167,7 +167,7 @@ REM ========================================
     )
 
     del "!PY_INSTALLER!" 2>nul
-    echo Python 3.10 installed successfully!
+    echo Python 3.12 installed successfully!
     echo.
 
     REM Refresh PATH so we can find the new Python

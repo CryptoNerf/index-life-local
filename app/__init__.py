@@ -169,45 +169,65 @@ def _add_system_stdlib(venv_dir: Path):
     PyInstaller strips stdlib modules (pickletools, etc.) that heavy
     venv packages like torch/diskcache need.  We read the venv's
     pyvenv.cfg to locate the system Python and add its stdlib.
+
+    Caveats:
+    - Skipped if the venv's Python version differs from the bundled
+      Python (ABI mismatch: e.g. sqlite3 from 3.10 cannot load
+      _sqlite3.pyd from 3.12 → import errors).
+    - Appended (not prepended) to sys.path so bundled copies always
+      win conflicts; system stdlib only serves as fallback for
+      modules PyInstaller stripped.
     """
     cfg = venv_dir / 'pyvenv.cfg'
     if not cfg.exists():
         log.warning('_add_system_stdlib: pyvenv.cfg not found in %s', venv_dir)
         return
     try:
-        cfg_text = cfg.read_text(encoding='utf-8', errors='ignore')
-        home_line = next(
-            (l for l in cfg_text.splitlines()
-             if l.strip().lower().startswith('home')), ''
-        )
-        if not home_line:
+        cfg_map = {}
+        for line in cfg.read_text(encoding='utf-8', errors='ignore').splitlines():
+            if '=' in line:
+                k, v = line.split('=', 1)
+                cfg_map[k.strip().lower()] = v.strip()
+
+        # Version compatibility — cross-version stdlib breaks C-extension imports
+        venv_version = cfg_map.get('version') or cfg_map.get('version_info') or ''
+        parts = venv_version.split('.')
+        if len(parts) >= 2:
+            try:
+                vmaj, vmin = int(parts[0]), int(parts[1])
+                if (vmaj, vmin) != (sys.version_info.major, sys.version_info.minor):
+                    log.warning(
+                        '_add_system_stdlib: skipping — venv Python %d.%d != bundled %d.%d',
+                        vmaj, vmin, sys.version_info.major, sys.version_info.minor,
+                    )
+                    return
+            except ValueError:
+                pass
+
+        home_val = cfg_map.get('home')
+        if not home_val:
             log.warning('_add_system_stdlib: no "home" key in pyvenv.cfg')
             return
-
-        _, home_val = home_line.split('=', 1)
-        python_home = Path(home_val.strip())  # e.g. /opt/homebrew/opt/python@3.12/bin
+        python_home = Path(home_val)
         log.info('_add_system_stdlib: python_home=%s', python_home)
 
         search_roots = [python_home.parent, python_home]
 
-        # macOS Homebrew: Frameworks/Python.framework/Versions/3.X/lib/
         fw = python_home.parent / 'Frameworks' / 'Python.framework'
         if fw.is_dir():
             for ver_dir in sorted(fw.glob('Versions/3.*'), reverse=True):
                 search_roots.insert(0, ver_dir)
 
         for root in search_roots:
-            # Windows: root/Lib
             win_lib = root / 'Lib'
             if win_lib.is_dir() and (win_lib / 'os.py').exists():
-                sys.path.insert(0, str(win_lib))
-                log.info('Added system stdlib: %s', win_lib)
+                sys.path.append(str(win_lib))
+                log.info('Appended system stdlib: %s', win_lib)
                 return
-            # Unix: root/lib/python3.X
             for p in sorted(root.glob('lib/python3.*'), reverse=True):
                 if p.is_dir() and (p / 'os.py').exists():
-                    sys.path.insert(0, str(p))
-                    log.info('Added system stdlib: %s', p)
+                    sys.path.append(str(p))
+                    log.info('Appended system stdlib: %s', p)
                     return
 
         log.warning('_add_system_stdlib: could not find stdlib from home=%s', python_home)
