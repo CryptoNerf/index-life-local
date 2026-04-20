@@ -164,9 +164,18 @@ def _ensure_modules_venv() -> Path:
     if not venv_python.exists():
         print(f"Creating modules virtual environment at {venv_dir} ...")
         subprocess.check_call([sys.executable, "-m", "venv", str(venv_dir)])
-        # Upgrade pip in the new venv
-        subprocess.check_call([str(venv_python), "-m", "pip", "install", "--upgrade", "pip"],
-                              stdout=subprocess.DEVNULL)
+        # Best-effort pip self-upgrade. On Windows + antivirus + network
+        # drives this can fail with WinError 32 (file locked) because pip
+        # imports its own modules while trying to overwrite them. The
+        # bundled pip works fine for package installs — don't let a
+        # cosmetic upgrade block module setup.
+        try:
+            subprocess.check_call(
+                [str(venv_python), "-m", "pip", "install", "--upgrade", "pip"],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+        except subprocess.CalledProcessError as exc:
+            print(f"  (pip self-upgrade skipped: {exc})")
         print("Virtual environment created.")
 
     return venv_python

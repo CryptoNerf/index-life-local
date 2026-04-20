@@ -8,12 +8,38 @@ import uuid as _uuid
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from pathlib import Path
-from sqlalchemy import inspect, text
+from sqlalchemy import event, inspect, text
+from sqlalchemy.engine import Engine
 
 log = logging.getLogger(__name__)
 
 # Initialize extensions
 db = SQLAlchemy()
+
+
+@event.listens_for(Engine, 'connect')
+def _set_sqlite_pragmas(dbapi_connection, connection_record):
+    """Apply SQLite PRAGMAs to every new connection.
+
+    WAL mode lets readers run concurrently with a single writer — without it
+    a background embedding/summary transaction blocks user saves and we get
+    'database is locked' errors. synchronous=NORMAL is safe with WAL and
+    materially faster on spinning/SSD disks. busy_timeout=30s gives slow
+    transactions room before the driver raises OperationalError.
+    """
+    # Only act on sqlite (Engine is global — this listener fires for any
+    # future engines too, but we don't use anything else).
+    import sqlite3
+    if not isinstance(dbapi_connection, sqlite3.Connection):
+        return
+    cursor = dbapi_connection.cursor()
+    try:
+        cursor.execute('PRAGMA journal_mode=WAL')
+        cursor.execute('PRAGMA synchronous=NORMAL')
+        cursor.execute('PRAGMA busy_timeout=30000')
+        cursor.execute('PRAGMA foreign_keys=ON')
+    finally:
+        cursor.close()
 
 # ── Schema version — bump when adding new migrations ──
 SCHEMA_VERSION = 2

@@ -53,6 +53,11 @@ class Config:
     # Database
     SQLALCHEMY_DATABASE_URI = f'sqlite:///{DATA_DIR / "diary.db"}'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    # Let the sqlite3 driver wait 30s for a lock instead of the default 5s.
+    # WAL mode + PRAGMAs are applied per-connection in app/__init__.py.
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'connect_args': {'timeout': 30, 'check_same_thread': False},
+    }
 
     # Upload folder for profile photos
     UPLOAD_FOLDER = DATA_DIR / 'profile_photos'

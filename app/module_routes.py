@@ -80,67 +80,244 @@ def _detect_profile() -> str:
     return 'cpu'
 
 
-def _find_python() -> str:
-    """Find a Python executable matching the frozen app's version.
+def _verify_python_version(path: str, app_ver: str) -> bool:
+    """Return True if `path` is a Python interpreter whose major.minor == app_ver."""
+    try:
+        out = subprocess.check_output(
+            [path, '--version'], text=True, stderr=subprocess.STDOUT, timeout=10,
+        ).strip()
+        ver = out.split()[-1].rsplit('.', 1)[0]  # "Python 3.12.13" → "3.12"
+        return ver == app_ver
+    except Exception:
+        return False
 
-    Native extensions (.so/.dylib) are ABI-specific, so the venv must
-    use the same major.minor Python as the frozen app.
+
+# Known-good python.org installer URLs keyed by "major.minor".
+# ABI compat is guaranteed across patch versions within the same minor,
+# so the patch version here can lag the frozen app's patch without issue.
+_PY_INSTALLER_URLS = {
+    '3.12': {
+        'patch': '3.12.8',
+        'x64': 'https://www.python.org/ftp/python/3.12.8/python-3.12.8-amd64.exe',
+        'x86': 'https://www.python.org/ftp/python/3.12.8/python-3.12.8.exe',
+    },
+}
+
+
+def _download_with_progress(url: str, dest: Path, label: str = '') -> None:
+    """Download `url` to `dest`, emitting progress lines to the install buffer."""
+    import urllib.request
+
+    _append_line(f'Downloading {label or url}\n')
+    last_pct = {'v': -1}
+
+    def _hook(block_num, block_size, total_size):
+        if total_size <= 0:
+            return
+        downloaded = block_num * block_size
+        pct = min(100, int(downloaded * 100 / total_size))
+        if pct >= last_pct['v'] + 5 or pct == 100:
+            mb_done = downloaded / (1024 * 1024)
+            mb_total = total_size / (1024 * 1024)
+            _append_line(f'  {pct:3d}%  {mb_done:.1f} / {mb_total:.1f} MB\n')
+            last_pct['v'] = pct
+
+    urllib.request.urlretrieve(url, str(dest), reporthook=_hook)
+
+
+def _install_python_windows(app_ver: str) -> str | None:
+    """Download and silently install Python matching app_ver on Windows.
+
+    Streams progress to the install buffer so the UI terminal shows what's
+    happening. Returns the path to the installed python.exe, or None if
+    anything failed.
+    """
+    entry = _PY_INSTALLER_URLS.get(app_ver)
+    if not entry:
+        _append_line(f'No installer URL configured for Python {app_ver}\n')
+        return None
+
+    arch = 'x86'
+    if os.environ.get('PROCESSOR_ARCHITECTURE', '').upper() == 'AMD64':
+        arch = 'x64'
+    if os.environ.get('PROCESSOR_ARCHITEW6432', '').upper() == 'AMD64':
+        arch = 'x64'
+
+    url = entry.get(arch) or entry['x64']
+    patch = entry['patch']
+
+    _append_line(
+        f'\nPython {app_ver} not found on this system. '
+        f'Downloading Python {patch} installer ({arch})...\n'
+    )
+
+    import tempfile
+    installer = Path(tempfile.gettempdir()) / url.rsplit('/', 1)[-1]
+
+    try:
+        _download_with_progress(url, installer, label=f'Python {patch} ({arch})')
+    except Exception as exc:
+        _append_line(f'Download failed: {exc}\n')
+        return None
+
+    if not installer.exists() or installer.stat().st_size < 1_000_000:
+        _append_line('Downloaded installer is missing or too small; aborting.\n')
+        return None
+
+    _append_line(f'\nRunning Python {patch} installer silently (this may take a minute)...\n')
+    try:
+        result = subprocess.run(
+            [
+                str(installer),
+                '/quiet',
+                'PrependPath=1',
+                'Include_test=0',
+                'InstallAllUsers=0',
+                'Include_pip=1',
+                'Include_launcher=1',
+            ],
+            capture_output=True, text=True, timeout=600,
+        )
+        if result.returncode != 0:
+            _append_line(f'Installer exited with code {result.returncode}\n')
+            if result.stdout:
+                _append_line(result.stdout + '\n')
+            if result.stderr:
+                _append_line(result.stderr + '\n')
+            return None
+    except Exception as exc:
+        _append_line(f'Installer failed: {exc}\n')
+        return None
+    finally:
+        try:
+            installer.unlink()
+        except Exception:
+            pass
+
+    _append_line(f'Python {patch} installed successfully.\n\n')
+
+    # PATH in this process won't pick up the new install — check the
+    # well-known per-user install location directly.
+    app_major, app_minor = app_ver.split('.')
+    candidates = [
+        Path(os.environ.get('LOCALAPPDATA', '')) / 'Programs' / 'Python'
+        / f'Python{app_major}{app_minor}' / 'python.exe',
+        Path(f'C:/Python{app_major}{app_minor}/python.exe'),
+        Path(f'C:/Program Files/Python{app_major}{app_minor}/python.exe'),
+    ]
+    for p in candidates:
+        if p.exists() and _verify_python_version(str(p), app_ver):
+            _append_line(f'Located interpreter: {p}\n')
+            return str(p)
+
+    # Fallback: the py launcher may have been registered.
+    py_launcher = shutil.which('py')
+    if py_launcher:
+        try:
+            resolved = subprocess.check_output(
+                [py_launcher, f'-{app_ver}', '-c',
+                 'import sys;print(sys.executable)'],
+                text=True, stderr=subprocess.DEVNULL, timeout=10,
+            ).strip()
+            if resolved and Path(resolved).exists() and \
+                    _verify_python_version(resolved, app_ver):
+                _append_line(f'Located interpreter via py launcher: {resolved}\n')
+                return resolved
+        except Exception:
+            pass
+
+    _append_line(
+        'Installation reported success but python.exe could not be located.\n'
+    )
+    return None
+
+
+def _find_python() -> str:
+    """Find a Python executable matching the frozen app's version exactly.
+
+    Native extensions (.so/.dylib/.pyd) are ABI-specific, so the venv
+    must use the SAME major.minor Python as the frozen app. On Windows
+    this means resolving `py` launcher with `-<version>` rather than just
+    invoking the launcher default.
     """
     if not getattr(sys, 'frozen', False):
         return sys.executable
 
-    app_ver = f'{sys.version_info.major}.{sys.version_info.minor}'
+    app_ver = f'{sys.version_info.major}.{sys.version_info.minor}'  # e.g. "3.12"
 
     if platform.system() == 'Darwin':
-        exact = [
+        candidates = [
             f'/opt/homebrew/bin/python{app_ver}',
             f'/usr/local/bin/python{app_ver}',
         ]
-        fallback = [
-            '/opt/homebrew/bin/python3.14',
-            '/opt/homebrew/bin/python3.13',
-            '/opt/homebrew/bin/python3.12',
-            '/opt/homebrew/bin/python3.11',
-            '/opt/homebrew/bin/python3.10',
-            '/opt/homebrew/bin/python3',
-            '/usr/local/bin/python3',
-            '/usr/bin/python3',
-        ]
-        candidates = exact + [c for c in fallback if c not in exact]
-    elif platform.system() == 'Windows':
-        candidates = [f'python{app_ver}', 'py', 'python3', 'python']
-    else:
-        candidates = [f'python{app_ver}', 'python3', 'python']
-
-    found = None
-    for c in candidates:
-        path = shutil.which(c)
-        if path:
-            found = path
-            break
-
-    if not found:
+        for c in candidates:
+            if Path(c).exists() and _verify_python_version(c, app_ver):
+                return c
+        # Fallback: let shutil.which find anything matching the major.minor
+        p = shutil.which(f'python{app_ver}')
+        if p and _verify_python_version(p, app_ver):
+            return p
         raise FileNotFoundError(
-            f'Python not found. Install Python {app_ver} from python.org '
-            f'or via Homebrew (brew install python@{app_ver}).'
+            f'Python {app_ver} not found. Install it via '
+            f'`brew install python@{app_ver}` and retry.'
         )
 
-    # Warn if version doesn't match (native .so won't load)
-    try:
-        out = subprocess.check_output(
-            [found, '--version'], text=True, stderr=subprocess.STDOUT,
-        ).strip()
-        ver = out.split()[-1].rsplit('.', 1)[0]  # "Python 3.12.13" → "3.12"
-        if ver != app_ver:
-            log.warning(
-                'Found Python %s but app was built with %s — '
-                'native modules may not load.',
-                ver, app_ver,
-            )
-    except Exception:
-        pass
+    if platform.system() == 'Windows':
+        # 1. Try `py -<ver>` launcher (most reliable on Windows — resolves
+        #    to the specific registered interpreter regardless of PATH).
+        py_launcher = shutil.which('py')
+        if py_launcher:
+            try:
+                resolved = subprocess.check_output(
+                    [py_launcher, f'-{app_ver}', '-c',
+                     'import sys;print(sys.executable)'],
+                    text=True, stderr=subprocess.DEVNULL, timeout=10,
+                ).strip()
+                if resolved and Path(resolved).exists() and \
+                        _verify_python_version(resolved, app_ver):
+                    return resolved
+            except Exception:
+                pass
 
-    return found
+        # 2. Direct `python3.12` in PATH
+        direct = shutil.which(f'python{app_ver}')
+        if direct and _verify_python_version(direct, app_ver):
+            return direct
+
+        # 3. Known install locations
+        import os as _os
+        app_major, app_minor = sys.version_info.major, sys.version_info.minor
+        known_paths = [
+            Path(_os.environ.get('LOCALAPPDATA', '')) / 'Programs' / 'Python'
+            / f'Python{app_major}{app_minor}' / 'python.exe',
+            Path(f'C:/Python{app_major}{app_minor}/python.exe'),
+            Path(f'C:/Program Files/Python{app_major}{app_minor}/python.exe'),
+        ]
+        for p in known_paths:
+            if p.exists() and _verify_python_version(str(p), app_ver):
+                return str(p)
+
+        # 4. Not found anywhere — try an automatic install from python.org.
+        installed = _install_python_windows(app_ver)
+        if installed:
+            return installed
+
+        raise FileNotFoundError(
+            f'Python {app_ver} is required but not found, and the automatic '
+            f'installer failed. Install it from '
+            f'https://www.python.org/downloads/release/python-3128/ '
+            f'(check "Add to PATH"), then try again.'
+        )
+
+    # Linux / other
+    for c in [f'python{app_ver}', 'python3', 'python']:
+        path = shutil.which(c)
+        if path and _verify_python_version(path, app_ver):
+            return path
+    raise FileNotFoundError(
+        f'Python {app_ver} not found. Install it via your package manager '
+        f'(e.g. `apt install python{app_ver}`) and retry.'
+    )
 
 
 def _find_install_script() -> Path:
