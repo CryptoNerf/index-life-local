@@ -118,12 +118,38 @@ def _get_modules_venv() -> Path:
 
 
 def _ensure_modules_venv() -> Path:
-    """Create modules venv if it doesn't exist. Returns path to venv python."""
+    """Create modules venv if it doesn't exist. Returns path to venv python.
+
+    If an existing venv was built against a different Python minor version,
+    it is wiped and recreated — its C extensions (numpy, llama_cpp) would be
+    ABI-incompatible otherwise.
+    """
+    import shutil as _shutil
     venv_dir = _get_modules_venv()
     if sys.platform == "win32":
         venv_python = venv_dir / "Scripts" / "python.exe"
     else:
         venv_python = venv_dir / "bin" / "python3"
+
+    # Detect ABI mismatch with an existing venv
+    cfg = venv_dir / "pyvenv.cfg"
+    if cfg.exists():
+        try:
+            for line in cfg.read_text(encoding="utf-8", errors="ignore").splitlines():
+                if line.strip().lower().startswith("version"):
+                    _, val = line.split("=", 1)
+                    parts = val.strip().split(".")
+                    if len(parts) >= 2:
+                        vmaj, vmin = int(parts[0]), int(parts[1])
+                        cur = (sys.version_info.major, sys.version_info.minor)
+                        if (vmaj, vmin) != cur:
+                            print(f"Existing modules_venv is Python {vmaj}.{vmin}, "
+                                  f"but installer runs on {cur[0]}.{cur[1]}. "
+                                  f"Wiping and recreating...")
+                            _shutil.rmtree(venv_dir, ignore_errors=True)
+                    break
+        except Exception as exc:
+            print(f"  Warning: could not read pyvenv.cfg: {exc}")
 
     if not venv_python.exists():
         print(f"Creating modules virtual environment at {venv_dir} ...")

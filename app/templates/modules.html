@@ -94,6 +94,22 @@
         <p class="install-alt">{{ install.method }}</p>
       </div>
     {% endif %}
+
+    <!-- Troubleshooting: reset venv as last-resort recovery -->
+    <div class="troubleshoot-section">
+      <details>
+        <summary>Troubleshooting</summary>
+        <p class="troubleshoot-desc">
+          If a module install is broken or hangs, you can wipe the Python
+          environment and reinstall from scratch. Downloaded AI models are
+          kept — only the Python packages are removed.
+        </p>
+        <button class="troubleshoot-btn" onclick="resetModules()" id="reset-btn">
+          Reset modules environment
+        </button>
+        <p class="troubleshoot-status" id="reset-status"></p>
+      </details>
+    </div>
   </div>
 
   <footer class="main-footer">
@@ -306,6 +322,46 @@
       if (eventSource) { eventSource.close(); eventSource = null; }
       stopPolling();
       document.getElementById('install-terminal').style.display = 'none';
+    }
+
+    function resetModules() {
+      if (currentModule) {
+        alert('An install is in progress. Wait for it to finish first.');
+        return;
+      }
+      var ok = confirm(
+        'This will delete the Python environment used by modules.\n\n' +
+        'Downloaded AI models are kept. After reset you need to reinstall ' +
+        'modules and restart the app.\n\n' +
+        'Continue?'
+      );
+      if (!ok) return;
+
+      var btn = document.getElementById('reset-btn');
+      var status = document.getElementById('reset-status');
+      btn.disabled = true;
+      btn.textContent = 'Resetting...';
+      status.textContent = '';
+
+      fetch('/modules/reset', { method: 'POST' })
+        .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
+        .then(function(res) {
+          if (!res.ok) {
+            status.textContent = 'Error: ' + (res.data.error || 'unknown');
+            btn.disabled = false;
+            btn.textContent = 'Reset modules environment';
+            return;
+          }
+          status.textContent = res.data.existed
+            ? 'Done. Reload the page or restart the app, then reinstall modules.'
+            : 'Nothing to reset — no environment found.';
+          btn.textContent = 'Reset complete';
+        })
+        .catch(function(err) {
+          status.textContent = 'Network error: ' + err;
+          btn.disabled = false;
+          btn.textContent = 'Reset modules environment';
+        });
     }
   </script>
 </body>

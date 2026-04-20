@@ -496,8 +496,10 @@ def restart_app():
 
     def _do_restart():
         time.sleep(0.5)  # let the HTTP response reach the browser
-        if sys.platform == 'darwin' and getattr(sys, 'frozen', False):
-            exe = Path(sys.executable).resolve()
+        frozen = getattr(sys, 'frozen', False)
+        exe = Path(sys.executable).resolve()
+
+        if sys.platform == 'darwin' and frozen:
             # Walk up to the .app bundle
             app_path = exe
             while app_path.parent != app_path:
@@ -506,18 +508,61 @@ def restart_app():
                 app_path = app_path.parent
             if app_path.suffix == '.app':
                 log.info('Restart: launching %s after 2s delay', app_path)
-                # Spawn a shell that waits for us to die, then relaunches.
-                # This avoids a port conflict (old process must release the
-                # port before the new one tries to bind it).
+                # Wait for us to die before relaunching — avoids port conflict
+                # on rebind.
                 subprocess.Popen(
                     ['bash', '-c', f'sleep 2 && open "{app_path}"'],
                     start_new_session=True,
                 )
             else:
                 log.warning('Restart: could not find .app bundle from %s', exe)
+        elif sys.platform == 'win32' and frozen:
+            log.info('Restart: launching %s after 2s delay', exe)
+            # DETACHED_PROCESS + CREATE_NEW_PROCESS_GROUP so the child
+            # survives parent termination and has no console ties.
+            DETACHED_PROCESS = 0x00000008
+            CREATE_NEW_PROCESS_GROUP = 0x00000200
+            cmd = f'timeout /t 2 /nobreak >nul & start "" "{exe}"'
+            subprocess.Popen(
+                cmd,
+                shell=True,
+                creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
+                close_fds=True,
+            )
+
         log.info('Restart: sending SIGTERM to pid %d', os.getpid())
         os.kill(os.getpid(), signal.SIGTERM)
 
     thread = threading.Thread(target=_do_restart, daemon=True)
     thread.start()
     return jsonify({'restarting': True})
+
+
+@bp.route('/modules/reset', methods=['POST'])
+def reset_modules():
+    """Delete modules_venv so modules can be reinstalled from a clean state.
+
+    Used as an escape hatch when an install is corrupted or the venv's
+    Python version is incompatible. Downloaded AI models are preserved —
+    only the Python environment is wiped.
+    """
+    with _install_lock:
+        if _install_status['running']:
+            return jsonify({'error': 'Install in progress — cannot reset now'}), 409
+
+    data_dir = current_app.config.get('DATA_DIR')
+    if not data_dir:
+        return jsonify({'error': 'DATA_DIR not configured'}), 500
+
+    venv = Path(data_dir) / 'modules_venv'
+    if not venv.is_dir():
+        return jsonify({'reset': True, 'existed': False})
+
+    try:
+        shutil.rmtree(venv)
+        log.info('reset_modules: wiped %s', venv)
+    except Exception as exc:
+        log.error('reset_modules: failed to remove %s: %s', venv, exc)
+        return jsonify({'error': f'Failed to remove venv: {exc}'}), 500
+
+    return jsonify({'reset': True, 'existed': True})

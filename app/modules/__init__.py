@@ -49,10 +49,11 @@ def _add_local_modules_site_packages() -> None:
                     minor = int(parts[1])
                     if (major, minor) != (sys.version_info.major, sys.version_info.minor):
                         log.warning(
-                            'Module venv Python version %s.%s does not match app Python %s.%s. '
-                            'Module deps may fail to import.',
+                            'Module venv Python %s.%s != app Python %s.%s — '
+                            'skipping venv (user must reinstall modules).',
                             major, minor, sys.version_info.major, sys.version_info.minor
                         )
+                        return
         except Exception as exc:
             log.warning('Failed to inspect modules venv: %s', exc)
 
@@ -136,6 +137,29 @@ def check_packages_in_venv(package_names: list[str]) -> list[str]:
     venv = data_dir / 'modules_venv'
     if not venv.is_dir():
         return list(package_names)
+
+    # If the venv was built against a different Python minor version, its C
+    # extensions (numpy, llama_cpp, torch) won't load in this interpreter.
+    # Treat all modules as missing so the user is prompted to reinstall.
+    cfg = venv / 'pyvenv.cfg'
+    if cfg.exists():
+        try:
+            for line in cfg.read_text(encoding='utf-8', errors='ignore').splitlines():
+                if line.strip().lower().startswith('version'):
+                    _, val = line.split('=', 1)
+                    parts = val.strip().split('.')
+                    if len(parts) >= 2:
+                        vmaj, vmin = int(parts[0]), int(parts[1])
+                        if (vmaj, vmin) != (sys.version_info.major, sys.version_info.minor):
+                            log.warning(
+                                'modules_venv Python %d.%d != app Python %d.%d — '
+                                'treating modules as needing reinstall',
+                                vmaj, vmin, sys.version_info.major, sys.version_info.minor,
+                            )
+                            return list(package_names)
+                    break
+        except Exception as exc:
+            log.warning('Failed to read modules_venv pyvenv.cfg: %s', exc)
 
     sp = None
     lib_dir = venv / 'lib'
