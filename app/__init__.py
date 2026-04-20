@@ -273,25 +273,17 @@ def _unfreeze_venv_packages(site_packages: Path):
 # ── App factory ───────────────────────────────────────────────
 
 def _get_data_dir() -> Path:
-    """Return writable data directory.
+    """Return writable data directory — delegates to config._resolve_data_dir.
 
-    In frozen (PyInstaller) builds the .app/.exe bundle is often read-only,
-    so we store user data in a platform-specific user directory.
-    In source mode we keep everything in the project root.
+    Keeping this thin wrapper so callers keep a stable name, but the
+    platform-specific logic (portable-first on Windows, Application
+    Support on macOS, dotfile on Linux) lives in one place in config.py.
     """
-    import sys as _sys, os as _os
-    if getattr(_sys, 'frozen', False):
-        if _sys.platform == 'darwin':
-            d = Path.home() / 'Library' / 'Application Support' / 'index.life'
-        elif _sys.platform == 'win32':
-            d = Path(_os.environ.get('APPDATA', str(Path.home()))) / 'index.life'
-        else:
-            d = Path.home() / '.index-life'
+    from config import _resolve_data_dir
+    d = _resolve_data_dir()
+    if getattr(sys, 'frozen', False):
         d.mkdir(parents=True, exist_ok=True)
-        return d
-    # Source checkout — project root
-    from config import BASE_DIR
-    return BASE_DIR
+    return d
 
 
 def create_app(config_class='config.Config'):

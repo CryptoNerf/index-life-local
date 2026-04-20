@@ -95,26 +95,37 @@ def discover_modules() -> list[str]:
     return sorted(found)
 
 
-def _get_modules_venv() -> Path:
-    """Return path to a dedicated venv for module dependencies.
+def _resolve_user_base() -> Path:
+    """Base dir for user-writable data (venv, models). Mirrors config.py.
 
-    In EXE/frozen context we always create a venv so we never hit
-    PEP 668 'externally-managed-environment' errors with Homebrew Python.
-    In source context we use the currently-running interpreter (assumed to
-    be inside the project venv already).
+    Windows: portable-first (next to exe) with %APPDATA% fallback for
+    legacy installs. macOS: Application Support (forced by .app bundle
+    code-signing). Linux: ~/.index-life. Source checkout: project root.
+
+    Note: on Windows the installer runs inside the modules_venv's python
+    (launched by install_modules.bat), so sys.executable points at the
+    venv — not the app. We use ROOT, which install_modules.py already
+    computes as the exe's directory via _script_parent.
     """
-    if _IS_FROZEN:
-        # EXE distribution — put venv in user data dir (never inside .app bundle)
-        if sys.platform == "darwin":
-            base = Path.home() / "Library" / "Application Support" / "index.life"
-        elif sys.platform == "win32":
-            base = Path(os.environ.get("APPDATA", str(Path.home()))) / "index.life"
-        else:
-            base = Path.home() / ".index-life"
-    else:
-        # Source checkout — put venv in project root
-        base = ROOT
-    return base / "modules_venv"
+    if not _IS_FROZEN:
+        return ROOT
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / "index.life"
+    if sys.platform == "win32":
+        exe_dir = ROOT  # directory containing index-life.exe
+        appdata_dir = Path(os.environ.get("APPDATA", str(Path.home()))) / "index.life"
+        markers = ("diary.db", "modules_venv", "models", "profile_photos")
+        if any((exe_dir / m).exists() for m in markers):
+            return exe_dir
+        if any((appdata_dir / m).exists() for m in markers):
+            return appdata_dir
+        return exe_dir
+    return Path.home() / ".index-life"
+
+
+def _get_modules_venv() -> Path:
+    """Return path to a dedicated venv for module dependencies."""
+    return _resolve_user_base() / "modules_venv"
 
 
 def _ensure_modules_venv() -> Path:
@@ -124,7 +135,6 @@ def _ensure_modules_venv() -> Path:
     it is wiped and recreated — its C extensions (numpy, llama_cpp) would be
     ABI-incompatible otherwise.
     """
-    import shutil as _shutil
     venv_dir = _get_modules_venv()
     if sys.platform == "win32":
         venv_python = venv_dir / "Scripts" / "python.exe"
@@ -146,7 +156,7 @@ def _ensure_modules_venv() -> Path:
                             print(f"Existing modules_venv is Python {vmaj}.{vmin}, "
                                   f"but installer runs on {cur[0]}.{cur[1]}. "
                                   f"Wiping and recreating...")
-                            _shutil.rmtree(venv_dir, ignore_errors=True)
+                            shutil.rmtree(venv_dir, ignore_errors=True)
                     break
         except Exception as exc:
             print(f"  Warning: could not read pyvenv.cfg: {exc}")
@@ -369,14 +379,7 @@ def download_file(url: str, dest: Path, description: str = "", max_retries: int 
 def _get_models_dir() -> Path:
     """Return writable models directory."""
     if _IS_FROZEN:
-        # Store models in user data dir (not inside .app bundle)
-        if sys.platform == "darwin":
-            base = Path.home() / "Library" / "Application Support" / "index.life"
-        elif sys.platform == "win32":
-            base = Path(os.environ.get("APPDATA", str(Path.home()))) / "index.life"
-        else:
-            base = Path.home() / ".index-life"
-        return base / "models" / "assistant"
+        return _resolve_user_base() / "models" / "assistant"
     return MODULES_DIR / "assistant" / "models"
 
 

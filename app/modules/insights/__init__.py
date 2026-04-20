@@ -14,11 +14,8 @@ bp = Blueprint(
 
 
 def _get_user_data_dir() -> Path:
-    if sys.platform == 'darwin':
-        return Path.home() / 'Library' / 'Application Support' / 'index.life'
-    elif sys.platform == 'win32':
-        return Path(os.environ.get('APPDATA', str(Path.home()))) / 'index.life'
-    return Path.home() / '.index-life'
+    from app.modules import _get_user_data_dir as _resolve
+    return _resolve()
 
 
 def sentinel_path() -> Path:

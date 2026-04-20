@@ -45,12 +45,10 @@ BANNER = """
 def setup_logging():
     """Configure logging."""
     if getattr(sys, 'frozen', False):
-        if sys.platform == 'darwin':
-            log_dir = os.path.expanduser('~/Library/Application Support/index.life')
-        elif sys.platform == 'win32':
-            log_dir = os.path.join(os.environ.get('APPDATA', os.path.expanduser('~')), 'index.life')
-        else:
-            log_dir = os.path.expanduser('~/.index-life')
+        # Use the same resolver as the rest of the app so logs end up next
+        # to diary.db (portable on Windows, Application Support on macOS).
+        from config import _resolve_data_dir
+        log_dir = str(_resolve_data_dir())
         os.makedirs(log_dir, exist_ok=True)
         log_file = os.path.join(log_dir, 'index-life.log')
         logging.basicConfig(

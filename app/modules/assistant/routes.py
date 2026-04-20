@@ -501,17 +501,25 @@ def _get_llm():
             if profile_name:
                 log.info(f'LLM hardware profile applied: {profile_name}')
 
-            # Search for model in user data dir first, then bundled location
+            # Search for model in user data dir first, then bundled location.
+            # On Windows we check both next-to-exe (portable) and %APPDATA%
+            # (legacy) so existing users don't have to re-download the model.
             gguf_files = []
             _search_dirs = [Path(__file__).parent / 'models']
             if getattr(sys, 'frozen', False):
                 if sys.platform == 'darwin':
-                    _data = Path.home() / 'Library' / 'Application Support' / 'index.life' / 'models' / 'assistant'
+                    _search_dirs.insert(
+                        0,
+                        Path.home() / 'Library' / 'Application Support' / 'index.life'
+                        / 'models' / 'assistant',
+                    )
                 elif sys.platform == 'win32':
-                    _data = Path(os.environ.get('APPDATA', str(Path.home()))) / 'index.life' / 'models' / 'assistant'
+                    exe_dir = Path(sys.executable).resolve().parent
+                    appdata = Path(os.environ.get('APPDATA', str(Path.home()))) / 'index.life'
+                    _search_dirs.insert(0, appdata / 'models' / 'assistant')
+                    _search_dirs.insert(0, exe_dir / 'models' / 'assistant')
                 else:
-                    _data = Path.home() / '.index-life' / 'models' / 'assistant'
-                _search_dirs.insert(0, _data)
+                    _search_dirs.insert(0, Path.home() / '.index-life' / 'models' / 'assistant')
             for model_dir in _search_dirs:
                 if model_dir.exists():
                     gguf_files = list(model_dir.glob('*.gguf'))

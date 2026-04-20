@@ -8,19 +8,40 @@ from pathlib import Path
 # Base directory (where the source code / bundled code lives)
 BASE_DIR = Path(__file__).parent.absolute()
 
-# Data directory (where user data is stored: DB, backups, photos)
-# In frozen builds, write to a proper user-data location so we never
-# write inside the .app bundle (macOS) or .exe directory (Windows).
-if getattr(sys, 'frozen', False):
+
+def _resolve_data_dir() -> Path:
+    """Pick the user-data base directory.
+
+    Windows is portable-first: data lives next to the exe so users can keep
+    everything on any drive and back up the whole folder. Existing users
+    with data in %APPDATA% (legacy layout) keep using it — we detect the
+    presence of known markers (diary.db, modules_venv, models) to decide.
+
+    macOS stays in Application Support — .app bundles are code-signed and
+    we can't write inside them. Linux uses the conventional dotfile dir.
+    """
+    if not getattr(sys, 'frozen', False):
+        return BASE_DIR
+
     if sys.platform == 'darwin':
-        DATA_DIR = Path.home() / 'Library' / 'Application Support' / 'index.life'
-    elif sys.platform == 'win32':
-        DATA_DIR = Path(os.environ.get('APPDATA', str(Path.home()))) / 'index.life'
-    else:
-        DATA_DIR = Path.home() / '.index-life'
+        return Path.home() / 'Library' / 'Application Support' / 'index.life'
+
+    if sys.platform == 'win32':
+        exe_dir = Path(sys.executable).resolve().parent
+        appdata_dir = Path(os.environ.get('APPDATA', str(Path.home()))) / 'index.life'
+        markers = ('diary.db', 'modules_venv', 'models', 'profile_photos')
+        if any((exe_dir / m).exists() for m in markers):
+            return exe_dir
+        if any((appdata_dir / m).exists() for m in markers):
+            return appdata_dir
+        return exe_dir  # fresh install — go portable
+
+    return Path.home() / '.index-life'
+
+
+DATA_DIR = _resolve_data_dir()
+if getattr(sys, 'frozen', False):
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-else:
-    DATA_DIR = BASE_DIR
 
 
 class Config:

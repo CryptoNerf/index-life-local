@@ -64,13 +64,8 @@ for line in sys.stdin:
 
 def _find_venv_python() -> Path:
     """Locate the modules_venv Python interpreter."""
-    if sys.platform == 'darwin':
-        base = Path.home() / 'Library' / 'Application Support' / 'index.life'
-    elif sys.platform == 'win32':
-        base = Path(os.environ.get('APPDATA', str(Path.home()))) / 'index.life'
-    else:
-        base = Path.home() / '.index-life'
-
+    from app.modules import _get_user_data_dir
+    base = _get_user_data_dir()
     venv = base / 'modules_venv'
     if sys.platform == 'win32':
         python = venv / 'Scripts' / 'python.exe'
