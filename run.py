@@ -136,43 +136,49 @@ def main():
     except ImportError:
         webview = None
 
-    if webview is not None:
-        import signal
-        signal.signal(signal.SIGINT, lambda *_: os._exit(0))
-        signal.signal(signal.SIGTERM, lambda *_: os._exit(0))
-
-        window = webview.create_window(
-            'index.life',
-            server_url,
-            width=1280,
-            height=800,
-            min_size=(900, 600),
-            easy_drag=False,   # default True intercepts first click for window drag
-            text_select=True,  # allow text selection like in a browser
-        )
-
-        # Intercept window close BEFORE AppKit starts finalizing PyObjC
-        # objects.  The `closing` event fires while the window is still
-        # alive — calling os._exit(0) here kills the process cleanly
-        # before the crash-prone cleanup code runs.
-        window.events.closing += lambda: os._exit(0)
-
-        try:
-            webview.start()
-        except SystemExit:
-            pass
-        finally:
-            os._exit(0)
-    else:
-        # pywebview not installed — fall back to browser (dev mode without it)
+    def _browser_fallback(reason: str | None = None):
         import webbrowser
-        print(f"\n  [>] Opening browser at {server_url}\n")
+        if reason:
+            print(f"\n  [!] Native window unavailable: {reason}")
+        print(f"  [>] Opening browser at {server_url}\n")
         webbrowser.open(server_url)
         try:
             flask_thread.join()
         except KeyboardInterrupt:
             print('\n\n[Shutdown] Shutting down...')
             sys.exit(0)
+
+    if webview is None:
+        _browser_fallback('pywebview not installed')
+        return
+
+    import signal
+    signal.signal(signal.SIGINT, lambda *_: os._exit(0))
+    signal.signal(signal.SIGTERM, lambda *_: os._exit(0))
+
+    window = webview.create_window(
+        'index.life',
+        server_url,
+        width=1280,
+        height=800,
+        min_size=(900, 600),
+        easy_drag=False,
+        text_select=True,
+    )
+
+    # Clean shutdown when user closes the window — avoids crash-prone
+    # PyObjC cleanup on macOS. Only called on real user close, not errors.
+    window.events.closing += lambda: os._exit(0)
+
+    try:
+        webview.start()
+    except SystemExit:
+        os._exit(0)
+    except Exception as e:
+        import traceback
+        print('\n[Error] Native window failed to start:', file=sys.stderr)
+        traceback.print_exc()
+        _browser_fallback(str(e))
 
 
 if __name__ == '__main__':
