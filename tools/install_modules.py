@@ -630,8 +630,20 @@ def install_assistant_vulkan_prebuilt() -> None:
     print("(No Vulkan SDK needed — uses GPU driver's Vulkan runtime)")
     print()
 
-    # Install other deps first
-    run_pip(["install", "sentence-transformers>=2.2.0", "numpy>=1.24.0", "Pillow"])
+    # Install non-llama deps + llama-cpp-python's runtime deps up front.
+    # We'll install the wheel itself with --no-deps to prevent pip from
+    # replacing our pre-built Vulkan wheel with a generic one from PyPI,
+    # so anything llama-cpp-python imports at runtime (diskcache, jinja2,
+    # typing_extensions) has to be installed explicitly here.
+    run_pip([
+        "install",
+        "sentence-transformers>=2.2.0",
+        "numpy>=1.24.0",
+        "Pillow",
+        "diskcache>=5.6.1",
+        "jinja2>=2.11.3",
+        "typing-extensions>=4.5.0",
+    ])
 
     # Download and install pre-built wheel
     url, filename = _get_vulkan_wheel_url()
