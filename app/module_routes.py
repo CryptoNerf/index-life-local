@@ -573,11 +573,20 @@ def _run_install(module_name: str, profile: str):
             env['CMAKE_ARGS'] = cmake
             env['FORCE_CMAKE'] = '1'
 
+        # Force UTF-8 for the child's stdout/stderr. Without this, piped
+        # Python on Windows picks the ANSI codepage (e.g. cp1251 on RU
+        # systems) and any non-ASCII character in install output crashes
+        # the script with UnicodeEncodeError.
+        env['PYTHONIOENCODING'] = 'utf-8'
+        env['PYTHONUTF8'] = '1'
+
         proc = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
+            encoding='utf-8',
+            errors='replace',
             bufsize=1,
             env=env,
         )

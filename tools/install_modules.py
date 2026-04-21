@@ -25,6 +25,16 @@ import urllib.request
 from pathlib import Path
 
 
+# Force UTF-8 on stdout/stderr so progress messages with non-ASCII
+# characters (→, ✓, Cyrillic, etc.) don't crash on Windows consoles
+# whose default encoding is cp1251/cp866.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+    except Exception:
+        pass
+
+
 # Detect context: EXE distribution or source checkout.
 # Source:  <project>/tools/install_modules.py  → parent.parent is project root
 # EXE Win: <exe_dir>/_internal/tools/install_modules.py → parent.parent is _internal
