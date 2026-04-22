@@ -74,16 +74,15 @@ VULKAN_WHEEL_TAG = "v2.5.0"  # Release tag containing Vulkan wheels
 def _get_vulkan_wheel_url() -> tuple[str, str]:
     """Return (url, filename) for the pre-built Vulkan wheel matching this OS.
 
-    Py tag is derived from the current interpreter (sys.version_info), so the
-    same exe can upgrade Python versions without a hardcoded tag mismatch.
+    llama-cpp-python >= 0.3.20 publishes stable-ABI wheels tagged `py3-none`,
+    so a single wheel per platform works across all Python 3.x minor versions.
     """
     ver = LLAMA_CPP_VERSION
     if sys.platform == "win32":
         plat = "win_amd64"
     else:
         plat = "linux_x86_64"
-    py_tag = f"cp{sys.version_info.major}{sys.version_info.minor}"
-    filename = f"llama_cpp_python-{ver}-{py_tag}-{py_tag}-{plat}.whl"
+    filename = f"llama_cpp_python-{ver}-py3-none-{plat}.whl"
     url = f"https://github.com/{GITHUB_REPO}/releases/download/{VULKAN_WHEEL_TAG}/{filename}"
     return url, filename
 
