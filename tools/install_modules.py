@@ -174,21 +174,37 @@ def _ensure_modules_venv() -> Path:
     if not venv_python.exists():
         print(f"Creating modules virtual environment at {venv_dir} ...")
         subprocess.check_call([sys.executable, "-m", "venv", str(venv_dir)])
-        # Best-effort pip self-upgrade. On Windows + antivirus + network
-        # drives this can fail with WinError 32 (file locked) because pip
-        # imports its own modules while trying to overwrite them. The
-        # bundled pip works fine for package installs — don't let a
-        # cosmetic upgrade block module setup.
-        try:
-            subprocess.check_call(
-                [str(venv_python), "-m", "pip", "install", "--upgrade", "pip"],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            )
-        except subprocess.CalledProcessError as exc:
-            print(f"  (pip self-upgrade skipped: {exc})")
         print("Virtual environment created.")
 
+    # Verify pip is functional. On Windows, a previously-interrupted
+    # `pip install --upgrade pip` can leave pip in a broken state where
+    # `pip._internal.cli` is unimportable. Heal it via ensurepip.
+    _ensure_pip_works(venv_python)
+
     return venv_python
+
+
+def _ensure_pip_works(venv_python: Path) -> None:
+    """Make sure `python -m pip --version` succeeds. Heal via ensurepip if not."""
+    try:
+        subprocess.check_call(
+            [str(venv_python), "-m", "pip", "--version"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        return
+    except Exception:
+        pass
+
+    print("  pip in modules_venv looks broken — repairing via ensurepip...")
+    try:
+        subprocess.check_call(
+            [str(venv_python), "-m", "ensurepip", "--upgrade", "--default-pip"],
+        )
+    except Exception as exc:
+        raise RuntimeError(
+            f"Could not repair pip in modules_venv: {exc}. "
+            f"Try Reset modules and reinstall."
+        )
 
 
 def run_pip(args: list[str], env: dict | None = None) -> None:
@@ -209,9 +225,11 @@ def ensure_stdlib_pth() -> None:
                         and adds DLL search directories
     """
     if _script_parent.name != "_internal":
-        return  # source context — not needed
+        return  # .pth / DLL-dir workaround is Windows-frozen specific
 
-    venv_dir = ROOT / "modules_venv"
+    # Respect the marker-aware resolver so we target the venv the app
+    # actually uses, not whatever happens to sit next to the exe.
+    venv_dir = _get_modules_venv()
     cfg = venv_dir / "pyvenv.cfg"
     if not cfg.exists():
         return
@@ -419,29 +437,36 @@ def download_model() -> None:
     print()
     print("Downloading AI model (~4.7 GB, this may take a while)...")
 
-    # Prefer huggingface_hub (installed via sentence-transformers).
-    # It handles rate-limits, resumable downloads, and proper auth headers.
-    venv_python = _ensure_modules_venv()
+    # Direct URL download first — emits line-based progress (newline per
+    # percent) so the in-app terminal and its SSE stream show progress.
+    # huggingface_hub uses tqdm with carriage-returns which the UI strips,
+    # making it look frozen. HF is kept as a fallback because it handles
+    # CDN edge cases (rate limits, redirects) on some networks.
     try:
-        subprocess.check_call([
-            str(venv_python), "-c",
-            f"from huggingface_hub import hf_hub_download; "
-            f"hf_hub_download("
-            f"  repo_id='{MODEL_HF_REPO}',"
-            f"  filename='{MODEL_FILENAME}',"
-            f"  local_dir=r'{models_dir}',"
-            f")"
-        ])
-        if dest.exists():
-            print(f"  Model download complete: {dest.name}")
-            return
+        download_file(MODEL_URL, dest,
+                      description=f"{MODEL_FILENAME} ({MODEL_HF_REPO})")
+        print("  Model download complete!")
+        return
     except Exception as exc:
-        print(f"  huggingface_hub download failed: {exc}")
-        print("  Falling back to direct URL download...")
+        print(f"  Direct download failed: {exc}")
+        print("  Falling back to huggingface_hub...")
 
-    # Fallback: direct download with User-Agent header
-    download_file(MODEL_URL, dest, description=f"{MODEL_FILENAME} ({MODEL_HF_REPO})")
-    print("  Model download complete!")
+    venv_python = _ensure_modules_venv()
+    # local_dir_use_symlinks=False: Windows without Developer Mode cannot
+    # create symlinks, and HF's default ("auto") may still try. With
+    # symlinks off the file is copied/moved directly into local_dir.
+    subprocess.check_call([
+        str(venv_python), "-c",
+        f"from huggingface_hub import hf_hub_download; "
+        f"hf_hub_download("
+        f"  repo_id='{MODEL_HF_REPO}',"
+        f"  filename='{MODEL_FILENAME}',"
+        f"  local_dir=r'{models_dir}',"
+        f"  local_dir_use_symlinks=False,"
+        f")"
+    ])
+    if dest.exists():
+        print(f"  Model download complete: {dest.name}")
 
 
 # ---------------------------------------------------------------------------
@@ -705,6 +730,44 @@ def install_assistant_vulkan_source() -> None:
     )
 
 
+_SMOKE_TESTS = {
+    "assistant": "import llama_cpp, sentence_transformers, numpy, diskcache, jinja2, typing_extensions",
+    "voice": "import faster_whisper",
+}
+
+
+def smoke_test(module_name: str) -> None:
+    """Run a quick `python -c "import X"` in the venv to catch missing deps now
+    rather than at runtime. Raises SystemExit with a useful message on failure.
+    """
+    probe = _SMOKE_TESTS.get(module_name)
+    if not probe:
+        return
+
+    venv_python = _ensure_modules_venv()
+    print()
+    print(f"Verifying {module_name} imports...")
+    try:
+        subprocess.check_call(
+            [str(venv_python), "-c", probe],
+            stdout=subprocess.DEVNULL,
+        )
+    except subprocess.CalledProcessError:
+        # Re-run without DEVNULL so the user sees the actual traceback.
+        print()
+        print(f"Smoke test failed — a runtime dependency is missing. Details:")
+        print()
+        try:
+            subprocess.call([str(venv_python), "-c", probe])
+        except Exception:
+            pass
+        raise SystemExit(
+            f"Installation of {module_name} completed package install but "
+            f"imports failed. Try Reset modules and reinstall."
+        )
+    print(f"  {module_name} import check OK.")
+
+
 def install_module(
     module_name: str,
     profile: str | None = None,
@@ -741,6 +804,11 @@ def install_module(
     if module_name == "assistant":
         print()
         download_model()
+
+    # Smoke-test: verify the module's runtime imports actually succeed. This
+    # catches missing transitive deps (diskcache, jinja2 etc.) at install
+    # time rather than at first chat/voice use.
+    smoke_test(module_name)
 
 
 # ---------------------------------------------------------------------------

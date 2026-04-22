@@ -14,6 +14,13 @@ REQUIRED_PACKAGES = [
     'llama_cpp',
     'sentence_transformers',
     'numpy',
+    # Transitive deps of llama-cpp-python — we install the Vulkan wheel with
+    # --no-deps (so pip doesn't replace it with a PyPI build), so these must
+    # be checked explicitly. Filesystem-only check in check_packages_in_venv
+    # treats `foo.py` or `foo/` as present; both match here.
+    'diskcache',
+    'jinja2',
+    'typing_extensions',
 ]
 
 

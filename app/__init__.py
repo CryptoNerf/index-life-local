@@ -312,6 +312,26 @@ def _get_data_dir() -> Path:
     return d
 
 
+def _cleanup_stale_modules_venvs(data_dir: Path) -> None:
+    """Remove any modules_venv.stale-* directories left by a deferred reset.
+
+    The Reset button renames the venv instead of deleting it when a .pyd
+    is locked by the current process. After a restart the lock is gone
+    and we can finish the removal here.
+    """
+    import shutil as _shutil
+    try:
+        for p in data_dir.glob('modules_venv.stale-*'):
+            if p.is_dir():
+                try:
+                    _shutil.rmtree(p)
+                    log.info('Removed stale modules venv: %s', p)
+                except Exception as exc:
+                    log.warning('Could not remove stale venv %s: %s', p, exc)
+    except Exception:
+        pass
+
+
 def create_app(config_class='config.Config'):
     """Create and configure Flask application"""
     app = Flask(__name__)
@@ -330,6 +350,8 @@ def create_app(config_class='config.Config'):
     app.config['DATA_DIR'] = data_dir
 
     log.info('Data directory: %s', data_dir)
+
+    _cleanup_stale_modules_venvs(data_dir)
 
     # Add modules_venv site-packages to sys.path so we can import
     # dependencies installed by the in-app module installer.

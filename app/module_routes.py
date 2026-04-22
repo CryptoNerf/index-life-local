@@ -747,8 +747,32 @@ def reset_modules():
     try:
         shutil.rmtree(venv)
         log.info('reset_modules: wiped %s', venv)
-    except Exception as exc:
-        log.error('reset_modules: failed to remove %s: %s', venv, exc)
-        return jsonify({'error': f'Failed to remove venv: {exc}'}), 500
-
-    return jsonify({'reset': True, 'existed': True})
+        return jsonify({'reset': True, 'existed': True})
+    except Exception as rm_exc:
+        # Windows: .pyd files loaded by the current process (e.g. hf_xet,
+        # numpy) hold a lock and can't be deleted. Renaming the parent
+        # folder still works, and the stale dir will be removed at the
+        # next app start (see _cleanup_stale_modules_venv in app/__init__.py).
+        import time as _time
+        stale = venv.with_name(f'modules_venv.stale-{int(_time.time())}')
+        try:
+            venv.rename(stale)
+            log.info('reset_modules: renamed %s -> %s (pending delete on restart)',
+                     venv, stale)
+            return jsonify({
+                'reset': True,
+                'existed': True,
+                'deferred': True,
+                'message': (
+                    'Modules environment is in use by the running app and will '
+                    'be cleaned up on the next restart. Please restart the app '
+                    'now to complete the reset.'
+                ),
+            })
+        except Exception as mv_exc:
+            log.error('reset_modules: rmtree failed (%s) and rename failed (%s)',
+                      rm_exc, mv_exc)
+            return jsonify({
+                'error': f'Could not reset modules_venv: {rm_exc}. '
+                         f'Restart the application and try again.'
+            }), 500
