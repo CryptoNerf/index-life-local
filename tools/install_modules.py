@@ -67,8 +67,8 @@ MODEL_URL = f"https://huggingface.co/{MODEL_HF_REPO}/resolve/main/{MODEL_FILENAM
 
 # Pre-built Vulkan wheel (GitHub Release — no Vulkan SDK needed for users)
 GITHUB_REPO = "CryptoNerf/index-life-local"
-LLAMA_CPP_VERSION = "0.3.15"
-VULKAN_WHEEL_TAG = "v2.4.0"  # Release tag containing Vulkan wheels
+LLAMA_CPP_VERSION = "0.3.30"
+VULKAN_WHEEL_TAG = "v2.5.0"  # Release tag containing Vulkan wheels
 
 
 def _get_vulkan_wheel_url() -> tuple[str, str]:
@@ -344,8 +344,21 @@ sys.meta_path.insert(0, _BlockTorch())
 # Download utilities
 # ---------------------------------------------------------------------------
 
+def _head_content_length(url: str) -> int | None:
+    """Fetch expected content-length via HEAD (follows redirects). Returns
+    None if the server doesn't advertise it (chunked transfer etc.)."""
+    try:
+        req = urllib.request.Request(url, method="HEAD")
+        req.add_header("User-Agent", "index-life/2.0")
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            cl = resp.headers.get("Content-Length")
+            return int(cl) if cl else None
+    except Exception:
+        return None
+
+
 def download_file(url: str, dest: Path, description: str = "", max_retries: int = 3) -> None:
-    """Download a file with progress indicator and retry on network errors."""
+    """Download a file with progress indicator, size verification, and retry."""
     if dest.exists():
         print(f"  Already exists: {dest.name}")
         return
@@ -356,6 +369,10 @@ def download_file(url: str, dest: Path, description: str = "", max_retries: int 
     label = description or dest.name
     print(f"  Downloading {label}...")
     print(f"  URL: {url}")
+
+    expected_size = _head_content_length(url)
+    if expected_size:
+        print(f"  Expected size: {expected_size / (1024*1024):.1f} MB")
 
     import time as _time
 
@@ -382,6 +399,20 @@ def download_file(url: str, dest: Path, description: str = "", max_retries: int 
         try:
             urllib.request.urlretrieve(url, str(tmp), reporthook=progress_hook)
             print()
+
+            # Verify we got the full file. urllib.urlretrieve only checks
+            # Content-Length when it's present — HF CDN often returns chunked
+            # transfers with no length, letting a truncated download pass
+            # silently. A cross-check against HEAD's Content-Length catches
+            # FAT32 4 GB limits and aborted connections.
+            actual_size = tmp.stat().st_size
+            if expected_size and actual_size < expected_size * 0.99:
+                raise IOError(
+                    f"Incomplete download: got {actual_size:,} bytes, "
+                    f"expected {expected_size:,} bytes. Often caused by "
+                    f"FAT32 drives (4 GB file limit) or aborted connection."
+                )
+
             # On Windows, file may be briefly locked after download; retry rename
             for rename_attempt in range(5):
                 try:
@@ -392,7 +423,7 @@ def download_file(url: str, dest: Path, description: str = "", max_retries: int 
                         _time.sleep(1)
                     else:
                         raise
-            print(f"  Saved: {dest.name}")
+            print(f"  Saved: {dest.name} ({actual_size / (1024*1024):.1f} MB)")
             return  # success
         except Exception as exc:
             last_error = exc
