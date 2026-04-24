@@ -38,15 +38,11 @@ MODULE_INFO = {
         'description': 'Chat with an AI psychologist that understands your diary entries. Uses Qwen3.5-9B model with local GPU inference.',
         'size': '~5 GB (model download)',
     },
-    'voice': {
-        'title': 'Voice Dictation',
-        'description': 'Dictate diary entries with your voice. Uses Whisper speech recognition.',
-        'size': '~1 GB (model download)',
-    },
     'deep_mind': {
         'title': 'Neural Map',
         'description': 'Visualize emotional themes from your diary as a neural topic map.',
         'size': '~50 MB',
+        'requires': ['assistant'],
     },
 }
 
@@ -468,10 +464,21 @@ def modules_page():
     discovered = discover_modules()
     active = current_app.config.get('ACTIVE_MODULES', [])
 
+    def _unmet(info: dict) -> list[str]:
+        return [r for r in info.get('requires', []) if r not in active]
+
+    def _labels(names: list[str]) -> list[str]:
+        return [MODULE_INFO.get(r, {}).get('title', r) for r in names]
+
     modules = []
     for name in discovered:
-        info = MODULE_INFO.get(name, {})
+        # Hide modules not registered in MODULE_INFO — lets us take a
+        # module out of circulation without deleting its code.
+        if name not in MODULE_INFO:
+            continue
+        info = MODULE_INFO[name]
         deps_ok = len(_check_module_deps(name)) == 0
+        unmet = _unmet(info)
         modules.append({
             'name': name,
             'title': info.get('title', name.replace('_', ' ').title()),
@@ -479,11 +486,14 @@ def modules_page():
             'size': info.get('size', ''),
             'active': name in active,
             'installed_needs_restart': deps_ok and name not in active,
+            'unmet_requires': unmet,
+            'requires_labels': _labels(unmet),
         })
 
     # Add known modules not yet discovered (folder doesn't exist)
     for name, info in MODULE_INFO.items():
         if name not in discovered:
+            unmet = _unmet(info)
             modules.append({
                 'name': name,
                 'title': info.get('title', name),
@@ -491,6 +501,8 @@ def modules_page():
                 'size': info.get('size', ''),
                 'active': False,
                 'installed_needs_restart': False,
+                'unmet_requires': unmet,
+                'requires_labels': _labels(unmet),
             })
 
     install = _get_install_instructions()
@@ -514,6 +526,18 @@ def install_module_route():
         module_name = request.form.get('module', '').strip()
         if module_name not in MODULE_INFO:
             return jsonify({'error': f'Unknown module: {module_name}'}), 400
+
+        # Module-level dependencies: refuse install when a required module
+        # isn't currently active. Prevents users from installing deep_mind
+        # (which needs assistant's LLM at runtime) before assistant.
+        active_mods = current_app.config.get('ACTIVE_MODULES', [])
+        requires = MODULE_INFO[module_name].get('requires', [])
+        unmet = [r for r in requires if r not in active_mods]
+        if unmet:
+            labels = [MODULE_INFO.get(r, {}).get('title', r) for r in unmet]
+            return jsonify({
+                'error': f'Requires active module(s): {", ".join(labels)}'
+            }), 400
 
         profile = request.form.get('profile', 'auto')
 
@@ -597,6 +621,19 @@ def _run_install(module_name: str, profile: str):
         proc.wait()
 
         if proc.returncode == 0:
+            # Sentinel-gated modules need explicit activation after pip
+            # succeeds — without it, deep_mind would auto-activate whenever
+            # assistant's transitive deps (numpy/sklearn) are present.
+            if module_name == 'deep_mind':
+                try:
+                    from app.modules.deep_mind import sentinel_path
+                    p = sentinel_path()
+                    p.parent.mkdir(parents=True, exist_ok=True)
+                    p.write_text('enabled\n')
+                    _append_line(f'Activated deep_mind (sentinel: {p})\n')
+                except Exception as exc:
+                    _append_line(f'Warning: could not activate deep_mind: {exc}\n')
+
             _install_status['success'] = True
             _install_status['verified'] = True
             _append_line('\nInstallation complete!\n')

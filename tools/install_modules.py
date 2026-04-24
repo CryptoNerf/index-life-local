@@ -763,6 +763,7 @@ def install_assistant_vulkan_source() -> None:
 _SMOKE_TESTS = {
     "assistant": "import llama_cpp, sentence_transformers, numpy, diskcache, jinja2, typing_extensions",
     "voice": "import faster_whisper",
+    "deep_mind": "import numpy, sklearn, hdbscan",
 }
 
 

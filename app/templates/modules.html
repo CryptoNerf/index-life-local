@@ -63,13 +63,22 @@
             {% if mod.size %}
               <span class="module-size">{{ mod.size }}</span>
             {% endif %}
-            <div class="module-action-row">
-              <button class="install-btn"
-                      onclick="startInstall('{{ mod.name }}')"
-                      id="btn-{{ mod.name }}">
-                Install
-              </button>
-            </div>
+            {% if mod.unmet_requires %}
+              <p class="module-action-hint">
+                Requires: {{ mod.requires_labels | join(', ') }}
+              </p>
+              <div class="module-action-row">
+                <button class="install-btn" disabled>Install</button>
+              </div>
+            {% else %}
+              <div class="module-action-row">
+                <button class="install-btn"
+                        onclick="startInstall('{{ mod.name }}')"
+                        id="btn-{{ mod.name }}">
+                  Install
+                </button>
+              </div>
+            {% endif %}
           {% endif %}
         </div>
       {% endfor %}
