@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>activities</title>
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/calendar.css') }}">
+  <link rel="stylesheet" href="{{ url_for('insights.static', filename='css/insights.css') }}">
+  <style>
+    .activities-wrap {
+      max-width: 1120px;
+      margin: 0 auto;
+    }
+    .activities-canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+      margin: 24px 0 8px;
+    }
+    .activity-circle {
+      cursor: default;
+      transition: stroke-width 0.15s ease;
+    }
+    .activity-circle:hover {
+      stroke: #000;
+      stroke-width: 2;
+    }
+    .activity-label {
+      font-family: 'Times New Roman', serif;
+      pointer-events: none;
+      text-anchor: middle;
+      dominant-baseline: middle;
+      fill: #000;
+    }
+    .activity-count {
+      font-family: 'Times New Roman', serif;
+      pointer-events: none;
+      text-anchor: middle;
+      dominant-baseline: middle;
+      fill: #555;
+      font-size: 11px;
+    }
+    .activities-summary-row {
+      text-align: center;
+      color: #777;
+      font-size: 14px;
+      font-family: 'Times New Roman', serif;
+      margin-top: 20px;
+      max-width: 720px;
+      margin-left: auto;
+      margin-right: auto;
+      line-height: 1.5;
+    }
+    .activities-empty {
+      color: #999;
+      font-style: italic;
+      text-align: center;
+      padding: 40px 0;
+    }
+    .activities-backfill-hint {
+      color: #e8a83e;
+      font-family: 'Times New Roman', serif;
+      text-align: center;
+      margin: 24px 0;
+      font-size: 15px;
+    }
+    .reextract-section {
+      text-align: center;
+      margin: 36px 0 12px;
+      font-family: 'Times New Roman', serif;
+    }
+    .reextract-btn {
+      background: transparent;
+      color: #555;
+      border: 1px solid #999;
+      padding: 8px 22px;
+      font-family: 'Times New Roman', serif;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    .reextract-btn:hover { background: #555; color: #fff; }
+    .reextract-btn:disabled { cursor: default; opacity: 0.6; }
+    .reextract-status {
+      margin-top: 10px;
+      font-size: 13px;
+      color: #777;
+      min-height: 16px;
+    }
+    .activities-legend {
+      display: flex;
+      justify-content: center;
+      gap: 24px;
+      margin-top: 12px;
+      font-family: 'Times New Roman', serif;
+      font-size: 13px;
+      color: #666;
+    }
+    .legend-swatch {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      vertical-align: middle;
+      margin-right: 6px;
+      border: 1px solid rgba(0,0,0,0.2);
+    }
+  </style>
+</head>
+<body>
+  <header class="main-header">
+    <nav class="top-menu">
+      <a href="{{ url_for('main.mood_grid') }}" class="menu-link">index.life</a>
+      <a href="{{ url_for('main.life_calendar') }}" class="menu-link">life in weeks</a>
+      <a href="{{ url_for('insights.insights_page') }}" class="menu-link active-link">insights</a>
+      {% if module_active('assistant') %}
+        <a href="{{ url_for('assistant.chat') }}" class="menu-link">ai psychologist</a>
+      {% endif %}
+      {% if module_active('deep_mind') %}
+        <a href="{{ url_for('deep_mind.neural_map') }}" class="menu-link">neural map</a>
+      {% endif %}
+      <a href="{{ url_for('main.account') }}" class="menu-link">account</a>
+      <a href="{{ url_for('sync.sync_page') }}" class="menu-link">sync</a>
+      <a href="{{ url_for('modules.modules_page') }}" class="menu-link">modules</a>
+    </nav>
+  </header>
+
+  <main class="insights-main">
+    <div class="detail-header">
+      <a href="{{ url_for('insights.insights_page') }}" class="back-link">← insights</a>
+      <p class="insights-title">activities</p>
+      <p class="insights-summary">
+        {% if total_activities > 0 %}
+          {{ total_activities }} activities across {{ total_mentions }} mentions — circle size is frequency, shade is mood relative to your {{ '%.2f'|format(baseline) }} average
+        {% elif has_notes %}
+          no activities extracted yet — the AI psychologist is still analyzing your entries
+        {% else %}
+          no entries with notes yet
+        {% endif %}
+      </p>
+    </div>
+
+    {% if total_activities == 0 and has_notes %}
+      <p class="activities-backfill-hint">
+        analysis runs in the background — come back in a few minutes
+      </p>
+    {% endif %}
+
+    {% if total_activities > 0 %}
+      <div class="activities-wrap">
+        <svg id="activities-canvas" class="activities-canvas"
+             viewBox="0 0 1200 780"
+             preserveAspectRatio="xMidYMid meet"></svg>
+
+        <div class="activities-legend">
+          <span>
+            <span class="legend-swatch" style="background: rgba(0,0,0,0.85)"></span>
+            worse days
+          </span>
+          <span>
+            <span class="legend-swatch" style="background: rgba(0,0,0,0.5)"></span>
+            near average
+          </span>
+          <span>
+            <span class="legend-swatch" style="background: rgba(0,0,0,0.15)"></span>
+            better days
+          </span>
+        </div>
+
+        <p class="activities-summary-row">
+          hover a circle for details · size is how many times you did it · lighter = mood above your average on those days, darker = below · neutral mid-grey = close to your overall average
+        </p>
+      </div>
+
+      {% if module_active('assistant') %}
+        <div class="reextract-section">
+          <button id="reextract-btn" class="reextract-btn" onclick="reextractActivities()">
+            re-extract activities
+          </button>
+          <p class="reextract-status" id="reextract-status"></p>
+        </div>
+      {% endif %}
+
+      <script src="{{ url_for('insights.static', filename='js/d3.v7.min.js') }}"></script>
+      <script id="activities-data" type="application/json">
+        {
+          "activities": {{ activities | tojson }},
+          "max_delta": {{ max_delta }},
+          "baseline": {{ baseline }}
+        }
+      </script>
+      <script>
+        (function () {
+          var dataEl = document.getElementById('activities-data');
+          var data = JSON.parse(dataEl.textContent);
+          var items = data.activities;
+          var maxDelta = data.max_delta || 0.5;
+
+          var svg = document.getElementById('activities-canvas');
+          var W = 1200, H = 780;
+
+          // Scale radii from counts. sqrt(count) spreads sizes more evenly
+          // than raw count, so a 30× activity isn't 30× bigger than a 1×
+          // activity — it's ~5.5× (reads better visually).
+          var counts = items.map(function (d) { return d.count; });
+          var maxCount = Math.max.apply(null, counts);
+          var minR = 34, maxR = 96;
+          var rScale = function (c) {
+            return minR + (maxR - minR) * Math.sqrt(c / maxCount);
+          };
+
+          // Shade inverted to match other insights: LIGHTER = better mood,
+          // DARKER = worse mood. delta in [-max, +max] → opacity in [0.85, 0.15]
+          function shade(delta) {
+            var t = delta / (maxDelta || 1);
+            t = Math.max(-1, Math.min(1, t));
+            return 0.5 - t * 0.35;
+          }
+
+          function formatDelta(d) {
+            var sign = d > 0 ? '+' : (d < 0 ? '' : '±');
+            return sign + d.toFixed(2);
+          }
+
+          // Prepare node objects for d3-force. Start near centre with a
+          // small random offset so the simulation has something to spread.
+          var nodes = items.map(function (d) {
+            return {
+              label: d.label,
+              count: d.count,
+              avg: d.avg,
+              delta: d.delta,
+              r: rScale(d.count),
+              x: W / 2 + (Math.random() - 0.5) * 60,
+              y: H / 2 + (Math.random() - 0.5) * 60,
+            };
+          });
+
+          // Create SVG groups up-front so d3 updates attributes directly on
+          // the DOM during the simulation tick (simpler than virtual DOM).
+          var svgNS = 'http://www.w3.org/2000/svg';
+          var groups = nodes.map(function (n) {
+            var g = document.createElementNS(svgNS, 'g');
+            g.setAttribute('class', 'activity-group');
+            g.setAttribute('transform', 'translate(' + n.x + ',' + n.y + ')');
+            g.style.opacity = '0';
+
+            var fillOpacity = shade(n.delta);
+            var textColor = fillOpacity > 0.55 ? '#fff' : '#000';
+
+            var circle = document.createElementNS(svgNS, 'circle');
+            circle.setAttribute('class', 'activity-circle');
+            circle.setAttribute('r', n.r);
+            circle.setAttribute('fill', 'rgba(0,0,0,' + fillOpacity + ')');
+            circle.setAttribute('stroke', 'rgba(0,0,0,0.3)');
+            circle.setAttribute('stroke-width', '0.5');
+
+            var title = document.createElementNS(svgNS, 'title');
+            title.textContent = n.label + ' · ' + n.count + '× · avg ' +
+              n.avg.toFixed(2) + ' (' + formatDelta(n.delta) + ')';
+            circle.appendChild(title);
+            g.appendChild(circle);
+
+            // Font shrinks to fit long labels inside the circle. For compound
+            // phrases like "встреча с друзьями" the computed size would leave
+            // text overflowing — we rely on SVG textLength to compress it.
+            var fontSize = Math.max(12, Math.min(21, Math.round(n.r * 0.38)));
+            var maxLabelWidth = n.r * 1.7;  // keep text inside circle
+            var label = document.createElementNS(svgNS, 'text');
+            label.setAttribute('class', 'activity-label');
+            label.setAttribute('y', n.r >= 36 ? -5 : 0);
+            label.setAttribute('font-size', fontSize);
+            label.setAttribute('fill', textColor);
+            label.setAttribute('lengthAdjust', 'spacingAndGlyphs');
+            // Approximate natural text width: ~0.55 × fontSize × chars
+            var approxW = n.label.length * fontSize * 0.55;
+            if (approxW > maxLabelWidth) {
+              label.setAttribute('textLength', maxLabelWidth);
+            }
+            label.textContent = n.label;
+            g.appendChild(label);
+
+            if (n.r >= 36) {
+              var cnt = document.createElementNS(svgNS, 'text');
+              cnt.setAttribute('class', 'activity-count');
+              cnt.setAttribute('y', fontSize * 0.95);
+              cnt.setAttribute('fill', textColor === '#fff'
+                ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.6)');
+              cnt.textContent = n.count + '×';
+              g.appendChild(cnt);
+            }
+
+            svg.appendChild(g);
+            return g;
+          });
+
+          // Fade the chart in once the simulation has a few ticks under its
+          // belt — avoids the "everything at centre then jumps outward" look.
+          var fadedIn = false;
+          function fadeIn() {
+            if (fadedIn) return;
+            fadedIn = true;
+            groups.forEach(function (g, i) {
+              setTimeout(function () {
+                g.style.transition = 'opacity 0.4s ease';
+                g.style.opacity = '1';
+              }, i * 8);
+            });
+          }
+
+          // d3-force: collision prevents overlap, weak centering keeps the
+          // cloud from drifting off-canvas. ManyBody with small positive
+          // strength gives a slight "breathing room" feel between bubbles.
+          var simulation = d3.forceSimulation(nodes)
+            .velocityDecay(0.35)
+            .force('center', d3.forceCenter(W / 2, H / 2).strength(0.06))
+            .force('x', d3.forceX(W / 2).strength(0.04))
+            .force('y', d3.forceY(H / 2).strength(0.05))
+            .force('collide', d3.forceCollide()
+              .radius(function (d) { return d.r + 2; })
+              .strength(0.9)
+              .iterations(2))
+            .alpha(0.9)
+            .alphaDecay(0.03)
+            .on('tick', function () {
+              for (var i = 0; i < nodes.length; i++) {
+                var n = nodes[i];
+                // Soft margin — keep the cloud within the viewBox
+                n.x = Math.max(n.r + 2, Math.min(W - n.r - 2, n.x));
+                n.y = Math.max(n.r + 2, Math.min(H - n.r - 2, n.y));
+                groups[i].setAttribute('transform',
+                  'translate(' + n.x + ',' + n.y + ')');
+              }
+            })
+            .on('end', function () {
+              fadeIn();
+            });
+
+          // Reveal halfway through — looks better than waiting for full settle
+          setTimeout(fadeIn, 180);
+        })();
+      </script>
+
+      <script>
+        var pollHandle = null;
+
+        function reextractActivities() {
+          if (!confirm('Re-run AI extraction of activities on all entries? Takes a few minutes; you can keep using the app.')) return;
+          var btn = document.getElementById('reextract-btn');
+          var status = document.getElementById('reextract-status');
+          btn.disabled = true;
+          btn.textContent = 're-extracting...';
+          status.textContent = 'starting...';
+
+          fetch('/insights/activities/reextract', { method: 'POST' })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+              if (data.error) {
+                status.textContent = 'error: ' + data.error;
+                btn.disabled = false;
+                btn.textContent = 're-extract activities';
+                return;
+              }
+              if (!data.started) {
+                status.textContent = 'already running — refresh the page when it finishes';
+              }
+              startPolling();
+            })
+            .catch(function(err) {
+              status.textContent = 'network error: ' + err;
+              btn.disabled = false;
+              btn.textContent = 're-extract activities';
+            });
+        }
+
+        function startPolling() {
+          if (pollHandle) clearInterval(pollHandle);
+          pollHandle = setInterval(pollStatus, 4000);
+          pollStatus();
+        }
+
+        function pollStatus() {
+          fetch('/insights/activities/reextract/status')
+            .then(function(r) { return r.json(); })
+            .then(function(s) {
+              var status = document.getElementById('reextract-status');
+              if (s.running) {
+                status.textContent = 'processing ' + s.processed + ' / ' + s.total;
+              } else {
+                clearInterval(pollHandle);
+                pollHandle = null;
+                if (s.total > 0 && s.processed >= s.total) {
+                  status.textContent = 'done — reloading...';
+                  setTimeout(function() { location.reload(); }, 800);
+                }
+              }
+            });
+        }
+
+        (function() {
+          fetch('/insights/activities/reextract/status')
+            .then(function(r) { return r.json(); })
+            .then(function(s) {
+              if (s.running) {
+                var btn = document.getElementById('reextract-btn');
+                btn.disabled = true;
+                btn.textContent = 're-extracting...';
+                startPolling();
+              }
+            });
+        })();
+      </script>
+    {% endif %}
+  </main>
+</body>
+</html>

@@ -5,7 +5,7 @@ import math
 from datetime import date, timedelta
 from collections import Counter
 
-from flask import render_template, redirect, url_for
+from flask import render_template, redirect, url_for, current_app, jsonify, request
 
 from app import db
 from app.models import MoodEntry
@@ -833,4 +833,602 @@ def words():
         total_words=len(scored),
         max_abs=max_abs,
     )
+
+
+@bp.route('/insights/people')
+def people():
+    """People/roles mentioned in diary entries, split by LLM-extracted tone.
+
+    Gated: requires the assistant module to be active — it holds the LLM
+    that extracts per-mention sentiment via `extract_people_mentions`.
+    Without it, the entry_people table can be empty or stale.
+    """
+    active = current_app.config.get('ACTIVE_MODULES', [])
+    if 'assistant' not in active:
+        return redirect(url_for('insights.insights_page'))
+
+    from app.models import EntryPerson, PersonAlias
+
+    rows = db.session.query(
+        EntryPerson.mention, EntryPerson.tone
+    ).all()
+
+    # Normalize at aggregation time so existing rows merge without re-
+    # extraction. Also filter pronouns the LLM mistakenly extracted as
+    # people ("Она", "Это"). Falls back to capitalize-only if pymorphy3
+    # isn't installed (older venvs).
+    try:
+        from app.modules.assistant.memory import _normalize_mention as _norm
+        from app.modules.assistant.memory import _is_blacklisted
+    except Exception:
+        def _norm(s: str) -> str:
+            s = (s or '').strip()
+            return s[0].upper() + s[1:] if s else s
+
+        def _is_blacklisted(s: str) -> bool:
+            return False
+
+    # User-curated alias map for merging LLM-produced duplicate forms.
+    # Walked transitively (A→B→C) with cycle protection.
+    alias_map = {a.alias: a.canonical for a in PersonAlias.query.all()}
+
+    def resolve_alias(name: str) -> str:
+        seen: set = set()
+        while name in alias_map and name not in seen:
+            seen.add(name)
+            name = alias_map[name]
+        return name
+
+    from collections import defaultdict
+    by_mention = defaultdict(lambda: {'positive': 0, 'neutral': 0, 'negative': 0})
+    for mention, tone in rows:
+        # Normalize first, then check against blacklist — generic roles
+        # only match the blacklist after lemmatization ("друзья" → "друг").
+        key = resolve_alias(_norm(mention))
+        if _is_blacklisted(key):
+            continue
+        by_mention[key][tone] = by_mention[key].get(tone, 0) + 1
+
+    min_count = 3
+    scored = []
+    for mention, counts in by_mention.items():
+        total = counts['positive'] + counts['neutral'] + counts['negative']
+        if total < min_count:
+            continue
+        # Tone score in [-1, +1]: positives - negatives / total
+        tone_score = (counts['positive'] - counts['negative']) / total
+        scored.append({
+            'mention': mention,
+            'count': total,
+            'positive': counts['positive'],
+            'neutral': counts['neutral'],
+            'negative': counts['negative'],
+            'tone': round(tone_score, 2),
+        })
+
+    lifts = sorted(
+        [s for s in scored if s['tone'] > 0],
+        key=lambda r: (-r['tone'], -r['count']),
+    )[:15]
+    drags = sorted(
+        [s for s in scored if s['tone'] < 0],
+        key=lambda r: (r['tone'], -r['count']),
+    )[:15]
+
+    total_mentions = sum(s['count'] for s in scored)
+    max_abs = max([abs(r['tone']) for r in lifts + drags] + [0.5])
+
+    # Backfill progress hint: if entries with notes exist but mentions are empty,
+    # extraction is likely still running.
+    has_notes = db.session.query(MoodEntry).filter(
+        MoodEntry.note.isnot(None), MoodEntry.note != ''
+    ).count()
+
+    return render_template(
+        'insights/insights_people.html',
+        lifts=lifts, drags=drags,
+        total_people=len(scored),
+        total_mentions=total_mentions,
+        has_notes=has_notes,
+        max_abs=max_abs,
+    )
+
+
+@bp.route('/insights/activities')
+def activities():
+    """Packed-circles chart of what the user does, sized by frequency,
+    colored by the average mood on days when the activity appears.
+
+    Gated: requires assistant module — LLM extracts canonical activity
+    labels (`спорт`, `программирование`) into entry_activities via
+    `extract_activities`. Without it, the table is empty.
+    """
+    active = current_app.config.get('ACTIVE_MODULES', [])
+    if 'assistant' not in active:
+        return redirect(url_for('insights.insights_page'))
+
+    from app.models import EntryActivity
+
+    # Join activities with entry ratings so we can compute per-activity mood
+    rows = db.session.query(
+        EntryActivity.activity, MoodEntry.rating
+    ).join(
+        MoodEntry, MoodEntry.id == EntryActivity.entry_id
+    ).all()
+
+    from collections import defaultdict
+    by_activity: dict[str, list[int]] = defaultdict(list)
+    for activity, rating in rows:
+        by_activity[str(activity).strip().lower()].append(rating)
+
+    # Baseline — user's overall average mood across all rated entries
+    baseline = db.session.query(db.func.avg(MoodEntry.rating)).scalar() or 0
+    baseline = float(baseline)
+
+    min_count = 2
+    items = []
+    for label, ratings in by_activity.items():
+        if len(ratings) < min_count or not label:
+            continue
+        avg = sum(ratings) / len(ratings)
+        items.append({
+            'label': label,
+            'count': len(ratings),
+            'avg': round(avg, 2),
+            'delta': round(avg - baseline, 2),
+        })
+
+    # Sort by count desc for stable circle packing (larger first)
+    items.sort(key=lambda r: (-r['count'], r['label']))
+    items = items[:60]  # cap — past 60 circles the chart gets crowded
+
+    has_notes = db.session.query(MoodEntry).filter(
+        MoodEntry.note.isnot(None), MoodEntry.note != ''
+    ).count()
+
+    total_mentions = sum(i['count'] for i in items)
+    max_delta = max([abs(i['delta']) for i in items] + [0.5])
+
+    return render_template(
+        'insights/insights_activities.html',
+        activities=items,
+        total_activities=len(items),
+        total_mentions=total_mentions,
+        has_notes=has_notes,
+        baseline=round(baseline, 2),
+        max_delta=round(max_delta, 2),
+    )
+
+
+@bp.route('/insights/people/manage')
+def people_manage():
+    """Bulk management page — see all unique person mentions grouped by
+    canonical, with checkboxes and a single merge action. Solves the
+    "30 clicks for one person with 10 forms" problem of the per-detail
+    merge UI.
+    """
+    err = _require_assistant()
+    if err:
+        return err
+
+    from app.models import EntryPerson, PersonAlias
+
+    try:
+        from app.modules.assistant.memory import _normalize_mention as _norm
+        from app.modules.assistant.memory import _is_blacklisted
+    except Exception:
+        def _norm(s: str) -> str:
+            s = (s or '').strip()
+            return s[0].upper() + s[1:] if s else s
+
+        def _is_blacklisted(s: str) -> bool:
+            return False
+
+    alias_map = {a.alias: a.canonical for a in PersonAlias.query.all()}
+
+    def resolve_alias(n: str) -> str:
+        seen: set = set()
+        while n in alias_map and n not in seen:
+            seen.add(n)
+            n = alias_map[n]
+        return n
+
+    # Per-form counts straight from entry_people, normalized so case
+    # variants ("маша"/"Маша") collapse before grouping.
+    raw_rows = (
+        db.session.query(EntryPerson.mention, db.func.count(EntryPerson.id))
+        .group_by(EntryPerson.mention)
+        .all()
+    )
+
+    # Each entry: {name, count} where name = normalized mention
+    by_normalized: dict[str, int] = {}
+    for mention, count in raw_rows:
+        norm = _norm(mention)
+        if _is_blacklisted(norm):
+            continue
+        by_normalized[norm] = by_normalized.get(norm, 0) + int(count)
+
+    # Group by canonical (alias resolution)
+    groups: dict[str, dict] = {}
+    for name, count in by_normalized.items():
+        canon = resolve_alias(name)
+        g = groups.setdefault(canon, {'canonical': canon, 'total': 0, 'members': []})
+        g['total'] += count
+        g['members'].append({'name': name, 'count': count, 'is_canonical': name == canon})
+
+    # Sort: groups by total desc; within group, canonical first then aliases by count desc
+    group_list = []
+    for canon, g in groups.items():
+        g['members'].sort(key=lambda m: (not m['is_canonical'], -m['count'], m['name']))
+        group_list.append(g)
+    group_list.sort(key=lambda g: (-g['total'], g['canonical']))
+
+    # All canonical names — fed into the target <datalist> for autocomplete
+    all_canonicals = sorted(groups.keys())
+
+    return render_template(
+        'insights/insights_people_manage.html',
+        groups=group_list,
+        all_canonicals=all_canonicals,
+        total_groups=len(group_list),
+        total_unique_names=len(by_normalized),
+    )
+
+
+@bp.route('/insights/people/alias/bulk', methods=['POST'])
+def people_alias_bulk():
+    """Merge a set of selected names into a single target canonical.
+
+    Form fields:
+      target — name to merge INTO (existing canonical OR a new typed name)
+      selected — list of names being merged (passed multiple times as
+                 selected=Name1, selected=Name2, ...)
+
+    For each selected name:
+      - Re-point any existing aliases that pointed to it
+      - Make the name itself an alias of target
+    Skips entries equal to the target (no-op self-alias).
+    """
+    err = _require_assistant()
+    if err:
+        return err
+
+    target = (request.form.get('target') or '').strip()
+    selected = [s.strip() for s in request.form.getlist('selected') if s.strip()]
+
+    if not target or not selected:
+        return redirect(url_for('insights.people_manage'))
+
+    from app.models import PersonAlias
+
+    # Resolve target through existing aliases (in case user picked an
+    # alias as target via autocomplete) so we always merge into a true
+    # canonical, never create a chain that lands at someone else.
+    aliases = {a.alias: a.canonical for a in PersonAlias.query.all()}
+
+    def resolve(name: str) -> str:
+        seen: set = set()
+        while name in aliases and name not in seen:
+            seen.add(name)
+            name = aliases[name]
+        return name
+
+    target = resolve(target)
+
+    for name in selected:
+        if name == target:
+            continue
+        # If `name` was canonical for other aliases, re-point those aliases
+        # so they land at the new target (preserves transitivity).
+        PersonAlias.query.filter_by(canonical=name).update({'canonical': target})
+        # Make `name` itself an alias of target — overwriting any existing
+        # mapping it might have had to a different canonical.
+        PersonAlias.query.filter_by(alias=name).delete()
+        db.session.add(PersonAlias(alias=name, canonical=target))
+
+    db.session.commit()
+    return redirect(url_for('insights.people_manage'))
+
+
+@bp.route('/insights/people/alias/create', methods=['POST'])
+def people_alias_create():
+    """Create an alias mapping `alias → canonical`. Used by the merge
+    button on the detail page. POST form fields: alias, canonical."""
+    err = _require_assistant()
+    if err:
+        return err
+
+    alias = (request.form.get('alias') or '').strip()
+    canonical = (request.form.get('canonical') or '').strip()
+    if not alias or not canonical or alias == canonical:
+        return redirect(url_for('insights.people'))
+
+    from app.models import PersonAlias
+    # Replace existing mapping for this alias if any (idempotent updates).
+    existing = PersonAlias.query.filter_by(alias=alias).first()
+    if existing:
+        existing.canonical = canonical
+    else:
+        db.session.add(PersonAlias(alias=alias, canonical=canonical))
+    db.session.commit()
+    return redirect(url_for('insights.people_detail', name=canonical))
+
+
+@bp.route('/insights/people/alias/set_canonical', methods=['POST'])
+def people_alias_set_canonical():
+    """Promote one of the merged names to be the displayed canonical.
+    All current aliases get re-pointed to the new canonical, and the
+    previous canonical becomes an alias of the new one.
+
+    POST form fields:
+      new_canonical — name to display from now on (must not equal current)
+      current_canonical — the displayed name on the page that's being changed
+    """
+    err = _require_assistant()
+    if err:
+        return err
+
+    new_canonical = (request.form.get('new_canonical') or '').strip()
+    current_canonical = (request.form.get('current_canonical') or '').strip()
+    if not new_canonical or not current_canonical or new_canonical == current_canonical:
+        return redirect(url_for('insights.people'))
+
+    from app.models import PersonAlias
+
+    # 1. Remove any outgoing alias from new_canonical (it's becoming
+    #    canonical itself, so it can't simultaneously be an alias).
+    PersonAlias.query.filter_by(alias=new_canonical).delete()
+
+    # 2. Re-point all aliases that resolved to current_canonical so they
+    #    now resolve to new_canonical.
+    PersonAlias.query.filter_by(canonical=current_canonical).update(
+        {'canonical': new_canonical}
+    )
+
+    # 3. Make the previous canonical itself an alias of the new one,
+    #    so any historical entry_people rows under that name keep flowing
+    #    to the merged group.
+    db.session.add(PersonAlias(alias=current_canonical, canonical=new_canonical))
+    db.session.commit()
+
+    return redirect(url_for('insights.people_detail', name=new_canonical))
+
+
+@bp.route('/insights/people/alias/delete', methods=['POST'])
+def people_alias_delete():
+    """Remove an alias mapping. POST form field: alias."""
+    err = _require_assistant()
+    if err:
+        return err
+
+    alias = (request.form.get('alias') or '').strip()
+    if not alias:
+        return redirect(url_for('insights.people'))
+
+    from app.models import PersonAlias
+    PersonAlias.query.filter_by(alias=alias).delete()
+    db.session.commit()
+    # Stay on the detail page the user came from
+    came_from = (request.form.get('return_to') or '').strip()
+    if came_from:
+        return redirect(url_for('insights.people_detail', name=came_from))
+    return redirect(url_for('insights.people'))
+
+
+@bp.route('/insights/activities/zoom')
+def activities_zoom():
+    """Zoomable circle packing of activities — top-level circles are
+    activities (sized by frequency, shaded by mood), child circles are
+    individual entry mentions. Click an activity to zoom into its
+    mentions; hover a mention to see the note text.
+    """
+    err = _require_assistant()
+    if err:
+        return err
+
+    from app.models import EntryActivity
+    from collections import defaultdict
+
+    rows = db.session.query(
+        EntryActivity.activity, MoodEntry.date,
+        MoodEntry.rating, MoodEntry.note,
+    ).join(
+        MoodEntry, MoodEntry.id == EntryActivity.entry_id
+    ).all()
+
+    by_activity = defaultdict(list)
+    for activity, edate, rating, note in rows:
+        label = str(activity).strip().lower()
+        if not label:
+            continue
+        by_activity[label].append({
+            'name': edate.isoformat(),
+            'date': edate.isoformat(),
+            'rating': rating,
+            'note': note or '',
+            'value': 1,
+        })
+
+    baseline_raw = db.session.query(db.func.avg(MoodEntry.rating)).scalar()
+    baseline = float(baseline_raw) if baseline_raw is not None else 0.0
+
+    activities_list = []
+    for label, mentions in by_activity.items():
+        if len(mentions) < 2:
+            continue
+        ratings = [m['rating'] for m in mentions]
+        avg = sum(ratings) / len(ratings)
+        activities_list.append({
+            'name': label,
+            'count': len(mentions),
+            'delta': round(avg - baseline, 2),
+            'avg': round(avg, 2),
+            'children': mentions,
+        })
+
+    activities_list.sort(key=lambda x: -x['count'])
+    activities_list = activities_list[:60]
+
+    has_notes = db.session.query(MoodEntry).filter(
+        MoodEntry.note.isnot(None), MoodEntry.note != ''
+    ).count()
+
+    max_delta = max([abs(a['delta']) for a in activities_list] + [0.5])
+
+    data = {'name': 'root', 'children': activities_list}
+
+    return render_template(
+        'insights/insights_activities_zoom.html',
+        data=data,
+        total_activities=len(activities_list),
+        baseline=round(baseline, 2),
+        max_delta=round(max_delta, 2),
+        has_notes=has_notes,
+    )
+
+
+@bp.route('/insights/people/detail')
+def people_detail():
+    """Per-person detail page — every entry mentioning this person plus the
+    tone the LLM assigned to each mention. Lets the user verify why a
+    person ended up in the lifts or drags column."""
+    err = _require_assistant()
+    if err:
+        return err
+
+    name = request.args.get('name', '').strip()
+    if not name:
+        return redirect(url_for('insights.people'))
+
+    from app.models import EntryPerson
+
+    # Match by normalized form AND walk user-defined aliases so that
+    # entries originally tagged "Марь" surface on the "Мари" detail page
+    # once the user has merged them.
+    try:
+        from app.modules.assistant.memory import _normalize_mention as _norm
+        from app.modules.assistant.memory import _is_blacklisted
+    except Exception:
+        def _norm(s: str) -> str:
+            s = (s or '').strip()
+            return s[0].upper() + s[1:] if s else s
+
+        def _is_blacklisted(s: str) -> bool:
+            return False
+
+    from app.models import PersonAlias
+    alias_map = {a.alias: a.canonical for a in PersonAlias.query.all()}
+
+    def resolve_alias(n: str) -> str:
+        seen: set = set()
+        while n in alias_map and n not in seen:
+            seen.add(n)
+            n = alias_map[n]
+        return n
+
+    # The query parameter might itself be an alias — resolve to its canonical
+    target = resolve_alias(_norm(name))
+
+    rows = db.session.query(
+        EntryPerson.entry_id, EntryPerson.mention, EntryPerson.tone
+    ).all()
+
+    by_entry: dict[int, list[str]] = {}
+    for entry_id, mention, tone in rows:
+        if resolve_alias(_norm(mention)) == target:
+            by_entry.setdefault(entry_id, []).append(tone)
+
+    # Aliases pointing INTO target — show on page so user can unmerge
+    incoming_aliases = [
+        a for a, c in alias_map.items() if resolve_alias(c) == target and a != target
+    ]
+
+    # All other canonical names from the chart, for the merge dropdown.
+    # Build the same way the chart does so the user only sees relevant
+    # options (already-merged variants are hidden).
+    all_mentions = db.session.query(EntryPerson.mention).distinct().all()
+    other_canonicals_set: set = set()
+    for (m,) in all_mentions:
+        c = resolve_alias(_norm(m))
+        if not _is_blacklisted(c) and c != target:
+            other_canonicals_set.add(c)
+    other_canonicals = sorted(other_canonicals_set)
+
+    counts = {'positive': 0, 'neutral': 0, 'negative': 0}
+    if not by_entry:
+        return render_template(
+            'insights/insights_people_detail.html',
+            name=target, entries=[], counts=counts, total=0, tone_score=0.0,
+        )
+
+    entries = MoodEntry.query.filter(
+        MoodEntry.id.in_(by_entry.keys())
+    ).order_by(MoodEntry.date.desc()).all()
+
+    items = []
+    for e in entries:
+        tones = by_entry.get(e.id, [])
+        for t in tones:
+            counts[t] = counts.get(t, 0) + 1
+        items.append({
+            'date': e.date,
+            'rating': e.rating,
+            'tones': tones,
+            'note': e.note or '',
+        })
+
+    total = sum(counts.values())
+    tone_score = (
+        round((counts['positive'] - counts['negative']) / total, 2)
+        if total else 0.0
+    )
+
+    return render_template(
+        'insights/insights_people_detail.html',
+        name=target, entries=items, counts=counts, total=total,
+        tone_score=tone_score,
+        incoming_aliases=incoming_aliases,
+        other_canonicals=other_canonicals,
+    )
+
+
+# ── Per-chart re-extract endpoints (LLM-only rebuild for one chart) ──────
+
+def _require_assistant():
+    if 'assistant' not in current_app.config.get('ACTIVE_MODULES', []):
+        return jsonify({'error': 'Assistant module not active'}), 400
+    return None
+
+
+@bp.route('/insights/people/reextract', methods=['POST'])
+def people_reextract():
+    err = _require_assistant()
+    if err:
+        return err
+    from app.modules.assistant.background import reextract_people_async
+    started = reextract_people_async(current_app._get_current_object())
+    return jsonify({'started': started})
+
+
+@bp.route('/insights/people/reextract/status')
+def people_reextract_status():
+    from app.modules.assistant.background import get_people_extract_status
+    return jsonify(get_people_extract_status())
+
+
+@bp.route('/insights/activities/reextract', methods=['POST'])
+def activities_reextract():
+    err = _require_assistant()
+    if err:
+        return err
+    from app.modules.assistant.background import reextract_activities_async
+    started = reextract_activities_async(current_app._get_current_object())
+    return jsonify({'started': started})
+
+
+@bp.route('/insights/activities/reextract/status')
+def activities_reextract_status():
+    from app.modules.assistant.background import get_activities_extract_status
+    return jsonify(get_activities_extract_status())
 

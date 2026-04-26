@@ -20,6 +20,13 @@ diary.db
 *.db
 *.sqlite
 *.sqlite3
+# SQLite WAL-mode auxiliary files (created at runtime; never commit user data)
+*.db-shm
+*.db-wal
+*.db-journal
+
+# Local automated backups created by app/backup.py
+backups/
 
 # PyInstaller build artifacts
 *.spec.lock

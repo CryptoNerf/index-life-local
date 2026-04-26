@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>people</title>
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/calendar.css') }}">
+  <link rel="stylesheet" href="{{ url_for('insights.static', filename='css/insights.css') }}">
+  <style>
+    .people-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 48px;
+      max-width: 1040px;
+      margin: 0 auto;
+    }
+    @media (max-width: 760px) {
+      .people-grid { grid-template-columns: 1fr; gap: 32px; }
+    }
+    .people-col-title {
+      font-family: 'Times New Roman', serif;
+      font-size: 20px;
+      font-style: italic;
+      margin: 0 0 20px;
+      color: #000;
+    }
+    .people-col-title .sub {
+      font-style: normal;
+      color: #999;
+      font-size: 14px;
+      margin-left: 10px;
+    }
+    .person-row {
+      display: grid;
+      grid-template-columns: 140px 1fr 70px 50px;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 0;
+      border-bottom: 1px solid #f1f1f1;
+      font-family: 'Times New Roman', serif;
+      text-decoration: none;
+      color: inherit;
+      transition: background 0.12s;
+    }
+    .person-row:last-child { border-bottom: none; }
+    a.person-row:hover {
+      background: #f7f7f7;
+    }
+    .person-name {
+      font-size: 16px;
+      color: #000;
+      text-align: right;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .person-bar-track {
+      position: relative;
+      height: 10px;
+      background: transparent;
+    }
+    .person-bar-fill {
+      position: absolute;
+      top: 0;
+      height: 10px;
+      background: #000;
+    }
+    .person-bar-fill.drag { opacity: 0.85; }
+    .person-bar-fill.lift { opacity: 0.45; }
+    .person-score {
+      font-size: 15px;
+      color: #000;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    .person-count {
+      font-size: 13px;
+      color: #999;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    .people-summary-row {
+      text-align: center;
+      color: #777;
+      font-size: 14px;
+      font-family: 'Times New Roman', serif;
+      margin-top: 28px;
+      max-width: 720px;
+      margin-left: auto;
+      margin-right: auto;
+      line-height: 1.5;
+    }
+    .people-empty {
+      color: #999;
+      font-style: italic;
+      text-align: center;
+      padding: 40px 0;
+    }
+    .people-backfill-hint {
+      color: #e8a83e;
+      font-family: 'Times New Roman', serif;
+      text-align: center;
+      margin: 24px 0;
+      font-size: 15px;
+    }
+    .reextract-section {
+      text-align: center;
+      margin: 36px 0 12px;
+      font-family: 'Times New Roman', serif;
+    }
+    .reextract-btn {
+      background: transparent;
+      color: #555;
+      border: 1px solid #999;
+      padding: 8px 22px;
+      font-family: 'Times New Roman', serif;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    .reextract-btn:hover { background: #555; color: #fff; }
+    .reextract-btn:disabled {
+      cursor: default;
+      opacity: 0.6;
+    }
+    .reextract-status {
+      margin-top: 10px;
+      font-size: 13px;
+      color: #777;
+      min-height: 16px;
+    }
+  </style>
+</head>
+<body>
+  <header class="main-header">
+    <nav class="top-menu">
+      <a href="{{ url_for('main.mood_grid') }}" class="menu-link">index.life</a>
+      <a href="{{ url_for('main.life_calendar') }}" class="menu-link">life in weeks</a>
+      <a href="{{ url_for('insights.insights_page') }}" class="menu-link active-link">insights</a>
+      {% if module_active('assistant') %}
+        <a href="{{ url_for('assistant.chat') }}" class="menu-link">ai psychologist</a>
+      {% endif %}
+      {% if module_active('deep_mind') %}
+        <a href="{{ url_for('deep_mind.neural_map') }}" class="menu-link">neural map</a>
+      {% endif %}
+      <a href="{{ url_for('main.account') }}" class="menu-link">account</a>
+      <a href="{{ url_for('sync.sync_page') }}" class="menu-link">sync</a>
+      <a href="{{ url_for('modules.modules_page') }}" class="menu-link">modules</a>
+    </nav>
+  </header>
+
+  <main class="insights-main">
+    <div class="detail-header">
+      <a href="{{ url_for('insights.insights_page') }}" class="back-link">← insights</a>
+      <p class="insights-title">people</p>
+      <p class="insights-summary">
+        {% if total_people > 0 %}
+          {{ total_people }} people mentioned at least 3 times — {{ total_mentions }} mentions total
+        {% elif has_notes %}
+          no mentions extracted yet — the AI psychologist is still analyzing your entries
+        {% else %}
+          no entries with notes yet
+        {% endif %}
+      </p>
+    </div>
+
+    {% if total_people == 0 and has_notes %}
+      <p class="people-backfill-hint">
+        analysis runs in the background — come back in a few minutes
+      </p>
+    {% endif %}
+
+    {% if total_people > 0 %}
+      <div class="people-grid">
+        <section>
+          <p class="people-col-title">
+            lift your mood
+            <span class="sub">positive mentions</span>
+          </p>
+          {% if lifts %}
+            {% for r in lifts %}
+              <a class="person-row" href="{{ url_for('insights.people_detail', name=r.mention) }}">
+                <div class="person-name">{{ r.mention }}</div>
+                <div class="person-bar-track">
+                  <div class="person-bar-fill lift"
+                       style="left: 0; width: {{ (r.tone / max_abs * 100)|round(1) }}%;"></div>
+                </div>
+                <div class="person-score">{{ '%+.2f'|format(r.tone) }}</div>
+                <div class="person-count">{{ r.count }}×</div>
+              </a>
+            {% endfor %}
+          {% else %}
+            <div class="people-empty">nothing yet</div>
+          {% endif %}
+        </section>
+
+        <section>
+          <p class="people-col-title">
+            drain your mood
+            <span class="sub">negative mentions</span>
+          </p>
+          {% if drags %}
+            {% for r in drags %}
+              <a class="person-row" href="{{ url_for('insights.people_detail', name=r.mention) }}">
+                <div class="person-name">{{ r.mention }}</div>
+                <div class="person-bar-track">
+                  <div class="person-bar-fill drag"
+                       style="left: 0; width: {{ ((-r.tone) / max_abs * 100)|round(1) }}%;"></div>
+                </div>
+                <div class="person-score">{{ '%+.2f'|format(r.tone) }}</div>
+                <div class="person-count">{{ r.count }}×</div>
+              </a>
+            {% endfor %}
+          {% else %}
+            <div class="people-empty">nothing yet</div>
+          {% endif %}
+        </section>
+      </div>
+
+      <p class="people-summary-row">
+        tone score ∈ [−1, +1] — share of positive mentions minus negative, per person,
+        as judged by the AI psychologist reading the context around each mention ·
+        count is how many times the name or role appears across your entries ·
+        neutral mentions don't count toward the score
+      </p>
+    {% endif %}
+
+    {% if module_active('assistant') and has_notes %}
+      <div class="reextract-section">
+        <a href="{{ url_for('insights.people_manage') }}" class="reextract-btn"
+           style="text-decoration:none; display:inline-block; margin-right: 10px;">
+          manage names
+        </a>
+        <button id="reextract-btn" class="reextract-btn" onclick="reextractPeople()">
+          re-extract names
+        </button>
+        <p class="reextract-status" id="reextract-status"></p>
+      </div>
+
+      <script>
+        var pollHandle = null;
+
+        function reextractPeople() {
+          if (!confirm('Re-run AI extraction of names on all entries? Takes a few minutes; you can keep using the app.')) return;
+          var btn = document.getElementById('reextract-btn');
+          var status = document.getElementById('reextract-status');
+          btn.disabled = true;
+          btn.textContent = 're-extracting...';
+          status.textContent = 'starting...';
+
+          fetch('/insights/people/reextract', { method: 'POST' })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+              if (data.error) {
+                status.textContent = 'error: ' + data.error;
+                btn.disabled = false;
+                btn.textContent = 're-extract names';
+                return;
+              }
+              if (!data.started) {
+                status.textContent = 'already running — refresh the page when it finishes';
+              }
+              startPolling();
+            })
+            .catch(function(err) {
+              status.textContent = 'network error: ' + err;
+              btn.disabled = false;
+              btn.textContent = 're-extract names';
+            });
+        }
+
+        function startPolling() {
+          if (pollHandle) clearInterval(pollHandle);
+          pollHandle = setInterval(pollStatus, 4000);
+          pollStatus();
+        }
+
+        function pollStatus() {
+          fetch('/insights/people/reextract/status')
+            .then(function(r) { return r.json(); })
+            .then(function(s) {
+              var status = document.getElementById('reextract-status');
+              if (s.running) {
+                status.textContent = 'processing ' + s.processed + ' / ' + s.total;
+              } else {
+                clearInterval(pollHandle);
+                pollHandle = null;
+                if (s.total > 0 && s.processed >= s.total) {
+                  status.textContent = 'done — reloading...';
+                  setTimeout(function() { location.reload(); }, 800);
+                }
+              }
+            });
+        }
+
+        // If a re-extract is already running when the page loads, pick it up
+        (function() {
+          fetch('/insights/people/reextract/status')
+            .then(function(r) { return r.json(); })
+            .then(function(s) {
+              if (s.running) {
+                var btn = document.getElementById('reextract-btn');
+                btn.disabled = true;
+                btn.textContent = 're-extracting...';
+                startPolling();
+              }
+            });
+        })();
+      </script>
+    {% endif %}
+  </main>
+</body>
+</html>

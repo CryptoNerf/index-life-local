@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>manage people</title>
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/calendar.css') }}">
+  <link rel="stylesheet" href="{{ url_for('insights.static', filename='css/insights.css') }}">
+  <style>
+    :root {
+      --pm-accent: #009AFA;
+      --pm-border: #e3e3e3;
+      --pm-soft: #f7f7f5;
+    }
+
+    .pm-wrap {
+      max-width: 820px;
+      margin: 0 auto;
+      font-family: 'Times New Roman', serif;
+    }
+
+    /* ── Sticky 3-step toolbar at the top ───────────────────────────── */
+    .pm-toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: #fff;
+      padding: 14px 0 12px;
+      border-bottom: 1px solid var(--pm-border);
+      margin-bottom: 18px;
+    }
+    .pm-steps {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+    .pm-step {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      flex: 1;
+      min-width: 200px;
+    }
+    .pm-step-num {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #000;
+      color: #fff;
+      font-size: 13px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 22px;
+    }
+    .pm-step-num.muted { background: #aaa; }
+    .pm-step-label { color: #444; font-size: 14px; }
+    .pm-arrow {
+      color: #aaa;
+      font-size: 18px;
+      flex: 0 0 auto;
+    }
+    .pm-target-input {
+      font-family: 'Times New Roman', serif;
+      font-size: 15px;
+      padding: 7px 10px;
+      border: 1px solid #aaa;
+      background: #fff;
+      flex: 1;
+      min-width: 180px;
+    }
+    .pm-target-input:focus {
+      outline: none;
+      border-color: var(--pm-accent);
+    }
+    .pm-merge-btn {
+      background: #000;
+      color: #fff;
+      border: none;
+      padding: 8px 22px;
+      font-family: inherit;
+      font-size: 14px;
+      cursor: pointer;
+      flex: 0 0 auto;
+    }
+    .pm-merge-btn:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    .pm-merge-btn:not(:disabled):hover {
+      background: #333;
+    }
+    .pm-toolbar-status {
+      margin-top: 8px;
+      display: flex;
+      gap: 14px;
+      align-items: center;
+      font-size: 13px;
+      color: #888;
+    }
+    .pm-clear-btn {
+      background: none;
+      border: none;
+      color: #888;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 13px;
+      padding: 0;
+      text-decoration: underline;
+    }
+    .pm-clear-btn:hover { color: #c00; }
+
+    /* ── Intro ──────────────────────────────────────────────────────── */
+    .pm-intro {
+      color: #666;
+      font-size: 14px;
+      line-height: 1.55;
+      margin: 0 0 24px;
+      padding: 14px 16px;
+      background: var(--pm-soft);
+      border-left: 3px solid var(--pm-accent);
+    }
+
+    /* ── Group cards ────────────────────────────────────────────────── */
+    .pm-group {
+      margin-bottom: 14px;
+      border: 1px solid var(--pm-border);
+      background: #fff;
+    }
+    .pm-group-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      background: var(--pm-soft);
+      border-bottom: 1px solid var(--pm-border);
+    }
+    .pm-group-canon {
+      font-size: 17px;
+      color: #000;
+      font-weight: bold;
+    }
+    .pm-group-meta {
+      display: flex;
+      align-items: baseline;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+    .pm-group-total {
+      color: #888;
+      font-size: 13px;
+      font-variant-numeric: tabular-nums;
+    }
+    .pm-group-select-all {
+      background: none;
+      border: none;
+      color: var(--pm-accent);
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 13px;
+      padding: 0;
+      text-decoration: underline;
+    }
+    .pm-group-select-all:hover { color: #007ad6; }
+
+    /* ── Row (whole row clickable via <label>) ──────────────────────── */
+    .pm-row {
+      display: grid;
+      grid-template-columns: 22px 1fr 60px;
+      align-items: center;
+      gap: 12px;
+      padding: 9px 14px;
+      cursor: pointer;
+      border-bottom: 1px solid #f3f3f3;
+      transition: background 0.1s;
+    }
+    .pm-row:last-child { border-bottom: none; }
+    .pm-row:hover { background: #fafafa; }
+    .pm-row input[type="checkbox"] {
+      cursor: pointer;
+      transform: scale(1.2);
+      accent-color: var(--pm-accent);
+    }
+    .pm-row.checked {
+      background: #fff8e1;
+    }
+    .pm-row.checked:hover {
+      background: #fff3c8;
+    }
+    .pm-name {
+      font-size: 15px;
+      color: #1a1a1a;
+    }
+    .pm-canon-tag {
+      display: inline-block;
+      margin-left: 8px;
+      color: var(--pm-accent);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      vertical-align: 1px;
+    }
+    .pm-count {
+      color: #777;
+      font-size: 14px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .pm-empty {
+      color: #999;
+      font-style: italic;
+      text-align: center;
+      padding: 60px 0;
+    }
+
+    @media (max-width: 600px) {
+      .pm-step { min-width: 100%; }
+      .pm-arrow { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="main-header">
+    <nav class="top-menu">
+      <a href="{{ url_for('main.mood_grid') }}" class="menu-link">index.life</a>
+      <a href="{{ url_for('main.life_calendar') }}" class="menu-link">life in weeks</a>
+      <a href="{{ url_for('insights.insights_page') }}" class="menu-link active-link">insights</a>
+      {% if module_active('assistant') %}
+        <a href="{{ url_for('assistant.chat') }}" class="menu-link">ai psychologist</a>
+      {% endif %}
+      {% if module_active('deep_mind') %}
+        <a href="{{ url_for('deep_mind.neural_map') }}" class="menu-link">neural map</a>
+      {% endif %}
+      <a href="{{ url_for('main.account') }}" class="menu-link">account</a>
+      <a href="{{ url_for('sync.sync_page') }}" class="menu-link">sync</a>
+      <a href="{{ url_for('modules.modules_page') }}" class="menu-link">modules</a>
+    </nav>
+  </header>
+
+  <main class="insights-main">
+    <div class="detail-header">
+      <a href="{{ url_for('insights.people') }}" class="back-link">← people</a>
+      <p class="insights-title">manage names</p>
+    </div>
+
+    <div class="pm-wrap">
+      {% if not groups %}
+        <p class="pm-empty">no people extracted yet</p>
+      {% else %}
+
+        <form id="bulk-form" method="post" action="{{ url_for('insights.people_alias_bulk') }}">
+          {# Sticky toolbar — visible while scrolling so the user can
+             always see what they've selected and where it'll go. #}
+          <div class="pm-toolbar">
+            <div class="pm-steps">
+              <span class="pm-step">
+                <span class="pm-step-num" id="step1-num">1</span>
+                <span class="pm-step-label" id="step1-label">tick names of one person</span>
+              </span>
+              <span class="pm-arrow">→</span>
+              <span class="pm-step">
+                <span class="pm-step-num muted" id="step2-num">2</span>
+                <input type="text" name="target" class="pm-target-input"
+                       list="all-canonicals"
+                       placeholder="display them all as…"
+                       maxlength="100" autocomplete="off">
+              </span>
+              <span class="pm-arrow">→</span>
+              <span class="pm-step" style="flex: 0 0 auto;">
+                <span class="pm-step-num muted" id="step3-num">3</span>
+                <button type="submit" class="pm-merge-btn" id="merge-btn" disabled>
+                  merge (<span id="merge-count">0</span>)
+                </button>
+              </span>
+            </div>
+            <div class="pm-toolbar-status">
+              <span id="status-text">no names selected yet</span>
+              <button type="button" class="pm-clear-btn" onclick="clearSelection()" id="clear-link" style="display:none;">
+                clear selection
+              </button>
+            </div>
+          </div>
+
+          <p class="pm-intro">
+            each card below is one person currently shown on the chart.
+            inside the card are all the name-forms grouped under that person.
+            tick boxes for forms that actually refer to the same human (across cards too if needed),
+            type the display name in the box at the top, then merge.
+            {% if total_groups > 0 %}
+              · {{ total_groups }} cards · {{ total_unique_names }} unique forms
+            {% endif %}
+          </p>
+
+          {% for g in groups %}
+            <div class="pm-group" data-group="{{ loop.index0 }}">
+              <div class="pm-group-head">
+                <span class="pm-group-canon">{{ g.canonical }}</span>
+                <span class="pm-group-meta">
+                  <span class="pm-group-total">
+                    {{ g.total }} mention{{ '' if g.total == 1 else 's' }}
+                    {%- if g.members|length > 1 %} · {{ g.members|length }} forms{% endif -%}
+                  </span>
+                  {% if g.members|length > 1 %}
+                    <button type="button" class="pm-group-select-all"
+                            onclick="selectAllInGroup({{ loop.index0 }})">
+                      select all in this card
+                    </button>
+                  {% endif %}
+                </span>
+              </div>
+
+              {% for m in g.members %}
+                <label class="pm-row">
+                  <input type="checkbox" name="selected" value="{{ m.name }}" class="pm-checkbox">
+                  <span class="pm-name">
+                    {{ m.name }}
+                    {% if m.is_canonical and g.members|length > 1 %}
+                      <span class="pm-canon-tag">displayed now</span>
+                    {% endif %}
+                  </span>
+                  <span class="pm-count">{{ m.count }}×</span>
+                </label>
+              {% endfor %}
+            </div>
+          {% endfor %}
+
+          <datalist id="all-canonicals">
+            {% for c in all_canonicals %}
+              <option value="{{ c }}">
+            {% endfor %}
+          </datalist>
+        </form>
+      {% endif %}
+    </div>
+  </main>
+
+  <script>
+    (function () {
+      var checkboxes = function () { return document.querySelectorAll('.pm-checkbox'); };
+      var statusText = document.getElementById('status-text');
+      var mergeCount = document.getElementById('merge-count');
+      var mergeBtn = document.getElementById('merge-btn');
+      var clearLink = document.getElementById('clear-link');
+      var step1Num = document.getElementById('step1-num');
+      var step2Num = document.getElementById('step2-num');
+      var step3Num = document.getElementById('step3-num');
+      var targetInput = document.querySelector('input[name="target"]');
+
+      function update() {
+        var selected = document.querySelectorAll('.pm-checkbox:checked');
+        var n = selected.length;
+        var hasTarget = (targetInput.value || '').trim().length > 0;
+
+        if (mergeCount) mergeCount.textContent = n;
+        if (statusText) {
+          if (n === 0) {
+            statusText.textContent = 'no names selected yet';
+          } else {
+            statusText.textContent = n + ' name' + (n === 1 ? '' : 's') + ' selected';
+          }
+        }
+        if (clearLink) clearLink.style.display = n > 0 ? '' : 'none';
+        if (mergeBtn) mergeBtn.disabled = !(n > 0 && hasTarget);
+
+        // Step indicators turn dark once their condition is met
+        if (step1Num) step1Num.classList.toggle('muted', n === 0);
+        if (step2Num) step2Num.classList.toggle('muted', !hasTarget);
+        if (step3Num) step3Num.classList.toggle('muted', !(n > 0 && hasTarget));
+
+        // Highlight the rows whose checkbox is on
+        document.querySelectorAll('.pm-row').forEach(function (row) {
+          var cb = row.querySelector('.pm-checkbox');
+          row.classList.toggle('checked', !!(cb && cb.checked));
+        });
+      }
+
+      checkboxes().forEach(function (c) { c.addEventListener('change', update); });
+      if (targetInput) targetInput.addEventListener('input', update);
+      update();
+
+      // Confirm before bulk-merging — irreversible-looking action even if it isn't
+      var form = document.getElementById('bulk-form');
+      if (form) {
+        form.addEventListener('submit', function (e) {
+          var selected = document.querySelectorAll('.pm-checkbox:checked');
+          var n = selected.length;
+          var target = (targetInput.value || '').trim();
+          if (!target || n === 0) {
+            e.preventDefault();
+            return;
+          }
+          var preview = Array.from(selected).slice(0, 5).map(function (c) {
+            return c.value;
+          }).join(', ');
+          if (n > 5) preview += ' + ' + (n - 5) + ' more';
+          var msg = 'Display these as "' + target + '":\n\n' + preview;
+          if (!confirm(msg)) e.preventDefault();
+        });
+      }
+    })();
+
+    function selectAllInGroup(gi) {
+      var group = document.querySelector('.pm-group[data-group="' + gi + '"]');
+      if (!group) return;
+      group.querySelectorAll('.pm-checkbox').forEach(function (c) { c.checked = true; });
+      // Trigger update via a synthetic change event
+      group.querySelectorAll('.pm-checkbox').forEach(function (c) {
+        c.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+    }
+
+    function clearSelection() {
+      document.querySelectorAll('.pm-checkbox').forEach(function (c) {
+        c.checked = false;
+        c.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+    }
+  </script>
+</body>
+</html>

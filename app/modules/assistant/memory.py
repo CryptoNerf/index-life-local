@@ -22,10 +22,11 @@ import numpy as np
 from app import db
 from app.models import (
     MoodEntry, EntrySummary, PeriodSummary,
-    EntryEmbedding, UserPsychProfile, ChatMessage,
+    EntryEmbedding, UserPsychProfile, ChatMessage, EntryPerson, EntryActivity,
 )
 from .prompts import (
-    SUMMARY_PROMPT, PROFILE_PROMPT, MONTH_SUMMARY_PROMPT,
+    SUMMARY_PROMPT, PROFILE_PROMPT, MONTH_SUMMARY_PROMPT, PEOPLE_PROMPT,
+    ACTIVITIES_PROMPT,
     PROFILE_SECTION, TIMELINE_SECTION, RELEVANT_SECTION, RECENT_SECTION,
     SYSTEM_PROMPT,
 )
@@ -419,6 +420,314 @@ def _parse_summary_response(text: str) -> tuple[str, list[str]]:
     if not summary:
         summary = text.split('\n')[0].strip()
     return summary, themes
+
+
+_VALID_TONES = ('positive', 'neutral', 'negative')
+
+# pymorphy3 is loaded lazily — first call to _to_nominative() creates the
+# analyzer, then it's cached for the lifetime of the process. The library
+# is not bundled in the frozen exe; it lives in modules_venv next to
+# llama-cpp-python and is imported via the venv on sys.path. If the venv
+# was built before we added pymorphy3 (older installs), the import fails
+# and we fall back to no-op lemmatization (just capitalize first letter).
+_morph_analyzer: object = None
+_morph_load_attempted = False
+
+
+def _get_morph_analyzer():
+    global _morph_analyzer, _morph_load_attempted
+    if _morph_load_attempted:
+        return _morph_analyzer
+    _morph_load_attempted = True
+    try:
+        import pymorphy3
+        _morph_analyzer = pymorphy3.MorphAnalyzer()
+        log.info('pymorphy3 analyzer loaded')
+    except Exception as exc:
+        log.warning(f'pymorphy3 not available — falling back to capitalize-only: {exc}')
+        _morph_analyzer = None
+    return _morph_analyzer
+
+
+def _to_nominative(word: str) -> str:
+    """Inflect a Russian common noun to its nominative case while keeping
+    its number (singular vs plural).
+
+    Only applied to lowercase single-word tokens (roles like "мама",
+    "родителях", "коллегой"). Proper names and multi-word phrases are
+    left untouched — pymorphy3 mangles rare/unknown names ("Дарёна"
+    → "Дарёный"), and short feminine names like "Поля" overlap with
+    masculine "Поль" with unstable score-ranking.
+
+    Uses `parse.inflect({'nomn'})` rather than `normal_form` so that
+    "родителях" → "родители" (plural preserved) instead of becoming
+    singular "родитель". `normal_form` always lemmatizes to singular,
+    which produces awkward role labels for collectives like "родители".
+    """
+    if not word or not word.strip():
+        return word
+    if ' ' in word:  # pymorphy3 is single-token; phrases pass through
+        return word
+    if word[0].isupper():  # proper noun
+        return word
+    morph = _get_morph_analyzer()
+    if morph is None:
+        return word
+    try:
+        parses = morph.parse(word)
+    except Exception:
+        return word
+    if not parses:
+        return word
+    parse = parses[0]
+    try:
+        inflected = parse.inflect({'nomn'})
+        if inflected and inflected.word:
+            return inflected.word
+    except Exception:
+        pass
+    return parse.normal_form or word
+
+
+# Generic social roles that don't identify a specific person — multiple
+# people in the user's life share these labels, so aggregating them on
+# the chart says little. The user explicitly asked to drop friend-style
+# roles (in contrast to specific-referent roles like мама/папа which
+# typically refer to a single person).
+_GENERIC_ROLE_BLACKLIST = {
+    'друг', 'подруга', 'друзья', 'подруги', 'товарищ', 'товарищи',
+    'приятель', 'приятельница', 'человек', 'люди',
+}
+
+
+# LLM occasionally extracts pronouns ("она", "он", "это") as "people". Drop
+# them — they aren't real mentions of anyone identifiable.
+_PRONOUN_BLACKLIST = {
+    'он', 'она', 'оно', 'они', 'мы', 'вы', 'я', 'ты',
+    'это', 'тот', 'та', 'те', 'этот', 'эта', 'эти',
+    'кто', 'что', 'кто-то', 'что-то', 'кто-либо',
+    'некто', 'нечто', 'все', 'всё',
+}
+
+
+def _is_pronoun_like(mention: str) -> bool:
+    """True if the mention is a pronoun — should be excluded from people chart."""
+    low = mention.strip().lower()
+    if not low:
+        return True
+    if low in _PRONOUN_BLACKLIST:
+        return True
+    morph = _get_morph_analyzer()
+    if morph is None:
+        return False
+    try:
+        parses = morph.parse(low)
+    except Exception:
+        return False
+    if not parses:
+        return False
+    # Drop only if every top parse agrees it's a pronoun (NPRO).
+    top = parses[:3]
+    return all('NPRO' in p.tag for p in top)
+
+
+def _is_blacklisted(mention: str) -> bool:
+    """True if mention should be dropped: pronoun or generic non-specific role.
+
+    Used both at extraction time (to avoid writing junk to entry_people) and
+    at chart aggregation time (so existing rows with these labels disappear
+    from the chart without needing a re-extract).
+    """
+    if not mention or not mention.strip():
+        return True
+    if _is_pronoun_like(mention):
+        return True
+    # After lemmatization, generic roles end up in canonical lowercase form
+    low = mention.strip().lower()
+    if low in _GENERIC_ROLE_BLACKLIST:
+        return True
+    return False
+
+
+def _normalize_mention(raw: str) -> str:
+    """Lemmatize to nominative + capitalize first letter.
+
+    "Марусе" → "маруся" → "Маруся"; "мама" → "мама" → "Мама".
+    Compound names like "Анна-Мария" survive unchanged because pymorphy3
+    leaves multi-word tokens alone, and we only touch the first letter.
+    """
+    s = raw.strip()
+    if not s:
+        return s
+    lemma = _to_nominative(s)
+    if lemma:
+        s = lemma
+    return s[0].upper() + s[1:]
+
+
+def _parse_people_response(text: str) -> list[dict]:
+    """Parse LLM people-extraction response into [{mention, tone}, ...]."""
+    text = _strip_think(text)
+    # Find the JSON array (LLM occasionally wraps it or adds preamble)
+    start = text.find('[')
+    end = text.rfind(']')
+    if start == -1 or end == -1 or end < start:
+        return []
+    raw = text[start:end + 1]
+    try:
+        data = json.loads(raw)
+    except Exception:
+        return []
+    if not isinstance(data, list):
+        return []
+
+    result = []
+    seen = set()
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        raw = str(item.get('mention') or item.get('name') or '').strip()
+        mention = _normalize_mention(raw)
+        if _is_blacklisted(mention):
+            continue
+        tone = str(item.get('tone') or '').strip().lower()
+        if not mention or len(mention) > 100:
+            continue
+        if tone not in _VALID_TONES:
+            continue
+        # Dedupe within a single entry — LLM occasionally repeats mentions
+        key = (mention.lower(), tone)
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append({'mention': mention, 'tone': tone})
+    return result
+
+
+def extract_people_mentions(entry: MoodEntry, llm) -> list[EntryPerson]:
+    """Extract person/role mentions for `entry` via LLM, replacing prior rows.
+
+    Idempotent on re-runs — deletes the entry's existing mentions first, so
+    editing an entry cleanly updates the extracted data.
+    """
+    # Commit the DELETE in its own short transaction BEFORE the LLM call
+    # — otherwise SQLite holds the write lock for the entire 5-30s LLM
+    # latency, and any concurrent writer (re-extract trigger, another
+    # entry being processed) hits "database is locked" once it exhausts
+    # the 30s busy_timeout. Splitting into two short transactions keeps
+    # the write window measured in milliseconds.
+    EntryPerson.query.filter_by(entry_id=entry.id).delete()
+    db.session.commit()
+
+    note = (entry.note or '').strip()
+    if not note:
+        return []
+
+    prompt = PEOPLE_PROMPT.format(
+        date=entry.date.isoformat(),
+        rating=entry.rating,
+        note=note,
+    )
+    try:
+        from .routes import _llm_inference_lock
+        with _llm_inference_lock:
+            result = llm.create_chat_completion(
+                messages=[{'role': 'user', 'content': prompt}],
+                max_tokens=400,
+                temperature=0.2,
+            )
+        response_text = result['choices'][0]['message']['content'].strip()
+        mentions = _parse_people_response(response_text)
+    except Exception as e:
+        log.warning(f'Failed to extract people from entry {entry.id}: {e}')
+        return []
+
+    objs = []
+    for m in mentions:
+        obj = EntryPerson(entry_id=entry.id, mention=m['mention'], tone=m['tone'])
+        db.session.add(obj)
+        objs.append(obj)
+    db.session.commit()
+    return objs
+
+
+def _parse_activities_response(text: str) -> list[str]:
+    """Parse LLM activities-extraction response into a list of canonical labels."""
+    text = _strip_think(text)
+    start = text.find('[')
+    end = text.rfind(']')
+    if start == -1 or end == -1 or end < start:
+        return []
+    raw = text[start:end + 1]
+    try:
+        data = json.loads(raw)
+    except Exception:
+        return []
+    if not isinstance(data, list):
+        return []
+
+    result = []
+    seen = set()
+    for item in data:
+        if isinstance(item, dict):
+            label = item.get('activity') or item.get('name') or ''
+        elif isinstance(item, str):
+            label = item
+        else:
+            continue
+        label = str(label).strip().lower()
+        if not label or len(label) > 30:
+            continue
+        if label in seen:
+            continue
+        seen.add(label)
+        result.append(label)
+        if len(result) >= 5:
+            break
+    return result
+
+
+def extract_activities(entry: MoodEntry, llm) -> list[EntryActivity]:
+    """Extract activity labels for `entry` via LLM, replacing prior rows.
+
+    Idempotent — deletes the entry's existing rows first so re-runs on an
+    edited entry produce a clean state.
+    """
+    # See extract_people_mentions: commit DELETE before LLM call so the
+    # write lock isn't held during the multi-second LLM latency.
+    EntryActivity.query.filter_by(entry_id=entry.id).delete()
+    db.session.commit()
+
+    note = (entry.note or '').strip()
+    if not note:
+        return []
+
+    prompt = ACTIVITIES_PROMPT.format(
+        date=entry.date.isoformat(),
+        rating=entry.rating,
+        note=note,
+    )
+    try:
+        from .routes import _llm_inference_lock
+        with _llm_inference_lock:
+            result = llm.create_chat_completion(
+                messages=[{'role': 'user', 'content': prompt}],
+                max_tokens=200,
+                temperature=0.2,
+            )
+        response_text = result['choices'][0]['message']['content'].strip()
+        activities = _parse_activities_response(response_text)
+    except Exception as e:
+        log.warning(f'Failed to extract activities from entry {entry.id}: {e}')
+        return []
+
+    objs = []
+    for a in activities:
+        obj = EntryActivity(entry_id=entry.id, activity=a)
+        db.session.add(obj)
+        objs.append(obj)
+    db.session.commit()
+    return objs
 
 
 def generate_month_summary(year: int, month: int, llm) -> PeriodSummary | None:

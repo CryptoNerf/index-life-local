@@ -42,7 +42,7 @@ def _set_sqlite_pragmas(dbapi_connection, connection_record):
         cursor.close()
 
 # ── Schema version — bump when adding new migrations ──
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 5
 
 
 def _get_schema_version(conn) -> int:
@@ -157,9 +157,83 @@ def _migrate_v2(conn, inspector):
             log.info('Backfilled UUIDs for %d chat messages', len(rows))
 
 
+def _migrate_v3(conn, inspector):
+    """Create entry_people table for LLM-extracted name/role mentions.
+
+    Used by insights/people chart to show how each person or family role
+    correlates with the user's mood beyond the day's overall rating.
+    """
+    if not _table_exists(inspector, 'entry_people'):
+        conn.execute(text('''
+            CREATE TABLE entry_people (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                entry_id INTEGER NOT NULL,
+                mention TEXT NOT NULL,
+                tone TEXT NOT NULL,
+                FOREIGN KEY (entry_id) REFERENCES mood_entries(id)
+            )
+        '''))
+        conn.execute(text(
+            'CREATE INDEX idx_entry_people_entry_id ON entry_people(entry_id)'
+        ))
+        conn.execute(text(
+            'CREATE INDEX idx_entry_people_mention ON entry_people(mention)'
+        ))
+
+
+def _migrate_v4(conn, inspector):
+    """Create entry_activities table for LLM-extracted activity labels.
+
+    Used by insights/activities (packed-circles chart) to show what the
+    user actually does and how each activity correlates with mood.
+    """
+    if not _table_exists(inspector, 'entry_activities'):
+        conn.execute(text('''
+            CREATE TABLE entry_activities (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                entry_id INTEGER NOT NULL,
+                activity TEXT NOT NULL,
+                FOREIGN KEY (entry_id) REFERENCES mood_entries(id)
+            )
+        '''))
+        conn.execute(text(
+            'CREATE INDEX idx_entry_activities_entry_id ON entry_activities(entry_id)'
+        ))
+        conn.execute(text(
+            'CREATE INDEX idx_entry_activities_activity ON entry_activities(activity)'
+        ))
+
+
+def _migrate_v5(conn, inspector):
+    """Create person_aliases table for the people chart's manual merge UI.
+
+    Stores user-curated `alias → canonical` mappings so duplicate name
+    forms produced by the LLM ("Марь" vs "Мари") collapse to a single
+    chart entry without mutating the underlying entry_people rows.
+    """
+    if not _table_exists(inspector, 'person_aliases'):
+        conn.execute(text('''
+            CREATE TABLE person_aliases (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                alias TEXT NOT NULL UNIQUE,
+                canonical TEXT NOT NULL,
+                created_at DATETIME
+            )
+        '''))
+        conn.execute(text(
+            'CREATE INDEX idx_person_aliases_alias ON person_aliases(alias)'
+        ))
+        conn.execute(text(
+            'CREATE INDEX idx_person_aliases_canonical ON person_aliases(canonical)'
+        ))
+
+
 MIGRATIONS = {
     1: _migrate_v1,
     2: _migrate_v2,
+    3: _migrate_v3,
+    4: _migrate_v4,
+    5: _migrate_v5,
 }
 
 
@@ -427,8 +501,14 @@ def create_app(config_class='config.Config'):
     # Warm up assistant module on startup (if enabled)
     if 'assistant' in app.config.get('ACTIVE_MODULES', []):
         try:
-            from app.modules.assistant.background import warmup_async
+            from app.modules.assistant.background import (
+                warmup_async, backfill_people_async, backfill_activities_async,
+            )
             warmup_async(app)
+            # One-time backfills for insights charts. No-op after first
+            # successful run (guarded by sync_meta flags).
+            backfill_people_async(app)
+            backfill_activities_async(app)
         except Exception:
             pass
 

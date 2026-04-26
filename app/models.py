@@ -97,6 +97,61 @@ class EntrySummary(db.Model):
     entry = db.relationship('MoodEntry', backref=db.backref('summary_obj', uselist=False))
 
 
+class PersonAlias(db.Model):
+    """User-defined mapping `alias → canonical` for the people chart.
+
+    The 9B LLM occasionally produces multiple inflected/clipped forms for
+    the same person ("Марь" instead of "Мари", "Дарёная" instead of
+    "Дарёна") across different entries. Rather than guessing similarity
+    automatically (frequency-based merging is unreliable), we let the
+    user explicitly say "X is the same person as Y" and persist that
+    decision. Aggregation in /insights/people walks aliases at chart
+    render time, so existing entry_people rows don't need rewriting.
+    """
+    __tablename__ = 'person_aliases'
+
+    id = db.Column(db.Integer, primary_key=True)
+    alias = db.Column(db.String(100), nullable=False, unique=True, index=True)
+    canonical = db.Column(db.String(100), nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class EntryActivity(db.Model):
+    """Canonical activity label extracted from an entry via LLM.
+
+    One row per (entry, activity) — "ran + read + met friends" on one day
+    produces three rows. The LLM is asked for short canonical labels
+    ("спорт", "программирование", "встреча с друзьями") so similar actions
+    across days naturally group. Aggregation joins back to MoodEntry to
+    compute each activity's mood correlation.
+    """
+    __tablename__ = 'entry_activities'
+
+    id = db.Column(db.Integer, primary_key=True)
+    entry_id = db.Column(db.Integer, db.ForeignKey('mood_entries.id'), nullable=False, index=True)
+    activity = db.Column(db.String(100), nullable=False, index=True)
+
+    entry = db.relationship('MoodEntry', backref=db.backref('activity_mentions', lazy='dynamic'))
+
+
+class EntryPerson(db.Model):
+    """Person or family-role mention extracted from an entry via LLM.
+
+    One row per (entry, mention) — an entry with `мама` and `Оля` produces
+    two rows. The `tone` captures how the mention was framed in context,
+    decoupling it from the day's overall rating (a bad day can still
+    have positive mentions of someone who cheered the user up).
+    """
+    __tablename__ = 'entry_people'
+
+    id = db.Column(db.Integer, primary_key=True)
+    entry_id = db.Column(db.Integer, db.ForeignKey('mood_entries.id'), nullable=False, index=True)
+    mention = db.Column(db.String(100), nullable=False, index=True)
+    tone = db.Column(db.String(10), nullable=False)  # 'positive'|'neutral'|'negative'
+
+    entry = db.relationship('MoodEntry', backref=db.backref('people_mentions', lazy='dynamic'))
+
+
 class PeriodSummary(db.Model):
     """Layer 3: monthly/weekly emotional overviews"""
     __tablename__ = 'period_summaries'

@@ -173,6 +173,117 @@
         <p class="viz-card-desc">which words appear on your best days and which appear on your worst — average rating for each recurring word in your notes.</p>
       </a>
 
+      {# ── Activities (requires AI Psychologist for LLM extraction) ── #}
+      {% set activities_ready = module_active('assistant') %}
+      {% set activities_preview %}
+        <svg viewBox="0 0 120 120" preserveAspectRatio="xMidYMid meet">
+          {% set bubbles = [
+            [40, 50, 22, 0.75],
+            [76, 38, 16, 0.45],
+            [82, 72, 18, 0.85],
+            [26, 82, 12, 0.30],
+            [58, 82, 9, 0.55],
+            [96, 22, 7, 0.40],
+            [18, 34, 10, 0.65]
+          ] %}
+          {% for b in bubbles %}
+            <circle cx="{{ b[0] }}" cy="{{ b[1] }}" r="{{ b[2] }}"
+                    fill="rgba(0,0,0,{{ b[3] }})" stroke="#000" stroke-width="0.4" stroke-opacity="0.35"/>
+          {% endfor %}
+        </svg>
+      {% endset %}
+      {% if activities_ready %}
+        <a href="{{ url_for('insights.activities') }}" class="viz-card">
+          <div class="viz-preview">{{ activities_preview|safe }}</div>
+          <p class="viz-card-title">activities</p>
+          <p class="viz-card-desc">what you do, packed as bubbles — circle size is frequency, shade is mood on those days.</p>
+        </a>
+      {% else %}
+        <div class="viz-card disabled" title="Requires the AI Psychologist module">
+          <div class="viz-preview">{{ activities_preview|safe }}</div>
+          <p class="viz-card-title">
+            activities
+            <span class="soon-tag needs-ai">requires ai psychologist</span>
+          </p>
+          <p class="viz-card-desc">what you do, packed as bubbles — circle size is frequency, shade is mood on those days.</p>
+        </div>
+      {% endif %}
+
+      {# ── Activities zoom (drill-down circle packing) ── #}
+      {% set az_ready = module_active('assistant') %}
+      {% set az_preview %}
+        <svg viewBox="0 0 120 120" preserveAspectRatio="xMidYMid meet">
+          {# big parent circle on the left, with small children inside; smaller standalone on right #}
+          <circle cx="44" cy="60" r="36" fill="rgba(0,0,0,0.25)" stroke="rgba(0,0,0,0.4)" stroke-width="0.6"/>
+          {% set kids = [
+            [32, 50, 8, 0.45],
+            [50, 48, 9, 0.20],
+            [42, 64, 10, 0.65],
+            [56, 68, 7, 0.40],
+            [30, 70, 6, 0.55]
+          ] %}
+          {% for k in kids %}
+            <circle cx="{{ k[0] }}" cy="{{ k[1] }}" r="{{ k[2] }}"
+                    fill="rgba(0,0,0,{{ k[3] }})" stroke="rgba(0,0,0,0.4)" stroke-width="0.4"/>
+          {% endfor %}
+          <circle cx="92" cy="46" r="14" fill="rgba(0,0,0,0.55)" stroke="rgba(0,0,0,0.4)" stroke-width="0.6"/>
+          <circle cx="100" cy="84" r="10" fill="rgba(0,0,0,0.40)" stroke="rgba(0,0,0,0.4)" stroke-width="0.5"/>
+          <circle cx="80" cy="98" r="7" fill="rgba(0,0,0,0.30)" stroke="rgba(0,0,0,0.4)" stroke-width="0.4"/>
+        </svg>
+      {% endset %}
+      {% if az_ready %}
+        <a href="{{ url_for('insights.activities_zoom') }}" class="viz-card">
+          <div class="viz-preview">{{ az_preview|safe }}</div>
+          <p class="viz-card-title">activities zoom</p>
+          <p class="viz-card-desc">zoomable circle packing — click an activity to drill into individual mentions, hover for the actual diary text.</p>
+        </a>
+      {% else %}
+        <div class="viz-card disabled" title="Requires the AI Psychologist module">
+          <div class="viz-preview">{{ az_preview|safe }}</div>
+          <p class="viz-card-title">
+            activities zoom
+            <span class="soon-tag needs-ai">requires ai psychologist</span>
+          </p>
+          <p class="viz-card-desc">zoomable circle packing — click an activity to drill into individual mentions, hover for the actual diary text.</p>
+        </div>
+      {% endif %}
+
+      {# ── People (requires AI Psychologist for per-mention sentiment) ── #}
+      {% set people_ready = module_active('assistant') %}
+      {% set people_preview %}
+        <svg viewBox="0 0 120 120" preserveAspectRatio="xMidYMid meet">
+          <line x1="60" y1="10" x2="60" y2="110" stroke="#ccc" stroke-width="0.4"/>
+          {% set pos = [[88,22],[80,36],[94,50]] %}
+          {% set neg = [[30,70],[40,84],[24,98]] %}
+          {% for p in pos %}
+            <line x1="60" y1="{{ p[1] }}" x2="{{ p[0] }}" y2="{{ p[1] }}"
+                  stroke="#000" stroke-width="0.8" opacity="0.45"/>
+            <circle cx="{{ p[0] }}" cy="{{ p[1] }}" r="3" fill="#000" opacity="0.45"/>
+          {% endfor %}
+          {% for p in neg %}
+            <line x1="60" y1="{{ p[1] }}" x2="{{ p[0] }}" y2="{{ p[1] }}"
+                  stroke="#000" stroke-width="0.8" opacity="0.85"/>
+            <circle cx="{{ p[0] }}" cy="{{ p[1] }}" r="3" fill="#000" opacity="0.85"/>
+          {% endfor %}
+        </svg>
+      {% endset %}
+      {% if people_ready %}
+        <a href="{{ url_for('insights.people') }}" class="viz-card">
+          <div class="viz-preview">{{ people_preview|safe }}</div>
+          <p class="viz-card-title">people</p>
+          <p class="viz-card-desc">names and roles mentioned in your notes, scored by context — who lifts you up and who drags you down.</p>
+        </a>
+      {% else %}
+        <div class="viz-card disabled" title="Requires the AI Psychologist module">
+          <div class="viz-preview">{{ people_preview|safe }}</div>
+          <p class="viz-card-title">
+            people
+            <span class="soon-tag needs-ai">requires ai psychologist</span>
+          </p>
+          <p class="viz-card-desc">names and roles mentioned in your notes, scored by context — who lifts you up and who drags you down.</p>
+        </div>
+      {% endif %}
+
       <a href="{{ url_for('insights.river') }}" class="viz-card">
         <div class="viz-preview">
           <svg viewBox="0 0 120 120" preserveAspectRatio="xMidYMid meet">

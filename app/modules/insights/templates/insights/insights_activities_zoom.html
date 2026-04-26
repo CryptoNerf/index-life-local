@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>activities zoom</title>
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/calendar.css') }}">
+  <link rel="stylesheet" href="{{ url_for('insights.static', filename='css/insights.css') }}">
+  <style>
+    /* Lift the 1180px max-width on .insights-main so the chart can use
+       the full window. Keep the standard 32px horizontal padding so the
+       header/back-link still align with other insights pages. */
+    main.insights-main {
+      max-width: 100% !important;
+      align-items: stretch !important;
+    }
+    .az-wrap {
+      /* Rectangular canvas — fills parent's content area (which is
+         viewport-width minus .insights-main padding), with a max cap. */
+      width: 100%;
+      max-width: 1700px;
+      height: min(72vh, 980px);
+      margin: 0 auto;
+      position: relative;
+    }
+    .az-canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: pointer;
+      background: #fafafa;
+      border: 1px solid #eee;
+    }
+    .az-circle {
+      transition: stroke-width 0.12s;
+    }
+    .az-label {
+      font-family: 'Times New Roman', serif;
+      pointer-events: none;
+      text-anchor: middle;
+      /* `central` aligns to the geometric centre of the em-box, which
+         WKWebView renders closer to true visual centre than `middle`
+         (which uses x-height and ends up a few pixels above centre). */
+      dominant-baseline: central;
+      fill: #fff;
+    }
+    .az-tooltip {
+      position: absolute;
+      pointer-events: none;
+      background: rgba(255, 255, 255, 0.97);
+      border: 1px solid #ccc;
+      padding: 12px 14px;
+      max-width: 360px;
+      font-family: 'Times New Roman', serif;
+      font-size: 14px;
+      line-height: 1.45;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.10);
+      z-index: 10;
+      display: none;
+      white-space: pre-wrap;
+    }
+    .az-tooltip-meta {
+      font-size: 12px;
+      color: #777;
+      margin-bottom: 6px;
+    }
+    .az-summary-row {
+      text-align: center;
+      color: #777;
+      font-size: 14px;
+      font-family: 'Times New Roman', serif;
+      margin: 18px auto 8px;
+      max-width: 720px;
+      line-height: 1.5;
+    }
+    .az-empty {
+      color: #999;
+      font-style: italic;
+      text-align: center;
+      padding: 40px 0;
+    }
+    .az-hint {
+      color: #e8a83e;
+      font-family: 'Times New Roman', serif;
+      text-align: center;
+      margin: 24px 0;
+      font-size: 15px;
+    }
+  </style>
+</head>
+<body>
+  <header class="main-header">
+    <nav class="top-menu">
+      <a href="{{ url_for('main.mood_grid') }}" class="menu-link">index.life</a>
+      <a href="{{ url_for('main.life_calendar') }}" class="menu-link">life in weeks</a>
+      <a href="{{ url_for('insights.insights_page') }}" class="menu-link active-link">insights</a>
+      {% if module_active('assistant') %}
+        <a href="{{ url_for('assistant.chat') }}" class="menu-link">ai psychologist</a>
+      {% endif %}
+      {% if module_active('deep_mind') %}
+        <a href="{{ url_for('deep_mind.neural_map') }}" class="menu-link">neural map</a>
+      {% endif %}
+      <a href="{{ url_for('main.account') }}" class="menu-link">account</a>
+      <a href="{{ url_for('sync.sync_page') }}" class="menu-link">sync</a>
+      <a href="{{ url_for('modules.modules_page') }}" class="menu-link">modules</a>
+    </nav>
+  </header>
+
+  <main class="insights-main">
+    <div class="detail-header">
+      <a href="{{ url_for('insights.insights_page') }}" class="back-link">← insights</a>
+      <p class="insights-title">activities zoom</p>
+      <p class="insights-summary">
+        {% if total_activities > 0 %}
+          {{ total_activities }} activities — click a circle to zoom in and see individual mentions
+        {% elif has_notes %}
+          no activities extracted yet — the AI psychologist is still analyzing your entries
+        {% else %}
+          no entries with notes yet
+        {% endif %}
+      </p>
+    </div>
+
+    {% if total_activities == 0 and has_notes %}
+      <p class="az-hint">analysis runs in the background — come back in a few minutes</p>
+    {% endif %}
+
+    {% if total_activities > 0 %}
+      <div class="az-wrap">
+        <svg id="az-canvas" class="az-canvas"
+             viewBox="-800 -460 1600 920"
+             preserveAspectRatio="xMidYMid meet"></svg>
+        <div id="az-tooltip" class="az-tooltip"></div>
+      </div>
+
+      <p class="az-summary-row">
+        click an activity to zoom into its mentions · click a mention to open that day's entry · click background to zoom out · hover for full note text ·
+        outer shade is mood vs your {{ '%.2f'|format(baseline) }} average (lighter = better days), inner shade is that day's rating
+      </p>
+
+      <script src="{{ url_for('insights.static', filename='js/d3.v7.min.js') }}"></script>
+      <script id="az-data" type="application/json">{{ data | tojson }}</script>
+      <script>
+        (function () {
+          var data = JSON.parse(document.getElementById('az-data').textContent);
+          var maxDelta = {{ max_delta }} || 0.5;
+
+          // Rectangular layout — wider than tall, matches the canvas
+          // viewBox of 1600×920. The pack algorithm packs circles into
+          // this aspect ratio for a more horizontal arrangement.
+          var width = 1600;
+          var height = 920;
+          // URL template for navigating to a specific day on click.
+          var DAY_URL_TEMPLATE = "{{ url_for('main.edit_day', day='__DAY__') }}";
+
+          // Outer activity shade — mood vs baseline. Darker = below average.
+          function shadeForDelta(delta) {
+            var t = Math.max(-1, Math.min(1, delta / (maxDelta || 1)));
+            return 0.5 - t * 0.35;  // [0.15, 0.85]
+          }
+
+          // Inner mention shade — that day's mood rating, 1=darkest, 10=lightest.
+          function shadeForRating(r) {
+            var t = (r - 1) / 9;
+            return 0.85 - t * 0.65;  // [0.20, 0.85]
+          }
+
+          var pack = d3.pack().size([width, height]).padding(3);
+          var root = pack(d3.hierarchy(data)
+            .sum(function (d) { return d.value || 0; })
+            .sort(function (a, b) { return b.value - a.value; }));
+
+          var svg = d3.select('#az-canvas');
+          var tooltip = document.getElementById('az-tooltip');
+          var canvasEl = document.getElementById('az-canvas');
+
+          function showTooltip(html, evt) {
+            tooltip.innerHTML = html;
+            tooltip.style.display = 'block';
+            // Position relative to wrapper using mouse coords
+            var wrap = canvasEl.parentNode;
+            var rect = wrap.getBoundingClientRect();
+            var x = evt.clientX - rect.left + 14;
+            var y = evt.clientY - rect.top + 14;
+            // Keep tooltip on-screen
+            var maxX = wrap.clientWidth - 380;
+            if (x > maxX) x = maxX;
+            tooltip.style.left = x + 'px';
+            tooltip.style.top = y + 'px';
+          }
+          function hideTooltip() { tooltip.style.display = 'none'; }
+
+          function escapeHTML(s) {
+            return String(s).replace(/[&<>"']/g, function (c) {
+              return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+            });
+          }
+
+          function tooltipHTML(d) {
+            if (d.depth === 1) {
+              // Activity-level
+              var sign = d.data.delta > 0 ? '+' : (d.data.delta < 0 ? '' : '±');
+              return (
+                '<div class="az-tooltip-meta">' + d.data.count + ' mentions · avg ' +
+                d.data.avg.toFixed(2) + ' (' + sign + d.data.delta.toFixed(2) + ') · click to zoom in' + '</div>' +
+                '<div><b>' + escapeHTML(d.data.name) + '</b></div>'
+              );
+            }
+            // Mention-level
+            return (
+              '<div class="az-tooltip-meta">' + escapeHTML(d.data.date) +
+              ' · ' + d.data.rating + '/10 · click to open this day</div>' +
+              '<div>' + escapeHTML(d.data.note || '(no note)') + '</div>'
+            );
+          }
+
+          var node = svg.append('g')
+            .selectAll('circle')
+            .data(root.descendants().slice(1))  // skip invisible root
+            .join('circle')
+              .attr('class', 'az-circle')
+              .attr('fill', function (d) {
+                if (d.depth === 1) return 'rgba(0,0,0,' + shadeForDelta(d.data.delta) + ')';
+                return 'rgba(0,0,0,' + shadeForRating(d.data.rating) + ')';
+              })
+              .attr('stroke', 'rgba(0,0,0,0.3)')
+              .attr('stroke-width', 0.5)
+              .style('cursor', 'pointer')  // every circle is clickable now
+              .on('mouseover', function (event, d) {
+                d3.select(this).attr('stroke-width', 2);
+                showTooltip(tooltipHTML(d), event);
+              })
+              .on('mousemove', function (event, d) {
+                showTooltip(tooltipHTML(d), event);
+              })
+              .on('mouseout', function () {
+                d3.select(this).attr('stroke-width', 0.5);
+                hideTooltip();
+              })
+              .on('click', function (event, d) {
+                event.stopPropagation();
+                // Leaf (mention) — navigate to the day's edit page so the
+                // user can see (and edit) the actual entry, not just hover.
+                if (!d.children) {
+                  hideTooltip();
+                  window.location.href = DAY_URL_TEMPLATE.replace('__DAY__', d.data.date);
+                  return;
+                }
+                if (focus !== d) zoom(event, d);
+              });
+
+          // Text label per node. Font size scales with circle radius so big
+          // activities get big readable labels, and textLength compresses
+          // long names ("встреча с друзьями") to fit inside their circle.
+          function labelText(d) {
+            if (d.depth === 1) return d.data.name;
+            // Mention — show MM-DD (year is shared in the parent context)
+            var parts = (d.data.date || '').split('-');
+            return parts.length === 3 ? parts[1] + '-' + parts[2] : d.data.name;
+          }
+          function fontSizeFor(d) {
+            // viewBox-units font size proportional to circle radius.
+            // Mention dates ("MM-DD") only need to be legible, not huge.
+            // Activities can afford bigger labels when their circle is large.
+            if (d.depth >= 2) {
+              return Math.max(11, Math.min(26, d.r * 0.30));
+            }
+            return Math.max(12, Math.min(56, d.r * 0.42));
+          }
+
+          var label = svg.append('g')
+              .style('font-family', "'Times New Roman', serif")
+              .attr('pointer-events', 'none')
+              .attr('text-anchor', 'middle')
+            .selectAll('text')
+            .data(root.descendants().slice(1))
+            .join('text')
+              .attr('class', 'az-label')
+              .style('font-size', function (d) { return fontSizeFor(d) + 'px'; })
+              .style('fill-opacity', function (d) { return d.parent === root ? 1 : 0; })
+              .style('display', function (d) { return d.parent === root ? 'inline' : 'none'; })
+              .text(labelText)
+              .each(function (d) {
+                // If natural text width (≈ chars × fontSize × 0.55) is wider
+                // than the circle's diameter minus padding, compress via
+                // textLength so it fits without overflow.
+                var fs = fontSizeFor(d);
+                var natural = labelText(d).length * fs * 0.55;
+                var maxWidth = d.r * 1.7;
+                if (natural > maxWidth) {
+                  this.setAttribute('textLength', maxWidth);
+                  this.setAttribute('lengthAdjust', 'spacingAndGlyphs');
+                }
+              });
+
+          svg.on('click', function (event) { zoom(event, root); });
+          var focus = root;
+          var view;
+          zoomTo([root.x, root.y, root.r * 2]);
+
+          function zoomTo(v) {
+            // Use the smaller of the two axes so the focused circle's
+            // diameter (v[2]) fits without overflowing — important when
+            // viewBox is rectangular (height < width here).
+            var k = Math.min(width, height) / v[2];
+            view = v;
+            label.attr('transform', function (d) {
+              return 'translate(' + (d.x - v[0]) * k + ',' + (d.y - v[1]) * k + ')';
+            });
+            // Scale font size and textLength with zoom level — without
+            // this, mention dates stay tiny at deep zoom even though the
+            // circles around them grow with k.
+            label
+              .style('font-size', function (d) { return (fontSizeFor(d) * k) + 'px'; })
+              .each(function (d) {
+                var fs = fontSizeFor(d) * k;
+                var natural = labelText(d).length * fs * 0.55;
+                var maxWidth = d.r * 1.7 * k;
+                if (natural > maxWidth) {
+                  this.setAttribute('textLength', maxWidth);
+                  this.setAttribute('lengthAdjust', 'spacingAndGlyphs');
+                } else {
+                  this.removeAttribute('textLength');
+                  this.removeAttribute('lengthAdjust');
+                }
+              });
+            node.attr('transform', function (d) {
+              return 'translate(' + (d.x - v[0]) * k + ',' + (d.y - v[1]) * k + ')';
+            });
+            node.attr('r', function (d) { return d.r * k; });
+          }
+
+          function zoom(event, d) {
+            focus = d;
+            var transition = svg.transition()
+                .duration(750)
+                .tween('zoom', function () {
+                  var i = d3.interpolateZoom(view, [focus.x, focus.y, focus.r * 2]);
+                  return function (t) { zoomTo(i(t)); };
+                });
+
+            label
+              .filter(function (d) { return d.parent === focus || this.style.display === 'inline'; })
+              .transition(transition)
+                .style('fill-opacity', function (d) { return d.parent === focus ? 1 : 0; })
+                .on('start', function (d) { if (d.parent === focus) this.style.display = 'inline'; })
+                .on('end', function (d) { if (d.parent !== focus) this.style.display = 'none'; });
+          }
+        })();
+      </script>
+    {% endif %}
+  </main>
+</body>
+</html>

@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ name }} · people</title>
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/calendar.css') }}">
+  <link rel="stylesheet" href="{{ url_for('insights.static', filename='css/insights.css') }}">
+  <style>
+    .pd-wrap {
+      max-width: 760px;
+      margin: 0 auto;
+      font-family: 'Times New Roman', serif;
+    }
+    .pd-summary {
+      display: flex;
+      gap: 32px;
+      align-items: baseline;
+      margin: 24px 0 32px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #eee;
+    }
+    .pd-stat-block {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .pd-stat-num {
+      font-size: 28px;
+      color: #000;
+      font-variant-numeric: tabular-nums;
+    }
+    .pd-stat-label {
+      font-size: 12px;
+      color: #999;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .pd-tone-row {
+      margin-left: auto;
+      display: flex;
+      gap: 18px;
+      align-items: baseline;
+    }
+    .pd-tone-cell { display: flex; gap: 6px; align-items: baseline; }
+    .pd-tone-cell .num {
+      font-size: 18px;
+      color: #000;
+      font-variant-numeric: tabular-nums;
+    }
+    .pd-tone-cell .lbl {
+      font-size: 12px;
+      color: #666;
+      text-transform: lowercase;
+    }
+    .pd-entry {
+      padding: 18px 0;
+      border-bottom: 1px solid #f1f1f1;
+    }
+    .pd-entry:last-child { border-bottom: none; }
+    .pd-entry-head {
+      display: flex;
+      gap: 14px;
+      align-items: center;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+    .pd-date {
+      color: #444;
+      font-variant-numeric: tabular-nums;
+    }
+    .pd-rating {
+      color: #666;
+      font-variant-numeric: tabular-nums;
+    }
+    .pd-tone-tag {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      padding: 2px 8px;
+      border: 1px solid #ccc;
+    }
+    .pd-tone-tag.tone-positive {
+      color: #fff;
+      background: rgba(0,0,0,0.35);
+      border-color: rgba(0,0,0,0.35);
+    }
+    .pd-tone-tag.tone-neutral {
+      color: #555;
+      background: transparent;
+    }
+    .pd-tone-tag.tone-negative {
+      color: #fff;
+      background: rgba(0,0,0,0.85);
+      border-color: rgba(0,0,0,0.85);
+    }
+    .pd-note {
+      font-size: 15px;
+      line-height: 1.55;
+      color: #1a1a1a;
+      white-space: pre-wrap;
+    }
+    .pd-empty {
+      text-align: center;
+      color: #999;
+      font-style: italic;
+      padding: 40px 0;
+    }
+    .pd-aliases {
+      margin: 32px 0 12px;
+      padding: 14px 16px;
+      background: #f7f7f5;
+      border-left: 3px solid #ddd;
+      font-size: 14px;
+    }
+    .pd-aliases-title {
+      color: #555;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin: 0 0 8px;
+    }
+    .pd-alias-row {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-right: 14px;
+      margin-bottom: 4px;
+    }
+    .pd-alias-name {
+      color: #000;
+    }
+    .pd-alias-btn {
+      background: transparent;
+      border: none;
+      color: #999;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 14px;
+      padding: 0 2px;
+    }
+    .pd-alias-btn.unmerge:hover { color: #c00; }
+    .pd-alias-btn.promote:hover { color: #009AFA; }
+    .pd-merge {
+      margin: 32px 0 16px;
+      padding: 16px 16px;
+      border: 1px dashed #ccc;
+      font-family: 'Times New Roman', serif;
+    }
+    .pd-merge-title {
+      color: #555;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin: 0 0 10px;
+    }
+    .pd-merge form {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .pd-merge select {
+      font-family: inherit;
+      font-size: 15px;
+      padding: 6px 8px;
+      border: 1px solid #aaa;
+      background: #fff;
+      min-width: 220px;
+    }
+    .pd-merge-btn {
+      background: transparent;
+      color: #555;
+      border: 1px solid #999;
+      padding: 6px 18px;
+      font-family: inherit;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .pd-merge-btn:hover { background: #555; color: #fff; }
+    .pd-merge-hint {
+      color: #999;
+      font-size: 13px;
+      margin-top: 6px;
+    }
+    .pd-rename {
+      margin: 16px 0 4px;
+      padding: 14px 16px;
+      border: 1px dashed #ccc;
+      font-family: 'Times New Roman', serif;
+    }
+    .pd-rename-title {
+      color: #555;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin: 0 0 10px;
+    }
+    .pd-rename form {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .pd-rename input[type="text"] {
+      font-family: inherit;
+      font-size: 15px;
+      padding: 6px 8px;
+      border: 1px solid #aaa;
+      background: #fff;
+      min-width: 240px;
+    }
+  </style>
+</head>
+<body>
+  <header class="main-header">
+    <nav class="top-menu">
+      <a href="{{ url_for('main.mood_grid') }}" class="menu-link">index.life</a>
+      <a href="{{ url_for('main.life_calendar') }}" class="menu-link">life in weeks</a>
+      <a href="{{ url_for('insights.insights_page') }}" class="menu-link active-link">insights</a>
+      {% if module_active('assistant') %}
+        <a href="{{ url_for('assistant.chat') }}" class="menu-link">ai psychologist</a>
+      {% endif %}
+      {% if module_active('deep_mind') %}
+        <a href="{{ url_for('deep_mind.neural_map') }}" class="menu-link">neural map</a>
+      {% endif %}
+      <a href="{{ url_for('main.account') }}" class="menu-link">account</a>
+      <a href="{{ url_for('sync.sync_page') }}" class="menu-link">sync</a>
+      <a href="{{ url_for('modules.modules_page') }}" class="menu-link">modules</a>
+    </nav>
+  </header>
+
+  <main class="insights-main">
+    <div class="detail-header">
+      <a href="{{ url_for('insights.people') }}" class="back-link">← people</a>
+      <p class="insights-title">{{ name }}</p>
+    </div>
+
+    <div class="pd-wrap">
+      {% if incoming_aliases %}
+        <div class="pd-aliases">
+          <p class="pd-aliases-title">also known as · click ↑ to display this name instead, × to unmerge</p>
+          {% for a in incoming_aliases %}
+            <span class="pd-alias-row">
+              <span class="pd-alias-name">{{ a }}</span>
+              <form method="post" action="{{ url_for('insights.people_alias_set_canonical') }}" style="display:inline">
+                <input type="hidden" name="new_canonical" value="{{ a }}">
+                <input type="hidden" name="current_canonical" value="{{ name }}">
+                <button class="pd-alias-btn promote" type="submit"
+                        onclick="return confirm('Display this person as ' + {{ a|tojson }} + ' instead? All merged names will continue to count toward the same person.');"
+                        title="Display as {{ a }}">↑</button>
+              </form>
+              <form method="post" action="{{ url_for('insights.people_alias_delete') }}" style="display:inline">
+                <input type="hidden" name="alias" value="{{ a }}">
+                <input type="hidden" name="return_to" value="{{ name }}">
+                <button class="pd-alias-btn unmerge" type="submit"
+                        onclick="return confirm('Unmerge ' + {{ a|tojson }} + ' — it will become a separate entry on the chart again.');"
+                        title="Unmerge {{ a }}">×</button>
+              </form>
+            </span>
+          {% endfor %}
+        </div>
+
+        <div class="pd-rename">
+          <p class="pd-rename-title">or display under a different name</p>
+          <form method="post" action="{{ url_for('insights.people_alias_set_canonical') }}">
+            <input type="hidden" name="current_canonical" value="{{ name }}">
+            <input type="text" name="new_canonical" placeholder="type a new name…" required maxlength="100">
+            <button class="pd-merge-btn" type="submit"
+                    onclick="return confirm('Display this person under the typed name?');">
+              rename
+            </button>
+          </form>
+        </div>
+      {% endif %}
+
+      {% if total > 0 %}
+        <div class="pd-summary">
+          <div class="pd-stat-block">
+            <span class="pd-stat-num">{{ total }}×</span>
+            <span class="pd-stat-label">mentions</span>
+          </div>
+          <div class="pd-stat-block">
+            <span class="pd-stat-num">{{ '%+.2f'|format(tone_score) }}</span>
+            <span class="pd-stat-label">tone score</span>
+          </div>
+
+          <div class="pd-tone-row">
+            <span class="pd-tone-cell">
+              <span class="num">{{ counts.positive }}</span>
+              <span class="lbl">positive</span>
+            </span>
+            <span class="pd-tone-cell">
+              <span class="num">{{ counts.neutral }}</span>
+              <span class="lbl">neutral</span>
+            </span>
+            <span class="pd-tone-cell">
+              <span class="num">{{ counts.negative }}</span>
+              <span class="lbl">negative</span>
+            </span>
+          </div>
+        </div>
+
+        {% for e in entries %}
+          <div class="pd-entry">
+            <div class="pd-entry-head">
+              <span class="pd-date">{{ e.date.strftime('%Y-%m-%d') }}</span>
+              <span class="pd-rating">{{ e.rating }}/10</span>
+              {% for t in e.tones %}
+                <span class="pd-tone-tag tone-{{ t }}">{{ t }}</span>
+              {% endfor %}
+            </div>
+            <div class="pd-note">{{ e.note }}</div>
+          </div>
+        {% endfor %}
+      {% else %}
+        <p class="pd-empty">no entries found for this person</p>
+      {% endif %}
+
+      {% if other_canonicals %}
+        <div class="pd-merge">
+          <p class="pd-merge-title">merge "{{ name }}" into another person</p>
+          <form method="post" action="{{ url_for('insights.people_alias_create') }}">
+            <input type="hidden" name="alias" value="{{ name }}">
+            <select name="canonical" required>
+              <option value="" disabled selected>— select target —</option>
+              {% for c in other_canonicals %}
+                <option value="{{ c }}">{{ c }}</option>
+              {% endfor %}
+            </select>
+            <button class="pd-merge-btn" type="submit"
+                    onclick="return confirm('Merge ' + {{ name|tojson }} + ' into the selected person? Their entries will combine on the chart. You can unmerge later.');">
+              merge
+            </button>
+          </form>
+          <p class="pd-merge-hint">
+            use this when the same person was extracted under two different name forms
+            (an inflected variant, a clipped form, or a spelling slip from the AI).
+            entry data isn't modified — the chart resolves the alias at render time.
+          </p>
+        </div>
+      {% endif %}
+    </div>
+  </main>
+</body>
+</html>

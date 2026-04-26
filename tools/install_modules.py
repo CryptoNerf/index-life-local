@@ -698,6 +698,7 @@ def install_assistant_vulkan_prebuilt() -> None:
         "diskcache>=5.6.1",
         "jinja2>=2.11.3",
         "typing-extensions>=4.5.0",
+        "pymorphy3>=2.0.1",
     ])
 
     # Download and install pre-built wheel

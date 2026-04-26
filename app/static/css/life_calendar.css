@@ -83,6 +83,28 @@ body {
 
 .birthdate-input:focus { border-color: #000; }
 
+/* Three locale-independent selects replacing <input type="date">.
+   Native date input renders in system-locale order (MM/DD/YYYY on
+   English macOS), which conflicts with the rest of the app's
+   day-month-year convention. */
+.birthdate-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.birthdate-select {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 16px;
+  border: 1px solid #222;
+  padding: 8px 12px;
+  background: #fff;
+  outline: none;
+  cursor: pointer;
+  min-width: 110px;
+}
+.birthdate-select:focus { border-color: #000; }
+
 .life-btn {
   font-family: 'Times New Roman', Times, serif;
   font-size: 16px;

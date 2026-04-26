@@ -35,18 +35,42 @@
         <span class="life-title-screen">Life in weeks</span>
         <span class="life-title-print">Your life in weeks.</span>
       </p>
+      {# Three split selects for day / month / year. Replaces the native
+         <input type="date">, whose displayed format is locked to the
+         system locale (MM/DD/YYYY on US-English webviews) and can't be
+         forced to DD-MM-YYYY any other way. #}
+      {% set today_year = current_year %}
+      {% set bd_d = birthdate.day if birthdate else '' %}
+      {% set bd_m = birthdate.month if birthdate else '' %}
+      {% set bd_y = birthdate.year if birthdate else '' %}
       <form class="birthdate-prompt" method="POST" action="{{ url_for('main.life_set_birthdate') }}">
-        <label for="birthdate-input">
+        <label>
           {% if show_change_form %}change your date of birth{% else %}enter your date of birth{% endif %}
         </label>
-        <input
-          type="date"
-          id="birthdate-input"
-          name="birthdate"
-          class="birthdate-input"
-          value="{{ birthdate.strftime('%Y-%m-%d') if birthdate else '' }}"
-          required
-        >
+        <div class="birthdate-row">
+          <select name="birthdate_day" class="birthdate-select" required aria-label="day">
+            <option value="" disabled {% if not bd_d %}selected{% endif %}>day</option>
+            {% for d in range(1, 32) %}
+              <option value="{{ d }}" {% if bd_d == d %}selected{% endif %}>{{ '%02d'|format(d) }}</option>
+            {% endfor %}
+          </select>
+          <select name="birthdate_month" class="birthdate-select" required aria-label="month">
+            <option value="" disabled {% if not bd_m %}selected{% endif %}>month</option>
+            {% for m, label in [
+              (1, 'January'), (2, 'February'), (3, 'March'), (4, 'April'),
+              (5, 'May'), (6, 'June'), (7, 'July'), (8, 'August'),
+              (9, 'September'), (10, 'October'), (11, 'November'), (12, 'December')
+            ] %}
+              <option value="{{ m }}" {% if bd_m == m %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+          <select name="birthdate_year" class="birthdate-select" required aria-label="year">
+            <option value="" disabled {% if not bd_y %}selected{% endif %}>year</option>
+            {% for y in range(today_year, today_year - 121, -1) %}
+              <option value="{{ y }}" {% if bd_y == y %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+          </select>
+        </div>
         <button type="submit" class="life-btn">save</button>
         {% if show_change_form %}
           <a href="{{ url_for('main.life_calendar') }}" class="menu-link" style="font-size:14px;color:#888;">cancel</a>

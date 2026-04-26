@@ -441,19 +441,37 @@ def life_calendar():
                            birthdate=birthdate,
                            weeks_lived=weeks_lived,
                            current_week_index=current_week_index,
-                           show_change_form=show_change_form)
+                           show_change_form=show_change_form,
+                           current_year=date.today().year)
 
 
 @bp.route('/life/set-birthdate', methods=['POST'])
 def life_set_birthdate():
-    """Save birthdate from the life calendar prompt form"""
-    birthdate_str = request.form.get('birthdate', '').strip()
-    if birthdate_str:
+    """Save birthdate from the life calendar prompt form.
+
+    Form fields are three separate selects (birthdate_day/month/year) —
+    locale-independent — combined here into a date. The legacy single
+    `birthdate` field (YYYY-MM-DD) is still accepted for compatibility.
+    """
+    bd = None
+    legacy_str = request.form.get('birthdate', '').strip()
+    if legacy_str:
         try:
-            bd = datetime.strptime(birthdate_str, '%Y-%m-%d').date()
+            bd = datetime.strptime(legacy_str, '%Y-%m-%d').date()
         except ValueError:
             flash('Invalid date format', 'error')
             return redirect(url_for('main.life_calendar'))
+    else:
+        d = request.form.get('birthdate_day', '').strip()
+        m = request.form.get('birthdate_month', '').strip()
+        y = request.form.get('birthdate_year', '').strip()
+        if d and m and y:
+            try:
+                bd = date(int(y), int(m), int(d))
+            except ValueError:
+                flash('Invalid date — please pick a real day/month/year combination', 'error')
+                return redirect(url_for('main.life_calendar'))
+    if bd:
 
         profile = UserProfile.query.first()
         if not profile:

@@ -7,7 +7,7 @@ import threading
 import time
 
 from app import db
-from app.models import MoodEntry, EntrySummary
+from app.models import MoodEntry, EntrySummary, EntryPerson, EntryActivity
 
 log = logging.getLogger(__name__)
 
@@ -85,6 +85,218 @@ def warmup_async(app):
     thread.start()
 
 
+# ── Per-chart re-extraction status ─────────────────────────────────
+# Lightweight progress dicts so the chart pages can poll re-extraction
+# progress without depending on _reindex_status (which is reserved for
+# the full assistant reindex). Single-user app — no race protection.
+_people_extract_status = {'running': False, 'processed': 0, 'total': 0, 'started_at': None}
+_activities_extract_status = {'running': False, 'processed': 0, 'total': 0, 'started_at': None}
+
+
+def get_people_extract_status() -> dict:
+    return dict(_people_extract_status)
+
+
+def get_activities_extract_status() -> dict:
+    return dict(_activities_extract_status)
+
+
+def _run_extraction(app, entry_ids: list, extract_fn, label: str, status: dict | None = None):
+    """Iterate entry_ids on the shared LLM lock, with cooperative yield.
+
+    Used by both startup backfill (status=None) and the chart-triggered
+    re-extract (status=dict) — avoids duplicating the lock/yield/error
+    plumbing in two places. Each iteration releases the lock briefly so
+    that user-triggered process_entry_async can cut in line on new
+    entries instead of waiting for the full extraction to finish.
+    """
+    if not entry_ids:
+        return
+
+    if not _lock.acquire(timeout=300):
+        log.warning(f'{label}: lock busy, giving up')
+        return
+
+    lock_held = True
+    try:
+        with app.app_context():
+            from .routes import _get_llm
+            try:
+                llm = _get_llm()
+            except Exception as e:
+                log.error(f'{label}: cannot load LLM: {e}')
+                return
+
+            total = len(entry_ids)
+            processed = 0
+            for entry_id in entry_ids:
+                entry = db.session.get(MoodEntry, entry_id)
+                if entry is None:
+                    continue
+                try:
+                    extract_fn(entry, llm)
+                except Exception as e:
+                    log.warning(f'{label}: failed for entry {entry_id}: {e}')
+                processed += 1
+                if status is not None:
+                    status['processed'] = processed
+                if processed % 10 == 0:
+                    log.info(f'{label}: {processed}/{total}')
+
+                # Cooperative yield — let process_entry_async cut in.
+                _lock.release()
+                lock_held = False
+                time.sleep(0.05)
+                if not _lock.acquire(timeout=300):
+                    log.warning(f'{label}: could not reacquire lock, pausing')
+                    return
+                lock_held = True
+
+            log.info(f'{label} complete: {total} entries')
+    finally:
+        if lock_held:
+            _lock.release()
+
+
+def reextract_people_async(app) -> bool:
+    """Wipe EntryPerson rows and re-run people extraction on all entries.
+
+    Triggered from the /insights/people page when the user wants to
+    rebuild this specific chart's data without running the full assistant
+    reindex (which also redoes embeddings/summaries/profile). Returns
+    False if a re-extract is already in progress.
+    """
+    if _people_extract_status['running']:
+        return False
+    thread = threading.Thread(target=_reextract_people, args=(app,), daemon=True)
+    thread.start()
+    return True
+
+
+def _reextract_people(app):
+    _people_extract_status.update({
+        'running': True, 'processed': 0, 'total': 0, 'started_at': time.time(),
+    })
+    try:
+        with app.app_context():
+            EntryPerson.query.delete()
+            db.session.commit()
+            log.info('Cleared EntryPerson for re-extraction')
+            entries = MoodEntry.query.filter(
+                MoodEntry.note.isnot(None), MoodEntry.note != ''
+            ).order_by(MoodEntry.date).all()
+            entry_ids = [e.id for e in entries]
+        _people_extract_status['total'] = len(entry_ids)
+        from .memory import extract_people_mentions
+        _run_extraction(
+            app, entry_ids, extract_people_mentions,
+            'People re-extract', status=_people_extract_status,
+        )
+    finally:
+        _people_extract_status['running'] = False
+
+
+def reextract_activities_async(app) -> bool:
+    """Wipe EntryActivity rows and re-run activity extraction on all entries."""
+    if _activities_extract_status['running']:
+        return False
+    thread = threading.Thread(target=_reextract_activities, args=(app,), daemon=True)
+    thread.start()
+    return True
+
+
+def _reextract_activities(app):
+    _activities_extract_status.update({
+        'running': True, 'processed': 0, 'total': 0, 'started_at': time.time(),
+    })
+    try:
+        with app.app_context():
+            EntryActivity.query.delete()
+            db.session.commit()
+            log.info('Cleared EntryActivity for re-extraction')
+            entries = MoodEntry.query.filter(
+                MoodEntry.note.isnot(None), MoodEntry.note != ''
+            ).order_by(MoodEntry.date).all()
+            entry_ids = [e.id for e in entries]
+        _activities_extract_status['total'] = len(entry_ids)
+        from .memory import extract_activities
+        _run_extraction(
+            app, entry_ids, extract_activities,
+            'Activities re-extract', status=_activities_extract_status,
+        )
+    finally:
+        _activities_extract_status['running'] = False
+
+
+def backfill_activities_async(app) -> bool:
+    """One-time backfill of EntryActivity rows for entries missing them.
+
+    Mirrors backfill_people_async — triggered at startup when assistant
+    is active, gated by sync_meta flag so it only runs once per install.
+    """
+    thread = threading.Thread(target=_backfill_activities, args=(app,), daemon=True)
+    thread.start()
+    return True
+
+
+def _backfill_activities(app):
+    """Run activity extraction on entries that have no EntryActivity rows yet.
+
+    Checks pending entries on every startup — no persistent "done" flag. This
+    keeps the backfill correct under DB swaps (importing an older DB with more
+    entries reprocesses anything that's missing rows). The scan is a cheap
+    set-difference on ids.
+    """
+    with app.app_context():
+        entries = MoodEntry.query.order_by(MoodEntry.date).all()
+        if not entries:
+            return
+        existing_ids = {r.entry_id for r in EntryActivity.query.with_entities(EntryActivity.entry_id).all()}
+        pending_ids = [e.id for e in entries if e.id not in existing_ids and (e.note or '').strip()]
+
+    if not pending_ids:
+        return
+
+    log.info(f'Activities backfill: {len(pending_ids)} entries pending')
+    from .memory import extract_activities
+    _run_extraction(app, pending_ids, extract_activities, 'Activities backfill')
+
+
+def backfill_people_async(app) -> bool:
+    """One-time backfill of EntryPerson rows for entries missing them.
+
+    Triggered at startup when assistant is active. Skips silently if the
+    backfill-complete flag is set in sync_meta. Processing happens in a
+    thread so app startup isn't blocked.
+    """
+    thread = threading.Thread(target=_backfill_people, args=(app,), daemon=True)
+    thread.start()
+    return True
+
+
+def _backfill_people(app):
+    """Run people extraction on entries that have no EntryPerson rows yet.
+
+    Checks pending entries on every startup — no persistent "done" flag. This
+    keeps the backfill correct under DB swaps (importing an older DB with more
+    entries reprocesses anything that's missing rows). The scan is a cheap
+    set-difference on ids.
+    """
+    with app.app_context():
+        entries = MoodEntry.query.order_by(MoodEntry.date).all()
+        if not entries:
+            return
+        existing_ids = {r.entry_id for r in EntryPerson.query.with_entities(EntryPerson.entry_id).all()}
+        pending_ids = [e.id for e in entries if e.id not in existing_ids and (e.note or '').strip()]
+
+    if not pending_ids:
+        return
+
+    log.info(f'People backfill: {len(pending_ids)} entries pending')
+    from .memory import extract_people_mentions
+    _run_extraction(app, pending_ids, extract_people_mentions, 'People backfill')
+
+
 def _process_entry(app, entry_id: int):
     """Process a single entry: embedding + summary + maybe profile update.
 
@@ -119,14 +331,31 @@ def _process_entry(app, entry_id: int):
             except Exception as e:
                 log.warning(f'Summary failed for entry {entry_id}: {e}')
 
-            # 3. Monthly summary for this entry's month
+            # 3. People mentions (needs LLM; extraction is idempotent so
+            # re-running on edited entries cleanly replaces prior rows)
+            try:
+                from .memory import extract_people_mentions
+                extract_people_mentions(entry, llm)
+                log.info(f'People mentions extracted for entry {entry_id}')
+            except Exception as e:
+                log.warning(f'People extraction failed for entry {entry_id}: {e}')
+
+            # 4. Activities (needs LLM; idempotent like people)
+            try:
+                from .memory import extract_activities
+                extract_activities(entry, llm)
+                log.info(f'Activities extracted for entry {entry_id}')
+            except Exception as e:
+                log.warning(f'Activities extraction failed for entry {entry_id}: {e}')
+
+            # 5. Monthly summary for this entry's month
             try:
                 from .memory import generate_month_summary
                 generate_month_summary(entry.date.year, entry.date.month, llm)
             except Exception as e:
                 log.warning(f'Month summary failed: {e}')
 
-            # 4. Profile update (every 5 entries)
+            # 6. Profile update (every 5 entries)
             try:
                 update_profile(llm)
                 log.info('Profile check complete')
@@ -162,10 +391,12 @@ def _reindex_all(app):
             try:
                 EntryEmbedding.query.delete()
                 EntrySummary.query.delete()
+                EntryPerson.query.delete()
+                EntryActivity.query.delete()
                 PeriodSummary.query.delete()
                 UserPsychProfile.query.delete()
                 db.session.commit()
-                log.info('Cleared embeddings, summaries, period summaries, and profile')
+                log.info('Cleared embeddings, summaries, people, activities, period summaries, profile')
             except Exception as e:
                 db.session.rollback()
                 log.warning(f'Failed to clear assistant memory layers: {e}')
@@ -202,7 +433,35 @@ def _reindex_all(app):
                     log.info(f'Summaries: {i + 1}/{total}')
             log.info('Summaries done')
 
-            # Phase 3: Monthly summaries
+            # Phase 3: People extraction (needs LLM)
+            from .memory import extract_people_mentions
+            _set_reindex_status(phase='people', current=0, total=total, message='People mentions')
+            for i, entry in enumerate(entries):
+                try:
+                    extract_people_mentions(entry, llm)
+                except Exception as e:
+                    log.warning(f'People extraction failed for entry {entry.id}: {e}')
+                if (i + 1) % 3 == 0 or (i + 1) == total:
+                    _set_reindex_status(current=i + 1)
+                if (i + 1) % 20 == 0:
+                    log.info(f'People: {i + 1}/{total}')
+            log.info('People mentions done')
+
+            # Phase 4: Activities extraction (needs LLM)
+            from .memory import extract_activities
+            _set_reindex_status(phase='activities', current=0, total=total, message='Activities')
+            for i, entry in enumerate(entries):
+                try:
+                    extract_activities(entry, llm)
+                except Exception as e:
+                    log.warning(f'Activities extraction failed for entry {entry.id}: {e}')
+                if (i + 1) % 3 == 0 or (i + 1) == total:
+                    _set_reindex_status(current=i + 1)
+                if (i + 1) % 20 == 0:
+                    log.info(f'Activities: {i + 1}/{total}')
+            log.info('Activities done')
+
+            # Phase 5: Monthly summaries
             months = set()
             for entry in entries:
                 months.add((entry.date.year, entry.date.month))
@@ -216,7 +475,7 @@ def _reindex_all(app):
                 _set_reindex_status(current=i + 1)
             log.info('Monthly summaries done')
 
-            # Phase 4: Full profile rebuild
+            # Phase 6: Full profile rebuild
             try:
                 _set_reindex_status(phase='profile', current=0, total=1, message='Profile rebuild')
                 update_profile(llm, force_rebuild=True)
