@@ -807,9 +807,29 @@ def reset_modules():
                 ),
             })
         except Exception as mv_exc:
-            log.error('reset_modules: rmtree failed (%s) and rename failed (%s)',
-                      rm_exc, mv_exc)
+            # Even rename failed — Windows is holding the folder very tightly
+            # (DLLs mapped + AV scanning + open handles deep inside). Last
+            # resort: drop a sentinel so the next app start wipes the venv
+            # BEFORE any module is imported and DLLs locked again.
+            log.warning('reset_modules: rmtree failed (%s) and rename failed (%s); deferring to startup',
+                        rm_exc, mv_exc)
+            sentinel = Path(data_dir) / 'modules_venv_reset_pending'
+            try:
+                sentinel.write_text('1', encoding='utf-8')
+            except Exception as sw_exc:
+                log.error('reset_modules: could not write reset sentinel: %s', sw_exc)
+                return jsonify({
+                    'error': f'Could not reset modules_venv: {rm_exc}. '
+                             f'Restart the application and try again.'
+                }), 500
             return jsonify({
-                'error': f'Could not reset modules_venv: {rm_exc}. '
-                         f'Restart the application and try again.'
-            }), 500
+                'reset': True,
+                'existed': True,
+                'deferred': True,
+                'message': (
+                    "Modules environment is in use by Windows (DLLs are "
+                    "loaded). Please CLOSE the application completely and "
+                    "open it again — the cleanup will finish automatically "
+                    "on the next start. Then you can reinstall the module."
+                ),
+            })

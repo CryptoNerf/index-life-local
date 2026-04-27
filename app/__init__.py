@@ -406,6 +406,48 @@ def _cleanup_stale_modules_venvs(data_dir: Path) -> None:
         pass
 
 
+def _process_pending_modules_venv_reset(data_dir: Path) -> None:
+    """Finish a Reset that couldn't complete in the previous app session.
+
+    On Windows, mapped DLLs (llama-cpp-python's ggml-base.dll etc.) can
+    block both rmtree and rename of the venv folder while the app is
+    running. As a last-resort path the Reset endpoint writes a sentinel;
+    we honour it here, BEFORE any module imports lock those DLLs again.
+
+    Must run before _add_local_modules_site_packages / register_modules
+    or we'll hit the same locks we were trying to escape.
+    """
+    sentinel = data_dir / 'modules_venv_reset_pending'
+    if not sentinel.exists():
+        return
+
+    venv = data_dir / 'modules_venv'
+    if venv.is_dir():
+        import shutil as _shutil
+        try:
+            _shutil.rmtree(venv)
+            log.info('Pending Reset: wiped %s', venv)
+        except Exception as exc:
+            # Could still fail if Windows is being slow about releasing
+            # the previous handles (rare). Try renaming so a future startup
+            # can finish via _cleanup_stale_modules_venvs.
+            log.warning('Pending Reset rmtree failed (%s); falling back to rename', exc)
+            try:
+                import time as _time
+                stale = venv.with_name(f'modules_venv.stale-{int(_time.time())}')
+                venv.rename(stale)
+                log.info('Pending Reset: renamed %s -> %s', venv, stale)
+            except Exception as exc2:
+                log.error('Pending Reset failed completely: %s', exc2)
+                # Keep sentinel so next start retries.
+                return
+
+    try:
+        sentinel.unlink()
+    except Exception:
+        pass
+
+
 def create_app(config_class='config.Config'):
     """Create and configure Flask application"""
     app = Flask(__name__)
@@ -425,6 +467,10 @@ def create_app(config_class='config.Config'):
 
     log.info('Data directory: %s', data_dir)
 
+    # Order matters: deferred-reset cleanup must run BEFORE
+    # _cleanup_stale_modules_venvs and BEFORE module imports — otherwise
+    # llama-cpp-python's DLLs get loaded again from the old venv and lock it.
+    _process_pending_modules_venv_reset(data_dir)
     _cleanup_stale_modules_venvs(data_dir)
 
     # Add modules_venv site-packages to sys.path so we can import

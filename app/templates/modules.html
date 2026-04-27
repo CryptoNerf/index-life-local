@@ -361,10 +361,13 @@
             btn.textContent = 'Reset modules environment';
             return;
           }
-          status.textContent = res.data.existed
+          // If the server returned a custom message (typical for the
+          // deferred-cleanup path on Windows), show it verbatim — it's
+          // tailored to the situation. Otherwise default to a generic line.
+          status.textContent = res.data.message || (res.data.existed
             ? 'Done. Reload the page or restart the app, then reinstall modules.'
-            : 'Nothing to reset — no environment found.';
-          btn.textContent = 'Reset complete';
+            : 'Nothing to reset — no environment found.');
+          btn.textContent = res.data.deferred ? 'Restart app to finish' : 'Reset complete';
         })
         .catch(function(err) {
           status.textContent = 'Network error: ' + err;
