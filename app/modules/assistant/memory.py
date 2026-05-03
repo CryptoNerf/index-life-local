@@ -1204,7 +1204,9 @@ def assemble_context(user_message: str, max_system_tokens: int = 0) -> str:
     else:
         recent_section = ''
 
+    today_str = datetime.now().strftime('%Y-%m-%d')
     full_text = SYSTEM_PROMPT.format(
+        today=today_str,
         profile_section=profile_section,
         timeline_section=timeline_section,
         relevant_section=relevant_section,
@@ -1223,6 +1225,7 @@ def assemble_context(user_message: str, max_system_tokens: int = 0) -> str:
                 lines = relevant_section.split('\n')
                 relevant_section = '\n'.join(lines[:4])  # header + 3 entries
                 full_text = SYSTEM_PROMPT.format(
+                    today=today_str,
                     profile_section=profile_section,
                     timeline_section=timeline_section,
                     relevant_section=relevant_section,
@@ -1234,6 +1237,7 @@ def assemble_context(user_message: str, max_system_tokens: int = 0) -> str:
                 lines = timeline_section.split('\n')
                 timeline_section = '\n'.join(lines[:1] + lines[-3:])
                 full_text = SYSTEM_PROMPT.format(
+                    today=today_str,
                     profile_section=profile_section,
                     timeline_section=timeline_section,
                     relevant_section=relevant_section,
@@ -1241,3 +1245,290 @@ def assemble_context(user_message: str, max_system_tokens: int = 0) -> str:
                 )
 
     return full_text
+
+
+# ── Chat tools (data lookups exposed to the AI psychologist) ──────
+# These functions are called from routes.py when the router LLM decides
+# the user's question needs specific data. Each returns a string that's
+# injected into the main LLM call's system prompt as additional context.
+# Designed to be cheap (DB queries only — no LLM inside) and safe to
+# call from inside the streaming generator.
+
+
+def _format_entry_line(entry: MoodEntry, extra: str = '', max_note: int = 280) -> str:
+    """One-line representation of an entry suitable for LLM context."""
+    note = (entry.note or '').strip()
+    if len(note) > max_note:
+        note = note[:max_note].rstrip() + '...'
+    suffix = f' [{extra}]' if extra else ''
+    return f'[{entry.date.isoformat()}] {entry.rating}/10{suffix}. {note}'
+
+
+def _excerpt_around_term(note: str, term: str, window_chars: int = 280) -> str:
+    """Return sentences from `note` that contain `term`, falling back to a
+    char-window around the first match if no sentence boundaries are found.
+
+    Lets the LLM see the actual context where a name/topic is mentioned —
+    much more informative than the first 280 chars of the entry, which
+    often have nothing to do with the lookup target.
+    """
+    note = (note or '').strip()
+    if not note:
+        return ''
+    if not term:
+        return note[:window_chars] + ('...' if len(note) > window_chars else '')
+
+    term_l = term.lower()
+    # Sentence split — Russian uses '.', '!', '?', plus newlines as separators.
+    sentences = re.split(r'(?<=[.!?])\s+|\n+', note)
+    matches = [s for s in sentences if s and term_l in s.lower()]
+    if matches:
+        out = ' / '.join(s.strip() for s in matches[:3])
+        if len(out) > window_chars:
+            out = out[:window_chars].rstrip() + '...'
+        return out
+
+    # No sentence-level hit — fall back to a char-window around the first match
+    idx = note.lower().find(term_l)
+    if idx == -1:
+        return note[:window_chars] + ('...' if len(note) > window_chars else '')
+    half = window_chars // 2
+    start = max(0, idx - half)
+    end = min(len(note), idx + len(term) + half)
+    chunk = note[start:end].strip()
+    prefix = '...' if start > 0 else ''
+    suffix = '...' if end < len(note) else ''
+    return prefix + chunk + suffix
+
+
+def tool_topic_search(query: str, limit: int = 8) -> str:
+    """Semantic search over entries for a topic-style query.
+
+    Used when the user asks abstract questions ("when was I most
+    anxious?", "patterns around my work stress"). Backed by the
+    existing embedding index, so it's fast and free of LLM cost.
+    """
+    query = (query or '').strip()
+    if not query:
+        return ''
+    try:
+        entries = search_relevant_entries(query, top_k=limit, min_score=0.30)
+    except Exception as exc:
+        log.warning(f'tool_topic_search failed: {exc}')
+        return ''
+    if not entries:
+        return f'По теме «{query}» подходящих записей не найдено.'
+    lines = [f'Записи, найденные по теме «{query}»:']
+    for e in entries:
+        lines.append(_format_entry_line(e))
+    return '\n'.join(lines)
+
+
+def tool_person_history(name: str, limit: int = 30) -> str:
+    """All entries that mention a specific person, alias-resolved.
+
+    Uses entry_people + person_aliases — gives the LLM a complete view
+    of the user's history with one person, not just the semantic-top-K.
+    """
+    name = (name or '').strip()
+    if not name:
+        return ''
+
+    from app.models import PersonAlias, EntryPerson
+
+    aliases = {a.alias: a.canonical for a in PersonAlias.query.all()}
+
+    def resolve(n: str) -> str:
+        seen: set = set()
+        while n in aliases and n not in seen:
+            seen.add(n)
+            n = aliases[n]
+        return n
+
+    target = resolve(_normalize_mention(name))
+
+    rows = db.session.query(
+        EntryPerson.entry_id, EntryPerson.mention, EntryPerson.tone
+    ).all()
+    matching: dict[int, list[str]] = {}
+    for entry_id, mention, tone in rows:
+        if resolve(_normalize_mention(mention)) == target:
+            matching.setdefault(entry_id, []).append(tone)
+
+    if not matching:
+        return f'Записей с упоминанием «{target}» не найдено.'
+
+    entries = (MoodEntry.query
+               .filter(MoodEntry.id.in_(matching.keys()))
+               .order_by(MoodEntry.date.desc())
+               .limit(limit)
+               .all())
+
+    # Tone breakdown — gives the model a quick global summary before
+    # diving into individual entries.
+    tone_totals: dict[str, int] = {}
+    for tones in matching.values():
+        for t in tones:
+            tone_totals[t] = tone_totals.get(t, 0) + 1
+    tone_summary = ', '.join(
+        f'{t}: {c}' for t, c in sorted(tone_totals.items(), key=lambda x: -x[1])
+    ) or 'тон не определён'
+
+    lines = [
+        f'Все упоминания «{target}» в дневнике (всего {len(matching)} записей; {tone_summary}):'
+    ]
+    # Use sentence-aware excerpts — show the actual sentence(s) around
+    # the mention rather than the entry's first N characters.
+    for e in entries:
+        tones = matching.get(e.id, [])
+        tone_txt = ', '.join(tones) if tones else 'unknown'
+        excerpt = _excerpt_around_term(e.note or '', target, window_chars=240)
+        lines.append(
+            f'[{e.date.isoformat()}] {e.rating}/10 [тон: {tone_txt}]. {excerpt}'
+        )
+    return '\n'.join(lines)
+
+
+def tool_mood_trend(window_days: int = 30) -> str:
+    """Recent mood trajectory: average, range, and direction over the
+    last `window_days` days. Lets the LLM ground answers like "у меня
+    последнее время плохо" on actual numbers.
+    """
+    from datetime import date as _date, timedelta
+    try:
+        window_days = int(window_days)
+    except (TypeError, ValueError):
+        window_days = 30
+    window_days = max(7, min(180, window_days))
+
+    cutoff = _date.today() - timedelta(days=window_days - 1)
+    entries = (MoodEntry.query
+               .filter(MoodEntry.date >= cutoff)
+               .order_by(MoodEntry.date)
+               .all())
+    if not entries:
+        return f'За последние {window_days} дней записей нет.'
+
+    ratings = [e.rating for e in entries]
+    avg = sum(ratings) / len(ratings)
+    lo, hi = min(ratings), max(ratings)
+
+    # Linear regression slope: positive = uptrend, negative = downtrend.
+    n = len(ratings)
+    xs = list(range(n))
+    mean_x = sum(xs) / n
+    mean_y = avg
+    num = sum((x - mean_x) * (y - mean_y) for x, y in zip(xs, ratings))
+    den = sum((x - mean_x) ** 2 for x in xs) or 1.0
+    slope = num / den  # rating change per day
+
+    direction = 'стабильно'
+    if slope > 0.04:
+        direction = 'растёт'
+    elif slope < -0.04:
+        direction = 'снижается'
+
+    half = n // 2 or 1
+    first_half_avg = sum(ratings[:half]) / half
+    second_half_avg = sum(ratings[-half:]) / half
+
+    return (
+        f'Тренд настроения за последние {window_days} дней '
+        f'({len(entries)} записей):\n'
+        f'- Среднее: {avg:.2f}/10 (диапазон {lo}–{hi})\n'
+        f'- Первая половина окна: {first_half_avg:.2f}/10\n'
+        f'- Вторая половина окна: {second_half_avg:.2f}/10\n'
+        f'- Направление: {direction} (наклон {slope:+.3f}/день)'
+    )
+
+
+def tool_compare_periods(period_a: str, period_b: str) -> str:
+    """Compare two periods. Each `period` is either "YYYY" or "YYYY-MM".
+
+    Returns headline stats (mean, min, max, count) for each plus a delta.
+    Useful when user asks "is my mood better this month than last".
+    """
+    def _parse(s: str):
+        s = (s or '').strip()
+        parts = s.split('-')
+        try:
+            year = int(parts[0])
+        except (TypeError, ValueError, IndexError):
+            return None, None, None
+        month = None
+        if len(parts) > 1 and parts[1]:
+            try:
+                month = int(parts[1])
+            except ValueError:
+                pass
+        return s, year, month
+
+    a_label, a_year, a_month = _parse(period_a)
+    b_label, b_year, b_month = _parse(period_b)
+    if a_year is None or b_year is None:
+        return ''
+
+    def _stats(year: int, month: int | None):
+        q = MoodEntry.query.filter(db.extract('year', MoodEntry.date) == year)
+        if month:
+            q = q.filter(db.extract('month', MoodEntry.date) == month)
+        rows = q.all()
+        if not rows:
+            return None
+        ratings = [r.rating for r in rows]
+        return {
+            'avg': sum(ratings) / len(ratings),
+            'min': min(ratings),
+            'max': max(ratings),
+            'count': len(ratings),
+        }
+
+    a = _stats(a_year, a_month)
+    b = _stats(b_year, b_month)
+
+    if a is None and b is None:
+        return f'За периоды {a_label} и {b_label} записей не найдено.'
+    if a is None:
+        return f'За {a_label} записей нет; за {b_label} среднее {b["avg"]:.2f}/10 ({b["count"]} записей).'
+    if b is None:
+        return f'За {b_label} записей нет; за {a_label} среднее {a["avg"]:.2f}/10 ({a["count"]} записей).'
+
+    delta = b['avg'] - a['avg']
+    direction = 'выше' if delta > 0.05 else ('ниже' if delta < -0.05 else 'примерно так же')
+    return (
+        f'Сравнение периодов:\n'
+        f'- {a_label}: среднее {a["avg"]:.2f}/10 (диапазон {a["min"]}–{a["max"]}, {a["count"]} записей)\n'
+        f'- {b_label}: среднее {b["avg"]:.2f}/10 (диапазон {b["min"]}–{b["max"]}, {b["count"]} записей)\n'
+        f'- Разница: {b_label} {direction} на {abs(delta):.2f} балла'
+    )
+
+
+def tool_period_entries(year: int, month: int | None = None,
+                        limit: int = 40) -> str:
+    """All entries from a specific year (and optionally month)."""
+    try:
+        year = int(year)
+    except (TypeError, ValueError):
+        return ''
+    if month is not None:
+        try:
+            month = int(month)
+        except (TypeError, ValueError):
+            month = None
+
+    q = MoodEntry.query.filter(db.extract('year', MoodEntry.date) == year)
+    if month:
+        q = q.filter(db.extract('month', MoodEntry.date) == month)
+    entries = q.order_by(MoodEntry.date.desc()).limit(limit).all()
+
+    if not entries:
+        period = f'{year}-{month:02d}' if month else f'{year}'
+        return f'Записей за {period} не найдено.'
+
+    period = f'{year}-{month:02d}' if month else f'{year}'
+    lines = [f'Записи за {period} (отсортированы от свежих к старым):']
+    avg = sum(e.rating for e in entries) / len(entries)
+    lines.append(f'Всего {len(entries)} записей, среднее настроение {avg:.2f}/10.')
+    for e in entries:
+        lines.append(_format_entry_line(e))
+    return '\n'.join(lines)

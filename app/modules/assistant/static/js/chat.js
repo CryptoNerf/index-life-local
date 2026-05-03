@@ -587,6 +587,36 @@
                 if (data.context) {
                   updateContextBar(data.context.pct);
                 }
+                // Tool routing — server may emit multiple `tool` events
+                // (1-2 per turn) before the main reply starts streaming.
+                // Each one tells us what data the AI is fetching; we
+                // accumulate them so the user sees the full sequence.
+                if (data.tool && !fullText) {
+                  if (!window.__toolHints) window.__toolHints = [];
+                  var hint = 'данных из дневника';
+                  if (data.tool === 'person_history' && data.args && data.args.name) {
+                    hint = 'про ' + data.args.name;
+                  } else if (data.tool === 'period_entries' && data.args) {
+                    var y = data.args.year;
+                    var m = data.args.month;
+                    hint = m
+                      ? 'за ' + y + '-' + (m < 10 ? '0' + m : m)
+                      : 'за ' + y + ' год';
+                  } else if (data.tool === 'search_topic' && data.args && data.args.query) {
+                    hint = '«' + data.args.query + '»';
+                  } else if (data.tool === 'mood_trend' && data.args) {
+                    var d = data.args.window_days || 30;
+                    hint = 'тренд настроения за ' + d + ' дн.';
+                  } else if (data.tool === 'compare_periods' && data.args) {
+                    hint = 'сравнение периодов ' + data.args.period_a + ' и ' + data.args.period_b;
+                  }
+                  window.__toolHints.push(hint);
+                  showWaitingHint('Поднимаю данные: ' + window.__toolHints.join(', ') + '...');
+                }
+                if (data.tool_done && !fullText) {
+                  window.__toolHints = [];
+                  showWaitingHint('Думаю над ответом...');
+                }
                 if (data.token) {
                   if (!fullText && loadingHintInterval) {
                     clearInterval(loadingHintInterval);

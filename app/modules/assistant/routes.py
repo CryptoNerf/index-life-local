@@ -35,6 +35,146 @@ _llm = None
 _llm_n_ctx = None
 _llm_lock = threading.Lock()
 _llm_inference_lock = threading.Lock()  # Protects all create_chat_completion calls
+
+
+# ── Tool routing for the AI psychologist chat ─────────────────────────
+# A small extra LLM call decides whether the user's message needs a
+# specific data lookup (person history, period, topic search) before
+# the main reply is generated. The result is appended to the system
+# prompt as additional grounded context so the model doesn't have to
+# rely only on what semantic-search happened to surface.
+
+_VALID_TOOLS = (
+    'person_history', 'period_entries', 'search_topic',
+    'mood_trend', 'compare_periods',
+)
+
+_ROUTER_PROMPT = """Ты — маршрутизатор для AI-психолога. Реши, какие данные из дневника нужно подтянуть, чтобы ответить на текущее сообщение пользователя.
+
+Сегодняшняя дата: {today}. Используй её для расчёта относительных периодов ("3 месяца назад", "на прошлой неделе" и т.д.).
+
+{prior_context}Текущее сообщение:
+{message}
+
+Доступные инструменты:
+- person_history — все записи, где упомянут конкретный человек (имя или роль). Для вопросов про конкретного человека.
+- period_entries — все записи за указанный период (год обязателен, месяц опционален). Для вопросов о времени: "этот месяц", "март 2025".
+- search_topic — семантический поиск по теме/чувству/паттерну. Для абстрактных вопросов.
+- mood_trend — динамика настроения за последние N дней. Для вопросов "как дела", "что в последнее время", "стало хуже/лучше".
+- compare_periods — сравнение двух периодов. Для вопросов "прошлый месяц был лучше?".
+- none — данных из дневника не нужно. Для приветствий, благодарностей, мета-вопросов.
+
+Можно выбрать ОДИН ИЛИ ДВА инструмента, если вопрос составной (например, и про человека, и про период). Не больше двух.
+
+Ответь СТРОГО JSON-массивом из 0–2 элементов, без markdown, без пояснений. Примеры:
+- "Что я писал про маму в марте?" → [{{"tool": "person_history", "args": {{"name": "мама"}}}}, {{"tool": "period_entries", "args": {{"year": 2025, "month": 3}}}}]
+- "Как я последнее время?" → [{{"tool": "mood_trend", "args": {{"window_days": 30}}}}]
+- "Что у меня с тревожностью?" → [{{"tool": "search_topic", "args": {{"query": "тревожность стресс беспокойство"}}}}]
+- "Привет" → []
+- "Этот месяц лучше прошлого?" → [{{"tool": "compare_periods", "args": {{"period_a": "2025-02", "period_b": "2025-03"}}}}]
+- "Что у меня с работой?" → [{{"tool": "search_topic", "args": {{"query": "работа"}}}}]"""
+
+
+def _route_to_tools(llm, user_message: str,
+                    prior_user_message: str | None = None) -> list[dict]:
+    """Decide which tools (0-2) the user's message needs.
+
+    `prior_user_message` is the user's previous turn — gives the router
+    multi-turn context (so "расскажи подробнее" doesn't lose the topic
+    from the previous question).
+
+    Returns a list of {tool, args}; empty list when no tools are warranted
+    or on parse failure (chat continues without extra grounding).
+    """
+    msg = user_message.strip()
+    # Trivial-length messages almost never benefit from tool calls.
+    if len(msg) < 14:
+        return []
+
+    prior_context = ''
+    if prior_user_message:
+        clean = prior_user_message.strip()
+        if clean and len(clean) >= 4:
+            # Cap to avoid blowing up router prompt
+            if len(clean) > 400:
+                clean = clean[:400] + '...'
+            prior_context = f'Предыдущее сообщение пользователя (для контекста):\n{clean}\n\n'
+
+    from datetime import datetime
+    prompt = _ROUTER_PROMPT.format(
+        today=datetime.now().strftime('%Y-%m-%d'),
+        prior_context=prior_context,
+        message=msg,
+    )
+    try:
+        with _llm_inference_lock:
+            result = llm.create_chat_completion(
+                messages=[{'role': 'user', 'content': prompt}],
+                max_tokens=200,
+                temperature=0.1,
+            )
+        text = result['choices'][0]['message']['content'].strip()
+        from .memory import _strip_think
+        text = _strip_think(text)
+        # Find the JSON array — model occasionally adds preamble
+        start = text.find('[')
+        end = text.rfind(']')
+        if start == -1 or end == -1 or end < start:
+            return []
+        data = json.loads(text[start:end + 1])
+        if not isinstance(data, list):
+            return []
+        out = []
+        for item in data[:2]:  # hard cap at 2 tools
+            if not isinstance(item, dict):
+                continue
+            tool = item.get('tool')
+            args = item.get('args') or {}
+            if tool in _VALID_TOOLS and isinstance(args, dict):
+                out.append({'tool': tool, 'args': args})
+        return out
+    except Exception as exc:
+        log = logging.getLogger(__name__)
+        log.warning(f'Tool router failed: {exc}')
+        return []
+
+
+def _execute_tool(tool_name: str, args: dict) -> str | None:
+    """Run a tool and return its formatted result, or None on failure."""
+    try:
+        from .memory import (
+            tool_topic_search, tool_person_history, tool_period_entries,
+            tool_mood_trend, tool_compare_periods,
+        )
+        if tool_name == 'person_history':
+            name = str((args or {}).get('name') or '').strip()
+            if not name:
+                return None
+            return tool_person_history(name)
+        if tool_name == 'period_entries':
+            year = (args or {}).get('year')
+            month = (args or {}).get('month')
+            if year is None:
+                return None
+            return tool_period_entries(year, month)
+        if tool_name == 'search_topic':
+            query = str((args or {}).get('query') or '').strip()
+            if not query:
+                return None
+            return tool_topic_search(query)
+        if tool_name == 'mood_trend':
+            window = (args or {}).get('window_days', 30)
+            return tool_mood_trend(window)
+        if tool_name == 'compare_periods':
+            a = str((args or {}).get('period_a') or '').strip()
+            b = str((args or {}).get('period_b') or '').strip()
+            if not a or not b:
+                return None
+            return tool_compare_periods(a, b)
+    except Exception as exc:
+        log = logging.getLogger(__name__)
+        log.warning(f'Tool exec failed for {tool_name}: {exc}')
+    return None
 _llm_loading = False
 _llm_loading_stage = ''  # e.g. 'importing', 'gpu:35/8192', 'cpu:8192'
 _llm_loading_progress = 0  # 0-100
@@ -377,7 +517,9 @@ def _build_continuation_messages(llm, system_text: str, assistant_text: str) -> 
 
 
 def _base_system_prompt() -> str:
+    from datetime import datetime
     return SYSTEM_PROMPT.format(
+        today=datetime.now().strftime('%Y-%m-%d'),
         profile_section='',
         timeline_section='',
         relevant_section='',
@@ -705,6 +847,39 @@ def stream():
             thinking_enabled = _get_request_thinking()
             llm = _get_llm()
 
+            # Tool routing — pre-fetch focused data (person history, period,
+            # topic, mood trend, period comparison). Router picks 0–2 tools
+            # in a single LLM call; result is appended to system prompt so
+            # the reply grounds on facts rather than vibes.
+            #
+            # Multi-turn awareness: pass the previous user message so a
+            # follow-up like "расскажи подробнее" still routes correctly.
+            prior_user_msg = None
+            try:
+                prior = (ChatMessage.query
+                         .filter_by(role='user')
+                         .order_by(ChatMessage.created_at.desc())
+                         .offset(1)  # the current message is at offset 0
+                         .limit(1)
+                         .first())
+                if prior:
+                    prior_user_msg = prior.content
+            except Exception:
+                pass
+
+            tool_decisions = _route_to_tools(llm, user_message, prior_user_msg)
+            tool_outputs: list[tuple[str, str]] = []  # [(tool_name, result_text)]
+            for decision in tool_decisions:
+                yield ('data: ' + json.dumps({
+                    'tool': decision['tool'],
+                    'args': decision['args'],
+                }) + '\n\n')
+                result_text = _execute_tool(decision['tool'], decision['args'])
+                if result_text:
+                    tool_outputs.append((decision['tool'], result_text))
+            if tool_outputs:
+                yield 'data: ' + json.dumps({'tool_done': True}) + '\n\n'
+
             # Detect emotional tone for adaptive responses
             from .memory import assemble_context, detect_emotional_tone
             user_tone, tone_confidence = detect_emotional_tone(user_message)
@@ -718,6 +893,27 @@ def stream():
             system_base = assemble_context(user_message,
                                            max_system_tokens=max(512, system_budget))
             system = system_base
+
+            # Append tool-fetched data to the system prompt as separate
+            # sections so the model can ground its reply. Caps total tool
+            # output to ~5000 chars (≈1000-1300 tokens) to leave room for
+            # everything else; with 2 tools that's ~2500 chars each.
+            if tool_outputs:
+                per_tool_cap = 5000 // max(1, len(tool_outputs))
+                sections = []
+                for tname, text in tool_outputs:
+                    chunk = text
+                    if len(chunk) > per_tool_cap:
+                        chunk = chunk[:per_tool_cap].rstrip() + '\n[обрезано]'
+                    sections.append(
+                        f'[{tname}]\n{chunk}'
+                    )
+                system += (
+                    '\n\nДОПОЛНИТЕЛЬНЫЕ ДАННЫЕ ИЗ ДНЕВНИКА (получены '
+                    'инструментами; используй конкретные даты и цитаты при '
+                    'ответе, не пересказывай шаблонно):\n\n'
+                    + '\n\n'.join(sections)
+                )
 
             # Inject emotional tone hint
             if tone_confidence > 0.5 and user_tone in ('distressed', 'sad'):
