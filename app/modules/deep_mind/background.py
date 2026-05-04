@@ -85,6 +85,14 @@ def _run(app):
             log.info('deep-mind analysis complete')
 
     except Exception as e:
+        # Roll back any pending state from a failed commit so the session
+        # is clean before teardown closes it. Without this, a partial
+        # cluster INSERT can leave the SQLite write transaction half-open.
+        try:
+            from app import db
+            db.session.rollback()
+        except Exception:
+            pass
         log.error('deep-mind analysis failed: %s', e, exc_info=True)
         _set(running=False, stage='error', progress=0, error=str(e))
     finally:

@@ -184,6 +184,11 @@ def name_cluster(cluster_entry_ids, llm, max_entries=MAX_TOPIC_ENTRIES):
         lines.append(f'[{e.date.isoformat()}] Настроение: {e.rating}/10. {note}')
     entries_text = context_line + '\n\n' + '\n'.join(lines)
 
+    # All needed data is now in `entries_text`/`entry_count` (plain strings/ints).
+    # Release the DB connection before the LLM call (5-30s) so concurrent
+    # writers aren't blocked by this thread's open read transaction.
+    db.session.remove()
+
     def _call_prompt(prompt):
         from app.modules.assistant.routes import _llm_inference_lock
         with _llm_inference_lock:
@@ -231,41 +236,68 @@ def name_cluster(cluster_entry_ids, llm, max_entries=MAX_TOPIC_ENTRIES):
 def save_clusters_to_db(pipeline_result, llm, progress_cb=None):
     """Persist clustering result to DB.
 
-    Clears old data, names each cluster via LLM, writes rows.
+    Three phases, each separated by db.session.remove() so the SQLite
+    write lock isn't held across the multi-minute LLM naming loop:
+
+    1. Clear old data (short write, commit, release).
+    2. Name every cluster via LLM (NO DB activity — collect names as
+       Python primitives).
+    3. Write all clusters in a single short batch transaction.
+
+    Previously, phase 2 used db.session.flush() inside the loop, which
+    started a write transaction and held the WAL write lock for the
+    duration of all LLM calls (up to many minutes). Every other writer
+    in the app — entry saves, chat messages, assistant background —
+    blocked for 30s and then failed with "database is locked".
+
     *progress_cb(i, total)* is called after each cluster is named.
     """
+    # Phase 1: clear existing clusters
     MindClusterEntry.query.delete()
     MindCluster.query.delete()
     db.session.commit()
+    db.session.remove()
 
-    saved = []
     clusters = pipeline_result['clusters']
     total = len(clusters)
 
+    # Phase 2: name each cluster via LLM. Collect results as primitives so
+    # phase 3 can do a single fast batch write.
+    named = []
     for i, c in enumerate(clusters):
         label, description, weight = name_cluster(c['entry_ids'], llm)
         log.info('Cluster %d/%d: "%s" (%d entries, weight=%.2f)',
                  i + 1, total, label, c['size'], weight)
+        named.append({
+            'label': label,
+            'description': description,
+            'weight': weight,
+            'centroid_bytes': c['centroid'].astype(np.float32).tobytes(),
+            'size': c['size'],
+            'entry_ids': list(c['entry_ids']),
+        })
+        if progress_cb:
+            progress_cb(i + 1, total)
 
+    # Phase 3: batch write — short transaction, no LLM calls.
+    saved = []
+    for nc in named:
         cluster_obj = MindCluster(
-            label=label,
-            description=description,
-            emotional_weight=weight,
-            centroid=c['centroid'].astype(np.float32).tobytes(),
-            entry_count=c['size'],
+            label=nc['label'],
+            description=nc['description'],
+            emotional_weight=nc['weight'],
+            centroid=nc['centroid_bytes'],
+            entry_count=nc['size'],
         )
         db.session.add(cluster_obj)
         db.session.flush()
 
-        for entry_id in c['entry_ids']:
+        for entry_id in nc['entry_ids']:
             db.session.add(MindClusterEntry(
                 cluster_id=cluster_obj.id,
                 entry_id=entry_id,
             ))
-
         saved.append(cluster_obj)
-        if progress_cb:
-            progress_cb(i + 1, total)
 
     db.session.commit()
     log.info('Saved %d clusters to DB', len(saved))

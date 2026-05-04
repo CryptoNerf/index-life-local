@@ -126,10 +126,17 @@
     fetch('/assistant/sync', { method: 'POST' })
       .then(function (r) { return r.json(); })
       .then(function (data) {
-        statusEl.textContent = data.message || 'Синхронизация...';
         if (data.status === 'started') {
-          setTimeout(function () { loadStatus(); }, 5000);
+          statusEl.textContent = 'Sync: запуск...';
+          pollSyncStatus();
+        } else {
+          // busy / disabled — show message and refresh status normally
+          statusEl.textContent = data.message || 'Sync недоступен';
+          setTimeout(function () { loadStatus(); }, 2000);
         }
+      })
+      .catch(function () {
+        statusEl.textContent = 'Sync: ошибка запроса';
       });
   });
 
@@ -180,6 +187,35 @@
     return text;
   }
 
+  function formatSyncStatus(sync) {
+    if (!sync) return '';
+    // Suppress fully-idle state. Show "done" briefly so the user sees the
+    // result, then hide on next loadStatus tick (the polling clears phase).
+    if (!sync.running && !sync.phase) return '';
+    if (sync.phase === 'scanning') return 'sync: сканирование...';
+    if (sync.phase === 'processing') {
+      var current = sync.current || 0;
+      var total = sync.total || 0;
+      var text = 'sync ' + current + '/' + total;
+      var fragments = [];
+      if (sync.embedded) fragments.push(sync.embedded + ' emb');
+      if (sync.summarized) fragments.push(sync.summarized + ' sum');
+      if (sync.failed) fragments.push(sync.failed + ' err');
+      if (fragments.length) text += ' (' + fragments.join(', ') + ')';
+      return text;
+    }
+    if (sync.phase === 'done') {
+      return 'sync: ' + (sync.message || 'готово');
+    }
+    if (sync.phase === 'done_with_errors') {
+      return 'sync: ' + (sync.message || 'готово с ошибками');
+    }
+    if (sync.phase === 'error') {
+      return 'sync ошибка: ' + (sync.message || 'неизвестно');
+    }
+    return '';
+  }
+
   function loadStatus() {
     fetch('/assistant/status')
       .then(function (r) { return r.json(); })
@@ -189,6 +225,10 @@
           var reindexLabel = formatReindexStatus(data.reindex);
           if (reindexLabel) {
             parts.push(reindexLabel);
+          }
+          var syncLabel = formatSyncStatus(data.sync);
+          if (syncLabel) {
+            parts.push(syncLabel);
           }
           if (data.llm_loading) {
             parts.push(formatLoadingStage(data.llm_loading_stage, data.llm_loading_progress));
@@ -208,6 +248,40 @@
         }
       })
       .catch(function () {});
+  }
+
+  function pollSyncStatus() {
+    var interval = setInterval(function () {
+      fetch('/assistant/status')
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          var parts = [];
+          var syncLabel = formatSyncStatus(data.sync);
+          if (syncLabel) parts.push(syncLabel);
+          if (data.total_entries > 0) {
+            parts.push(data.embedded + '/' + data.total_entries + ' embedded');
+            parts.push(data.summarized + '/' + data.total_entries + ' summarized');
+          }
+          statusEl.textContent = parts.join(' · ');
+
+          var sync = data.sync || {};
+          if (!sync.running) {
+            clearInterval(interval);
+            // Surface failure details if any
+            if (sync.phase === 'done_with_errors' && sync.errors && sync.errors.length) {
+              var errLines = sync.errors.slice(0, 3).join('\n');
+              console.warn('Sync errors:\n' + errLines);
+            }
+            // Refresh full status after a short pause so the "done" line
+            // briefly stays visible.
+            setTimeout(function () { loadStatus(); }, 4000);
+          }
+        })
+        .catch(function () {
+          clearInterval(interval);
+          statusEl.textContent = 'Sync: ошибка опроса статуса';
+        });
+    }, 2000);
   }
 
   function pollStatus() {

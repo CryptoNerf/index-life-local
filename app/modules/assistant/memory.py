@@ -283,15 +283,25 @@ def update_embedding(entry: MoodEntry):
     if existing and existing.text_hash == h:
         return  # unchanged
 
+    # Capture primitives before releasing DB connection. embed_text can take
+    # 5-30s (subprocess call or first-time model load) — holding the
+    # connection across this window risks "database is locked" for any
+    # concurrent writer.
+    entry_id = entry.id
+    has_existing = existing is not None
+    db.session.remove()
+
     vec = embed_text(text)
     vec_bytes = vec.astype(np.float32).tobytes()
 
+    # Re-query for write — old ORM object is detached after db.session.remove()
+    existing = EntryEmbedding.query.filter_by(entry_id=entry_id).first() if has_existing else None
     if existing:
         existing.embedding = vec_bytes
         existing.text_hash = h
     else:
         db.session.add(EntryEmbedding(
-            entry_id=entry.id,
+            entry_id=entry_id,
             embedding=vec_bytes,
             text_hash=h,
         ))
@@ -357,14 +367,23 @@ def generate_entry_summary(entry: MoodEntry, llm) -> EntrySummary | None:
     if existing and not _summary_invalid(existing.summary):
         return existing
 
+    # Capture primitives before releasing DB connection
+    entry_id = entry.id
+    entry_date = entry.date
+    entry_rating = entry.rating
     note = (entry.note or '').strip()
+    has_existing = existing is not None
+
+    # Release DB connection before the LLM call (may take 5-30s)
+    db.session.remove()
+
     if not note:
-        summary_text = f'Настроение {entry.rating}/10, без заметки.'
+        summary_text = f'Настроение {entry_rating}/10, без заметки.'
         themes_list = []
     else:
         prompt = SUMMARY_PROMPT.format(
-            date=entry.date.isoformat(),
-            rating=entry.rating,
+            date=entry_date.isoformat(),
+            rating=entry_rating,
             note=note,
         )
         try:
@@ -378,15 +397,17 @@ def generate_entry_summary(entry: MoodEntry, llm) -> EntrySummary | None:
             response_text = result['choices'][0]['message']['content'].strip()
             summary_text, themes_list = _parse_summary_response(response_text)
         except Exception as e:
-            log.warning(f'Failed to summarize entry {entry.id}: {e}')
+            log.warning(f'Failed to summarize entry {entry_id}: {e}')
             summary_text = note[:200] + ('...' if len(note) > 200 else '')
             themes_list = []
     summary_text = _strip_think(summary_text)
     if not summary_text:
-        note_text = (entry.note or '').strip()
-        summary_text = note_text[:200] + ('...' if len(note_text) > 200 else '')
+        summary_text = note[:200] + ('...' if len(note) > 200 else '')
     if not summary_text:
-        summary_text = f'Настроение {entry.rating}/10, без заметки.'
+        summary_text = f'Настроение {entry_rating}/10, без заметки.'
+
+    # Re-query after db.session.remove() — old ORM object is detached
+    existing = EntrySummary.query.filter_by(entry_id=entry_id).first() if has_existing else None
 
     if existing:
         existing.summary = summary_text
@@ -395,7 +416,7 @@ def generate_entry_summary(entry: MoodEntry, llm) -> EntrySummary | None:
         obj = existing
     else:
         obj = EntrySummary(
-            entry_id=entry.id,
+            entry_id=entry_id,
             summary=summary_text,
             themes=json.dumps(themes_list, ensure_ascii=False),
             created_at=datetime.utcnow(),
@@ -610,22 +631,25 @@ def extract_people_mentions(entry: MoodEntry, llm) -> list[EntryPerson]:
     Idempotent on re-runs — deletes the entry's existing mentions first, so
     editing an entry cleanly updates the extracted data.
     """
-    # Commit the DELETE in its own short transaction BEFORE the LLM call
-    # — otherwise SQLite holds the write lock for the entire 5-30s LLM
-    # latency, and any concurrent writer (re-extract trigger, another
-    # entry being processed) hits "database is locked" once it exhausts
-    # the 30s busy_timeout. Splitting into two short transactions keeps
-    # the write window measured in milliseconds.
-    EntryPerson.query.filter_by(entry_id=entry.id).delete()
-    db.session.commit()
-
+    # Capture primitives before any DB operations
+    entry_id = entry.id
+    entry_date = entry.date
+    entry_rating = entry.rating
     note = (entry.note or '').strip()
+
+    # DELETE in its own short transaction, then release the connection before
+    # the LLM call — otherwise SQLite holds the write lock for the entire
+    # 5-30s LLM latency and concurrent writers hit "database is locked".
+    EntryPerson.query.filter_by(entry_id=entry_id).delete()
+    db.session.commit()
+    db.session.remove()  # release connection before LLM
+
     if not note:
         return []
 
     prompt = PEOPLE_PROMPT.format(
-        date=entry.date.isoformat(),
-        rating=entry.rating,
+        date=entry_date.isoformat(),
+        rating=entry_rating,
         note=note,
     )
     try:
@@ -639,12 +663,12 @@ def extract_people_mentions(entry: MoodEntry, llm) -> list[EntryPerson]:
         response_text = result['choices'][0]['message']['content'].strip()
         mentions = _parse_people_response(response_text)
     except Exception as e:
-        log.warning(f'Failed to extract people from entry {entry.id}: {e}')
+        log.warning(f'Failed to extract people from entry {entry_id}: {e}')
         return []
 
     objs = []
     for m in mentions:
-        obj = EntryPerson(entry_id=entry.id, mention=m['mention'], tone=m['tone'])
+        obj = EntryPerson(entry_id=entry_id, mention=m['mention'], tone=m['tone'])
         db.session.add(obj)
         objs.append(obj)
     db.session.commit()
@@ -693,18 +717,24 @@ def extract_activities(entry: MoodEntry, llm) -> list[EntryActivity]:
     Idempotent — deletes the entry's existing rows first so re-runs on an
     edited entry produce a clean state.
     """
-    # See extract_people_mentions: commit DELETE before LLM call so the
-    # write lock isn't held during the multi-second LLM latency.
-    EntryActivity.query.filter_by(entry_id=entry.id).delete()
-    db.session.commit()
-
+    # Capture primitives before any DB operations
+    entry_id = entry.id
+    entry_date = entry.date
+    entry_rating = entry.rating
     note = (entry.note or '').strip()
+
+    # See extract_people_mentions: commit DELETE then release connection before
+    # LLM call so the write lock isn't held during the multi-second LLM latency.
+    EntryActivity.query.filter_by(entry_id=entry_id).delete()
+    db.session.commit()
+    db.session.remove()  # release connection before LLM
+
     if not note:
         return []
 
     prompt = ACTIVITIES_PROMPT.format(
-        date=entry.date.isoformat(),
-        rating=entry.rating,
+        date=entry_date.isoformat(),
+        rating=entry_rating,
         note=note,
     )
     try:
@@ -718,12 +748,12 @@ def extract_activities(entry: MoodEntry, llm) -> list[EntryActivity]:
         response_text = result['choices'][0]['message']['content'].strip()
         activities = _parse_activities_response(response_text)
     except Exception as e:
-        log.warning(f'Failed to extract activities from entry {entry.id}: {e}')
+        log.warning(f'Failed to extract activities from entry {entry_id}: {e}')
         return []
 
     objs = []
     for a in activities:
-        obj = EntryActivity(entry_id=entry.id, activity=a)
+        obj = EntryActivity(entry_id=entry_id, activity=a)
         db.session.add(obj)
         objs.append(obj)
     db.session.commit()
@@ -767,6 +797,11 @@ def generate_month_summary(year: int, month: int, llm) -> PeriodSummary | None:
     ]
     month_label = f'{month_names[month]} {year}'
 
+    # Capture remaining primitives and release DB before LLM call
+    n_entries = len(entries)
+    has_existing = existing is not None
+    db.session.remove()  # release connection before LLM
+
     try:
         prompt = MONTH_SUMMARY_PROMPT.format(
             month_label=month_label,
@@ -782,16 +817,19 @@ def generate_month_summary(year: int, month: int, llm) -> PeriodSummary | None:
         summary_text = result['choices'][0]['message']['content'].strip()
     except Exception as e:
         log.warning(f'Failed to generate month summary for {period_key}: {e}')
-        summary_text = f'{len(entries)} записей, средний рейтинг {avg:.1f}/10.'
+        summary_text = f'{n_entries} записей, средний рейтинг {avg:.1f}/10.'
 
     summary_text = _strip_think(summary_text)
     if not summary_text:
-        summary_text = f'{len(entries)} ???????, ??????? ??????? {avg:.1f}/10.'
+        summary_text = f'{n_entries} записей, средний рейтинг {avg:.1f}/10.'
+
+    # Re-query after db.session.remove() — old ORM object is detached
+    existing = PeriodSummary.query.filter_by(period_key=period_key).first() if has_existing else None
 
     if existing:
         existing.summary = summary_text
         existing.avg_rating = round(avg, 1)
-        existing.entry_count = len(entries)
+        existing.entry_count = n_entries
         existing.created_at = datetime.utcnow()
     else:
         db.session.add(PeriodSummary(
@@ -799,7 +837,7 @@ def generate_month_summary(year: int, month: int, llm) -> PeriodSummary | None:
             period_key=period_key,
             summary=summary_text,
             avg_rating=round(avg, 1),
-            entry_count=len(entries),
+            entry_count=n_entries,
             created_at=datetime.utcnow(),
         ))
     db.session.commit()
@@ -850,6 +888,9 @@ def update_profile(llm, force_rebuild: bool = False):
         safe_summary = _strip_think(s.summary or '')
         lines.append(f'[{e.date.isoformat()}] {e.rating}/10. {safe_summary} Темы: {themes_str}')
     summaries_text = '\n'.join(lines)
+
+    # All data captured as primitives — release DB before the very long LLM call
+    db.session.remove()
 
     # Token-aware truncation to fit model context window
     try:
@@ -909,7 +950,10 @@ def update_profile(llm, force_rebuild: bool = False):
         profile_data = _extract_json(raw)
     except Exception as e:
         log.warning(f'Failed to generate profile: {e}')
-        return profile
+        return None  # profile object is detached after db.session.remove()
+
+    # Re-query after db.session.remove() — old ORM object is detached
+    profile = UserPsychProfile.query.first()
 
     if profile is None:
         profile = UserPsychProfile(

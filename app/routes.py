@@ -246,26 +246,67 @@ def edit_day(day):
         device_id_row = db.session.get(SyncMeta, 'device_id')
         _device_id = device_id_row.value if device_id_row else None
 
-        if entry:
-            # Update existing entry
-            entry.rating = rating
-            entry.note = note
-            entry.updated_at = datetime.utcnow()
-            if _device_id:
-                entry.device_id = _device_id
+        # Apply changes inside the retry loop so that a rollback (which
+        # detaches new objects / reverts attribute changes) is recovered
+        # before the next attempt. Without this, the second commit() after
+        # a rollback is a silent no-op — saved=True is set but nothing
+        # was written, and entry.id is left as None, which downstream
+        # code (process_entry_async) cannot handle.
+        import time as _time
+        saved = False
+        last_exc = None
+        for _attempt in range(4):
+            try:
+                if is_new:
+                    # Re-fetch on retry in case a concurrent writer created it
+                    existing = MoodEntry.query.filter_by(date=day_date).first()
+                    if existing is None:
+                        entry = MoodEntry(
+                            date=day_date,
+                            rating=rating,
+                            note=note,
+                            device_id=_device_id,
+                        )
+                        db.session.add(entry)
+                    else:
+                        entry = existing
+                        entry.rating = rating
+                        entry.note = note
+                        entry.updated_at = datetime.utcnow()
+                        if _device_id:
+                            entry.device_id = _device_id
+                else:
+                    entry = MoodEntry.query.filter_by(date=day_date).first()
+                    if entry is None:
+                        # Edge case: entry was deleted between GET and POST
+                        entry = MoodEntry(
+                            date=day_date,
+                            rating=rating,
+                            note=note,
+                            device_id=_device_id,
+                        )
+                        db.session.add(entry)
+                    else:
+                        entry.rating = rating
+                        entry.note = note
+                        entry.updated_at = datetime.utcnow()
+                        if _device_id:
+                            entry.device_id = _device_id
+
+                db.session.commit()
+                saved = True
+                break
+            except Exception as e:
+                db.session.rollback()
+                if 'locked' in str(e).lower() and _attempt < 3:
+                    _time.sleep(0.4 * (_attempt + 1))
+                    continue
+                last_exc = e
+                break
+
+        if not saved:
+            flash(f'Error saving entry: {last_exc}', 'error')
         else:
-            # Create new entry
-            entry = MoodEntry(
-                date=day_date,
-                rating=rating,
-                note=note,
-                device_id=_device_id,
-            )
-            db.session.add(entry)
-
-        try:
-            db.session.commit()
-
             # Trigger background processing if assistant module is active
             from flask import current_app
             if 'assistant' in current_app.config.get('ACTIVE_MODULES', []):
@@ -291,11 +332,7 @@ def edit_day(day):
             except Exception:
                 pass
 
-            # Redirect to the year of the edited entry (no flash message needed - visual confirmation on calendar is enough)
             return redirect(url_for('main.mood_grid', year=day_date.year))
-        except Exception as e:
-            db.session.rollback()
-            flash(f'Error saving entry: {e}', 'error')
 
     return render_template('edit_day.html',
                          day=day_date,

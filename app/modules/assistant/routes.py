@@ -866,6 +866,9 @@ def stream():
                     prior_user_msg = prior.content
             except Exception:
                 pass
+            # prior_user_msg is a plain string — release connection before
+            # the router LLM call so it doesn't block other writers.
+            db.session.remove()
 
             tool_decisions = _route_to_tools(llm, user_message, prior_user_msg)
             tool_outputs: list[tuple[str, str]] = []  # [(tool_name, result_text)]
@@ -879,6 +882,9 @@ def stream():
                     tool_outputs.append((decision['tool'], result_text))
             if tool_outputs:
                 yield 'data: ' + json.dumps({'tool_done': True}) + '\n\n'
+            # tool_outputs contains plain strings — release connection before
+            # assemble_context which opens its own DB read.
+            db.session.remove()
 
             # Detect emotional tone for adaptive responses
             from .memory import assemble_context, detect_emotional_tone
@@ -966,6 +972,12 @@ def stream():
             }
             if max_tokens is not None:
                 chat_kwargs['max_tokens'] = max_tokens
+
+            # Release DB connection before long LLM inference so background
+            # threads (embedding, summary, etc.) are not blocked for the
+            # entire generation time. All needed data is already in local
+            # variables (messages, system, user_tone…).
+            db.session.remove()
 
             # Acquire inference lock to prevent concurrent LLM access
             # (llama-cpp-python is not thread-safe)
@@ -1200,8 +1212,9 @@ def status():
     embedded = EntryEmbedding.query.count()
     summarized = EntrySummary.query.count()
     profile = UserPsychProfile.query.first()
-    from .background import get_reindex_status
+    from .background import get_reindex_status, get_sync_status
     reindex_status = get_reindex_status()
+    sync_status = get_sync_status()
 
     # Chat message count for context indicator
     chat_count = ChatMessage.query.count()
@@ -1217,6 +1230,7 @@ def status():
         'llm_loading_progress': _llm_loading_progress if _llm_loading else 0,
         'llm_ready': _llm is not None,
         'reindex': reindex_status,
+        'sync': sync_status,
         'chat_messages': chat_count,
         'n_ctx': _llm_n_ctx or _env_int('LLM_N_CTX', _DEFAULT_GPU_CTX, min_value=256),
     })

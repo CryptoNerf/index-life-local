@@ -525,6 +525,16 @@ def create_app(config_class='config.Config'):
                 if not dest.exists():
                     shutil.copy2(f, dest)
 
+    # NullPool: each DB operation gets its own connection, released immediately
+    # after commit. Prevents "database is locked" from connection reuse across
+    # background threads. Slight open/close overhead is negligible for a
+    # local single-user app; correct concurrency is worth far more.
+    from sqlalchemy.pool import NullPool
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+        'poolclass': NullPool,
+        'connect_args': {'timeout': 30, 'check_same_thread': False},
+    }
+
     # Initialize extensions
     db.init_app(app)
 
@@ -548,13 +558,13 @@ def create_app(config_class='config.Config'):
     if 'assistant' in app.config.get('ACTIVE_MODULES', []):
         try:
             from app.modules.assistant.background import (
-                warmup_async, backfill_people_async, backfill_activities_async,
+                warmup_async, backfill_assistant_data_async,
             )
             warmup_async(app)
-            # One-time backfills for insights charts. No-op after first
-            # successful run (guarded by sync_meta flags).
-            backfill_people_async(app)
-            backfill_activities_async(app)
+            # One-time backfills for insights charts. People + activities
+            # run sequentially in a single thread to avoid doubling lock
+            # contention at startup.
+            backfill_assistant_data_async(app)
         except Exception:
             pass
 

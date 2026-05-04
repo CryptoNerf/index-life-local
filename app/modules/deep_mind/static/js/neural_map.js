@@ -96,16 +96,34 @@
     });
 
     // ── d3-force simulation ──────────────────────────────────
+    // Force parameters scale down with node count: with many neurons,
+    // the cumulative repulsion energy is huge and any disturbance
+    // propagates as a shock wave to all neighbours. We dampen this:
+    //   - charge weaker and shorter-range
+    //   - velocityDecay higher (more damping per tick)
+    //   - alphaDecay slightly higher (smoother initial convergence)
+    //   - collision padding smaller (less crowding pressure)
+    var nodeCount = nodes.length;
+    // Scale charge strength inversely with sqrt(N): -1200 was tuned for
+    // ~10 nodes; with 33 the perceived "force per node" should stay similar.
+    var chargeStrength = -800 * Math.sqrt(10 / Math.max(10, nodeCount));
+    // Distance cap also shrinks so each neuron only "feels" closer ones.
+    var chargeMaxDist = 700;
+
     simulation = d3.forceSimulation(nodes)
+      .alphaDecay(0.035)        // smoother initial layout convergence
+      .velocityDecay(0.55)      // more damping (default 0.4) — kills jitter
       .force('link', d3.forceLink(edges)
         .id(function (d) { return d.id; })
         .distance(function (d) { return 400 + 200 * (1 - d.strength); })
         .strength(function (d) { return d.strength * 0.15; })
       )
-      .force('charge', d3.forceManyBody().strength(-1200).distanceMax(1200))
+      .force('charge', d3.forceManyBody()
+        .strength(chargeStrength)
+        .distanceMax(chargeMaxDist))
       .force('center', d3.forceCenter(W / 2, H / 2).strength(0.02))
       .force('collision', d3.forceCollide().radius(function (d) {
-        return d.r + 80;
+        return d.r + 35;        // was r+80 — too aggressive at 33+ nodes
       }))
       .on('tick', function () {
         // Clamp positions
@@ -115,16 +133,17 @@
         });
       });
 
-    // Gentle floating for unpinned nodes
+    // Gentle floating for unpinned nodes — very small kicks so the map
+    // breathes without the whole network reorganising every interval.
     setInterval(function () {
       nodes.forEach(function (n) {
         if (n.fx == null) {
-          n.vx += (Math.random() - 0.5) * 0.15;
-          n.vy += (Math.random() - 0.5) * 0.15;
+          n.vx += (Math.random() - 0.5) * 0.05;
+          n.vy += (Math.random() - 0.5) * 0.05;
         }
       });
-      simulation.alpha(0.015).restart();
-    }, 5000);
+      simulation.alpha(0.005).restart();
+    }, 8000);
 
     // ── Mouse / touch events ─────────────────────────────────
     canvas.addEventListener('mousemove', onMouseMove);
@@ -164,9 +183,15 @@
   function onMouseMove(e) {
     var p = canvasXY(e);
     if (dragNode) {
+      // Update the pinned position only. The simulation is already kept
+      // warm by the alphaTarget set in onMouseDown — calling
+      // simulation.alpha(0.3).restart() here used to inject energy 60+
+      // times per second on every cursor pixel, which is what made
+      // neighbouring nodes snap violently. Letting the existing
+      // alphaTarget-warmed simulation pick up the new fx/fy on the next
+      // tick is dramatically smoother.
       dragNode.fx = p.x;
       dragNode.fy = p.y;
-      simulation.alpha(0.3).restart();
       return;
     }
     var h = nodeAt(p.x, p.y);
@@ -184,7 +209,11 @@
       dragNode.fx = n.x;
       dragNode.fy = n.y;
       n._pinned = true;
-      simulation.alphaTarget(0.3).restart();
+      // 0.1 instead of the previous 0.3 — keeps the sim warm enough to
+      // adjust neighbours during drag, but low enough that with strong
+      // charge + 30+ nodes, the shock wave from a moved neuron stays
+      // visible-but-gentle rather than explosive.
+      simulation.alphaTarget(0.1).restart();
       e.preventDefault();
     }
   }
@@ -563,7 +592,10 @@
     ctx.scale(dpr, dpr);
     if (simulation) {
       simulation.force('center', d3.forceCenter(W / 2, H / 2).strength(0.04));
-      simulation.alpha(0.3).restart();
+      // Lower alpha kick on resize — 0.3 caused the same shock-wave
+      // problem when many nodes are present. 0.1 still re-centers the
+      // graph cleanly without violent reorganisation.
+      simulation.alpha(0.1).restart();
     }
   });
 

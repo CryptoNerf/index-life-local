@@ -39,6 +39,40 @@ def get_reindex_status():
         return dict(_reindex_status)
 
 
+# ── Sync (missing-only) progress ────────────────────────────────
+# Mirrors _reindex_status so the UI can poll the same way. `embedded` /
+# `summarized` count successful writes; `failed` counts entries where
+# either step raised. `errors` keeps the most recent few failure messages
+# so the user can see what went wrong without opening the terminal.
+_sync_state_lock = threading.Lock()
+_sync_status = {
+    'running': False,
+    'phase': '',           # scanning | processing | done | done_with_errors | error
+    'current': 0,
+    'total': 0,
+    'embedded': 0,
+    'summarized': 0,
+    'failed': 0,
+    'errors': [],          # last 5 short messages
+    'message': '',
+    'started_at': None,
+    'updated_at': None,
+}
+
+
+def _set_sync_status(**updates):
+    with _sync_state_lock:
+        for key, value in updates.items():
+            if key in _sync_status:
+                _sync_status[key] = value
+        _sync_status['updated_at'] = time.time()
+
+
+def get_sync_status():
+    with _sync_state_lock:
+        return dict(_sync_status)
+
+
 def process_entry_async(app, entry_id: int):
     """Spawn a background thread to process a new/updated entry."""
     thread = threading.Thread(
@@ -104,11 +138,11 @@ def get_activities_extract_status() -> dict:
 def _run_extraction(app, entry_ids: list, extract_fn, label: str, status: dict | None = None):
     """Iterate entry_ids on the shared LLM lock, with cooperative yield.
 
-    Used by both startup backfill (status=None) and the chart-triggered
-    re-extract (status=dict) — avoids duplicating the lock/yield/error
-    plumbing in two places. Each iteration releases the lock briefly so
-    that user-triggered process_entry_async can cut in line on new
-    entries instead of waiting for the full extraction to finish.
+    Each entry runs in its own app_context so the DB connection is fully
+    released between entries. Without this, a single long-lived context
+    keeps the SQLAlchemy session (and underlying SQLite connection) open
+    across multi-second LLM calls, causing "database is locked" for every
+    other writer (Flask requests, other background threads).
     """
     if not entry_ids:
         return
@@ -119,6 +153,7 @@ def _run_extraction(app, entry_ids: list, extract_fn, label: str, status: dict |
 
     lock_held = True
     try:
+        # Load (or reuse cached) LLM once before the loop.
         with app.app_context():
             from .routes import _get_llm
             try:
@@ -127,32 +162,42 @@ def _run_extraction(app, entry_ids: list, extract_fn, label: str, status: dict |
                 log.error(f'{label}: cannot load LLM: {e}')
                 return
 
-            total = len(entry_ids)
-            processed = 0
-            for entry_id in entry_ids:
+        total = len(entry_ids)
+        processed = 0
+        for entry_id in entry_ids:
+            # Fresh context per entry: DB connection released after each
+            # commit, no stale transaction held during LLM inference.
+            with app.app_context():
                 entry = db.session.get(MoodEntry, entry_id)
                 if entry is None:
+                    processed += 1
                     continue
                 try:
                     extract_fn(entry, llm)
                 except Exception as e:
+                    # Roll back any pending state from a failed commit so the
+                    # session is clean before teardown closes it.
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
                     log.warning(f'{label}: failed for entry {entry_id}: {e}')
-                processed += 1
-                if status is not None:
-                    status['processed'] = processed
-                if processed % 10 == 0:
-                    log.info(f'{label}: {processed}/{total}')
+            processed += 1
+            if status is not None:
+                status['processed'] = processed
+            if processed % 10 == 0:
+                log.info(f'{label}: {processed}/{total}')
 
-                # Cooperative yield — let process_entry_async cut in.
-                _lock.release()
-                lock_held = False
-                time.sleep(0.05)
-                if not _lock.acquire(timeout=300):
-                    log.warning(f'{label}: could not reacquire lock, pausing')
-                    return
-                lock_held = True
+            # Cooperative yield — let process_entry_async cut in.
+            _lock.release()
+            lock_held = False
+            time.sleep(0.05)
+            if not _lock.acquire(timeout=300):
+                log.warning(f'{label}: could not reacquire lock, pausing')
+                return
+            lock_held = True
 
-            log.info(f'{label} complete: {total} entries')
+        log.info(f'{label} complete: {total} entries')
     finally:
         if lock_held:
             _lock.release()
@@ -239,6 +284,31 @@ def backfill_activities_async(app) -> bool:
     return True
 
 
+def backfill_assistant_data_async(app) -> bool:
+    """Run people + activities backfills sequentially in a SINGLE thread.
+
+    Running them in parallel doubles startup contention on `_lock` and the
+    LLM inference lock — every cooperative yield in `_run_extraction`
+    bounces the lock between two backfills and any new-entry processing.
+    Sequencing them serialises the work and lets new-entry processing
+    cut in cleanly between cycles.
+    """
+    thread = threading.Thread(target=_backfill_sequential, args=(app,), daemon=True)
+    thread.start()
+    return True
+
+
+def _backfill_sequential(app):
+    try:
+        _backfill_people(app)
+    except Exception as e:
+        log.warning(f'People backfill crashed: {e}')
+    try:
+        _backfill_activities(app)
+    except Exception as e:
+        log.warning(f'Activities backfill crashed: {e}')
+
+
 def _backfill_activities(app):
     """Run activity extraction on entries that have no EntryActivity rows yet.
 
@@ -300,67 +370,120 @@ def _backfill_people(app):
 def _process_entry(app, entry_id: int):
     """Process a single entry: embedding + summary + maybe profile update.
 
-    Waits up to 120s for the lock (previous entry processing or reindex)
-    so that entries are never silently skipped.
+    Each step runs in its own app_context so the DB connection is released
+    before the LLM call begins. This prevents "database is locked" errors
+    when the user edits an entry while background processing is running —
+    a single long app_context would hold the SQLAlchemy session (and its
+    underlying SQLite connection) open across multi-second LLM inference.
     """
     if not _lock.acquire(timeout=120):
         log.warning('Background lock held for >120s, skipping entry %d', entry_id)
         return
 
     try:
+        # 1. Embedding — fast, no LLM; own context so connection is freed immediately.
         with app.app_context():
             entry = db.session.get(MoodEntry, entry_id)
             if entry is None:
                 return
-
-            from .memory import update_embedding, generate_entry_summary, update_profile
-            from .routes import _get_llm
-
-            # 1. Embedding (no LLM needed)
             try:
+                from .memory import update_embedding
                 update_embedding(entry)
-                log.info(f'Embedding updated for entry {entry_id}')
+                log.info('Embedding updated for entry %d', entry_id)
             except Exception as e:
-                log.warning(f'Embedding failed for entry {entry_id}: {e}')
+                # Roll back any pending state from the failed commit so the
+                # session is clean before teardown closes it. Without this,
+                # the next step's first SQL can hit a half-aborted session.
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+                log.warning('Embedding failed for entry %d: %s', entry_id, e)
 
-            # 2. Summary (needs LLM)
+        # 2–6: Each step re-fetches the entry in a fresh context so no DB
+        # connection is held while the LLM generates completions.
+
+        # 2. Summary
+        with app.app_context():
+            entry = db.session.get(MoodEntry, entry_id)
+            if entry is None:
+                return
             try:
-                llm = _get_llm()
-                generate_entry_summary(entry, llm)
-                log.info(f'Summary generated for entry {entry_id}')
+                from .memory import generate_entry_summary
+                from .routes import _get_llm
+                generate_entry_summary(entry, _get_llm())
+                log.info('Summary generated for entry %d', entry_id)
             except Exception as e:
-                log.warning(f'Summary failed for entry {entry_id}: {e}')
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+                log.warning('Summary failed for entry %d: %s', entry_id, e)
 
-            # 3. People mentions (needs LLM; extraction is idempotent so
-            # re-running on edited entries cleanly replaces prior rows)
+        # 3. People mentions (idempotent — replaces prior rows on re-run)
+        with app.app_context():
+            entry = db.session.get(MoodEntry, entry_id)
+            if entry is None:
+                return
             try:
                 from .memory import extract_people_mentions
-                extract_people_mentions(entry, llm)
-                log.info(f'People mentions extracted for entry {entry_id}')
+                from .routes import _get_llm
+                extract_people_mentions(entry, _get_llm())
+                log.info('People mentions extracted for entry %d', entry_id)
             except Exception as e:
-                log.warning(f'People extraction failed for entry {entry_id}: {e}')
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+                log.warning('People extraction failed for entry %d: %s', entry_id, e)
 
-            # 4. Activities (needs LLM; idempotent like people)
+        # 4. Activities (idempotent like people)
+        with app.app_context():
+            entry = db.session.get(MoodEntry, entry_id)
+            if entry is None:
+                return
             try:
                 from .memory import extract_activities
-                extract_activities(entry, llm)
-                log.info(f'Activities extracted for entry {entry_id}')
+                from .routes import _get_llm
+                extract_activities(entry, _get_llm())
+                log.info('Activities extracted for entry %d', entry_id)
             except Exception as e:
-                log.warning(f'Activities extraction failed for entry {entry_id}: {e}')
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+                log.warning('Activities extraction failed for entry %d: %s', entry_id, e)
 
-            # 5. Monthly summary for this entry's month
+        # 5. Monthly summary for this entry's month
+        with app.app_context():
+            entry = db.session.get(MoodEntry, entry_id)
+            if entry is None:
+                return
             try:
                 from .memory import generate_month_summary
-                generate_month_summary(entry.date.year, entry.date.month, llm)
+                from .routes import _get_llm
+                generate_month_summary(entry.date.year, entry.date.month, _get_llm())
             except Exception as e:
-                log.warning(f'Month summary failed: {e}')
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+                log.warning('Month summary failed: %s', e)
 
-            # 6. Profile update (every 5 entries)
+        # 6. Profile update (every 5 entries)
+        with app.app_context():
             try:
-                update_profile(llm)
+                from .memory import update_profile
+                from .routes import _get_llm
+                update_profile(_get_llm())
                 log.info('Profile check complete')
             except Exception as e:
-                log.warning(f'Profile update failed: {e}')
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+                log.warning('Profile update failed: %s', e)
+
     finally:
         _lock.release()
 
@@ -511,51 +634,166 @@ def rebuild_profile_async(app):
 
 
 def _sync_missing(app):
-    """Process only entries that are missing embeddings or summaries."""
+    """Process only entries missing embeddings or summaries.
+
+    Each entry runs in its own app_context so the DB connection is fully
+    released between entries — same pattern as `_run_extraction`. Between
+    entries the function does a cooperative yield of `_lock`, letting
+    new-entry processing cut in cleanly so the user doesn't wait for a
+    long sync to finish before their fresh save gets indexed.
+
+    Progress is tracked in `_sync_status` (poll via `get_sync_status()`).
+    Per-entry failures don't abort the run — they're counted in `failed`
+    and the last few messages stored in `errors` so the UI can show them.
+    """
     if not _lock.acquire(timeout=5):
         log.info('Lock busy, skipping sync')
+        _set_sync_status(running=False, phase='', message='Background busy, try again later')
         return
 
+    lock_held = True
+    _set_sync_status(
+        running=True, phase='scanning', current=0, total=0,
+        embedded=0, summarized=0, failed=0, errors=[],
+        message='Scanning entries…', started_at=time.time(),
+    )
+
+    embedded_count = 0
+    summarized_count = 0
+    failed_count = 0
+    errors: list = []
+
     try:
+        # Phase 1: scan for missing data — short read in its own context.
+        # Capture only IDs (not ORM objects) so the loop below can re-fetch
+        # each entry in a fresh session without DetachedInstanceError.
         with app.app_context():
-            from .memory import update_embedding, generate_entry_summary
-            from .routes import _get_llm
             from app.models import EntryEmbedding, EntrySummary
+            embedded_ids = {
+                row[0] for row in
+                EntryEmbedding.query.with_entities(EntryEmbedding.entry_id).all()
+            }
+            summarized_ids = {
+                row[0] for row in
+                EntrySummary.query.with_entities(EntrySummary.entry_id).all()
+            }
+            entry_rows = (MoodEntry.query
+                          .with_entities(MoodEntry.id)
+                          .order_by(MoodEntry.date)
+                          .all())
+            missing = []
+            for (entry_id,) in entry_rows:
+                needs_embed = entry_id not in embedded_ids
+                needs_summary = entry_id not in summarized_ids
+                if needs_embed or needs_summary:
+                    missing.append((entry_id, needs_embed, needs_summary))
 
-            all_entries = MoodEntry.query.all()
-            embedded_ids = {e.entry_id for e in EntryEmbedding.query.all()}
-            summarized_ids = {s.entry_id for s in EntrySummary.query.all()}
+        if not missing:
+            log.info('sync: all entries up to date')
+            _set_sync_status(running=False, phase='done',
+                             message='Все записи уже обработаны')
+            return
 
-            missing = [e for e in all_entries
-                       if e.id not in embedded_ids or e.id not in summarized_ids]
+        total = len(missing)
+        log.info('sync: %d entries need processing', total)
+        _set_sync_status(phase='processing', total=total,
+                         message=f'Обработка {total} записей')
 
-            if not missing:
-                log.info('sync: all entries up to date')
+        # Load LLM once before the per-entry loop. _get_llm() is cached;
+        # this is only slow on the very first call after startup.
+        with app.app_context():
+            from .routes import _get_llm
+            try:
+                llm = _get_llm()
+            except Exception as e:
+                log.error(f'sync: cannot load LLM: {e}')
+                _set_sync_status(running=False, phase='error',
+                                 message=f'LLM не загрузилась: {e}')
                 return
 
-            log.info('sync: %d entries need processing', len(missing))
-            llm = None
+        # Phase 2: process each entry in its own context so the DB
+        # connection is freed between entries. Cooperative yield between
+        # entries lets new-entry processing cut in.
+        for i, (entry_id, needs_embed, needs_summary) in enumerate(missing):
+            with app.app_context():
+                entry = db.session.get(MoodEntry, entry_id)
+                if entry is None:
+                    continue
 
-            for entry in missing:
-                if entry.id not in embedded_ids:
+                if needs_embed:
                     try:
+                        from .memory import update_embedding
                         update_embedding(entry)
-                        log.info(f'sync: embedded entry {entry.id}')
+                        embedded_count += 1
                     except Exception as e:
-                        log.warning(f'sync: embedding failed for {entry.id}: {e}')
+                        try:
+                            db.session.rollback()
+                        except Exception:
+                            pass
+                        failed_count += 1
+                        errors.append(f'embed #{entry_id}: {str(e)[:140]}')
+                        log.warning(f'sync: embedding failed for {entry_id}: {e}')
 
-                if entry.id not in summarized_ids:
+                if needs_summary:
+                    # Re-fetch in case update_embedding removed the session.
+                    if entry not in db.session:
+                        entry = db.session.get(MoodEntry, entry_id)
+                        if entry is None:
+                            continue
                     try:
-                        if llm is None:
-                            llm = _get_llm()
+                        from .memory import generate_entry_summary
                         generate_entry_summary(entry, llm)
-                        log.info(f'sync: summarized entry {entry.id}')
+                        summarized_count += 1
                     except Exception as e:
-                        log.warning(f'sync: summary failed for {entry.id}: {e}')
+                        try:
+                            db.session.rollback()
+                        except Exception:
+                            pass
+                        failed_count += 1
+                        errors.append(f'summary #{entry_id}: {str(e)[:140]}')
+                        log.warning(f'sync: summary failed for {entry_id}: {e}')
 
-            log.info('sync: done')
+            # Update progress (keep only last 5 errors for the UI)
+            _set_sync_status(
+                current=i + 1,
+                embedded=embedded_count,
+                summarized=summarized_count,
+                failed=failed_count,
+                errors=errors[-5:],
+            )
+
+            # Cooperative yield — let new-entry processing cut in.
+            _lock.release()
+            lock_held = False
+            time.sleep(0.05)
+            if not _lock.acquire(timeout=300):
+                log.warning('sync: could not reacquire lock, pausing')
+                _set_sync_status(running=False, phase='error',
+                                 message='Прервано: лок занят слишком долго')
+                return
+            lock_held = True
+
+        # Done — surface final counts to the UI.
+        if failed_count > 0:
+            msg = (f'Готово с ошибками: {embedded_count} embeddings, '
+                   f'{summarized_count} summaries, {failed_count} ошибок')
+            _set_sync_status(running=False, phase='done_with_errors',
+                             message=msg, errors=errors[-5:])
+        else:
+            msg = f'Готово: {embedded_count} embeddings, {summarized_count} summaries'
+            _set_sync_status(running=False, phase='done', message=msg)
+        log.info(f'sync: {msg}')
+    except Exception as e:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        log.error('sync crashed: %s', e, exc_info=True)
+        _set_sync_status(running=False, phase='error',
+                         message=f'Сбой синхронизации: {e}')
     finally:
-        _lock.release()
+        if lock_held:
+            _lock.release()
 
 
 def _rebuild_profile(app):
