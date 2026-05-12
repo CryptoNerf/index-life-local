@@ -36,6 +36,51 @@
   var animFrame = null;
   var time = 0;
 
+  // ── Theme color resolution ─────────────────────────────────
+  // Reads CSS variables set by the customization module. Each value
+  // is cached for the page lifetime — colors only change on reload,
+  // which is consistent with how the user interacts with these pages
+  // (set colors on /customization/, then navigate here to see them).
+  function cssVar(name, fallback) {
+    var v = getComputedStyle(document.documentElement)
+              .getPropertyValue('--' + name).trim();
+    return v || fallback;
+  }
+  // Parse #rgb / #rrggbb / rgb()/rgba() into [r, g, b] (0–255).
+  // Used to recompose `rgba(r,g,b,alpha)` strings where the legacy
+  // code applies dynamic alpha — keeps the pulsing/glow effects intact
+  // while letting users theme the underlying base color.
+  function parseRgb(css) {
+    if (!css) return [0, 0, 0];
+    css = css.trim();
+    if (css.charAt(0) === '#') {
+      if (css.length === 4) {
+        return [css.charAt(1) + css.charAt(1),
+                css.charAt(2) + css.charAt(2),
+                css.charAt(3) + css.charAt(3)]
+               .map(function (c) { return parseInt(c, 16); });
+      }
+      return [css.substr(1, 2), css.substr(3, 2), css.substr(5, 2)]
+             .map(function (c) { return parseInt(c, 16); });
+    }
+    var m = css.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+    return m ? [parseInt(m[1]), parseInt(m[2]), parseInt(m[3])] : [0, 0, 0];
+  }
+  function withAlpha(rgb, alpha) {
+    return 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',' + alpha + ')';
+  }
+  var THEME = null;
+  function resolveTheme() {
+    THEME = {
+      edgeRgb:   parseRgb(cssVar('neural-edge-color', 'rgba(0,0,0,0.25)')),
+      nodeRgb:   parseRgb(cssVar('neural-node-color', 'rgb(40,40,40)')),
+      activeRgb: parseRgb(cssVar('neural-node-active-color', '#009afa')),
+      glowRgb:   parseRgb(cssVar('neural-glow-color', 'rgb(0,154,250)')),
+      labelColor: cssVar('text-color', '#444'),
+    };
+    THEME.activeCss = 'rgb(' + THEME.activeRgb.join(',') + ')';
+  }
+
   // ── Load graph data ────────────────────────────────────────────
   function loadGraph() {
     statusBar.textContent = 'Загрузка...';
@@ -71,6 +116,7 @@
     graphContainer.innerHTML = '';
     if (simulation) simulation.stop();
     if (animFrame) cancelAnimationFrame(animFrame);
+    resolveTheme();
 
     var W = graphContainer.clientWidth;
     var H = graphContainer.clientHeight;
@@ -295,7 +341,7 @@
     ctx.beginPath();
     ctx.moveTo(s.x, s.y);
     ctx.quadraticCurveTo(cpx, cpy, t.x, t.y);
-    ctx.strokeStyle = 'rgba(0, 0, 0, ' + alpha + ')';
+    ctx.strokeStyle = withAlpha(THEME.edgeRgb, alpha);
     ctx.lineWidth = 0.5 + strength * 1;
     ctx.stroke();
 
@@ -310,7 +356,7 @@
       var dotAlpha = 0.1 + 0.15 * Math.sin(time * 1.5 + i * 2 + s.x * 0.1);
       ctx.beginPath();
       ctx.arc(px, py, 1.5, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(0, 0, 0, ' + dotAlpha + ')';
+      ctx.fillStyle = withAlpha(THEME.edgeRgb, dotAlpha);
       ctx.fill();
     }
   }
@@ -330,14 +376,14 @@
     if (hovered || active) glowAlpha = 0.12;
     var gradient = ctx.createRadialGradient(n.x, n.y, drawR * 0.3, n.x, n.y, drawR * 2.2);
     if (active) {
-      gradient.addColorStop(0, 'rgba(0, 154, 250, ' + (glowAlpha * 2.5) + ')');
-      gradient.addColorStop(1, 'rgba(0, 154, 250, 0)');
+      gradient.addColorStop(0, withAlpha(THEME.glowRgb, glowAlpha * 2.5));
+      gradient.addColorStop(1, withAlpha(THEME.glowRgb, 0));
     } else if (hovered) {
-      gradient.addColorStop(0, 'rgba(0, 154, 250, ' + (glowAlpha * 1.5) + ')');
-      gradient.addColorStop(1, 'rgba(0, 154, 250, 0)');
+      gradient.addColorStop(0, withAlpha(THEME.glowRgb, glowAlpha * 1.5));
+      gradient.addColorStop(1, withAlpha(THEME.glowRgb, 0));
     } else {
-      gradient.addColorStop(0, 'rgba(0, 0, 0, ' + glowAlpha + ')');
-      gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      gradient.addColorStop(0, withAlpha(THEME.edgeRgb, glowAlpha));
+      gradient.addColorStop(1, withAlpha(THEME.edgeRgb, 0));
     }
     ctx.beginPath();
     ctx.arc(n.x, n.y, drawR * 2.2, 0, Math.PI * 2);
@@ -360,15 +406,20 @@
     }
     ctx.closePath();
 
-    // Fill
+    // Fill — themed via CSS variables. Hover keeps a fixed mid-grey to
+    // give a clear "darken" feedback regardless of base node color.
     if (active) {
-      ctx.fillStyle = '#009AFA';
+      ctx.fillStyle = THEME.activeCss;
     } else if (hovered) {
-      ctx.fillStyle = '#333';
+      ctx.fillStyle = withAlpha(THEME.nodeRgb, 1.0);
     } else {
-      // Darker for heavier weight
-      var shade = Math.round(30 + (1 - w) * 40);
-      ctx.fillStyle = 'rgb(' + shade + ',' + shade + ',' + shade + ')';
+      // Darker for heavier weight: lerp the themed node color toward
+      // black by `(1-w) * 0.3` so high-weight nodes are slightly darker.
+      var lerp = (1 - w) * 0.3;
+      var rr = Math.round(THEME.nodeRgb[0] * (1 - lerp));
+      var gg = Math.round(THEME.nodeRgb[1] * (1 - lerp));
+      var bb = Math.round(THEME.nodeRgb[2] * (1 - lerp));
+      ctx.fillStyle = 'rgb(' + rr + ',' + gg + ',' + bb + ')';
     }
     ctx.fill();
 
@@ -393,11 +444,12 @@
     // Small dendrite stubs radiating from the cell
     drawDendriteStubs(n, drawR, active || hovered);
 
-    // Pinned indicator — small ring
+    // Pinned indicator — small ring (uses active/glow color so it
+    // visually relates to "selected" state)
     if (n._pinned) {
       ctx.beginPath();
       ctx.arc(n.x, n.y, drawR + 3, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(0, 154, 250, 0.4)';
+      ctx.strokeStyle = withAlpha(THEME.activeRgb, 0.4);
       ctx.lineWidth = 1;
       ctx.stroke();
     }
@@ -422,14 +474,14 @@
       ctx.beginPath();
       ctx.moveTo(startX, startY);
       ctx.quadraticCurveTo(cpX, cpY, endX, endY);
-      ctx.strokeStyle = 'rgba(0, 0, 0, ' + alpha + ')';
+      ctx.strokeStyle = withAlpha(THEME.edgeRgb, alpha);
       ctx.lineWidth = 1;
       ctx.stroke();
 
       // Tiny terminal bulb
       ctx.beginPath();
       ctx.arc(endX, endY, 1.5, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(0, 0, 0, ' + (alpha * 0.8) + ')';
+      ctx.fillStyle = withAlpha(THEME.edgeRgb, alpha * 0.8);
       ctx.fill();
     }
   }
@@ -439,7 +491,7 @@
     ctx.font = (highlighted ? 'bold ' : '') + '12px "Times New Roman", Times, serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
-    ctx.fillStyle = highlighted ? '#009AFA' : '#444';
+    ctx.fillStyle = highlighted ? THEME.activeCss : THEME.labelColor;
     ctx.fillText(label, n.x, n.y + n.r + 16);
   }
 

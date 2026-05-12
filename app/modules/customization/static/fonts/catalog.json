@@ -1,0 +1,42 @@
+[
+  {
+    "id": "inter",
+    "family": "Inter",
+    "label": "Inter"
+  },
+  {
+    "id": "roboto",
+    "family": "Roboto",
+    "label": "Roboto"
+  },
+  {
+    "id": "lora",
+    "family": "Lora",
+    "label": "Lora"
+  },
+  {
+    "id": "playfair",
+    "family": "Playfair Display",
+    "label": "Playfair Display"
+  },
+  {
+    "id": "jetbrains-mono",
+    "family": "JetBrains Mono",
+    "label": "JetBrains Mono"
+  },
+  {
+    "id": "caveat",
+    "family": "Caveat",
+    "label": "Caveat"
+  },
+  {
+    "id": "manrope",
+    "family": "Manrope",
+    "label": "Manrope"
+  },
+  {
+    "id": "merriweather",
+    "family": "Merriweather",
+    "label": "Merriweather"
+  }
+]

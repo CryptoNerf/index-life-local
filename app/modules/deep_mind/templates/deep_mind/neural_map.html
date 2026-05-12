@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="{{ current_lang }}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,20 +8,22 @@
   <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='images/apple-touch-icon.png') }}">
   <link rel="manifest" href="{{ url_for('static', filename='images/site.webmanifest') }}">
   <link rel="stylesheet" href="{{ url_for('deep_mind.static', filename='css/neural_map.css') }}">
+  {{ customization_css }}
 </head>
 <body>
   <header class="main-header">
     <nav class="top-menu">
-      <a href="{{ url_for('main.mood_grid') }}" class="menu-link">index.life</a>
-      <a href="{{ url_for('main.life_calendar') }}" class="menu-link">life in weeks</a>
-      {% if module_active('insights') %}<a href="{{ url_for('insights.insights_page') }}" class="menu-link">insights</a>{% endif %}
+      <a href="{{ url_for('main.mood_grid') }}" class="menu-link">{{ t('nav.mood_grid') }}</a>
+      <a href="{{ url_for('main.life_calendar') }}" class="menu-link">{{ t('nav.life_calendar') }}</a>
+      {% if module_active('insights') %}<a href="{{ url_for('insights.insights_page') }}" class="menu-link">{{ t('nav.insights') }}</a>{% endif %}
       {% if module_active('assistant') %}
-        <a href="{{ url_for('assistant.chat') }}" class="menu-link">ai psychologist</a>
+        <a href="{{ url_for('assistant.chat') }}" class="menu-link">{{ t('nav.assistant') }}</a>
       {% endif %}
-      <a href="{{ url_for('deep_mind.neural_map') }}" class="menu-link active-link">neural map</a>
-      <a href="{{ url_for('main.account') }}" class="menu-link">account</a>
-      <a href="{{ url_for('sync.sync_page') }}" class="menu-link">sync</a>
-      <a href="{{ url_for('modules.modules_page') }}" class="menu-link">modules</a>
+      <a href="{{ url_for('deep_mind.neural_map') }}" class="menu-link active-link">{{ t('nav.deep_mind') }}</a>
+      <a href="{{ url_for('main.account') }}" class="menu-link">{{ t('nav.account') }}</a>
+      <a href="{{ url_for('sync.sync_page') }}" class="menu-link">{{ t('nav.sync') }}</a>
+      <a href="{{ url_for('modules.modules_page') }}" class="menu-link">{{ t('nav.modules') }}</a>
+      {% if module_active('customization') %}<a href="{{ url_for('customization.settings') }}" class="menu-link">{{ t('nav.customize') }}</a>{% endif %}
     </nav>
   </header>
 
@@ -43,13 +45,13 @@
       <div id="detail-evidence" class="detail-evidence"></div>
       <div id="detail-entries" class="detail-entries"></div>
       {% if module_active('assistant') %}
-        <button id="btn-discuss" class="btn-discuss">Обсудить с психологом</button>
+        <button id="btn-discuss" class="btn-discuss">{{ t('deep_mind.discuss') }}</button>
       {% endif %}
     </div>
   </div>
 
   <div class="map-toolbar">
-    <button id="btn-analyze" class="tool-btn">Проанализировать</button>
+    <button id="btn-analyze" class="tool-btn">{{ t('deep_mind.analyze') }}</button>
     <span id="analyze-status" class="analyze-status"></span>
   </div>
 

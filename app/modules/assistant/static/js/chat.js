@@ -102,11 +102,13 @@
     fetch('/assistant/compress-chat', { method: 'POST' })
       .then(function (r) { return r.json(); })
       .then(function (data) {
+        var I18N = window.CHAT_I18N || {};
         if (data.removed > 0) {
-          statusEl.textContent = 'Удалено ' + data.removed + ' сообщений';
+          var tpl = I18N.deleteMessages || 'Deleted {n} messages';
+          statusEl.textContent = tpl.replace('{n}', data.removed);
           setTimeout(function () { location.reload(); }, 1000);
         } else {
-          statusEl.textContent = 'Контекст уже минимален';
+          statusEl.textContent = I18N.contextMinimal || 'Context already minimal';
           setTimeout(function () { statusEl.textContent = ''; }, 2000);
         }
         fetchContextUsage();
@@ -114,7 +116,8 @@
   });
 
   document.getElementById('btn-clear-chat').addEventListener('click', function () {
-    if (!confirm('Очистить всю историю чата?')) return;
+    var I18N = window.CHAT_I18N || {};
+    if (!confirm(I18N.clearConfirm || 'Clear all chat history?')) return;
     fetch('/assistant/clear-chat', { method: 'POST' })
       .then(function () {
         updateContextBar(0);

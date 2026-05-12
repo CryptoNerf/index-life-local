@@ -42,7 +42,7 @@ def _set_sqlite_pragmas(dbapi_connection, connection_record):
         cursor.close()
 
 # ── Schema version — bump when adding new migrations ──
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 7
 
 
 def _get_schema_version(conn) -> int:
@@ -228,12 +228,46 @@ def _migrate_v5(conn, inspector):
         ))
 
 
+def _migrate_v6(conn, inspector):
+    """Create user_customization table for the customization module.
+
+    Single-row table storing the user's color/font/background/mosaic
+    preferences as a JSON blob plus a few hot-path columns. The module
+    is sentinel-gated, so the table can exist even when the module is
+    inactive — that's harmless: rows are only read when the module's
+    context processor runs.
+    """
+    if not _table_exists(inspector, 'user_customization'):
+        conn.execute(text('''
+            CREATE TABLE user_customization (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                settings_json TEXT NOT NULL DEFAULT '{}',
+                updated_at DATETIME
+            )
+        '''))
+
+
+def _migrate_v7(conn, inspector):
+    """Add language column to user_profile for the i18n toggle.
+
+    Default 'ru' matches the pre-existing app language (the UI was
+    Russian-first before any translation work) so existing users see
+    no surface change after upgrade.
+    """
+    if not _table_has_column(inspector, 'user_profile', 'language'):
+        conn.execute(text(
+            "ALTER TABLE user_profile ADD COLUMN language VARCHAR(2) NOT NULL DEFAULT 'ru'"
+        ))
+
+
 MIGRATIONS = {
     1: _migrate_v1,
     2: _migrate_v2,
     3: _migrate_v3,
     4: _migrate_v4,
     5: _migrate_v5,
+    6: _migrate_v6,
+    7: _migrate_v7,
 }
 
 
@@ -614,6 +648,12 @@ def create_app(config_class='config.Config'):
             'module_active': lambda name: name in app.config.get('ACTIVE_MODULES', []),
             'update_available': app.config.get('UPDATE_AVAILABLE'),
         }
+
+    # i18n: expose t(), current_lang, supported_langs, js_translations
+    # to every template. Must be registered AFTER db.init_app so the
+    # context processor can read UserProfile.language at render time.
+    from app import i18n
+    i18n.register_context_processor(app)
 
     # Create database tables and run migrations
     with app.app_context():

@@ -1,0 +1,532 @@
+/* Customization settings page — classic monochrome to match the rest
+   of the app (Times New Roman, white background, restrained accents).
+   Uses theme variables itself so the user sees their own settings
+   applied to this page in real time. */
+
+.cz-page {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 24px 32px 80px;
+  box-sizing: border-box;
+}
+
+.cz-title {
+  font-size: 28px;
+  font-weight: normal;
+  margin: 0 0 4px;
+  color: var(--heading-color, #222);
+  font-family: var(--font-heading, inherit);
+}
+.cz-subtitle {
+  font-size: 15px;
+  color: #666;
+  margin: 0 0 32px;
+}
+
+/* ── Section card ─────────────────────────────────────────── */
+.cz-section {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 380px);
+  gap: 32px;
+  padding: 22px 0;
+  border-top: 1px solid #e6e6e6;
+}
+.cz-section:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+@media (max-width: 820px) {
+  .cz-section {
+    grid-template-columns: 1fr;
+  }
+}
+
+.cz-section-head {
+  margin-bottom: 14px;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.cz-section-head > .cz-section-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  width: 100%;
+}
+.cz-section-title {
+  font-size: 19px;
+  font-weight: normal;
+  margin: 0 0 4px;
+  color: var(--heading-color, #222);
+  font-family: var(--font-heading, inherit);
+  flex: 1;
+}
+.cz-section-reset {
+  font-size: 12px;
+  color: #888;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  font-family: inherit;
+}
+.cz-section-reset:hover { color: #c44; }
+.cz-section-desc {
+  font-size: 13px;
+  color: #666;
+  margin: 0;
+  flex-basis: 100%;  /* force onto its own row inside .cz-section-head flexbox */
+}
+
+/* ── Controls (left column) ──────────────────────────────── */
+.cz-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cz-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.cz-row label {
+  flex: 1;
+  font-size: 14px;
+  color: #444;
+}
+
+/* Native color picker — reskinned to match the minimal aesthetic */
+input[type="color"].cz-color {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 36px;
+  height: 28px;
+  border: 1px solid #ccc;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+}
+input[type="color"].cz-color::-webkit-color-swatch-wrapper {
+  padding: 2px;
+}
+input[type="color"].cz-color::-webkit-color-swatch {
+  border: none;
+}
+
+/* Hex value next to the swatch */
+.cz-hex {
+  width: 92px;
+  font-family: ui-monospace, "JetBrains Mono", "Menlo", monospace;
+  font-size: 13px;
+  border: 1px solid #ccc;
+  border-radius: 0;
+  padding: 5px 8px;
+  background: #fff;
+  color: #222;
+}
+
+/* ── Preview panel (right column) ────────────────────────── */
+.cz-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
+}
+.cz-preview-label {
+  font-size: 12px;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.cz-preview-frame {
+  background: #fafafa;
+  border: 1px solid #e6e6e6;
+  padding: 16px;
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Storage cleanup section ─────────────────────────────── */
+.cz-cleanup {
+  margin: 32px 0 0;
+  padding: 16px 20px;
+  background: #fafafa;
+  border: 1px solid #e6e6e6;
+}
+.cz-cleanup-summary {
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--heading-color, #222);
+  font-family: var(--font-heading, inherit);
+}
+.cz-cleanup-desc {
+  font-size: 13px;
+  color: #666;
+  margin: 12px 0;
+  line-height: 1.5;
+}
+.cz-cleanup-actions {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.cz-cleanup-output {
+  font-family: ui-monospace, "JetBrains Mono", "Menlo", monospace;
+  font-size: 12px;
+  background: #fff;
+  border: 1px solid #e6e6e6;
+  padding: 10px;
+  margin: 0;
+  max-height: 200px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  color: #444;
+}
+.cz-cleanup-output:empty { display: none; }
+
+/* ── Footer actions (sticky bar) ─────────────────────────── */
+.cz-footer {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  padding: 14px 0;
+  margin-top: 24px;
+  background: linear-gradient(to bottom, transparent 0, var(--bg-color, #fff) 22px);
+}
+.cz-btn {
+  font-family: var(--font-body, 'Times New Roman', Times, serif);
+  font-size: 15px;
+  padding: 8px 22px;
+  border: 1px solid #222;
+  background: #fff;
+  color: #222;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.cz-btn:hover {
+  background: #222;
+  color: #fff;
+}
+.cz-btn-primary {
+  background: #222;
+  color: #fff;
+}
+.cz-btn-primary:hover {
+  background: #000;
+}
+/* `<a>` tags styled as cz-btn need extra normalisation */
+.cz-btn-link {
+  text-decoration: none;
+  display: inline-block;
+  text-align: center;
+  line-height: normal;
+}
+.cz-btn[disabled] {
+  opacity: 0.4;
+  cursor: default;
+  background: #fff;
+  color: #222;
+}
+
+.cz-saved-msg {
+  align-self: center;
+  font-size: 13px;
+  color: #2a8f2a;
+  margin-right: auto;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.cz-saved-msg.visible { opacity: 1; }
+
+/* ── Select dropdown (for fonts) ─────────────────────────── */
+.cz-select {
+  flex: 1;
+  font-family: inherit;
+  font-size: 14px;
+  padding: 6px 30px 6px 10px;
+  border: 1px solid #ccc;
+  background: #fff;
+  color: #222;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%23666' stroke-width='1.4'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  cursor: pointer;
+}
+.cz-select:focus {
+  outline: none;
+  border-color: var(--brand-color, #009afa);
+}
+
+/* ── Mosaic empty-day mode panes (mirror bg-pane structure) ── */
+.cz-mosaic-empty-pane { display: none; flex-direction: column; gap: 12px; }
+.cz-mosaic-empty-pane.cz-pane-active { display: flex; }
+.cz-mosaic-empty-pane[data-pane="color"].cz-pane-active {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+
+/* ── Toggle (checkbox styled as switch-like row) ─────────── */
+.cz-toggle-row {
+  justify-content: space-between;
+}
+.cz-toggle-label {
+  flex: 1;
+  font-size: 14px;
+  color: #444;
+  cursor: pointer;
+}
+.cz-toggle {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--brand-color, #009afa);
+  cursor: pointer;
+}
+
+/* ── Font preview pane ───────────────────────────────────── */
+.preview-mini-fonts {
+  width: 100%;
+  text-align: left;
+  padding: 12px 16px;
+}
+.preview-mini-heading {
+  font-family: var(--font-heading, var(--font-body, 'Times New Roman', Times, serif));
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 10px;
+  color: var(--heading-color, #222);
+  line-height: 1.2;
+}
+.preview-mini-body {
+  font-family: var(--font-body, 'Times New Roman', Times, serif);
+  font-size: 16px;
+  margin: 0;
+  color: var(--text-color, #222);
+  line-height: 1.5;
+}
+.preview-mini-notes-label {
+  font-family: var(--font-body, 'Times New Roman', Times, serif);
+  font-size: 11px;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 14px;
+  margin-bottom: 4px;
+}
+.preview-mini-notes {
+  /* Mirrors the .wysiwyg-editor / textarea rule: --font-notes is unset
+     by default → falls back to Times. The toggle controls --font-notes. */
+  font-family: var(--font-notes, 'Times New Roman', Times, serif);
+  font-size: 15px;
+  color: var(--text-color, #222);
+  border: 1px solid #ddd;
+  padding: 8px 10px;
+  background: #fafafa;
+  line-height: 1.5;
+}
+
+/* ── Background type toggle ──────────────────────────────── */
+.cz-bg-type-toggle {
+  display: inline-flex;
+  border: 1px solid #ccc;
+  border-radius: 0;
+  overflow: hidden;
+}
+.cz-bg-type-btn {
+  background: #fff;
+  border: none;
+  padding: 6px 14px;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  border-right: 1px solid #ccc;
+  color: #444;
+  transition: background 0.12s, color 0.12s;
+}
+.cz-bg-type-btn:last-child { border-right: none; }
+.cz-bg-type-btn:hover { background: #f4f4f4; }
+.cz-bg-type-btn.active {
+  background: #222;
+  color: #fff;
+}
+
+/* Show only the pane matching the active type */
+.cz-bg-pane { display: none; flex-direction: column; gap: 12px; }
+.cz-bg-pane.cz-pane-active { display: flex; }
+.cz-bg-pane[data-pane="color"].cz-pane-active { display: flex; flex-direction: row; align-items: center; gap: 12px; }
+
+/* Range slider: stripped down, monochrome */
+.cz-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1;
+  height: 4px;
+  background: #ddd;
+  outline: none;
+  cursor: pointer;
+}
+.cz-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  background: #222;
+  border-radius: 50%;
+  cursor: pointer;
+}
+.cz-slider::-moz-range-thumb {
+  width: 14px; height: 14px;
+  background: #222;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+}
+.cz-slider-val {
+  width: 56px;
+  text-align: right;
+  font-family: ui-monospace, "JetBrains Mono", "Menlo", monospace;
+  font-size: 12px;
+  color: #666;
+}
+
+/* Small in-row buttons (file upload trigger / delete) */
+.cz-btn-small {
+  font-family: var(--font-body, 'Times New Roman', Times, serif);
+  font-size: 13px;
+  padding: 5px 14px;
+  border: 1px solid #222;
+  background: #fff;
+  color: #222;
+  cursor: pointer;
+}
+.cz-btn-small:hover {
+  background: #222;
+  color: #fff;
+}
+.cz-btn-small:disabled {
+  opacity: 0.4;
+  cursor: default;
+  background: #fff;
+  color: #222;
+}
+.cz-btn-warn { border-color: #c44; color: #c44; }
+.cz-btn-warn:hover { background: #c44; color: #fff; }
+
+.cz-current-file {
+  font-family: ui-monospace, "JetBrains Mono", "Menlo", monospace;
+  font-size: 12px;
+  color: #888;
+}
+
+/* Page sample preview frame — show actual rendered bg variables on a
+   miniature canvas so the user can see the effect without scrolling. */
+.cz-bg-preview-frame {
+  min-height: 180px;
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-color, #fff);
+  border: 1px solid #e6e6e6;
+  padding: 0;
+}
+.cz-bg-preview-frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background-image: var(--bg-image, none);
+  background-size: var(--bg-size, cover);
+  background-position: var(--bg-position, center);
+  background-repeat: var(--bg-repeat, no-repeat);
+  filter: blur(var(--bg-image-blur, 0px));
+  opacity: var(--bg-image-opacity, 1);
+}
+.cz-bg-preview-frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: var(--bg-overlay, transparent);
+}
+.cz-bg-preview-frame .cz-bg-preview-text {
+  position: relative;
+  z-index: 3;
+  padding: 24px;
+  text-align: center;
+  font-family: var(--font-body, 'Times New Roman', Times, serif);
+  color: var(--text-color, #222);
+  font-size: 16px;
+}
+.cz-bg-preview-frame .cz-bg-preview-link {
+  color: var(--brand-color, #009afa);
+  text-decoration: none;
+}
+
+/* ── Mini-preview specifics ──────────────────────────────── */
+/* Mini calendar uses fluid columns + aspect-ratio cubes so the 3-month
+   grid always fits the preview frame regardless of frame width. */
+.preview-mini-calendar {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  width: 100%;
+  max-width: 320px;
+  margin: 0 auto;
+}
+.preview-mini-month {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px;
+}
+.preview-mini-cube {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background: var(--cube-empty-color, #fff);
+  border: 1px solid var(--cube-border-color, #000);
+  box-sizing: border-box;
+}
+.preview-mini-cube.filled {
+  background: var(--cube-filled-color, #000);
+}
+.preview-mini-cube.today {
+  border: 2px solid var(--cube-today-color, #0080ff);
+}
+
+.preview-mini-header {
+  display: flex;
+  gap: 16px;
+  font-family: var(--font-body, 'Times New Roman', Times, serif);
+  font-size: 16px;
+  width: 100%;
+  justify-content: center;
+}
+.preview-mini-link {
+  color: var(--text-color, #222);
+  text-decoration: none;
+}
+.preview-mini-link.active {
+  color: var(--brand-color, #009afa);
+}
+
+.preview-mini-canvas {
+  width: 100%;
+  height: 200px;
+  display: block;
+}
+
+.preview-mini-svg {
+  width: 100%;
+  height: 140px;
+  display: block;
+}

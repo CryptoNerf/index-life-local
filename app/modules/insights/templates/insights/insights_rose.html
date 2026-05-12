@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="{{ current_lang }}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -27,22 +27,24 @@
       dominant-baseline: middle;
     }
   </style>
+  {{ customization_css }}
 </head>
 <body>
   <header class="main-header">
     <nav class="top-menu">
-      <a href="{{ url_for('main.mood_grid') }}" class="menu-link">index.life</a>
-      <a href="{{ url_for('main.life_calendar') }}" class="menu-link">life in weeks</a>
-      <a href="{{ url_for('insights.insights_page') }}" class="menu-link active-link">insights</a>
+      <a href="{{ url_for('main.mood_grid') }}" class="menu-link">{{ t('nav.mood_grid') }}</a>
+      <a href="{{ url_for('main.life_calendar') }}" class="menu-link">{{ t('nav.life_calendar') }}</a>
+      <a href="{{ url_for('insights.insights_page') }}" class="menu-link active-link">{{ t('nav.insights') }}</a>
       {% if module_active('assistant') %}
-        <a href="{{ url_for('assistant.chat') }}" class="menu-link">ai psychologist</a>
+        <a href="{{ url_for('assistant.chat') }}" class="menu-link">{{ t('nav.assistant') }}</a>
       {% endif %}
       {% if module_active('deep_mind') %}
-        <a href="{{ url_for('deep_mind.neural_map') }}" class="menu-link">neural map</a>
+        <a href="{{ url_for('deep_mind.neural_map') }}" class="menu-link">{{ t('nav.deep_mind') }}</a>
       {% endif %}
-      <a href="{{ url_for('main.account') }}" class="menu-link">account</a>
-      <a href="{{ url_for('sync.sync_page') }}" class="menu-link">sync</a>
-      <a href="{{ url_for('modules.modules_page') }}" class="menu-link">modules</a>
+      <a href="{{ url_for('main.account') }}" class="menu-link">{{ t('nav.account') }}</a>
+      <a href="{{ url_for('sync.sync_page') }}" class="menu-link">{{ t('nav.sync') }}</a>
+      <a href="{{ url_for('modules.modules_page') }}" class="menu-link">{{ t('nav.modules') }}</a>
+      {% if module_active('customization') %}<a href="{{ url_for('customization.settings') }}" class="menu-link">{{ t('nav.customize') }}</a>{% endif %}
     </nav>
   </header>
 
@@ -66,13 +68,13 @@
           <circle cx="{{ cx }}" cy="{{ cy }}" r="{{ c.r }}" class="rose-ref"/>
         {% endfor %}
 
-        {# Petals #}
+        {# Petals — fill colour from CSS, opacity = data signal. #}
         {% for p in petals %}
           {% if p.has_data %}
             <path d="M {{ p.points[0][0] }} {{ p.points[0][1] }}
                      {% for pt in p.points[1:] %}L {{ pt[0] }} {{ pt[1] }} {% endfor %}Z"
                   class="rose-petal"
-                  fill="rgba(0,0,0,{{ p.fill_opacity }})">
+                  fill-opacity="{{ p.fill_opacity }}">
               <title>{{ p.name }} · {{ p.count }} entries · avg {{ '%.2f'|format(p.avg) }}/10</title>
             </path>
           {% else %}

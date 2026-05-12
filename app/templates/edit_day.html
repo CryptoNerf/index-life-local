@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="{{ current_lang }}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>my day index</title>
+  <title>{{ t('edit_day.title') }}</title>
   <meta property="og:title" content="index.life" />
   <meta property="og:description" content="mood book" />
   <meta property="og:type" content="website" />
@@ -28,26 +28,28 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/tiptap-custom.css') }}">
   <script src="{{ url_for('static', filename='js/tiptap-bundle.js') }}"></script>
   <script src="{{ url_for('static', filename='js/tiptap-editor-init.js') }}"></script>
+  {{ customization_css }}
 </head>
 <body>
   <header class="main-header">
     <nav class="top-menu">
-      <a href="{{ url_for('main.mood_grid') }}" class="menu-link active-link">index.life</a>
-      <a href="{{ url_for('main.life_calendar') }}" class="menu-link">life in weeks</a>
-      {% if module_active('insights') %}<a href="{{ url_for('insights.insights_page') }}" class="menu-link">insights</a>{% endif %}
+      <a href="{{ url_for('main.mood_grid') }}" class="menu-link active-link">{{ t('nav.mood_grid') }}</a>
+      <a href="{{ url_for('main.life_calendar') }}" class="menu-link">{{ t('nav.life_calendar') }}</a>
+      {% if module_active('insights') %}<a href="{{ url_for('insights.insights_page') }}" class="menu-link">{{ t('nav.insights') }}</a>{% endif %}
       {% if module_active('assistant') %}
-        <a href="{{ url_for('assistant.chat') }}" class="menu-link">ai psychologist</a>
+        <a href="{{ url_for('assistant.chat') }}" class="menu-link">{{ t('nav.assistant') }}</a>
       {% endif %}
       {% if module_active('deep_mind') %}
-        <a href="{{ url_for('deep_mind.neural_map') }}" class="menu-link">neural map</a>
+        <a href="{{ url_for('deep_mind.neural_map') }}" class="menu-link">{{ t('nav.deep_mind') }}</a>
       {% endif %}
-      <a href="{{ url_for('main.account') }}" class="menu-link">account</a>
-      <a href="{{ url_for('sync.sync_page') }}" class="menu-link">sync</a>
-      <a href="{{ url_for('modules.modules_page') }}" class="menu-link">modules</a>
+      <a href="{{ url_for('main.account') }}" class="menu-link">{{ t('nav.account') }}</a>
+      <a href="{{ url_for('sync.sync_page') }}" class="menu-link">{{ t('nav.sync') }}</a>
+      <a href="{{ url_for('modules.modules_page') }}" class="menu-link">{{ t('nav.modules') }}</a>
+      {% if module_active('customization') %}<a href="{{ url_for('customization.settings') }}" class="menu-link">{{ t('nav.customize') }}</a>{% endif %}
     </nav>
   </header>
   <div class="center-content">
-    <h1 class="header" style="font-weight:normal;">my day index</h1>
+    <h1 class="header" style="font-weight:normal;">{{ t('edit_day.header') }}</h1>
     <p class="date-display">{{ day.strftime('%Y-%m-%d') }}</p>
     
     <!-- Error message display -->
@@ -66,48 +68,48 @@
         {% endfor %}
       </div>
       <input type="hidden" name="rating" id="rating-input" value="{{ entry.rating if entry else '' }}">
-      <div><p style="font-size:20px;">my day comment</p></div>
+      <div><p style="font-size:20px;">{{ t('edit_day.comment_label') }}</p></div>
       <div class="textarea-block">
         <!-- Formatting toolbar -->
         <div class="formatting-toolbar">
-          <button type="button" class="format-btn" data-format="bold" title="Bold (Ctrl+B)">
+          <button type="button" class="format-btn" data-format="bold" title="{{ t('edit_day.fmt_bold') }}">
             <strong>B</strong>
           </button>
-          <button type="button" class="format-btn" data-format="italic" title="Italic (Ctrl+I)">
+          <button type="button" class="format-btn" data-format="italic" title="{{ t('edit_day.fmt_italic') }}">
             <em>I</em>
           </button>
-          <button type="button" class="format-btn" data-format="h1" title="Heading 1">
+          <button type="button" class="format-btn" data-format="h1" title="{{ t('edit_day.fmt_h1') }}">
             H1
           </button>
-          <button type="button" class="format-btn" data-format="h2" title="Heading 2">
+          <button type="button" class="format-btn" data-format="h2" title="{{ t('edit_day.fmt_h2') }}">
             H2
           </button>
-          <button type="button" class="format-btn" data-format="h3" title="Heading 3">
+          <button type="button" class="format-btn" data-format="h3" title="{{ t('edit_day.fmt_h3') }}">
             H3
           </button>
-          <button type="button" class="format-btn" data-format="list" title="Bullet List">
+          <button type="button" class="format-btn" data-format="list" title="{{ t('edit_day.fmt_list') }}">
             • List
           </button>
-          <button type="button" class="format-btn" data-format="numbered" title="Numbered List">
+          <button type="button" class="format-btn" data-format="numbered" title="{{ t('edit_day.fmt_numbered') }}">
             1. List
           </button>
-          <button type="button" class="format-btn" data-format="link" title="Link">
+          <button type="button" class="format-btn" data-format="link" title="{{ t('edit_day.fmt_link') }}">
             Link
           </button>
-          <button type="button" class="format-btn" data-format="quote" title="Quote">
+          <button type="button" class="format-btn" data-format="quote" title="{{ t('edit_day.fmt_quote') }}">
             "
           </button>
-          <button type="button" class="format-btn" data-format="strike" title="Strikethrough (Ctrl+Shift+X)">
+          <button type="button" class="format-btn" data-format="strike" title="{{ t('edit_day.fmt_strike') }}">
             <s>S</s>
           </button>
-          <button type="button" class="format-btn" data-format="code" title="Inline Code (Ctrl+E)">
+          <button type="button" class="format-btn" data-format="code" title="{{ t('edit_day.fmt_code') }}">
             &lt;/&gt;
           </button>
-          <button type="button" class="format-btn" data-format="hr" title="Horizontal Rule">
+          <button type="button" class="format-btn" data-format="hr" title="{{ t('edit_day.fmt_hr') }}">
             ―
           </button>
           {% if module_active('voice') %}
-            <button type="button" class="mic-btn" id="voice-mic-btn" title="Voice dictation">
+            <button type="button" class="mic-btn" id="voice-mic-btn" title="{{ t('edit_day.voice_mic') }}">
               mic.
             </button>
           {% endif %}
@@ -117,8 +119,8 @@
         <!-- Tiptap editor container -->
         <div id="tiptap-editor" class="tiptap-editor"></div>
       </div>
-      <p style="font-size: 13px; color: #888; margin-bottom: 16px;">markdown supported</p>
-      <button class="save-btn" type="submit">save</button>
+      <p style="font-size: 13px; color: #888; margin-bottom: 16px;">{{ t('edit_day.markdown_supported') }}</p>
+      <button class="save-btn" type="submit">{{ t('edit_day.save') }}</button>
     </form>
   </div>
 
@@ -127,14 +129,17 @@
   <div style="text-align: center; margin-top: 60px; margin-bottom: 20px;">
     <form id="delete-form" method="post" action="{{ url_for('main.delete_day', day=day.strftime('%Y-%m-%d')) }}" style="display: inline;">
       <button type="button" onclick="confirmDelete()" style="background: none; border: none; color: #999; font-size: 14px; cursor: pointer; text-decoration: none; padding: 8px;">
-        kill a note
+        {{ t('edit_day.kill_note') }}
       </button>
     </form>
   </div>
   {% endif %}
   <script>
+    var KILL_CONFIRM = {{ t('edit_day.kill_confirm')|tojson }};
+    var RATING_REQUIRED = {{ t('edit_day.rating_required')|tojson }};
+    var TIPTAP_PLACEHOLDER = {{ t('edit_day.placeholder')|tojson }};
     function confirmDelete() {
-      if (confirm('Are you sure you want to kill the note?')) {
+      if (confirm(KILL_CONFIRM)) {
         try {
           localStorage.removeItem(`draft:{{ day.strftime('%Y-%m-%d') }}`);
         } catch(e) {}
@@ -234,7 +239,7 @@
     // Initialize Tiptap editor
     tiptapEditor = window.TiptapEditorUtils.initTiptapEditor({
       elementId: 'tiptap-editor',
-      placeholderText: 'Write your note here...',
+      placeholderText: TIPTAP_PLACEHOLDER,
       initialContent: contentToLoad,
       onUpdate: (markdown, editor) => {
         noteTextarea.value = markdown;
@@ -282,7 +287,7 @@
         errorDiv.style.borderLeft = '4px solid #f44';
         errorDiv.style.borderRadius = '4px';
         errorDiv.style.color = '#c00';
-        errorDiv.innerHTML = '<p style="margin: 5px 0;">Please select your day mood rating (1-10) before saving</p>';
+        errorDiv.innerHTML = '<p style="margin: 5px 0;">' + RATING_REQUIRED + '</p>';
         
         const form = this;
         form.parentNode.insertBefore(errorDiv, form);

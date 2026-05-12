@@ -1,53 +1,45 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="{{ current_lang }}">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>why?</title>
+    <title>{{ t('what_is_index.title') }}</title>
     <meta property="og:title" content="index.life" />
     <meta property="og:description" content="mood book" />
     <meta property="og:type" content="website" />
     <meta property="og:image" content="{{ url_for('static', filename='images/android-chrome-512x512.png', _external=True) }}" />
-    <!-- Основные favicon -->
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
     <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='images/favicon-16x16.png') }}">
     <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='images/favicon-32x32.png') }}">
-
-    <!-- iOS Safari (для добавления на рабочий стол iPhone) -->
     <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='images/apple-touch-icon.png') }}">
-
-    <!-- Android Chrome -->
     <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='images/android-chrome-192x192.png') }}">
     <link rel="icon" type="image/png" sizes="512x512" href="{{ url_for('static', filename='images/android-chrome-512x512.png') }}">
-
-    <!-- Web App Manifest (для PWA функций) -->
     <link rel="manifest" href="{{ url_for('static', filename='images/site.webmanifest') }}">
 
     <link rel="stylesheet" href="{{ url_for('static', filename='css/what_is_index.css') }}" />
-  </head>
+    {{ customization_css }}
+</head>
   <body>
     <header class="main-header">
     <nav class="top-menu">
-      <a href="{{ url_for('main.mood_grid') }}" class="menu-link">index.life</a>
-      <a href="{{ url_for('main.life_calendar') }}" class="menu-link">life in weeks</a>
-      {% if module_active('insights') %}<a href="{{ url_for('insights.insights_page') }}" class="menu-link">insights</a>{% endif %}
+      <a href="{{ url_for('main.mood_grid') }}" class="menu-link">{{ t('nav.mood_grid') }}</a>
+      <a href="{{ url_for('main.life_calendar') }}" class="menu-link">{{ t('nav.life_calendar') }}</a>
+      {% if module_active('insights') %}<a href="{{ url_for('insights.insights_page') }}" class="menu-link">{{ t('nav.insights') }}</a>{% endif %}
       {% if module_active('assistant') %}
-        <a href="{{ url_for('assistant.chat') }}" class="menu-link">ai psychologist</a>
+        <a href="{{ url_for('assistant.chat') }}" class="menu-link">{{ t('nav.assistant') }}</a>
       {% endif %}
       {% if module_active('deep_mind') %}
-        <a href="{{ url_for('deep_mind.neural_map') }}" class="menu-link">neural map</a>
+        <a href="{{ url_for('deep_mind.neural_map') }}" class="menu-link">{{ t('nav.deep_mind') }}</a>
       {% endif %}
-      <a href="{{ url_for('main.account') }}" class="menu-link">account</a>
-      <a href="{{ url_for('sync.sync_page') }}" class="menu-link">sync</a>
-      <a href="{{ url_for('modules.modules_page') }}" class="menu-link">modules</a>
+      <a href="{{ url_for('main.account') }}" class="menu-link">{{ t('nav.account') }}</a>
+      <a href="{{ url_for('sync.sync_page') }}" class="menu-link">{{ t('nav.sync') }}</a>
+      <a href="{{ url_for('modules.modules_page') }}" class="menu-link">{{ t('nav.modules') }}</a>
+      {% if module_active('customization') %}<a href="{{ url_for('customization.settings') }}" class="menu-link">{{ t('nav.customize') }}</a>{% endif %}
     </nav>
     </header>
-  <h1 style="margin-top:64px;">What is index.life?</h1>
-  <div class="lang-switch">
-      <a href="#" onclick="showLang('en'); return false;">en</a> /
-      <a href="#" onclick="showLang('ru'); return false;">ru</a>
-    </div>
-    <div id="text-block-en" class="text-block">
+  <h1 style="margin-top:64px;">{{ t('what_is_index.heading') }}</h1>
+    <div class="text-block">
+      {% if current_lang == 'en' %}
       Index.life is a local diary application created by <a href="https://cryptonerf.github.io/portfolio/" target="_blank" rel="noopener noreferrer">Emile
       Alexanyan</a> so that he could better remember and understand himself. But
       more importantly, index.life is an idea — the idea that it's useful to
@@ -60,17 +52,11 @@
       The calendar design is inspired by a heatmap.
       I noticed that such a grid motivates me not to skip days and to fill in
       every single one.
-    </div>
-    <div id="text-block-ru" class="text-block" style="display:none;">
+      {% else %}
       Index.life — это локальное приложение-дневник, созданное <a href="https://cryptonerf.github.io/portfolio/" target="_blank" rel="noopener noreferrer">Эмилем Алексаняном</a>, чтобы лучше помнить и понимать себя. Но что важнее index.life это идея того, что полезно иметь место в котором вы пишете что думаете и чувствуете о своём дне.<br />
       Часто в течении жизни я ловил себя на мысли, что не помню что было даже на этой неделе, день сменяет другой день и так бесконечно. Всё будто одинаковое. И index.life это возможность посмотреть на свои записки и оценки проходящих дней чтобы сделать выводы и подумать над этим.<br />
       Дизайн календаря вдохновлён heatmap-сеткой. Я заметил, что такая сетка мотивирует меня не пропускать дни и заполнять каждый из них.
+      {% endif %}
     </div>
-    <script>
-    function showLang(lang) {
-      document.getElementById('text-block-en').style.display = (lang === 'en') ? '' : 'none';
-      document.getElementById('text-block-ru').style.display = (lang === 'ru') ? '' : 'none';
-    }
-    </script>
   </body>
 </html>

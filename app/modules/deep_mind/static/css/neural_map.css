@@ -1,11 +1,11 @@
 /* neural_map.css — organic/biological neuron style, Canvas renderer */
 
 body {
-  font-family: 'Times New Roman', Times, serif;
-  background: #fafafa;
+  font-family: var(--font-body, 'Times New Roman', Times, serif);
+  background-color: var(--bg-color, #fafafa);
   margin: 0;
   padding: 0;
-  color: #000;
+  color: var(--text-color, #000);
 }
 
 /* ── Navigation (matches other pages) ── */
@@ -29,12 +29,12 @@ body {
   }
 }
 .menu-link {
-  color: #222;
+  color: var(--text-color, #222);
   text-decoration: none;
-  font-family: 'Times New Roman', Times, serif;
+  font-family: inherit;
 }
 .menu-link:hover { text-decoration: underline; }
-.active-link { color: #009AFA; }
+.active-link { color: var(--brand-color, #009AFA); }
 
 /* ── Status bar ── */
 .status-bar {

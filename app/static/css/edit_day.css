@@ -3,8 +3,9 @@ html, body {
   height: 100%;
 }
 body {
-  font-family: 'Times New Roman', Times, serif;
-  background: #fff;
+  font-family: var(--font-body, 'Times New Roman', Times, serif);
+  background-color: var(--bg-color, #fff);
+  color: var(--text-color, #000);
   margin: 0;
   padding: 0;
   min-height: 100vh;
@@ -60,7 +61,7 @@ header {
 }
 
 .menu-link {
-  color: #222;
+  color: var(--text-color, #222);
   text-decoration: none;
   font-family: inherit;
   transition: color 0.2s;
@@ -69,7 +70,7 @@ header {
   text-decoration: underline;
 }
 .active-link {
-  color: #009AFA;
+  color: var(--brand-color, #009AFA);
 }
 
 /* Make header fixed and add top padding to body */
@@ -149,7 +150,10 @@ textarea {
   width: 100%;
   height: 100px;
   max-height: 400px;
-  font-family: 'Times New Roman', Times, serif;
+  /* When customization toggle "Apply font to notes" is on, --font-notes
+     is set by the context processor to the chosen body font. Otherwise
+     it stays unset and the Times fallback wins (historic look). */
+  font-family: var(--font-notes, 'Times New Roman', Times, serif);
   font-size: 20px;
   border: 1px solid #222;
   border-top: none;
@@ -245,7 +249,7 @@ textarea {
   width: 100%;
   min-height: 150px;
   max-height: 400px;
-  font-family: 'Times New Roman', Times, serif;
+  font-family: var(--font-notes, 'Times New Roman', Times, serif);
   font-size: 20px;
   border: 1px solid #222;
   border-top: none;
@@ -327,7 +331,7 @@ textarea {
   width: 100%;
   min-height: 100px;
   max-height: 400px;
-  font-family: 'Times New Roman', Times, serif;
+  font-family: var(--font-notes, 'Times New Roman', Times, serif);
   font-size: 20px;
   border: 1px solid #222;
   padding: 8px;

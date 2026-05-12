@@ -420,6 +420,33 @@ def account():
                          current_year=date.today().year)
 
 
+@bp.route('/account/language', methods=['POST'])
+def set_language():
+    """Save the user's interface language preference.
+
+    Single-user app: writes the new code straight onto the
+    UserProfile row. The i18n context processor reads it on the next
+    request render, so a redirect back to /account is enough.
+    """
+    from app.i18n import SUPPORTED_LANGS
+    lang = (request.form.get('language') or '').strip().lower()
+    if lang not in SUPPORTED_LANGS:
+        flash('Unsupported language', 'error')
+        return redirect(url_for('main.account'))
+
+    profile = UserProfile.query.first()
+    if profile is None:
+        profile = UserProfile(username='User', email='')
+        db.session.add(profile)
+    profile.language = lang
+    try:
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        flash(f'Could not save language: {exc}', 'error')
+    return redirect(url_for('main.account'))
+
+
 @bp.route('/what_is_index')
 def what_is_index():
     """Information page about the application"""

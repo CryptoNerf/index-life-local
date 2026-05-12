@@ -1,6 +1,7 @@
 body {
-  font-family: 'Times New Roman', Times, serif;
-  background: #fff;
+  font-family: var(--font-body, 'Times New Roman', Times, serif);
+  background-color: var(--bg-color, #fff);
+  color: var(--text-color, #000);
   margin: 0;
   padding: 0;
   display: flex;
@@ -55,7 +56,7 @@ body {
   }
 }
 .menu-link {
-  color: #222;
+  color: var(--text-color, #222);
   text-decoration: none;
   font-family: inherit;
   transition: color 0.2s;
@@ -64,7 +65,7 @@ body {
   text-decoration: underline;
 }
 .active-link {
-  color: #009AFA;
+  color: var(--brand-color, #009AFA);
 }
 
 /* ========== Toolbar ========== */

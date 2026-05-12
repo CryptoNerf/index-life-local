@@ -60,12 +60,13 @@ html, body {
 }
 
 .back-link:hover {
-  color: #009AFA;
+  color: var(--brand-color, #009AFA);
 }
 
 .insights-title {
   font-size: 28px;
-  color: #222;
+  color: var(--heading-color, #222);
+  font-family: var(--font-heading, inherit);
   margin: 0;
   font-weight: normal;
 }
@@ -100,13 +101,14 @@ html, body {
   display: flex;
   flex-direction: column;
   padding: 20px;
-  border: 1px solid #222;
-  background: #fff;
-  color: #222;
+  border: 1px solid var(--text-color, #222);
+  background: var(--bg-color, #fff);
+  color: var(--text-color, #222);
   text-decoration: none;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
   cursor: pointer;
 }
+
 
 .viz-card:not(.disabled):hover {
   transform: translateY(-2px);
@@ -120,12 +122,12 @@ html, body {
 }
 
 .soon-tag.needs-ai {
-  color: #009AFA;
+  color: var(--brand-color, #009AFA);
   opacity: 1;
 }
 
 .inline-link {
-  color: #009AFA;
+  color: var(--brand-color, #009AFA);
   text-decoration: none;
 }
 
@@ -146,12 +148,20 @@ html, body {
 .viz-preview svg {
   max-width: 100%;
   max-height: 100%;
+  /* Setting `color:` here lets the inline SVG miniatures pick up the
+     theme's chart-color via `stroke="currentColor"` / `fill="currentColor"`
+     (SVG presentation attributes don't support var(), but currentColor
+     is inherited from the CSS color property). Data-encoded
+     `rgba(0,0,0,X)` values are intentionally NOT themed because their
+     meaning is *intensity*, not theme colour. */
+  color: var(--chart-color, #000);
 }
 
 .viz-card-title {
   font-size: 19px;
   margin: 0 0 6px;
-  color: #222;
+  color: var(--heading-color, #222);
+  font-family: var(--font-heading, inherit);
 }
 
 .viz-card-desc {
@@ -177,7 +187,8 @@ html, body {
 
 .chart-title {
   font-size: 18px;
-  color: #222;
+  color: var(--heading-color, #222);
+  font-family: var(--font-heading, inherit);
   margin: 0 0 16px;
 }
 
@@ -197,19 +208,28 @@ html, body {
   min-width: 900px;
 }
 
-/* ── SVG primitives ── */
+/* ── SVG primitives ──
+   Chart-relevant strokes/fills route through `--chart-color` and
+   `--chart-grid-color` so the customization module's color pickers
+   actually move them. Originals are kept as fallbacks: when the
+   module is inactive (or user hasn't picked a chart color), every
+   line below renders exactly as it did before customization. */
 .axis {
-  stroke: #222;
+  stroke: var(--chart-color, #222);
   stroke-width: 1;
   fill: none;
 }
 
 .axis-faint {
-  stroke: #c8c8c8;
+  stroke: var(--chart-grid-color, #c8c8c8);
   stroke-width: 1;
   fill: none;
 }
 
+/* Axis text labels stay in their original muted greys regardless of
+   chart-color choice — readable hierarchy comes from making LABELS
+   subdued vs. DATA prominent. Theming the labels too would just make
+   them yell over the actual chart data. */
 .axis-label {
   font-size: 11px;
   fill: #888;
@@ -229,30 +249,33 @@ html, body {
 }
 
 .bar {
-  fill: #000;
+  fill: var(--chart-color, #000);
 }
 
 /* ── River ── */
 .river-line {
   fill: none;
-  stroke: #000;
+  stroke: var(--chart-color, #000);
   stroke-width: 1.6;
   stroke-linejoin: round;
   stroke-linecap: round;
 }
 
 .river-area {
+  /* Soft fill under the river line. Not themed — keep at low opacity
+     black so the line itself (which IS themed) reads cleanly against
+     it for any chart-color the user picks. */
   fill: rgba(0, 0, 0, 0.08);
   stroke: none;
 }
 
 .river-raw-dot {
-  fill: #000;
+  fill: var(--chart-color, #000);
   opacity: 0.35;
 }
 
 .today-line {
-  stroke: #009AFA;
+  stroke: var(--brand-color, #009AFA);
   stroke-width: 1.4;
   stroke-dasharray: 3 3;
 }
@@ -272,11 +295,14 @@ html, body {
 
 .spiral-guide {
   fill: none;
-  stroke: #d8d8d8;
+  stroke: var(--chart-grid-color, #d8d8d8);
   stroke-width: 1;
 }
 
 .spiral-dot {
+  /* Fill follows --chart-color so the user can recolour the heatmap;
+     fill-opacity (set inline per dot) carries the rating signal. */
+  fill: var(--chart-color, #000);
   stroke: none;
 }
 
@@ -292,7 +318,7 @@ html, body {
 
 .spiral-today {
   fill: none;
-  stroke: #009AFA;
+  stroke: var(--brand-color, #009AFA);
   stroke-width: 1.6;
 }
 
@@ -324,16 +350,26 @@ html, body {
 }
 
 /* ── Heatmap ── */
+/* All these classes paint a single colour at a data-driven opacity.
+   fill colour follows --chart-color; the inline `fill-opacity="..."`
+   in each rect/path carries the rating signal. Class CSS rule wins
+   over the SVG `fill="..."` presentation attribute, so the legacy
+   inline-rgba approach has been removed from the templates. */
+.rhythm-cell, .rose-petal, .heat-cell {
+  fill: var(--chart-color, #000);
+}
 .heat-cell { stroke: none; }
 
 .heat-empty {
-  fill: #fff;
-  stroke: #d8d8d8;
+  /* Empty heatmap cell — pairs with the calendar's empty cube so a
+     theme that themes one feels coherent applied to the other. */
+  fill: var(--cube-empty-color, #fff);
+  stroke: var(--chart-grid-color, #d8d8d8);
   stroke-width: 1;
 }
 
 .heat-today {
-  stroke: #009AFA;
+  stroke: var(--brand-color, #009AFA);
   stroke-width: 1.5;
 }
 
@@ -373,4 +409,4 @@ html, body {
 
 .year-link:hover { text-decoration: underline; }
 
-.year-link.active { color: #009AFA; }
+.year-link.active { color: var(--brand-color, #009AFA); }

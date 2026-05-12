@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="{{ current_lang }}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -32,8 +32,17 @@
       background: #fafafa;
       border: 1px solid #eee;
     }
+    /* Per-chart theming hooks — fill/stroke set here so the customization
+       layer (inline <style> after this block) can override via the
+       _CHART_OVERRIDE_MAP without touching the JS. Opacity is still
+       encoded per-datum via the `fill-opacity` attribute. */
     .az-circle {
       transition: stroke-width 0.12s;
+      stroke: rgba(0, 0, 0, 0.3);
+    }
+    .az-activity-circle,
+    .az-mention-circle {
+      fill: #000;
     }
     .az-label {
       font-family: 'Times New Roman', serif;
@@ -88,22 +97,24 @@
       font-size: 15px;
     }
   </style>
+  {{ customization_css }}
 </head>
 <body>
   <header class="main-header">
     <nav class="top-menu">
-      <a href="{{ url_for('main.mood_grid') }}" class="menu-link">index.life</a>
-      <a href="{{ url_for('main.life_calendar') }}" class="menu-link">life in weeks</a>
-      <a href="{{ url_for('insights.insights_page') }}" class="menu-link active-link">insights</a>
+      <a href="{{ url_for('main.mood_grid') }}" class="menu-link">{{ t('nav.mood_grid') }}</a>
+      <a href="{{ url_for('main.life_calendar') }}" class="menu-link">{{ t('nav.life_calendar') }}</a>
+      <a href="{{ url_for('insights.insights_page') }}" class="menu-link active-link">{{ t('nav.insights') }}</a>
       {% if module_active('assistant') %}
-        <a href="{{ url_for('assistant.chat') }}" class="menu-link">ai psychologist</a>
+        <a href="{{ url_for('assistant.chat') }}" class="menu-link">{{ t('nav.assistant') }}</a>
       {% endif %}
       {% if module_active('deep_mind') %}
-        <a href="{{ url_for('deep_mind.neural_map') }}" class="menu-link">neural map</a>
+        <a href="{{ url_for('deep_mind.neural_map') }}" class="menu-link">{{ t('nav.deep_mind') }}</a>
       {% endif %}
-      <a href="{{ url_for('main.account') }}" class="menu-link">account</a>
-      <a href="{{ url_for('sync.sync_page') }}" class="menu-link">sync</a>
-      <a href="{{ url_for('modules.modules_page') }}" class="menu-link">modules</a>
+      <a href="{{ url_for('main.account') }}" class="menu-link">{{ t('nav.account') }}</a>
+      <a href="{{ url_for('sync.sync_page') }}" class="menu-link">{{ t('nav.sync') }}</a>
+      <a href="{{ url_for('modules.modules_page') }}" class="menu-link">{{ t('nav.modules') }}</a>
+      {% if module_active('customization') %}<a href="{{ url_for('customization.settings') }}" class="menu-link">{{ t('nav.customize') }}</a>{% endif %}
     </nav>
   </header>
 
@@ -219,12 +230,16 @@
             .selectAll('circle')
             .data(root.descendants().slice(1))  // skip invisible root
             .join('circle')
-              .attr('class', 'az-circle')
-              .attr('fill', function (d) {
-                if (d.depth === 1) return 'rgba(0,0,0,' + shadeForDelta(d.data.delta) + ')';
-                return 'rgba(0,0,0,' + shadeForRating(d.data.rating) + ')';
+              .attr('class', function (d) {
+                // Per-depth class lets the theming layer pick a different
+                // fill for activities vs mentions; opacity is encoded via
+                // fill-opacity so the colour stays themable.
+                return 'az-circle ' + (d.depth === 1 ? 'az-activity-circle' : 'az-mention-circle');
               })
-              .attr('stroke', 'rgba(0,0,0,0.3)')
+              .attr('fill-opacity', function (d) {
+                if (d.depth === 1) return shadeForDelta(d.data.delta);
+                return shadeForRating(d.data.rating);
+              })
               .attr('stroke-width', 0.5)
               .style('cursor', 'pointer')  // every circle is clickable now
               .on('mouseover', function (event, d) {

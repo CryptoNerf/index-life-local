@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="{{ current_lang }}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>customize · index.life</title>
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='images/favicon-32x32.png') }}">
+  <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='images/apple-touch-icon.png') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/modules.css') }}">
+  <link rel="stylesheet" href="{{ url_for('customization.static', filename='css/settings.css') }}">
+  {{ customization_css }}
+</head>
+<body>
+  <header class="main-header">
+    <nav class="top-menu">
+      <a href="{{ url_for('main.mood_grid') }}" class="menu-link">{{ t('nav.mood_grid') }}</a>
+      <a href="{{ url_for('main.life_calendar') }}" class="menu-link">{{ t('nav.life_calendar') }}</a>
+      {% if module_active('insights') %}<a href="{{ url_for('insights.insights_page') }}" class="menu-link">{{ t('nav.insights') }}</a>{% endif %}
+      {% if module_active('assistant') %}<a href="{{ url_for('assistant.chat') }}" class="menu-link">{{ t('nav.assistant') }}</a>{% endif %}
+      {% if module_active('deep_mind') %}<a href="{{ url_for('deep_mind.neural_map') }}" class="menu-link">{{ t('nav.deep_mind') }}</a>{% endif %}
+      <a href="{{ url_for('main.account') }}" class="menu-link">{{ t('nav.account') }}</a>
+      <a href="{{ url_for('sync.sync_page') }}" class="menu-link">{{ t('nav.sync') }}</a>
+      <a href="{{ url_for('modules.modules_page') }}" class="menu-link">{{ t('nav.modules') }}</a>
+      <a href="{{ url_for('customization.settings') }}" class="menu-link active-link">{{ t('nav.customize') }}</a>
+    </nav>
+  </header>
+
+  <main class="cz-page">
+    <h1 class="cz-title">Customize</h1>
+    <p class="cz-subtitle">
+      {{ t('customization.intro') }}
+    </p>
+
+    <!-- ── 1. Page background ─────────────────────────────────── -->
+    <section class="cz-section" id="sec-bg">
+      <div>
+        <div class="cz-section-head">
+          <h2 class="cz-section-title">Page background</h2>
+          <button type="button" class="cz-section-reset" data-section="sec-bg">reset section</button>
+          <p class="cz-section-desc">{{ t('customization.bg_desc') }}</p>
+        </div>
+        <div class="cz-controls">
+          <div class="cz-row cz-bg-type-row">
+            <label>Type</label>
+            <div class="cz-bg-type-toggle" id="cz-bg-type-toggle">
+              <button type="button" class="cz-bg-type-btn" data-type="color">Color</button>
+              <button type="button" class="cz-bg-type-btn" data-type="gradient">Gradient</button>
+              <button type="button" class="cz-bg-type-btn" data-type="image">Image</button>
+            </div>
+          </div>
+
+          <!-- Solid color: bg-color -->
+          <div class="cz-row cz-bg-pane" data-pane="color">
+            <label for="cz-bg-color">Background color</label>
+            <input type="color" class="cz-color" id="cz-bg-color"
+                   data-key="bg-color" value="{{ current['bg-color'] }}">
+            <input type="text" class="cz-hex" data-hex-for="cz-bg-color"
+                   value="{{ current['bg-color'] }}">
+          </div>
+
+          <!-- Gradient: from / to / angle -->
+          <div class="cz-bg-pane" data-pane="gradient">
+            <div class="cz-row">
+              <label for="cz-grad-from">From</label>
+              <input type="color" class="cz-color" id="cz-grad-from"
+                     data-key="bg-gradient-from" value="{{ current['bg-gradient-from'] }}">
+              <input type="text" class="cz-hex" data-hex-for="cz-grad-from"
+                     value="{{ current['bg-gradient-from'] }}">
+            </div>
+            <div class="cz-row">
+              <label for="cz-grad-to">To</label>
+              <input type="color" class="cz-color" id="cz-grad-to"
+                     data-key="bg-gradient-to" value="{{ current['bg-gradient-to'] }}">
+              <input type="text" class="cz-hex" data-hex-for="cz-grad-to"
+                     value="{{ current['bg-gradient-to'] }}">
+            </div>
+            <div class="cz-row">
+              <label for="cz-grad-angle">Angle</label>
+              <input type="range" class="cz-slider" id="cz-grad-angle"
+                     min="0" max="360" step="15"
+                     data-key="bg-gradient-angle" data-unit="deg"
+                     value="{{ current['bg-gradient-angle']|replace('deg','') }}">
+              <span class="cz-slider-val" id="cz-grad-angle-val">{{ current['bg-gradient-angle'] }}</span>
+            </div>
+          </div>
+
+          <!-- Image: filename + blur + opacity -->
+          <div class="cz-bg-pane" data-pane="image">
+            <div class="cz-row">
+              <label>Image file</label>
+              <button type="button" class="cz-btn-small" id="cz-upload-trigger">Choose…</button>
+              <input type="file" id="cz-upload-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none">
+              <button type="button" class="cz-btn-small cz-btn-warn"
+                      id="cz-bg-image-clear"
+                      {% if not current['bg-image-filename'] %}disabled{% endif %}>Remove</button>
+            </div>
+            <div class="cz-row">
+              <span class="cz-current-file" id="cz-current-file">
+                {% if current['bg-image-filename'] %}{{ current['bg-image-filename'][:8] }}…{% else %}no image uploaded{% endif %}
+              </span>
+            </div>
+            <div class="cz-row">
+              <label for="cz-bg-blur">Blur</label>
+              <input type="range" class="cz-slider" id="cz-bg-blur"
+                     min="0" max="40" step="1"
+                     data-key="bg-image-blur" data-unit="px"
+                     value="{{ current['bg-image-blur']|replace('px','') }}">
+              <span class="cz-slider-val" id="cz-bg-blur-val">{{ current['bg-image-blur'] }}</span>
+            </div>
+            <div class="cz-row">
+              <label for="cz-bg-opacity">Opacity</label>
+              <input type="range" class="cz-slider" id="cz-bg-opacity"
+                     min="0" max="100" step="5"
+                     data-key="bg-image-opacity" data-unit="percent"
+                     value="{{ (current['bg-image-opacity']|float * 100)|int }}">
+              <span class="cz-slider-val" id="cz-bg-opacity-val">{{ (current['bg-image-opacity']|float * 100)|int }}%</span>
+            </div>
+            <div class="cz-row">
+              <label for="cz-bg-overlay">Overlay tint</label>
+              <input type="color" class="cz-color" id="cz-bg-overlay"
+                     data-key="bg-overlay"
+                     value="{{ current['bg-overlay'] if current['bg-overlay'].startswith('#') else '#000000' }}">
+              <input type="text" class="cz-hex" data-hex-for="cz-bg-overlay"
+                     value="{{ current['bg-overlay'] }}">
+            </div>
+            <p class="cz-section-desc" style="margin-top:6px">
+              {{ t('customization.overlay_desc') }}
+            </p>
+          </div>
+
+          <!-- Hidden field carrying the bg-image-filename so the save button
+               picks it up alongside the visible controls -->
+          <input type="hidden" id="cz-bg-filename" data-key="bg-image-filename"
+                 value="{{ current['bg-image-filename'] }}">
+          <input type="hidden" id="cz-bg-type" data-key="bg-type"
+                 value="{{ current['bg-type'] }}">
+        </div>
+      </div>
+      <div class="cz-preview">
+        <span class="cz-preview-label">preview · page sample</span>
+        <div class="cz-preview-frame cz-bg-preview-frame" id="cz-bg-preview">
+          <div class="cz-bg-preview-text">
+            <div style="font-size:18px; margin-bottom:8px;">Sample heading</div>
+            <div>Body text on the chosen background.</div>
+            <div style="margin-top:8px;">
+              <a class="cz-bg-preview-link">accent link</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Fonts ─────────────────────────────────────────────── -->
+    <section class="cz-section" id="sec-fonts">
+      <div>
+        <div class="cz-section-head">
+          <h2 class="cz-section-title">Fonts</h2>
+          <button type="button" class="cz-section-reset" data-section="sec-fonts">reset section</button>
+          <p class="cz-section-desc">
+            {{ t('customization.fonts_desc') }}
+          </p>
+        </div>
+        <div class="cz-controls">
+          <div class="cz-row">
+            <label for="cz-font-body">Body</label>
+            <select class="cz-select" id="cz-font-body" data-key="font-body-id">
+              {% for f in font_catalog %}
+                <option value="{{ f.id }}"
+                        style="font-family: {{ f.family|safe }}"
+                        {% if current['font-body-id'] == f.id %}selected{% endif %}>
+                  {{ f.label }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="cz-row">
+            <label for="cz-font-heading">Headings</label>
+            <select class="cz-select" id="cz-font-heading" data-key="font-heading-id">
+              {% for f in font_catalog %}
+                <option value="{{ f.id }}"
+                        style="font-family: {{ f.family|safe }}"
+                        {% if current['font-heading-id'] == f.id %}selected{% endif %}>
+                  {{ f.label }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="cz-row">
+            <label>Custom font file</label>
+            <button type="button" class="cz-btn-small" id="cz-font-upload-trigger">Upload…</button>
+            <input type="file" id="cz-font-upload-input"
+                   accept=".ttf,.otf,.woff,.woff2,font/ttf,font/otf,font/woff,font/woff2"
+                   style="display:none">
+            <button type="button" class="cz-btn-small cz-btn-warn"
+                    id="cz-font-clear"
+                    {% if not current['custom-font-filename'] %}disabled{% endif %}>Remove</button>
+          </div>
+          <div class="cz-row">
+            <span class="cz-current-file" id="cz-current-font">
+              {% if current['custom-font-filename'] %}{{ current['custom-font-filename'][:8] }}…{% else %}no custom font uploaded{% endif %}
+            </span>
+          </div>
+          <input type="hidden" id="cz-custom-font-filename"
+                 data-key="custom-font-filename"
+                 value="{{ current['custom-font-filename'] }}">
+
+          <div class="cz-row cz-toggle-row">
+            <label for="cz-notes-use-body" class="cz-toggle-label">
+              Apply body font to diary notes
+            </label>
+            <input type="checkbox" class="cz-toggle" id="cz-notes-use-body"
+                   data-key="notes-use-body-font"
+                   {% if current['notes-use-body-font'] == 'true' %}checked{% endif %}>
+          </div>
+          <p class="cz-section-desc" style="margin-top:-4px">
+            {{ t('customization.notes_font_desc_off') }}
+          </p>
+        </div>
+      </div>
+      <div class="cz-preview">
+        <span class="cz-preview-label">preview · sample text</span>
+        <div class="cz-preview-frame">
+          <div class="preview-mini-fonts">
+            <div class="preview-mini-heading" id="preview-font-heading">
+              Headings look like this.
+            </div>
+            <p class="preview-mini-body" id="preview-font-body">
+              The quick brown fox jumps over the lazy dog.<br>
+              А роза упала на лапу Азора.
+            </p>
+            <div class="preview-mini-notes-label">notes:</div>
+            <div class="preview-mini-notes" id="preview-font-notes">
+              Tomorrow I'll go for a walk in the park.<br>
+              Завтра пойду гулять в парк.
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── 2. Text & accent colours ──────────────────────────── -->
+    <section class="cz-section" id="sec-text">
+      <div>
+        <div class="cz-section-head">
+          <h2 class="cz-section-title">Text &amp; accent</h2>
+          <button type="button" class="cz-section-reset" data-section="sec-text">reset section</button>
+          <p class="cz-section-desc">{{ t('customization.colors_desc') }}</p>
+        </div>
+        <div class="cz-controls">
+          <div class="cz-row">
+            <label for="cz-text-color">Body text</label>
+            <input type="color" class="cz-color" id="cz-text-color"
+                   data-key="text-color" value="{{ current['text-color'] }}">
+            <input type="text" class="cz-hex" data-hex-for="cz-text-color"
+                   value="{{ current['text-color'] }}">
+          </div>
+          <div class="cz-row">
+            <label for="cz-heading-color">Headings</label>
+            <input type="color" class="cz-color" id="cz-heading-color"
+                   data-key="heading-color" value="{{ current['heading-color'] }}">
+            <input type="text" class="cz-hex" data-hex-for="cz-heading-color"
+                   value="{{ current['heading-color'] }}">
+          </div>
+          <div class="cz-row">
+            <label for="cz-brand-color">Brand / accent (active link)</label>
+            <input type="color" class="cz-color" id="cz-brand-color"
+                   data-key="brand-color" value="{{ current['brand-color'] }}">
+            <input type="text" class="cz-hex" data-hex-for="cz-brand-color"
+                   value="{{ current['brand-color'] }}">
+          </div>
+        </div>
+      </div>
+      <div class="cz-preview">
+        <span class="cz-preview-label">preview · navigation</span>
+        <div class="cz-preview-frame">
+          <nav class="preview-mini-header">
+            <a class="preview-mini-link">index.life</a>
+            <a class="preview-mini-link">insights</a>
+            <a class="preview-mini-link active">customize</a>
+            <a class="preview-mini-link">account</a>
+          </nav>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Calendar mosaic ──────────────────────────────────── -->
+    <section class="cz-section" id="sec-mosaic">
+      <div>
+        <div class="cz-section-head">
+          <h2 class="cz-section-title">Calendar mosaic</h2>
+          <button type="button" class="cz-section-reset" data-section="sec-mosaic">reset section</button>
+          <p class="cz-section-desc">
+            {{ t('customization.mosaic_desc') }}
+          </p>
+        </div>
+        <div class="cz-controls">
+          <div class="cz-row cz-toggle-row">
+            <label for="cz-mosaic-enabled" class="cz-toggle-label">
+              Enable mosaic
+            </label>
+            <input type="checkbox" class="cz-toggle" id="cz-mosaic-enabled"
+                   data-key="mosaic-enabled"
+                   {% if current['mosaic-enabled'] == 'true' %}checked{% endif %}>
+          </div>
+
+          <!-- Filled-day image -->
+          <div class="cz-row">
+            <label>Filled-day image</label>
+            <button type="button" class="cz-btn-small"
+                    id="cz-mosaic-filled-trigger">Choose…</button>
+            <input type="file" id="cz-mosaic-filled-input"
+                   accept="image/png,image/jpeg,image/webp,image/gif"
+                   style="display:none">
+            <button type="button" class="cz-btn-small cz-btn-warn"
+                    id="cz-mosaic-filled-clear"
+                    {% if not current['mosaic-filled-filename'] %}disabled{% endif %}>Remove</button>
+          </div>
+          <div class="cz-row">
+            <span class="cz-current-file" id="cz-mosaic-filled-current">
+              {% if current['mosaic-filled-filename'] %}{{ current['mosaic-filled-filename'][:8] }}…{% else %}no image uploaded{% endif %}
+            </span>
+          </div>
+
+          <!-- Empty-day mode toggle -->
+          <div class="cz-row cz-bg-type-row">
+            <label>Empty-day fill</label>
+            <div class="cz-bg-type-toggle" id="cz-mosaic-empty-toggle">
+              <button type="button" class="cz-bg-type-btn cz-mosaic-empty-btn" data-mode="color">Color</button>
+              <button type="button" class="cz-bg-type-btn cz-mosaic-empty-btn" data-mode="gradient">Gradient</button>
+              <button type="button" class="cz-bg-type-btn cz-mosaic-empty-btn" data-mode="image">Image</button>
+            </div>
+          </div>
+
+          <!-- Color pane -->
+          <div class="cz-row cz-mosaic-empty-pane" data-pane="color">
+            <label for="cz-mosaic-empty-color">Color</label>
+            <input type="color" class="cz-color" id="cz-mosaic-empty-color"
+                   data-key="mosaic-empty-color"
+                   value="{{ current['mosaic-empty-color'] }}">
+            <input type="text" class="cz-hex" data-hex-for="cz-mosaic-empty-color"
+                   value="{{ current['mosaic-empty-color'] }}">
+          </div>
+
+          <!-- Gradient pane -->
+          <div class="cz-mosaic-empty-pane" data-pane="gradient">
+            <div class="cz-row">
+              <label for="cz-mosaic-empty-grad-from">From</label>
+              <input type="color" class="cz-color" id="cz-mosaic-empty-grad-from"
+                     data-key="mosaic-empty-grad-from"
+                     value="{{ current['mosaic-empty-grad-from'] }}">
+              <input type="text" class="cz-hex" data-hex-for="cz-mosaic-empty-grad-from"
+                     value="{{ current['mosaic-empty-grad-from'] }}">
+            </div>
+            <div class="cz-row">
+              <label for="cz-mosaic-empty-grad-to">To</label>
+              <input type="color" class="cz-color" id="cz-mosaic-empty-grad-to"
+                     data-key="mosaic-empty-grad-to"
+                     value="{{ current['mosaic-empty-grad-to'] }}">
+              <input type="text" class="cz-hex" data-hex-for="cz-mosaic-empty-grad-to"
+                     value="{{ current['mosaic-empty-grad-to'] }}">
+            </div>
+            <div class="cz-row">
+              <label for="cz-mosaic-empty-grad-angle">Angle</label>
+              <input type="range" class="cz-slider"
+                     id="cz-mosaic-empty-grad-angle"
+                     min="0" max="360" step="15"
+                     data-key="mosaic-empty-grad-angle" data-unit="deg"
+                     value="{{ current['mosaic-empty-grad-angle']|replace('deg','') }}">
+              <span class="cz-slider-val" id="cz-mosaic-empty-grad-angle-val">{{ current['mosaic-empty-grad-angle'] }}</span>
+            </div>
+          </div>
+
+          <!-- Image pane -->
+          <div class="cz-mosaic-empty-pane" data-pane="image">
+            <div class="cz-row">
+              <label>Empty-day image</label>
+              <button type="button" class="cz-btn-small"
+                      id="cz-mosaic-empty-trigger">Choose…</button>
+              <input type="file" id="cz-mosaic-empty-input"
+                     accept="image/png,image/jpeg,image/webp,image/gif"
+                     style="display:none">
+              <button type="button" class="cz-btn-small cz-btn-warn"
+                      id="cz-mosaic-empty-clear"
+                      {% if not current['mosaic-empty-filename'] %}disabled{% endif %}>Remove</button>
+            </div>
+            <div class="cz-row">
+              <span class="cz-current-file" id="cz-mosaic-empty-current">
+                {% if current['mosaic-empty-filename'] %}{{ current['mosaic-empty-filename'][:8] }}…{% else %}no image uploaded{% endif %}
+              </span>
+            </div>
+            <p class="cz-section-desc" style="margin-top:-6px">
+              {{ t('customization.mosaic_empty_desc') }}
+            </p>
+          </div>
+
+          <!-- Hidden carriers for filenames + mode -->
+          <input type="hidden" id="cz-mosaic-filled-filename"
+                 data-key="mosaic-filled-filename"
+                 value="{{ current['mosaic-filled-filename'] }}">
+          <input type="hidden" id="cz-mosaic-empty-filename"
+                 data-key="mosaic-empty-filename"
+                 value="{{ current['mosaic-empty-filename'] }}">
+          <input type="hidden" id="cz-mosaic-empty-mode"
+                 data-key="mosaic-empty-mode"
+                 value="{{ current['mosaic-empty-mode'] }}">
+        </div>
+      </div>
+      <div class="cz-preview">
+        <span class="cz-preview-label">preview · 3 sample months</span>
+        <div class="cz-preview-frame">
+          <div class="preview-mini-calendar" id="preview-mosaic-calendar"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── 2. Calendar cubes ────────────────────────────────── -->
+    <section class="cz-section" id="sec-calendar">
+      <div>
+        <div class="cz-section-head">
+          <h2 class="cz-section-title">Calendar</h2>
+          <button type="button" class="cz-section-reset" data-section="sec-calendar">reset section</button>
+          <p class="cz-section-desc">{{ t('customization.cubes_desc') }}</p>
+        </div>
+        <div class="cz-controls">
+          <div class="cz-row">
+            <label for="cz-cube-filled">Filled day</label>
+            <input type="color" class="cz-color" id="cz-cube-filled"
+                   data-key="cube-filled-color" value="{{ current['cube-filled-color'] }}">
+            <input type="text" class="cz-hex" data-hex-for="cz-cube-filled"
+                   value="{{ current['cube-filled-color'] }}">
+          </div>
+          <div class="cz-row">
+            <label for="cz-cube-empty">Empty day</label>
+            <input type="color" class="cz-color" id="cz-cube-empty"
+                   data-key="cube-empty-color" value="{{ current['cube-empty-color'] }}">
+            <input type="text" class="cz-hex" data-hex-for="cz-cube-empty"
+                   value="{{ current['cube-empty-color'] }}">
+          </div>
+          <div class="cz-row">
+            <label for="cz-cube-border">Cube border</label>
+            <input type="color" class="cz-color" id="cz-cube-border"
+                   data-key="cube-border-color" value="{{ current['cube-border-color'] }}">
+            <input type="text" class="cz-hex" data-hex-for="cz-cube-border"
+                   value="{{ current['cube-border-color'] }}">
+          </div>
+          <div class="cz-row">
+            <label for="cz-cube-today">Today highlight</label>
+            <input type="color" class="cz-color" id="cz-cube-today"
+                   data-key="cube-today-color" value="{{ current['cube-today-color'] }}">
+            <input type="text" class="cz-hex" data-hex-for="cz-cube-today"
+                   value="{{ current['cube-today-color'] }}">
+          </div>
+        </div>
+      </div>
+      <div class="cz-preview">
+        <span class="cz-preview-label">preview · calendar (3 months)</span>
+        <div class="cz-preview-frame">
+          <div class="preview-mini-calendar" id="preview-calendar"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── 3. Insights charts: global + one subsection per chart ─── -->
+    <section class="cz-section" id="sec-charts-global">
+      <div>
+        <div class="cz-section-head">
+          <h2 class="cz-section-title">Insights charts</h2>
+          <button type="button" class="cz-section-reset" data-section="sec-charts-global">reset section</button>
+          <p class="cz-section-desc">
+            {{ t('customization.charts_global_desc') }}
+          </p>
+        </div>
+        <div class="cz-controls">
+          <div class="cz-row">
+            <label for="cz-chart-color">Primary color (default for all charts)</label>
+            <input type="color" class="cz-color" id="cz-chart-color"
+                   data-key="chart-color" value="{{ current['chart-color'] }}">
+            <input type="text" class="cz-hex" data-hex-for="cz-chart-color"
+                   value="{{ current['chart-color'] }}">
+          </div>
+          <div class="cz-row">
+            <label for="cz-chart-grid">Grid / faint lines (default)</label>
+            <input type="color" class="cz-color" id="cz-chart-grid"
+                   data-key="chart-grid-color" value="{{ current['chart-grid-color'] }}">
+            <input type="text" class="cz-hex" data-hex-for="cz-chart-grid"
+                   value="{{ current['chart-grid-color'] }}">
+          </div>
+        </div>
+      </div>
+      <div class="cz-preview">
+        <span class="cz-preview-label">preview · global colors</span>
+        <div class="cz-preview-frame">
+          <p class="cz-section-desc" style="margin:0;text-align:center">
+            {{ t('customization.charts_per_chart') }}
+          </p>
+        </div>
+      </div>
+    </section>
+
+    {# Per-chart subsections rendered from chart_schema.CHARTS #}
+    {% for chart in chart_schema %}
+    <section class="cz-section cz-chart-section" id="sec-chart-{{ chart.id }}">
+      <div>
+        <div class="cz-section-head">
+          <h2 class="cz-section-title">{{ chart.label }}</h2>
+          <button type="button" class="cz-section-reset" data-section="sec-chart-{{ chart.id }}">reset section</button>
+          <p class="cz-section-desc">{{ chart.description }}</p>
+        </div>
+        <div class="cz-controls">
+          {% for ctrl in chart.controls %}
+            {% set safe_id = 'cz-' + ctrl.key %}
+            <div class="cz-row">
+              {% if ctrl.type == 'color' %}
+                <label for="{{ safe_id }}">{{ ctrl.label }}</label>
+                <input type="color" class="cz-color" id="{{ safe_id }}"
+                       data-key="{{ ctrl.key }}" value="{{ current[ctrl.key] }}">
+                <input type="text" class="cz-hex" data-hex-for="{{ safe_id }}"
+                       value="{{ current[ctrl.key] }}">
+              {% elif ctrl.type == 'slider' %}
+                <label for="{{ safe_id }}">{{ ctrl.label }}</label>
+                <input type="range" class="cz-slider" id="{{ safe_id }}"
+                       min="{{ ctrl.min }}" max="{{ ctrl.max }}" step="{{ ctrl.step }}"
+                       data-key="{{ ctrl.key }}" data-unit="{{ ctrl.unit }}"
+                       value="{{ current[ctrl.key]|replace(ctrl.unit, '') }}">
+                <span class="cz-slider-val" id="{{ safe_id }}-val">{{ current[ctrl.key] }}</span>
+              {% elif ctrl.type == 'unit' %}
+                <label for="{{ safe_id }}">{{ ctrl.label }}</label>
+                <input type="range" class="cz-slider" id="{{ safe_id }}"
+                       min="0" max="100" step="2"
+                       data-key="{{ ctrl.key }}" data-unit="percent"
+                       value="{{ (current[ctrl.key]|float * 100)|int }}">
+                <span class="cz-slider-val" id="{{ safe_id }}-val">{{ (current[ctrl.key]|float * 100)|int }}%</span>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="cz-preview">
+        <span class="cz-preview-label">preview · {{ chart.label }}</span>
+        <div class="cz-preview-frame">
+          <svg class="preview-mini-svg" id="{{ chart.preview_id }}"
+               data-chart="{{ chart.id }}"
+               viewBox="0 0 240 140"
+               xmlns="http://www.w3.org/2000/svg"></svg>
+        </div>
+      </div>
+    </section>
+    {% endfor %}
+
+    <!-- ── 4. Neural map (deep_mind) ─────────────────────────── -->
+    <section class="cz-section" id="sec-neural">
+      <div>
+        <div class="cz-section-head">
+          <h2 class="cz-section-title">Neural map</h2>
+          <button type="button" class="cz-section-reset" data-section="sec-neural">reset section</button>
+          <p class="cz-section-desc">{{ t('customization.neural_desc') }}</p>
+        </div>
+        <div class="cz-controls">
+          <div class="cz-row">
+            <label for="cz-neural-node">Neuron body</label>
+            <input type="color" class="cz-color" id="cz-neural-node"
+                   data-key="neural-node-color" value="{{ current['neural-node-color'] }}">
+            <input type="text" class="cz-hex" data-hex-for="cz-neural-node"
+                   value="{{ current['neural-node-color'] }}">
+          </div>
+          <div class="cz-row">
+            <label for="cz-neural-active">Active neuron</label>
+            <input type="color" class="cz-color" id="cz-neural-active"
+                   data-key="neural-node-active-color" value="{{ current['neural-node-active-color'] }}">
+            <input type="text" class="cz-hex" data-hex-for="cz-neural-active"
+                   value="{{ current['neural-node-active-color'] }}">
+          </div>
+          <div class="cz-row">
+            <label for="cz-neural-edge">Connection (dendrite)</label>
+            <input type="color" class="cz-color" id="cz-neural-edge"
+                   data-key="neural-edge-color" value="{{ current['neural-edge-color'] }}">
+            <input type="text" class="cz-hex" data-hex-for="cz-neural-edge"
+                   value="{{ current['neural-edge-color'] }}">
+          </div>
+        </div>
+      </div>
+      <div class="cz-preview">
+        <span class="cz-preview-label">preview · neural map (mini)</span>
+        <div class="cz-preview-frame">
+          <canvas class="preview-mini-canvas" id="preview-neural"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Storage cleanup ─────────────────────────────────────── -->
+    <details class="cz-cleanup">
+      <summary class="cz-cleanup-summary">Storage cleanup</summary>
+      <p class="cz-cleanup-desc">
+        {{ t('customization.cleanup_desc') }}
+      </p>
+      <div class="cz-cleanup-actions">
+        <button type="button" class="cz-btn cz-btn-small" id="cz-cleanup-scan">Scan for orphans</button>
+        <button type="button" class="cz-btn cz-btn-small cz-btn-warn"
+                id="cz-cleanup-run" disabled>Delete orphans</button>
+      </div>
+      <pre class="cz-cleanup-output" id="cz-cleanup-output"></pre>
+    </details>
+
+    <!-- ── Footer: save / reset / export / import ──────────────── -->
+    <div class="cz-footer">
+      <span class="cz-saved-msg" id="cz-saved-msg">Saved.</span>
+      <a class="cz-btn cz-btn-link" id="cz-export-link"
+         href="/customization/api/export"
+         download
+         title="{{ t('customization.export_title') }}">Export</a>
+      <button class="cz-btn" type="button" id="cz-import-trigger"
+              title="{{ t('customization.import_title') }}">Import</button>
+      <input type="file" id="cz-import-input"
+             accept="application/json,.json" style="display:none">
+      <button class="cz-btn" id="cz-reset-btn">Reset to defaults</button>
+      <button class="cz-btn cz-btn-primary" id="cz-save-btn">Save</button>
+    </div>
+  </main>
+
+  {% if module_active('deep_mind') %}
+  <script src="{{ url_for('deep_mind.static', filename='js/d3.v7.min.js') }}"></script>
+  {% endif %}
+  <script src="{{ url_for('customization.static', filename='js/settings.js') }}"></script>
+</body>
+</html>

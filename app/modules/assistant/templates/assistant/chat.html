@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="{{ current_lang }}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,20 +8,22 @@
   <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='images/apple-touch-icon.png') }}">
   <link rel="manifest" href="{{ url_for('static', filename='images/site.webmanifest') }}">
   <link rel="stylesheet" href="{{ url_for('assistant.static', filename='css/chat.css') }}">
+  {{ customization_css }}
 </head>
 <body>
   <header class="main-header">
     <nav class="top-menu">
-      <a href="{{ url_for('main.mood_grid') }}" class="menu-link">index.life</a>
-      <a href="{{ url_for('main.life_calendar') }}" class="menu-link">life in weeks</a>
-      {% if module_active('insights') %}<a href="{{ url_for('insights.insights_page') }}" class="menu-link">insights</a>{% endif %}
-      <a href="{{ url_for('assistant.chat') }}" class="menu-link active-link">ai psychologist</a>
+      <a href="{{ url_for('main.mood_grid') }}" class="menu-link">{{ t('nav.mood_grid') }}</a>
+      <a href="{{ url_for('main.life_calendar') }}" class="menu-link">{{ t('nav.life_calendar') }}</a>
+      {% if module_active('insights') %}<a href="{{ url_for('insights.insights_page') }}" class="menu-link">{{ t('nav.insights') }}</a>{% endif %}
+      <a href="{{ url_for('assistant.chat') }}" class="menu-link active-link">{{ t('nav.assistant') }}</a>
       {% if module_active('deep_mind') %}
-        <a href="{{ url_for('deep_mind.neural_map') }}" class="menu-link">neural map</a>
+        <a href="{{ url_for('deep_mind.neural_map') }}" class="menu-link">{{ t('nav.deep_mind') }}</a>
       {% endif %}
-      <a href="{{ url_for('main.account') }}" class="menu-link">account</a>
-      <a href="{{ url_for('sync.sync_page') }}" class="menu-link">sync</a>
-      <a href="{{ url_for('modules.modules_page') }}" class="menu-link">modules</a>
+      <a href="{{ url_for('main.account') }}" class="menu-link">{{ t('nav.account') }}</a>
+      <a href="{{ url_for('sync.sync_page') }}" class="menu-link">{{ t('nav.sync') }}</a>
+      <a href="{{ url_for('modules.modules_page') }}" class="menu-link">{{ t('nav.modules') }}</a>
+      {% if module_active('customization') %}<a href="{{ url_for('customization.settings') }}" class="menu-link">{{ t('nav.customize') }}</a>{% endif %}
     </nav>
   </header>
 
@@ -29,18 +31,18 @@
     <div class="chat-toolbar">
       <div class="chat-toolbar-top">
         <span class="chat-status" id="chat-status"></span>
-        <span class="chat-context-label">Заполненность контекста:</span>
-        <div class="chat-context-bar" id="context-bar" title="Заполненность контекстного окна">
+        <span class="chat-context-label">{{ t('assistant.context_label') }}</span>
+        <div class="chat-context-bar" id="context-bar" title="{{ t('assistant.context_tooltip') }}">
           <div class="context-bar-fill" id="context-bar-fill"></div>
           <span class="context-bar-label" id="context-bar-label"></span>
         </div>
       </div>
       <div class="chat-toolbar-btns">
-        <button class="chat-tool-btn" id="btn-compress" title="Сжать контекст — оставить последние сообщения">compress</button>
-        <button class="chat-tool-btn" id="btn-clear-chat" title="Очистить всю историю чата">clear chat</button>
-        <button class="chat-tool-btn" id="btn-sync" title="Догенерировать embeddings и summaries для записей, у которых их нет (например, если фоновая обработка не успела или упала). Не трогает: people / activities / месячные сводки / профиль — для них есть отдельные кнопки.">sync</button>
-        <button class="chat-tool-btn" id="btn-reindex" title="Полный реиндекс всех записей">reindex</button>
-        <button class="chat-tool-btn" id="btn-reset-profile" title="Пересобрать психологический профиль">rebuild profile</button>
+        <button class="chat-tool-btn" id="btn-compress" title="{{ t('assistant.compress_tooltip') }}">{{ t('assistant.compress') }}</button>
+        <button class="chat-tool-btn" id="btn-clear-chat" title="{{ t('assistant.clear_chat_tooltip') }}">{{ t('assistant.clear_chat') }}</button>
+        <button class="chat-tool-btn" id="btn-sync" title="{{ t('assistant.sync_tooltip') }}">{{ t('assistant.sync') }}</button>
+        <button class="chat-tool-btn" id="btn-reindex" title="{{ t('assistant.reindex_tooltip') }}">{{ t('assistant.reindex') }}</button>
+        <button class="chat-tool-btn" id="btn-reset-profile" title="{{ t('assistant.rebuild_profile_tooltip') }}">{{ t('assistant.rebuild_profile') }}</button>
       </div>
     </div>
 
@@ -60,18 +62,23 @@
       {% else %}
         <div class="chat-row chat-row-assistant">
           <img class="chat-avatar" src="{{ url_for('static', filename='images/model.png') }}" alt="AI">
-          <div class="chat-bubble chat-bubble-assistant">Привет. Я твой AI-психолог. У меня есть доступ к твоему дневнику настроения. Я могу помочь разобраться в чувствах и мыслях. Как ты себя чувствуешь сегодня?</div>
+          <div class="chat-bubble chat-bubble-assistant">{{ t('assistant.greeting') }}</div>
         </div>
       {% endif %}
     </div>
 
     <div class="chat-input-area">
-      <textarea id="chat-input" placeholder="Напиши сообщение..." rows="2">{{ preload_message or '' }}</textarea>
+      <textarea id="chat-input" placeholder="{{ t('assistant.input_placeholder') }}" rows="2">{{ preload_message or '' }}</textarea>
       <button id="chat-send-btn" type="button">Send</button>
     </div>
   </div>
 
   <script>
+    window.CHAT_I18N = {
+      deleteMessages: {{ t('assistant.delete_messages')|tojson }},
+      contextMinimal: {{ t('assistant.context_minimal')|tojson }},
+      clearConfirm: {{ t('assistant.clear_confirm')|tojson }},
+    };
     window.CHAT_AVATARS = {
       model: "{{ url_for('static', filename='images/model.png') }}",
       user: "{{ user_avatar }}"

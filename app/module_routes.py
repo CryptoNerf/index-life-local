@@ -44,6 +44,11 @@ MODULE_INFO = {
         'size': '~50 MB',
         'requires': ['assistant'],
     },
+    'customization': {
+        'title': 'Customization',
+        'description': 'Personalise colors, fonts, the page background, and the calendar mosaic. No internet — everything stays local.',
+        'size': '—',
+    },
 }
 
 # Maximum number of lines kept in terminal buffer (prevent memory bloat)
@@ -565,13 +570,14 @@ def install_module_route():
 def _run_install(module_name: str, profile: str):
     """Run install_modules.py in a subprocess, capturing output line by line."""
     try:
-        # Insights has no pip deps — just create a sentinel file.
-        if module_name == 'insights':
-            from app.modules.insights import sentinel_path
-            p = sentinel_path()
+        # Sentinel-only modules (no pip deps) — just create the marker file.
+        if module_name in ('insights', 'customization'):
+            from importlib import import_module
+            mod = import_module(f'app.modules.{module_name}')
+            p = mod.sentinel_path()
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_text('enabled\n')
-            _append_line(f'Enabled insights module (sentinel: {p})\n')
+            _append_line(f'Enabled {module_name} module (sentinel: {p})\n')
             _install_status['success'] = True
             _install_status['verified'] = True
             _append_line('\nInstallation complete!\n')

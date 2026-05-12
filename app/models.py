@@ -51,6 +51,9 @@ class UserProfile(db.Model):
     email = db.Column(db.String(120), nullable=True)
     photo_filename = db.Column(db.String(255), nullable=True)
     birthdate = db.Column(db.Date, nullable=True)
+    # ISO 639-1 two-letter code. Drives the i18n context processor.
+    # Migration v7 backfills 'ru' for existing rows.
+    language = db.Column(db.String(2), nullable=False, default='ru')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -252,3 +255,22 @@ class SyncConflict(db.Model):
     remote_device = db.Column(db.String(36))
     winner = db.Column(db.String(10), default='remote')  # 'local' or 'remote'
     resolved_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+# ── Customization ───────────────────────────────────────────
+
+class UserCustomization(db.Model):
+    """Single-row table holding the user's UI preferences as a JSON blob.
+
+    Owned by the customization module. Defined here so the model is
+    available even when the module isn't loaded — only the module's
+    context processor reads it. JSON storage keeps schema flexible:
+    adding a new color/font option is a code change in the module, no
+    further migrations needed.
+    """
+    __tablename__ = 'user_customization'
+
+    id = db.Column(db.Integer, primary_key=True)
+    settings_json = db.Column(db.Text, nullable=False, default='{}')
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow,
+                           onupdate=datetime.utcnow)

@@ -1,7 +1,11 @@
 /* ========== Layout & Structure ========== */
+/* Themable surfaces use `var(--name, default)` so when the customization
+   module is inactive the fallback (the original hard-coded value) wins
+   and the page renders identically to its pre-customization state. */
 body {
-  font-family: 'Times New Roman', Times, serif;
-  background: #fff;
+  font-family: var(--font-body, 'Times New Roman', Times, serif);
+  background-color: var(--bg-color, #fff);
+  color: var(--text-color, #000);
   margin: 0;
   padding: 0;
 }
@@ -20,7 +24,7 @@ header {
 }
 
 .menu-link {
-  color: #222;
+  color: var(--text-color, #222);
   text-decoration: none;
   font-family: inherit;
   transition: color 0.2s;
@@ -30,7 +34,7 @@ header {
 }
 .index-link,
 .active-link {
-  color: #009AFA;
+  color: var(--brand-color, #009AFA);
 }
 
 .main-header {
@@ -43,7 +47,8 @@ header {
   text-align: center;
   font-size: 24px;
   font-weight: 600;
-  color: #222;
+  font-family: var(--font-heading, inherit);
+  color: var(--heading-color, #222);
 }
 
 main {
@@ -117,8 +122,8 @@ main {
 }
 
 .year-arrow:hover {
-  border-color: #009AFA;
-  color: #009AFA;
+  border-color: var(--brand-color, #009AFA);
+  color: var(--brand-color, #009AFA);
 }
 
 .year-arrow.disabled {
@@ -139,31 +144,31 @@ main {
 }
 
 .year-select:hover {
-  border-color: #009AFA;
+  border-color: var(--brand-color, #009AFA);
 }
 
 .year-select:focus {
   outline: none;
-  border-color: #009AFA;
+  border-color: var(--brand-color, #009AFA);
 }
 
 /* ========== Day Cube ========== */
 .cube {
   width: 15px;
   height: 15px;
-  background: #fff;
-  border: 1px solid #000000;
+  background: var(--cube-empty-color, #fff);
+  border: 1px solid var(--cube-border-color, #000000);
   display: inline-block;
   margin: 0;
   box-sizing: border-box;
   transition: background 0.15s, border 0.15s;
 }
 .cube.today {
-  border: 2px solid #0080ff;
+  border: 2px solid var(--cube-today-color, #0080ff);
   box-sizing: border-box;
 }
 .cube.filled {
-  background: #000;
+  background: var(--cube-filled-color, #000);
 }
 
 /* ========== Footer ========== */
@@ -171,9 +176,9 @@ main {
   width: 100%;
   margin: 20px 0 0 0;
   text-align: center;
-  color: #222;
+  color: var(--text-color, #222);
   font-size: 16px;
-  background: #fff;
+  background: transparent;  /* let body's bg show through */
   padding: 10px 0;
   flex-shrink: 0;
 }

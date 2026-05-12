@@ -45,7 +45,7 @@ header {
 }
 
 .menu-link {
-  color: #222;
+  color: var(--text-color, #222);
   text-decoration: none;
   font-family: inherit;
   transition: color 0.2s;
@@ -54,7 +54,7 @@ header {
   text-decoration: underline;
 }
 .active-link {
-  color: #009AFA;
+  color: var(--brand-color, #009AFA);
 }
 
 /* Make header fixed and add top padding to body */
@@ -64,8 +64,9 @@ header {
   width: 100%;
 }
 body {
-  font-family: 'Times New Roman', Times, serif;
-  background: #fff;
+  font-family: var(--font-body, 'Times New Roman', Times, serif);
+  background-color: var(--bg-color, #fff);
+  color: var(--text-color, #000);
   margin: 0;
   padding: 0;
   display: flex;
@@ -78,9 +79,9 @@ body {
   width: 100%;
   margin: 20px 0 0 0;
   text-align: center;
-  color: #222;
+  color: var(--text-color, #222);
   font-size: 16px;
-  background: #fff;
+  background: transparent;
   padding: 10px 0;
   flex-shrink: 0;
 }

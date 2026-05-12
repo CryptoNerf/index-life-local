@@ -1,7 +1,8 @@
 /* ========== Base ========== */
 body {
-  font-family: 'Times New Roman', Times, serif;
-  background: #fff;
+  font-family: var(--font-body, 'Times New Roman', Times, serif);
+  background-color: var(--bg-color, #fff);
+  color: var(--text-color, #000);
   margin: 0;
   padding: 0;
 }
@@ -34,13 +35,13 @@ body {
 }
 
 .menu-link {
-  color: #222;
+  color: var(--text-color, #222);
   text-decoration: none;
   font-family: inherit;
   transition: color 0.2s;
 }
 .menu-link:hover { text-decoration: underline; }
-.active-link { color: #009AFA; }
+.active-link { color: var(--brand-color, #009AFA); }
 
 /* ========== Page Layout ========== */
 .life-page {
@@ -176,24 +177,26 @@ body {
   line-height: 11px;
 }
 
-/* Individual cell */
+/* Individual cell — themed via the same cube-* variables used by the
+   main calendar so a single colour change applies to both views. */
 .life-cell {
   width: 11px;
   height: 11px;
-  border: 1px solid #222;
+  border: 1px solid var(--cube-border-color, #222);
+  background: var(--cube-empty-color, transparent);
   flex-shrink: 0;
   margin: 0 1px;
   box-sizing: border-box;
 }
 
 .life-cell.lived {
-  background: #000;
-  border-color: #000;
+  background: var(--cube-filled-color, #000);
+  border-color: var(--cube-border-color, #000);
 }
 
 .life-cell.current-week {
-  background: #009AFA;
-  border-color: #000000;
+  background: var(--brand-color, #009AFA);
+  border-color: var(--cube-border-color, #000000);
 }
 
 /* ========== Stats line ========== */

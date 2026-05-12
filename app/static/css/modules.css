@@ -1,7 +1,10 @@
 /* ========== Base ========== */
+/* Themable surfaces use `var(--name, default)` so when the customization
+   module is inactive the fallback wins and the page looks unchanged. */
 body {
-  font-family: 'Times New Roman', Times, serif;
-  background: #fff;
+  font-family: var(--font-body, 'Times New Roman', Times, serif);
+  background-color: var(--bg-color, #fff);
+  color: var(--text-color, #000);
   margin: 0;
   padding: 0;
   min-height: 100vh;
@@ -31,13 +34,13 @@ header { width: 100%; }
 }
 
 .menu-link {
-  color: #222;
+  color: var(--text-color, #222);
   text-decoration: none;
   font-family: inherit;
   transition: color 0.2s;
 }
 .menu-link:hover { text-decoration: underline; }
-.active-link { color: #009AFA; }
+.active-link { color: var(--brand-color, #009AFA); }
 
 /* ========== Page ========== */
 .modules-page {
@@ -74,7 +77,7 @@ header { width: 100%; }
   padding: 20px;
 }
 
-.module-active { border-color: #222; }
+.module-active { border-color: var(--text-color, #222); }
 .module-restart { border-color: #e8a83e; }
 
 .module-header {
@@ -85,7 +88,7 @@ header { width: 100%; }
 }
 
 .module-dot { font-size: 14px; }
-.dot-active { color: #009AFA; }
+.dot-active { color: var(--brand-color, #009AFA); }
 .dot-restart { color: #e8a83e; }
 .dot-inactive { color: #ccc; }
 
@@ -97,8 +100,8 @@ header { width: 100%; }
   margin-left: auto;
 }
 .badge-active {
-  color: #009AFA;
-  border: 1px solid #009AFA;
+  color: var(--brand-color, #009AFA);
+  border: 1px solid var(--brand-color, #009AFA);
 }
 .badge-restart {
   color: #e8a83e;
