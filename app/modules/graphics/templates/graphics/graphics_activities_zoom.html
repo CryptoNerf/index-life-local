@@ -3,21 +3,21 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>activities zoom</title>
+  <title>{{ t('graphics.activities_zoom.title') }}</title>
   <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/calendar.css') }}">
-  <link rel="stylesheet" href="{{ url_for('insights.static', filename='css/insights.css') }}">
+  <link rel="stylesheet" href="{{ url_for('graphics.static', filename='css/graphics.css') }}">
   <style>
-    /* Lift the 1180px max-width on .insights-main so the chart can use
+    /* Lift the 1180px max-width on .graphics-main so the chart can use
        the full window. Keep the standard 32px horizontal padding so the
        header/back-link still align with other insights pages. */
-    main.insights-main {
+    main.graphics-main {
       max-width: 100% !important;
       align-items: stretch !important;
     }
     .az-wrap {
       /* Rectangular canvas — fills parent's content area (which is
-         viewport-width minus .insights-main padding), with a max cap. */
+         viewport-width minus .graphics-main padding), with a max cap. */
       width: 100%;
       max-width: 1700px;
       height: min(72vh, 980px);
@@ -104,7 +104,7 @@
     <nav class="top-menu">
       <a href="{{ url_for('main.mood_grid') }}" class="menu-link">{{ t('nav.mood_grid') }}</a>
       <a href="{{ url_for('main.life_calendar') }}" class="menu-link">{{ t('nav.life_calendar') }}</a>
-      <a href="{{ url_for('insights.insights_page') }}" class="menu-link active-link">{{ t('nav.insights') }}</a>
+      <a href="{{ url_for('graphics.graphics_page') }}" class="menu-link active-link">{{ t('nav.graphics') }}</a>
       {% if module_active('assistant') %}
         <a href="{{ url_for('assistant.chat') }}" class="menu-link">{{ t('nav.assistant') }}</a>
       {% endif %}
@@ -118,23 +118,23 @@
     </nav>
   </header>
 
-  <main class="insights-main">
+  <main class="graphics-main">
     <div class="detail-header">
-      <a href="{{ url_for('insights.insights_page') }}" class="back-link">← insights</a>
-      <p class="insights-title">activities zoom</p>
-      <p class="insights-summary">
+      <a href="{{ url_for('graphics.graphics_page') }}" class="back-link">{{ t('graphics.back') }}</a>
+      <p class="graphics-title">{{ t('graphics.activities_zoom.title') }}</p>
+      <p class="graphics-summary">
         {% if total_activities > 0 %}
-          {{ total_activities }} activities — click a circle to zoom in and see individual mentions
+          {{ t('graphics.activities_zoom.summary', n=total_activities) }}
         {% elif has_notes %}
-          no activities extracted yet — the AI psychologist is still analyzing your entries
+          {{ t('graphics.activities_zoom.no_activities') }}
         {% else %}
-          no entries with notes yet
+          {{ t('graphics.no_notes') }}
         {% endif %}
       </p>
     </div>
 
     {% if total_activities == 0 and has_notes %}
-      <p class="az-hint">analysis runs in the background — come back in a few minutes</p>
+      <p class="az-hint">{{ t('graphics.analysis_running') }}</p>
     {% endif %}
 
     {% if total_activities > 0 %}
@@ -146,11 +146,10 @@
       </div>
 
       <p class="az-summary-row">
-        click an activity to zoom into its mentions · click a mention to open that day's entry · click background to zoom out · hover for full note text ·
-        outer shade is mood vs your {{ '%.2f'|format(baseline) }} average (lighter = better days), inner shade is that day's rating
+        {{ t('graphics.activities_zoom.summary_row', avg='%.2f'|format(baseline)) }}
       </p>
 
-      <script src="{{ url_for('insights.static', filename='js/d3.v7.min.js') }}"></script>
+      <script src="{{ url_for('graphics.static', filename='js/d3.v7.min.js') }}"></script>
       <script id="az-data" type="application/json">{{ data | tojson }}</script>
       <script>
         (function () {

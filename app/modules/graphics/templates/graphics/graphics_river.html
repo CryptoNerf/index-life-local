@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>river of mood {{ year }}</title>
+  <title>{{ t('graphics.river.title') }} {{ year }}</title>
   <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/calendar.css') }}">
-  <link rel="stylesheet" href="{{ url_for('insights.static', filename='css/insights.css') }}">
+  <link rel="stylesheet" href="{{ url_for('graphics.static', filename='css/graphics.css') }}">
   {{ customization_css }}
 </head>
 <body>
@@ -14,7 +14,7 @@
     <nav class="top-menu">
       <a href="{{ url_for('main.mood_grid') }}" class="menu-link">{{ t('nav.mood_grid') }}</a>
       <a href="{{ url_for('main.life_calendar') }}" class="menu-link">{{ t('nav.life_calendar') }}</a>
-      <a href="{{ url_for('insights.insights_page') }}" class="menu-link active-link">{{ t('nav.insights') }}</a>
+      <a href="{{ url_for('graphics.graphics_page') }}" class="menu-link active-link">{{ t('nav.graphics') }}</a>
       {% if module_active('assistant') %}
         <a href="{{ url_for('assistant.chat') }}" class="menu-link">{{ t('nav.assistant') }}</a>
       {% endif %}
@@ -28,15 +28,15 @@
     </nav>
   </header>
 
-  <main class="insights-main">
+  <main class="graphics-main">
     <div class="detail-header">
-      <a href="{{ url_for('insights.insights_page') }}" class="back-link">← insights</a>
-      <p class="insights-title">river of mood<sup>{{ year }}</sup>{% if year != current_year %}<span class="archive-tag">(archive)</span>{% endif %}</p>
-      <p class="insights-summary">
+      <a href="{{ url_for('graphics.graphics_page') }}" class="back-link">{{ t('graphics.back') }}</a>
+      <p class="graphics-title">{{ t('graphics.river.title') }}<sup>{{ year }}</sup>{% if year != current_year %}<span class="archive-tag">(archive)</span>{% endif %}</p>
+      <p class="graphics-summary">
         {% if total %}
-          {{ total }} entries · average {{ '%.2f'|format(avg) }} / 10 · 14-day rolling mean
+          {{ t('graphics.river.summary', n=total, avg='%.2f'|format(avg)) }}
         {% else %}
-          no entries for this year
+          {{ t('graphics.no_entries_year') }}
         {% endif %}
       </p>
     </div>
@@ -87,7 +87,7 @@
     {% if available_years|length > 1 %}
       <nav class="years-nav">
         {% for y in available_years %}
-          <a href="{{ url_for('insights.river', year=y) }}" class="year-link{% if y == year %} active{% endif %}">{{ y }}</a>
+          <a href="{{ url_for('graphics.river', year=y) }}" class="year-link{% if y == year %} active{% endif %}">{{ y }}</a>
         {% endfor %}
       </nav>
     {% endif %}

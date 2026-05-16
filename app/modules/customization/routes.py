@@ -51,14 +51,13 @@ def _is_valid_color(value: str) -> bool:
 # Keys treated as colors (validated as CSS color); everything else is
 # subject to per-key validation below.
 _COLOR_KEYS = {
-    'bg-color', 'text-color', 'heading-color', 'brand-color',
+    'bg-color', 'text-color', 'text-muted', 'heading-color', 'brand-color',
     'cube-filled-color', 'cube-empty-color', 'cube-border-color',
     'cube-today-color',
     'chart-color', 'chart-grid-color',
     'neural-node-color', 'neural-node-active-color',
-    'neural-edge-color', 'neural-glow-color',
+    'neural-edge-color', 'neural-glow-color', 'neural-canvas-bg',
     'bg-gradient-from', 'bg-gradient-to',
-    'bg-overlay',  # also accepts 'transparent' which _is_valid_color allows
     'mosaic-empty-color', 'mosaic-empty-grad-from', 'mosaic-empty-grad-to',
 }
 
@@ -156,6 +155,7 @@ _VALIDATORS.update({
     'font-heading-id':    _is_valid_font_id,
     'custom-font-filename': _is_valid_font_filename,
     'notes-use-body-font': _is_valid_bool_str,
+    'auto-invert-text':    _is_valid_bool_str,
     'mosaic-enabled':         _is_valid_bool_str,
     'mosaic-filled-filename': _is_valid_filename,
     'mosaic-empty-mode':      _is_valid_mosaic_mode,
@@ -189,10 +189,10 @@ _SECTION_KEYS = {
         'bg-type', 'bg-color',
         'bg-gradient-from', 'bg-gradient-to', 'bg-gradient-angle',
         'bg-image-filename', 'bg-image-blur', 'bg-image-opacity',
-        'bg-overlay',
     },
     'sec-text': {
-        'text-color', 'heading-color', 'brand-color',
+        'text-color', 'text-muted', 'heading-color', 'brand-color',
+        'auto-invert-text',
     },
     'sec-fonts': {
         'font-body-id', 'font-heading-id',
@@ -207,7 +207,7 @@ _SECTION_KEYS = {
     },
     'sec-neural': {
         'neural-node-color', 'neural-node-active-color',
-        'neural-edge-color', 'neural-glow-color',
+        'neural-edge-color', 'neural-glow-color', 'neural-canvas-bg',
     },
     'sec-mosaic': {
         'mosaic-enabled', 'mosaic-filled-filename',

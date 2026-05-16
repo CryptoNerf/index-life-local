@@ -127,7 +127,7 @@ main {
 }
 
 .year-arrow.disabled {
-  color: #bbb;
+  color: var(--text-muted, #bbb);
   border-color: #eee;
   cursor: default;
   pointer-events: none;

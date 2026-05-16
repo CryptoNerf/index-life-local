@@ -15,7 +15,7 @@
     <nav class="top-menu">
       <a href="{{ url_for('main.mood_grid') }}" class="menu-link">{{ t('nav.mood_grid') }}</a>
       <a href="{{ url_for('main.life_calendar') }}" class="menu-link">{{ t('nav.life_calendar') }}</a>
-      {% if module_active('insights') %}<a href="{{ url_for('insights.insights_page') }}" class="menu-link">{{ t('nav.insights') }}</a>{% endif %}
+      {% if module_active('graphics') %}<a href="{{ url_for('graphics.graphics_page') }}" class="menu-link">{{ t('nav.graphics') }}</a>{% endif %}
       {% if module_active('assistant') %}
         <a href="{{ url_for('assistant.chat') }}" class="menu-link">{{ t('nav.assistant') }}</a>
       {% endif %}
@@ -60,6 +60,21 @@
     if (typeof d3 === 'undefined') {
       document.write('<script src="{{ url_for("deep_mind.static", filename="js/d3.v7.min.js") }}"><\/script>');
     }
+    window.NEURAL_MAP_I18N = {
+      loading:        {{ t('deep_mind.loading')|tojson }},
+      loadError:      {{ t('deep_mind.load_error')|tojson }},
+      emptyState:     {{ t('deep_mind.empty_state')|tojson }},
+      entries:        {{ t('deep_mind.entries')|tojson }},
+      weight:         {{ t('deep_mind.weight')|tojson }},
+      analysisStart:  {{ t('deep_mind.analysis_start')|tojson }},
+      analysisError:  {{ t('deep_mind.analysis_error')|tojson }},
+      doneTotal:      {{ t('deep_mind.done_total')|tojson }},
+      done:           {{ t('deep_mind.done')|tojson }},
+      analyzeStep:    {{ t('deep_mind.analyze_step')|tojson }},
+      clustering:     {{ t('deep_mind.clustering')|tojson }},
+      loadingLlm:     {{ t('deep_mind.loading_llm')|tojson }},
+      namingThemes:   {{ t('deep_mind.naming_themes')|tojson }},
+    };
   </script>
   <script src="{{ url_for('deep_mind.static', filename='js/neural_map.js') }}"></script>
 </body>

@@ -29,13 +29,16 @@
     // Pre-format the image / gradient / color values so we don't
     // recompute them per cube.
     var filledImg = 'url("' + cfg.filledUrl + '")';
-    var emptyBg = null;
+    // For image / gradient modes the value is already a CSS image
+    // function — wrapped server-side. For color mode we just have a
+    // hex/rgb string, which goes onto `background-color` instead.
+    var emptyImage = null;
+    var emptyColor = null;
     if (cfg.emptyMode === 'image' || cfg.emptyMode === 'gradient') {
-      emptyBg = cfg.emptyValue;  // already wrapped in url(...) or linear-gradient(...)
+      emptyImage = cfg.emptyValue;
+    } else if (cfg.emptyMode === 'color' && cfg.emptyValue) {
+      emptyColor = cfg.emptyValue;
     }
-    // Color mode: leave background-image unset so the existing CSS
-    // var(--cube-empty-color, #fff) keeps working — that path supports
-    // user customisation without a mosaic-specific color override.
 
     cubes.forEach(function (cube) {
       var r = cube.getBoundingClientRect();
@@ -49,17 +52,29 @@
         cube.style.backgroundSize = sizeStr;
         cube.style.backgroundPosition = posStr;
         cube.style.backgroundRepeat = 'no-repeat';
-      } else if (emptyBg) {
-        cube.style.backgroundImage = emptyBg;
+        cube.style.backgroundColor = '';
+      } else if (emptyImage) {
+        cube.style.backgroundImage = emptyImage;
         cube.style.backgroundSize = sizeStr;
         cube.style.backgroundPosition = posStr;
         cube.style.backgroundRepeat = 'no-repeat';
-      } else {
-        // Color-mode empty days: clear any previously-set inline image
-        // so toggling mosaic off-then-on doesn't leave stale slices.
+        cube.style.backgroundColor = '';
+      } else if (emptyColor) {
+        // Apply the mosaic-specific empty colour inline. We deliberately
+        // override the existing `var(--cube-empty-color)` fallback so the
+        // user's mosaic-empty-color picker actually drives empty cubes
+        // when mosaic is on — without this, the value was saved but
+        // never reached the DOM.
         cube.style.backgroundImage = '';
         cube.style.backgroundSize = '';
         cube.style.backgroundPosition = '';
+        cube.style.backgroundColor = emptyColor;
+      } else {
+        // Color mode with no value set: defer to existing CSS.
+        cube.style.backgroundImage = '';
+        cube.style.backgroundSize = '';
+        cube.style.backgroundPosition = '';
+        cube.style.backgroundColor = '';
       }
     });
   };

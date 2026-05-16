@@ -184,8 +184,59 @@
       if (key === 'notes-use-body-font') {
         applyNotesFont(v === 'true');
       }
+      if (key === 'auto-invert-text') {
+        applyAutoInvert();
+      }
     });
   });
+
+  // ── Auto-invert text (Stage 7) ───────────────────────────────
+  // Mirrors context_processor._auto_invert_overrides so live preview
+  // matches what the next page render will produce. When the toggle is
+  // off, we clear any computed override so the manual text-color picker
+  // takes over again.
+  function effectiveBgRgb() {
+    var bgType = (document.getElementById('cz-bg-type') || {}).value || 'color';
+    if (bgType === 'color') {
+      var c = (document.getElementById('cz-bg-color') || {}).value || '#ffffff';
+      return hexToRgb(c);
+    }
+    if (bgType === 'gradient') {
+      var f = (document.getElementById('cz-grad-from') || {}).value || '#ffffff';
+      var t = (document.getElementById('cz-grad-to')   || {}).value || '#dddddd';
+      var a = hexToRgb(f), b = hexToRgb(t);
+      return [
+        Math.round((a[0] + b[0]) / 2),
+        Math.round((a[1] + b[1]) / 2),
+        Math.round((a[2] + b[2]) / 2),
+      ];
+    }
+    return null;  // image: can't compute without sampling
+  }
+  function luma(rgb) {
+    return rgb[0] * 0.299 + rgb[1] * 0.587 + rgb[2] * 0.114;
+  }
+  function applyAutoInvert() {
+    var toggle = document.getElementById('cz-auto-invert');
+    var on = toggle && toggle.checked;
+    if (!on) {
+      // Restore manual values. The pickers carry the current intent.
+      var tc = (document.getElementById('cz-text-color') || {}).value;
+      var tm = (document.getElementById('cz-text-muted') || {}).value;
+      if (tc) applyVar('text-color', tc);
+      if (tm) applyVar('text-muted', tm);
+      return;
+    }
+    var rgb = effectiveBgRgb();
+    if (!rgb) return;  // image bg, no overlay — leave whatever's set
+    if (luma(rgb) < 128) {
+      applyVar('text-color', '#ffffff');
+      applyVar('text-muted', '#cccccc');
+    } else {
+      applyVar('text-color', '#000000');
+      applyVar('text-muted', '#666666');
+    }
+  }
 
   function applyNotesFont(on) {
     if (on) {
@@ -1173,6 +1224,12 @@
     var colNode   = readVar('neural-node-color')        || 'rgb(40,40,40)';
     var colActive = readVar('neural-node-active-color') || '#009afa';
     var colEdge   = readVar('neural-edge-color')        || 'rgba(0,0,0,0.25)';
+    var colBg     = readVar('neural-canvas-bg')         || '#fafafa';
+
+    // Paint the canvas background — clearRect leaves it transparent, so
+    // without this fill the bg picker wouldn't visibly affect the preview.
+    ctx.fillStyle = colBg;
+    ctx.fillRect(0, 0, W, H);
 
     // Resolve fractional coords once
     var nodes = neuralNodes.map(function (n) {
@@ -1381,16 +1438,18 @@
       if (W < 10 || H < 10) return;
 
       var filledImg = 'url("/customization/uploads/' + fillFn + '")';
-      var emptyBg = null;
+      var emptyImage = null;
+      var emptyColor = null;
       if (mosaicEmptyMode === 'image' && emptyFn) {
-        emptyBg = 'url("/customization/uploads/' + emptyFn + '")';
+        emptyImage = 'url("/customization/uploads/' + emptyFn + '")';
       } else if (mosaicEmptyMode === 'gradient') {
         var f = (document.getElementById('cz-mosaic-empty-grad-from') || {}).value || '#fff';
         var t = (document.getElementById('cz-mosaic-empty-grad-to')   || {}).value || '#ddd';
         var a = (document.getElementById('cz-mosaic-empty-grad-angle') || {}).value || '180';
-        emptyBg = 'linear-gradient(' + a + 'deg, ' + f + ', ' + t + ')';
+        emptyImage = 'linear-gradient(' + a + 'deg, ' + f + ', ' + t + ')';
+      } else if (mosaicEmptyMode === 'color') {
+        emptyColor = (document.getElementById('cz-mosaic-empty-color') || {}).value || '';
       }
-      // Color mode: leave inline image unset; CSS --cube-empty-color wins.
 
       box.querySelectorAll('.preview-mini-cube').forEach(function (cube) {
         var r = cube.getBoundingClientRect();
@@ -1403,11 +1462,19 @@
           cube.style.backgroundSize = sizeStr;
           cube.style.backgroundPosition = posStr;
           cube.style.backgroundRepeat = 'no-repeat';
-        } else if (emptyBg) {
-          cube.style.backgroundImage = emptyBg;
+          cube.style.backgroundColor = '';
+        } else if (emptyImage) {
+          cube.style.backgroundImage = emptyImage;
           cube.style.backgroundSize = sizeStr;
           cube.style.backgroundPosition = posStr;
           cube.style.backgroundRepeat = 'no-repeat';
+          cube.style.backgroundColor = '';
+        } else if (emptyColor) {
+          cube.style.backgroundImage = '';
+          cube.style.backgroundColor = emptyColor;
+        } else {
+          cube.style.backgroundImage = '';
+          cube.style.backgroundColor = '';
         }
       });
     });
@@ -1450,8 +1517,15 @@
   }
 
   function onPreviewChange(key) {
+    // Any change to the effective background should re-evaluate the
+    // auto-invert decision so the live preview matches what the server
+    // will emit on the next render.
+    if (key === 'bg-color' || key === 'bg-type' ||
+        key.indexOf('bg-gradient-') === 0) {
+      applyAutoInvert();
+    }
     // Mini-calendar uses pure CSS, no JS redraw.
-    if (key.indexOf('neural-') === 0 || key === 'text-color') {
+    if (key.indexOf('neural-') === 0 || key === 'text-color' || key === 'text-muted') {
       renderNeural();
       return;
     }
@@ -1473,6 +1547,7 @@
     renderCalendar();
     renderAllCharts();
     renderNeural();
+    applyAutoInvert();
   }
 
   // Re-render on resize (canvas needs to scale)

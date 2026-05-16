@@ -99,20 +99,19 @@ def _available_years(today):
 
 # ── Routes ──────────────────────────────────────────────────
 
-@bp.route('/insights')
-def insights_page():
+@bp.route('/graphics')
+def graphics_page():
     today = date.today()
     # Mini preview for "overview" card: a tiny heatmap of current year
     preview = _year_heatmap(today.year, cell=6, gap=2)
-    return render_template(
-        'insights/insights_landing.html',
+    return render_template('graphics/graphics_landing.html',
         preview_heat=preview,
         current_year=today.year,
     )
 
 
-@bp.route('/insights/overview')
-@bp.route('/insights/overview/<int:year>')
+@bp.route('/graphics/overview')
+@bp.route('/graphics/overview/<int:year>')
 def overview(year=None):
     today = date.today()
     if year is None:
@@ -120,7 +119,7 @@ def overview(year=None):
 
     available_years = _available_years(today)
     if year != today.year and year not in available_years:
-        return redirect(url_for('insights.overview', year=today.year))
+        return redirect(url_for('graphics.overview', year=today.year))
 
     heat = _year_heatmap(year)
     heat_pad_l = 34
@@ -176,8 +175,7 @@ def overview(year=None):
     total = len(ratings)
     avg = round(sum(ratings)/total, 2) if total else None
 
-    return render_template(
-        'insights/insights_overview.html',
+    return render_template('graphics/graphics_overview.html',
         year=year,
         current_year=today.year,
         available_years=available_years,
@@ -211,8 +209,8 @@ def _days_in_year(year: int) -> int:
 
 # ── River of mood ────────────────────────────────────────────
 
-@bp.route('/insights/river')
-@bp.route('/insights/river/<int:year>')
+@bp.route('/graphics/river')
+@bp.route('/graphics/river/<int:year>')
 def river(year=None):
     today = date.today()
     if year is None:
@@ -220,7 +218,7 @@ def river(year=None):
 
     available_years = _available_years(today)
     if year != today.year and year not in available_years:
-        return redirect(url_for('insights.river', year=today.year))
+        return redirect(url_for('graphics.river', year=today.year))
 
     series = _year_series(year)
     days_in_year = _days_in_year(year)
@@ -264,8 +262,7 @@ def river(year=None):
     total = len(ratings)
     avg = round(sum(ratings) / total, 2) if total else None
 
-    return render_template(
-        'insights/insights_river.html',
+    return render_template('graphics/graphics_river.html',
         year=year, current_year=today.year,
         available_years=available_years,
         total=total, avg=avg,
@@ -280,8 +277,8 @@ def river(year=None):
 
 # ── Spiral year ──────────────────────────────────────────────
 
-@bp.route('/insights/spiral')
-@bp.route('/insights/spiral/<int:year>')
+@bp.route('/graphics/spiral')
+@bp.route('/graphics/spiral/<int:year>')
 def spiral(year=None):
     today = date.today()
     if year is None:
@@ -289,7 +286,7 @@ def spiral(year=None):
 
     available_years = _available_years(today)
     if year != today.year and year not in available_years:
-        return redirect(url_for('insights.spiral', year=today.year))
+        return redirect(url_for('graphics.spiral', year=today.year))
 
     series = _year_series(year)
     days_in_year = _days_in_year(year)
@@ -348,8 +345,7 @@ def spiral(year=None):
     total = len(ratings)
     avg = round(sum(ratings) / total, 2) if total else None
 
-    return render_template(
-        'insights/insights_spiral.html',
+    return render_template('graphics/graphics_spiral.html',
         year=year, current_year=today.year,
         available_years=available_years,
         total=total, avg=avg,
@@ -363,8 +359,8 @@ def spiral(year=None):
 
 # ── Rhythm: weekday × month heatmap ──────────────────────────
 
-@bp.route('/insights/rhythm')
-@bp.route('/insights/rhythm/<int:year>')
+@bp.route('/graphics/rhythm')
+@bp.route('/graphics/rhythm/<int:year>')
 def rhythm(year=None):
     today = date.today()
     if year is None:
@@ -372,7 +368,7 @@ def rhythm(year=None):
 
     available_years = _available_years(today)
     if year != today.year and year not in available_years:
-        return redirect(url_for('insights.rhythm', year=today.year))
+        return redirect(url_for('graphics.rhythm', year=today.year))
 
     entries = MoodEntry.query.filter(
         db.extract('year', MoodEntry.date) == year
@@ -488,8 +484,7 @@ def rhythm(year=None):
     total = len(entries)
     overall_avg = round(sum(e.rating for e in entries) / total, 2) if total else None
 
-    return render_template(
-        'insights/insights_rhythm.html',
+    return render_template('graphics/graphics_rhythm.html',
         year=year, current_year=today.year,
         available_years=available_years,
         width=width, height=height,
@@ -504,8 +499,8 @@ def rhythm(year=None):
 
 # ── Polar rose: rating distribution by weekday ───────────────
 
-@bp.route('/insights/rose')
-@bp.route('/insights/rose/<int:year>')
+@bp.route('/graphics/rose')
+@bp.route('/graphics/rose/<int:year>')
 def rose(year=None):
     today = date.today()
     if year is None:
@@ -513,7 +508,7 @@ def rose(year=None):
 
     available_years = _available_years(today)
     if year != today.year and year not in available_years:
-        return redirect(url_for('insights.rose', year=today.year))
+        return redirect(url_for('graphics.rose', year=today.year))
 
     entries = MoodEntry.query.filter(
         db.extract('year', MoodEntry.date) == year
@@ -642,8 +637,7 @@ def rose(year=None):
     total = len(entries)
     overall_avg = round(sum(e.rating for e in entries) / total, 2) if total else None
 
-    return render_template(
-        'insights/insights_rose.html',
+    return render_template('graphics/graphics_rose.html',
         year=year, current_year=today.year,
         available_years=available_years,
         size=size, cx=cx, cy=cy,
@@ -659,8 +653,8 @@ def rose(year=None):
 
 # ── Ridgeline: rating distribution by month ──────────────────
 
-@bp.route('/insights/ridgeline')
-@bp.route('/insights/ridgeline/<int:year>')
+@bp.route('/graphics/ridgeline')
+@bp.route('/graphics/ridgeline/<int:year>')
 def ridgeline(year=None):
     today = date.today()
     if year is None:
@@ -668,7 +662,7 @@ def ridgeline(year=None):
 
     available_years = _available_years(today)
     if year != today.year and year not in available_years:
-        return redirect(url_for('insights.ridgeline', year=today.year))
+        return redirect(url_for('graphics.ridgeline', year=today.year))
 
     # For each month, build a 10-bin histogram of ratings
     entries = MoodEntry.query.filter(
@@ -747,8 +741,7 @@ def ridgeline(year=None):
     total = len(entries)
     overall_avg = round(sum(e.rating for e in entries) / total, 2) if total else None
 
-    return render_template(
-        'insights/insights_ridgeline.html',
+    return render_template('graphics/graphics_ridgeline.html',
         year=year, current_year=today.year,
         available_years=available_years,
         ridges=ridges,
@@ -782,7 +775,7 @@ after some any all each every other another own same such any of had have has
 """.split())
 
 
-@bp.route('/insights/words')
+@bp.route('/graphics/words')
 def words():
     """Words that correlate with good or bad days.
     For each word (≥3 occurrences), compute avg rating of days where it appears."""
@@ -825,8 +818,7 @@ def words():
         [abs(r['delta']) for r in lifts + drags] + [0.5]
     )
 
-    return render_template(
-        'insights/insights_words.html',
+    return render_template('graphics/graphics_words.html',
         lifts=lifts, drags=drags,
         total_days=total_days,
         global_avg=round(global_avg, 2),
@@ -835,7 +827,7 @@ def words():
     )
 
 
-@bp.route('/insights/people')
+@bp.route('/graphics/people')
 def people():
     """People/roles mentioned in diary entries, split by LLM-extracted tone.
 
@@ -845,7 +837,7 @@ def people():
     """
     active = current_app.config.get('ACTIVE_MODULES', [])
     if 'assistant' not in active:
-        return redirect(url_for('insights.insights_page'))
+        return redirect(url_for('graphics.graphics_page'))
 
     from app.models import EntryPerson, PersonAlias
 
@@ -924,8 +916,7 @@ def people():
         MoodEntry.note.isnot(None), MoodEntry.note != ''
     ).count()
 
-    return render_template(
-        'insights/insights_people.html',
+    return render_template('graphics/graphics_people.html',
         lifts=lifts, drags=drags,
         total_people=len(scored),
         total_mentions=total_mentions,
@@ -934,7 +925,7 @@ def people():
     )
 
 
-@bp.route('/insights/activities')
+@bp.route('/graphics/activities')
 def activities():
     """Packed-circles chart of what the user does, sized by frequency,
     colored by the average mood on days when the activity appears.
@@ -945,7 +936,7 @@ def activities():
     """
     active = current_app.config.get('ACTIVE_MODULES', [])
     if 'assistant' not in active:
-        return redirect(url_for('insights.insights_page'))
+        return redirect(url_for('graphics.graphics_page'))
 
     from app.models import EntryActivity
 
@@ -989,8 +980,7 @@ def activities():
     total_mentions = sum(i['count'] for i in items)
     max_delta = max([abs(i['delta']) for i in items] + [0.5])
 
-    return render_template(
-        'insights/insights_activities.html',
+    return render_template('graphics/graphics_activities.html',
         activities=items,
         total_activities=len(items),
         total_mentions=total_mentions,
@@ -1000,7 +990,7 @@ def activities():
     )
 
 
-@bp.route('/insights/people/manage')
+@bp.route('/graphics/people/manage')
 def people_manage():
     """Bulk management page — see all unique person mentions grouped by
     canonical, with checkboxes and a single merge action. Solves the
@@ -1067,8 +1057,7 @@ def people_manage():
     # All canonical names — fed into the target <datalist> for autocomplete
     all_canonicals = sorted(groups.keys())
 
-    return render_template(
-        'insights/insights_people_manage.html',
+    return render_template('graphics/graphics_people_manage.html',
         groups=group_list,
         all_canonicals=all_canonicals,
         total_groups=len(group_list),
@@ -1076,7 +1065,7 @@ def people_manage():
     )
 
 
-@bp.route('/insights/people/alias/bulk', methods=['POST'])
+@bp.route('/graphics/people/alias/bulk', methods=['POST'])
 def people_alias_bulk():
     """Merge a set of selected names into a single target canonical.
 
@@ -1098,7 +1087,7 @@ def people_alias_bulk():
     selected = [s.strip() for s in request.form.getlist('selected') if s.strip()]
 
     if not target or not selected:
-        return redirect(url_for('insights.people_manage'))
+        return redirect(url_for('graphics.people_manage'))
 
     from app.models import PersonAlias
 
@@ -1128,10 +1117,10 @@ def people_alias_bulk():
         db.session.add(PersonAlias(alias=name, canonical=target))
 
     db.session.commit()
-    return redirect(url_for('insights.people_manage'))
+    return redirect(url_for('graphics.people_manage'))
 
 
-@bp.route('/insights/people/alias/create', methods=['POST'])
+@bp.route('/graphics/people/alias/create', methods=['POST'])
 def people_alias_create():
     """Create an alias mapping `alias → canonical`. Used by the merge
     button on the detail page. POST form fields: alias, canonical."""
@@ -1142,7 +1131,7 @@ def people_alias_create():
     alias = (request.form.get('alias') or '').strip()
     canonical = (request.form.get('canonical') or '').strip()
     if not alias or not canonical or alias == canonical:
-        return redirect(url_for('insights.people'))
+        return redirect(url_for('graphics.people'))
 
     from app.models import PersonAlias
     # Replace existing mapping for this alias if any (idempotent updates).
@@ -1152,10 +1141,10 @@ def people_alias_create():
     else:
         db.session.add(PersonAlias(alias=alias, canonical=canonical))
     db.session.commit()
-    return redirect(url_for('insights.people_detail', name=canonical))
+    return redirect(url_for('graphics.people_detail', name=canonical))
 
 
-@bp.route('/insights/people/alias/set_canonical', methods=['POST'])
+@bp.route('/graphics/people/alias/set_canonical', methods=['POST'])
 def people_alias_set_canonical():
     """Promote one of the merged names to be the displayed canonical.
     All current aliases get re-pointed to the new canonical, and the
@@ -1172,7 +1161,7 @@ def people_alias_set_canonical():
     new_canonical = (request.form.get('new_canonical') or '').strip()
     current_canonical = (request.form.get('current_canonical') or '').strip()
     if not new_canonical or not current_canonical or new_canonical == current_canonical:
-        return redirect(url_for('insights.people'))
+        return redirect(url_for('graphics.people'))
 
     from app.models import PersonAlias
 
@@ -1192,10 +1181,10 @@ def people_alias_set_canonical():
     db.session.add(PersonAlias(alias=current_canonical, canonical=new_canonical))
     db.session.commit()
 
-    return redirect(url_for('insights.people_detail', name=new_canonical))
+    return redirect(url_for('graphics.people_detail', name=new_canonical))
 
 
-@bp.route('/insights/people/alias/delete', methods=['POST'])
+@bp.route('/graphics/people/alias/delete', methods=['POST'])
 def people_alias_delete():
     """Remove an alias mapping. POST form field: alias."""
     err = _require_assistant()
@@ -1204,7 +1193,7 @@ def people_alias_delete():
 
     alias = (request.form.get('alias') or '').strip()
     if not alias:
-        return redirect(url_for('insights.people'))
+        return redirect(url_for('graphics.people'))
 
     from app.models import PersonAlias
     PersonAlias.query.filter_by(alias=alias).delete()
@@ -1212,11 +1201,11 @@ def people_alias_delete():
     # Stay on the detail page the user came from
     came_from = (request.form.get('return_to') or '').strip()
     if came_from:
-        return redirect(url_for('insights.people_detail', name=came_from))
-    return redirect(url_for('insights.people'))
+        return redirect(url_for('graphics.people_detail', name=came_from))
+    return redirect(url_for('graphics.people'))
 
 
-@bp.route('/insights/activities/zoom')
+@bp.route('/graphics/activities/zoom')
 def activities_zoom():
     """Zoomable circle packing of activities — top-level circles are
     activities (sized by frequency, shaded by mood), child circles are
@@ -1278,8 +1267,7 @@ def activities_zoom():
 
     data = {'name': 'root', 'children': activities_list}
 
-    return render_template(
-        'insights/insights_activities_zoom.html',
+    return render_template('graphics/graphics_activities_zoom.html',
         data=data,
         total_activities=len(activities_list),
         baseline=round(baseline, 2),
@@ -1288,7 +1276,7 @@ def activities_zoom():
     )
 
 
-@bp.route('/insights/people/detail')
+@bp.route('/graphics/people/detail')
 def people_detail():
     """Per-person detail page — every entry mentioning this person plus the
     tone the LLM assigned to each mention. Lets the user verify why a
@@ -1299,7 +1287,7 @@ def people_detail():
 
     name = request.args.get('name', '').strip()
     if not name:
-        return redirect(url_for('insights.people'))
+        return redirect(url_for('graphics.people'))
 
     from app.models import EntryPerson
 
@@ -1357,8 +1345,7 @@ def people_detail():
 
     counts = {'positive': 0, 'neutral': 0, 'negative': 0}
     if not by_entry:
-        return render_template(
-            'insights/insights_people_detail.html',
+        return render_template('graphics/graphics_people_detail.html',
             name=target, entries=[], counts=counts, total=0, tone_score=0.0,
         )
 
@@ -1384,8 +1371,7 @@ def people_detail():
         if total else 0.0
     )
 
-    return render_template(
-        'insights/insights_people_detail.html',
+    return render_template('graphics/graphics_people_detail.html',
         name=target, entries=items, counts=counts, total=total,
         tone_score=tone_score,
         incoming_aliases=incoming_aliases,
@@ -1401,7 +1387,7 @@ def _require_assistant():
     return None
 
 
-@bp.route('/insights/people/reextract', methods=['POST'])
+@bp.route('/graphics/people/reextract', methods=['POST'])
 def people_reextract():
     err = _require_assistant()
     if err:
@@ -1411,13 +1397,13 @@ def people_reextract():
     return jsonify({'started': started})
 
 
-@bp.route('/insights/people/reextract/status')
+@bp.route('/graphics/people/reextract/status')
 def people_reextract_status():
     from app.modules.assistant.background import get_people_extract_status
     return jsonify(get_people_extract_status())
 
 
-@bp.route('/insights/activities/reextract', methods=['POST'])
+@bp.route('/graphics/activities/reextract', methods=['POST'])
 def activities_reextract():
     err = _require_assistant()
     if err:
@@ -1427,7 +1413,7 @@ def activities_reextract():
     return jsonify({'started': started})
 
 
-@bp.route('/insights/activities/reextract/status')
+@bp.route('/graphics/activities/reextract/status')
 def activities_reextract_status():
     from app.modules.assistant.background import get_activities_extract_status
     return jsonify(get_activities_extract_status())

@@ -19,7 +19,7 @@
 }
 .cz-subtitle {
   font-size: 15px;
-  color: #666;
+  color: var(--text-muted, #666);
   margin: 0 0 32px;
 }
 
@@ -65,7 +65,7 @@
 }
 .cz-section-reset {
   font-size: 12px;
-  color: #888;
+  color: var(--text-muted, #888);
   background: none;
   border: none;
   padding: 0;
@@ -76,7 +76,7 @@
 .cz-section-reset:hover { color: #c44; }
 .cz-section-desc {
   font-size: 13px;
-  color: #666;
+  color: var(--text-muted, #666);
   margin: 0;
   flex-basis: 100%;  /* force onto its own row inside .cz-section-head flexbox */
 }
@@ -96,7 +96,7 @@
 .cz-row label {
   flex: 1;
   font-size: 14px;
-  color: #444;
+  color: var(--text-muted, #444);
 }
 
 /* Native color picker — reskinned to match the minimal aesthetic */
@@ -138,7 +138,7 @@ input[type="color"].cz-color::-webkit-color-swatch {
 }
 .cz-preview-label {
   font-size: 12px;
-  color: #888;
+  color: var(--text-muted, #888);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -168,7 +168,7 @@ input[type="color"].cz-color::-webkit-color-swatch {
 }
 .cz-cleanup-desc {
   font-size: 13px;
-  color: #666;
+  color: var(--text-muted, #666);
   margin: 12px 0;
   line-height: 1.5;
 }
@@ -187,7 +187,7 @@ input[type="color"].cz-color::-webkit-color-swatch {
   max-height: 200px;
   overflow-y: auto;
   white-space: pre-wrap;
-  color: #444;
+  color: var(--text-muted, #444);
 }
 .cz-cleanup-output:empty { display: none; }
 
@@ -285,7 +285,7 @@ input[type="color"].cz-color::-webkit-color-swatch {
 .cz-toggle-label {
   flex: 1;
   font-size: 14px;
-  color: #444;
+  color: var(--text-muted, #444);
   cursor: pointer;
 }
 .cz-toggle {
@@ -319,7 +319,7 @@ input[type="color"].cz-color::-webkit-color-swatch {
 .preview-mini-notes-label {
   font-family: var(--font-body, 'Times New Roman', Times, serif);
   font-size: 11px;
-  color: #888;
+  color: var(--text-muted, #888);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-top: 14px;
@@ -352,7 +352,7 @@ input[type="color"].cz-color::-webkit-color-swatch {
   font-size: 13px;
   cursor: pointer;
   border-right: 1px solid #ccc;
-  color: #444;
+  color: var(--text-muted, #444);
   transition: background 0.12s, color 0.12s;
 }
 .cz-bg-type-btn:last-child { border-right: none; }
@@ -398,7 +398,7 @@ input[type="color"].cz-color::-webkit-color-swatch {
   text-align: right;
   font-family: ui-monospace, "JetBrains Mono", "Menlo", monospace;
   font-size: 12px;
-  color: #666;
+  color: var(--text-muted, #666);
 }
 
 /* Small in-row buttons (file upload trigger / delete) */
@@ -427,7 +427,7 @@ input[type="color"].cz-color::-webkit-color-swatch {
 .cz-current-file {
   font-family: ui-monospace, "JetBrains Mono", "Menlo", monospace;
   font-size: 12px;
-  color: #888;
+  color: var(--text-muted, #888);
 }
 
 /* Page sample preview frame — show actual rendered bg variables on a
@@ -451,13 +451,6 @@ input[type="color"].cz-color::-webkit-color-swatch {
   background-repeat: var(--bg-repeat, no-repeat);
   filter: blur(var(--bg-image-blur, 0px));
   opacity: var(--bg-image-opacity, 1);
-}
-.cz-bg-preview-frame::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  background: var(--bg-overlay, transparent);
 }
 .cz-bg-preview-frame .cz-bg-preview-text {
   position: relative;

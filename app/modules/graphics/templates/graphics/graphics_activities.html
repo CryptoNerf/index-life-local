@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>activities</title>
+  <title>{{ t('graphics.activities.title') }}</title>
   <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/calendar.css') }}">
-  <link rel="stylesheet" href="{{ url_for('insights.static', filename='css/insights.css') }}">
+  <link rel="stylesheet" href="{{ url_for('graphics.static', filename='css/graphics.css') }}">
   <style>
     .activities-wrap {
       max-width: 1120px;
@@ -114,7 +114,7 @@
     <nav class="top-menu">
       <a href="{{ url_for('main.mood_grid') }}" class="menu-link">{{ t('nav.mood_grid') }}</a>
       <a href="{{ url_for('main.life_calendar') }}" class="menu-link">{{ t('nav.life_calendar') }}</a>
-      <a href="{{ url_for('insights.insights_page') }}" class="menu-link active-link">{{ t('nav.insights') }}</a>
+      <a href="{{ url_for('graphics.graphics_page') }}" class="menu-link active-link">{{ t('nav.graphics') }}</a>
       {% if module_active('assistant') %}
         <a href="{{ url_for('assistant.chat') }}" class="menu-link">{{ t('nav.assistant') }}</a>
       {% endif %}
@@ -128,24 +128,24 @@
     </nav>
   </header>
 
-  <main class="insights-main">
+  <main class="graphics-main">
     <div class="detail-header">
-      <a href="{{ url_for('insights.insights_page') }}" class="back-link">← insights</a>
-      <p class="insights-title">activities</p>
-      <p class="insights-summary">
+      <a href="{{ url_for('graphics.graphics_page') }}" class="back-link">{{ t('graphics.back') }}</a>
+      <p class="graphics-title">{{ t('graphics.activities.title') }}</p>
+      <p class="graphics-summary">
         {% if total_activities > 0 %}
-          {{ total_activities }} activities across {{ total_mentions }} mentions — circle size is frequency, shade is mood relative to your {{ '%.2f'|format(baseline) }} average
+          {{ t('graphics.activities.summary', n=total_activities, mentions=total_mentions, avg='%.2f'|format(baseline)) }}|format(baseline) }} average
         {% elif has_notes %}
-          no activities extracted yet — the AI psychologist is still analyzing your entries
+          {{ t('graphics.activities_zoom.no_activities') }}
         {% else %}
-          no entries with notes yet
+          {{ t('graphics.no_notes') }}
         {% endif %}
       </p>
     </div>
 
     {% if total_activities == 0 and has_notes %}
       <p class="activities-backfill-hint">
-        analysis runs in the background — come back in a few minutes
+        {{ t('graphics.analysis_running') }}
       </p>
     {% endif %}
 
@@ -171,7 +171,7 @@
         </div>
 
         <p class="activities-summary-row">
-          hover a circle for details · size is how many times you did it · lighter = mood above your average on those days, darker = below · neutral mid-grey = close to your overall average
+          {{ t('graphics.activities.legend') }}
         </p>
       </div>
 
@@ -184,7 +184,7 @@
         </div>
       {% endif %}
 
-      <script src="{{ url_for('insights.static', filename='js/d3.v7.min.js') }}"></script>
+      <script src="{{ url_for('graphics.static', filename='js/d3.v7.min.js') }}"></script>
       <script id="activities-data" type="application/json">
         {
           "activities": {{ activities | tojson }},
@@ -355,7 +355,7 @@
           btn.textContent = 're-extracting...';
           status.textContent = 'starting...';
 
-          fetch('/insights/activities/reextract', { method: 'POST' })
+          fetch('/graphics/activities/reextract', { method: 'POST' })
             .then(function(r) { return r.json(); })
             .then(function(data) {
               if (data.error) {
@@ -383,7 +383,7 @@
         }
 
         function pollStatus() {
-          fetch('/insights/activities/reextract/status')
+          fetch('/graphics/activities/reextract/status')
             .then(function(r) { return r.json(); })
             .then(function(s) {
               var status = document.getElementById('reextract-status');
@@ -401,7 +401,7 @@
         }
 
         (function() {
-          fetch('/insights/activities/reextract/status')
+          fetch('/graphics/activities/reextract/status')
             .then(function(r) { return r.json(); })
             .then(function(s) {
               if (s.running) {

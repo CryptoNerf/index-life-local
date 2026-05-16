@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Modules</title>
+  <title>{{ t('modules.title') }}</title>
   <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
   <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='images/favicon-32x32.png') }}">
   <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='images/apple-touch-icon.png') }}">
@@ -15,7 +15,7 @@
     <nav class="top-menu">
       <a href="{{ url_for('main.mood_grid') }}" class="menu-link">{{ t('nav.mood_grid') }}</a>
       <a href="{{ url_for('main.life_calendar') }}" class="menu-link">{{ t('nav.life_calendar') }}</a>
-      {% if module_active('insights') %}<a href="{{ url_for('insights.insights_page') }}" class="menu-link">{{ t('nav.insights') }}</a>{% endif %}
+      {% if module_active('graphics') %}<a href="{{ url_for('graphics.graphics_page') }}" class="menu-link">{{ t('nav.graphics') }}</a>{% endif %}
       {% if module_active('assistant') %}
         <a href="{{ url_for('assistant.chat') }}" class="menu-link">{{ t('nav.assistant') }}</a>
       {% endif %}
@@ -30,8 +30,8 @@
   </header>
 
   <div class="modules-page">
-    <h1>Modules</h1>
-    <p class="modules-subtitle">Optional features you can add to index.life</p>
+    <h1>{{ t('modules.title') }}</h1>
+    <p class="modules-subtitle">{{ t('modules.subtitle') }}</p>
 
     <div class="module-list">
       {% for mod in modules %}
@@ -44,22 +44,22 @@
             {% else %}
               <span class="module-dot dot-inactive">&#9675;</span>
             {% endif %}
-            <span class="module-title">{{ mod.title }}</span>
+            <span class="module-title">{{ t(mod.title) }}</span>
             {% if mod.active %}
-              <span class="module-badge badge-active">active</span>
+              <span class="module-badge badge-active">{{ t('modules.active') }}</span>
             {% elif mod.installed_needs_restart %}
-              <span class="module-badge badge-restart">restart needed</span>
+              <span class="module-badge badge-restart">{{ t('modules.restart_badge') }}</span>
             {% endif %}
           </div>
           {% if mod.description %}
-            <p class="module-desc">{{ mod.description }}</p>
+            <p class="module-desc">{{ t(mod.description) }}</p>
           {% endif %}
 
           {% if mod.active %}
             {# Module is loaded and working #}
           {% elif mod.installed_needs_restart %}
             <div class="module-action-row">
-              <button class="install-btn install-btn-restart" onclick="restartApp()">Restart app</button>
+              <button class="install-btn install-btn-restart" onclick="restartApp()">{{ t('modules.restart_btn') }}</button>
             </div>
           {% else %}
             {% if mod.size %}
@@ -67,17 +67,17 @@
             {% endif %}
             {% if mod.unmet_requires %}
               <p class="module-action-hint">
-                Requires: {{ mod.requires_labels | join(', ') }}
+                {{ t('modules.requires', names=mod.requires_labels | join(', ')) }}
               </p>
               <div class="module-action-row">
-                <button class="install-btn" disabled>Install</button>
+                <button class="install-btn" disabled>{{ t('modules.install') }}</button>
               </div>
             {% else %}
               <div class="module-action-row">
                 <button class="install-btn"
                         onclick="startInstall('{{ mod.name }}')"
                         id="btn-{{ mod.name }}">
-                  Install
+                  {{ t('modules.install') }}
                 </button>
               </div>
             {% endif %}
@@ -89,7 +89,7 @@
     <!-- Install terminal output -->
     <div id="install-terminal" class="install-terminal" style="display:none">
       <div class="terminal-header">
-        <span id="terminal-title">Installing...</span>
+        <span id="terminal-title">{{ t('modules.installing') }}</span>
         <button class="terminal-close" onclick="closeTerminal()">&times;</button>
       </div>
       <pre id="terminal-output" class="terminal-output"></pre>
@@ -100,7 +100,7 @@
     {% set has_installable = modules | rejectattr('active') | rejectattr('installed_needs_restart') | list | length > 0 %}
     {% if has_installable %}
       <div class="install-section">
-        <h2>Alternative: manual install</h2>
+        <h2>{{ t('modules.alt_install_heading') }}</h2>
         <p class="install-platform">{{ install.platform }}</p>
         <p class="install-alt">{{ install.method }}</p>
       </div>
@@ -109,14 +109,12 @@
     <!-- Troubleshooting: reset venv as last-resort recovery -->
     <div class="troubleshoot-section">
       <details>
-        <summary>Troubleshooting</summary>
+        <summary>{{ t('modules.troubleshooting') }}</summary>
         <p class="troubleshoot-desc">
-          If a module install is broken or hangs, you can wipe the Python
-          environment and reinstall from scratch. Downloaded AI models are
-          kept — only the Python packages are removed.
+          {{ t('modules.troubleshoot_desc') }}
         </p>
         <button class="troubleshoot-btn" onclick="resetModules()" id="reset-btn">
-          Reset modules environment
+          {{ t('modules.reset_btn') }}
         </button>
         <p class="troubleshoot-status" id="reset-status"></p>
       </details>
@@ -129,6 +127,30 @@
 
   <script>
     const PROFILE = '{{ profile }}';
+    const MODULES_I18N = {
+      installModule:        {{ t('modules.install_module')|tojson }},
+      installing:           {{ t('modules.installing')|tojson }},
+      installComplete:      {{ t('modules.installation_complete')|tojson }},
+      installFailed:        {{ t('modules.installation_failed')|tojson }},
+      retry:                {{ t('modules.retry')|tojson }},
+      install:              {{ t('modules.install')|tojson }},
+      restartBtn:           {{ t('modules.restart_btn')|tojson }},
+      restarting:           {{ t('modules.restarting')|tojson }},
+      restartingManual:     {{ t('modules.restarting_manual')|tojson }},
+      reconnecting:         {{ t('modules.reconnecting')|tojson }},
+      reconnectFailed:      {{ t('modules.reconnect_failed')|tojson }},
+      networkError:         {{ t('modules.network_error')|tojson }},
+      error:                {{ t('modules.error')|tojson }},
+      unknown:              {{ t('modules.unknown_error')|tojson }},
+      resetBtn:             {{ t('modules.reset_btn')|tojson }},
+      resetRunning:         {{ t('modules.reset_running')|tojson }},
+      resetComplete:        {{ t('modules.reset_complete')|tojson }},
+      resetRestart:         {{ t('modules.reset_restart')|tojson }},
+      resetConfirm:         {{ t('modules.reset_confirm')|tojson }},
+      resetBusy:            {{ t('modules.reset_busy')|tojson }},
+      resetDone:            {{ t('modules.reset_done')|tojson }},
+      resetNoEnv:           {{ t('modules.reset_no_env')|tojson }},
+    };
     let currentModule = null;
     let eventSource = null;
     let pollInterval = null;
@@ -165,9 +187,9 @@
       disableAllButtons();
 
       var btn = document.getElementById('btn-' + moduleName);
-      if (btn) btn.textContent = 'Installing...';
+      if (btn) btn.textContent = MODULES_I18N.installing;
 
-      showTerminal('Installing ' + moduleName + '...', true);
+      showTerminal(MODULES_I18N.installModule.replace('{name}', moduleName), true);
 
       var form = new FormData();
       form.append('module', moduleName);
@@ -177,14 +199,14 @@
         .then(function(r) { return r.json(); })
         .then(function(data) {
           if (data.error) {
-            appendOutput('Error: ' + data.error + '\n');
+            appendOutput(MODULES_I18N.error.replace('{err}', data.error) + '\n');
             handleError();
             return;
           }
           connectStream(0);
         })
         .catch(function(err) {
-          appendOutput('Network error: ' + err + '\n');
+          appendOutput(MODULES_I18N.networkError.replace('{err}', err) + '\n');
           handleError();
         });
     }
@@ -245,7 +267,7 @@
 
     function pollStatus() {
       stopPolling();
-      appendOutput('\n(Reconnecting...)\n');
+      appendOutput('\n' + MODULES_I18N.reconnecting + '\n');
       pollInterval = setInterval(function() {
         fetch('/modules/install/status')
           .then(function(r) { return r.json(); })
@@ -264,10 +286,10 @@
     }
 
     function handleSuccess() {
-      document.getElementById('terminal-title').textContent = 'Installation complete!';
+      document.getElementById('terminal-title').textContent = MODULES_I18N.installComplete;
       var actions = document.getElementById('terminal-actions');
       actions.style.display = 'block';
-      actions.innerHTML = '<button class="install-btn install-btn-restart" onclick="restartApp()">Restart app</button>';
+      actions.innerHTML = '<button class="install-btn install-btn-restart" onclick="restartApp()">' + MODULES_I18N.restartBtn + '</button>';
 
       if (currentModule) {
         var card = document.getElementById('card-' + currentModule);
@@ -281,16 +303,16 @@
     }
 
     function handleError() {
-      document.getElementById('terminal-title').textContent = 'Installation failed';
+      document.getElementById('terminal-title').textContent = MODULES_I18N.installFailed;
       var actions = document.getElementById('terminal-actions');
       actions.style.display = 'block';
-      actions.innerHTML = '<button class="install-btn" onclick="retryInstall()">Retry</button>';
+      actions.innerHTML = '<button class="install-btn" onclick="retryInstall()">' + MODULES_I18N.retry + '</button>';
 
       document.querySelectorAll('.install-btn').forEach(function(b) { b.disabled = false; });
 
       if (currentModule) {
         var btn = document.getElementById('btn-' + currentModule);
-        if (btn) { btn.textContent = 'Install'; btn.disabled = false; }
+        if (btn) { btn.textContent = MODULES_I18N.install; btn.disabled = false; }
       }
       currentModule = null;
     }
@@ -306,22 +328,22 @@
 
     function restartApp() {
       var btns = document.querySelectorAll('.install-btn-restart');
-      btns.forEach(function(b) { b.disabled = true; b.textContent = 'Restarting...'; });
+      btns.forEach(function(b) { b.disabled = true; b.textContent = MODULES_I18N.installing; });
 
       fetch('/modules/restart', { method: 'POST' })
         .then(function() {
-          appendOutput('\nRestarting application...\n');
+          appendOutput('\n' + MODULES_I18N.restarting + '\n');
           setTimeout(function() { tryReconnect(0); }, 2000);
         })
         .catch(function() {
-          appendOutput('\nPlease quit and reopen the application manually.\n');
-          btns.forEach(function(b) { b.textContent = 'Restart app'; b.disabled = false; });
+          appendOutput('\n' + MODULES_I18N.restartingManual + '\n');
+          btns.forEach(function(b) { b.textContent = MODULES_I18N.restartBtn; b.disabled = false; });
         });
     }
 
     function tryReconnect(attempt) {
       if (attempt > 20) {
-        appendOutput('Could not reconnect. Please reopen the application manually.\n');
+        appendOutput(MODULES_I18N.reconnectFailed + '\n');
         return;
       }
       fetch('/modules')
@@ -337,44 +359,38 @@
 
     function resetModules() {
       if (currentModule) {
-        alert('An install is in progress. Wait for it to finish first.');
+        alert(MODULES_I18N.resetBusy);
         return;
       }
-      var ok = confirm(
-        'This will delete the Python environment used by modules.\n\n' +
-        'Downloaded AI models are kept. After reset you need to reinstall ' +
-        'modules and restart the app.\n\n' +
-        'Continue?'
-      );
-      if (!ok) return;
+      if (!confirm(MODULES_I18N.resetConfirm)) return;
 
       var btn = document.getElementById('reset-btn');
       var status = document.getElementById('reset-status');
       btn.disabled = true;
-      btn.textContent = 'Resetting...';
+      btn.textContent = MODULES_I18N.resetRunning;
       status.textContent = '';
 
       fetch('/modules/reset', { method: 'POST' })
         .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
         .then(function(res) {
           if (!res.ok) {
-            status.textContent = 'Error: ' + (res.data.error || 'unknown');
+            status.textContent = MODULES_I18N.error.replace('{err}', res.data.error || MODULES_I18N.unknown);
             btn.disabled = false;
-            btn.textContent = 'Reset modules environment';
+            btn.textContent = MODULES_I18N.resetBtn;
             return;
           }
           // If the server returned a custom message (typical for the
           // deferred-cleanup path on Windows), show it verbatim — it's
           // tailored to the situation. Otherwise default to a generic line.
           status.textContent = res.data.message || (res.data.existed
-            ? 'Done. Reload the page or restart the app, then reinstall modules.'
-            : 'Nothing to reset — no environment found.');
-          btn.textContent = res.data.deferred ? 'Restart app to finish' : 'Reset complete';
+            ? MODULES_I18N.resetDone
+            : MODULES_I18N.resetNoEnv);
+          btn.textContent = res.data.deferred ? MODULES_I18N.resetRestart : MODULES_I18N.resetComplete;
         })
         .catch(function(err) {
-          status.textContent = 'Network error: ' + err;
+          status.textContent = MODULES_I18N.networkError.replace('{err}', err);
           btn.disabled = false;
-          btn.textContent = 'Reset modules environment';
+          btn.textContent = MODULES_I18N.resetBtn;
         });
     }
   </script>

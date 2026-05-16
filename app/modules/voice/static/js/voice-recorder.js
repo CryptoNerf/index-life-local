@@ -72,7 +72,7 @@
     var hint = document.createElement('div');
     hint.className = 'voice-processing-hint';
     hint.style.cssText = 'color:#999;font-style:italic;padding:4px 8px;';
-    hint.textContent = 'Распознавание речи...';
+    hint.textContent = (window.VOICE_I18N && window.VOICE_I18N.recognizing) || 'Recognizing speech...';
     container.parentNode.insertBefore(hint, container.nextSibling);
   }
 
@@ -114,7 +114,7 @@
           console.error('Transcription error:', data.error);
           alert('Transcription error: ' + data.error);
         } else {
-          alert('Не удалось распознать речь. Попробуйте говорить чуть громче и без пауз.');
+          alert((window.VOICE_I18N && window.VOICE_I18N.recognizeFailed) || 'Speech recognition failed. Try speaking a bit louder and without pauses.');
         }
       })
       .catch(function (err) {

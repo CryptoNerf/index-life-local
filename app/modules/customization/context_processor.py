@@ -37,6 +37,7 @@ _METADATA_KEYS = {
     'bg-image-filename',
     'font-body-id', 'font-heading-id', 'custom-font-filename',
     'notes-use-body-font',
+    'auto-invert-text',
     # Mosaic settings — JS reads them via window.__CZ_MOSAIC__ rather
     # than CSS variables (per-cube positioning needs DOM measurement).
     'mosaic-enabled', 'mosaic-filled-filename',
@@ -159,6 +160,80 @@ def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
         return (int(s[0:2], 16), int(s[2:4], 16), int(s[4:6], 16))
     except ValueError:
         return (0, 0, 0)
+
+
+def _parse_css_color(value: str) -> tuple[int, int, int, float] | None:
+    """Best-effort parser for the colour formats users actually pick:
+    `#rgb`, `#rrggbb`, `rgb(r,g,b)`, `rgba(r,g,b,a)`. Returns (r,g,b,a)
+    where a is 0..1, or None when the value doesn't match — we never
+    raise so a stray free-text overlay can't crash render.
+    """
+    if not isinstance(value, str):
+        return None
+    s = value.strip().lower()
+    if not s or s == 'transparent':
+        return None
+    if s.startswith('#'):
+        r, g, b = _hex_to_rgb(s)
+        return (r, g, b, 1.0)
+    import re as _re
+    m = _re.match(r'rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\)', s)
+    if not m:
+        return None
+    try:
+        r, g, b = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        a = float(m.group(4)) if m.group(4) is not None else 1.0
+        return (r, g, b, a)
+    except ValueError:
+        return None
+
+
+def _effective_bg_rgb(settings: dict) -> tuple[int, int, int] | None:
+    """Pick a single (r,g,b) that best represents what the user sees
+    behind the page text.
+
+    Priority chain:
+      1. bg-type='color' → bg-color.
+      2. bg-type='gradient' → midpoint between from / to.
+      3. bg-type='image' → None (can't sample a photo server-side, so
+         auto-invert stays off — manual text-color wins).
+
+    Returns None when no decision can be made.
+    """
+    bg_type = settings.get('bg-type', 'color')
+    if bg_type == 'color':
+        return _hex_to_rgb(settings.get('bg-color', '#ffffff'))
+    if bg_type == 'gradient':
+        a = _hex_to_rgb(settings.get('bg-gradient-from', '#ffffff'))
+        b = _hex_to_rgb(settings.get('bg-gradient-to',   '#dddddd'))
+        return ((a[0] + b[0]) // 2, (a[1] + b[1]) // 2, (a[2] + b[2]) // 2)
+    return None
+
+
+def _luma(rgb: tuple[int, int, int]) -> float:
+    """ITU-R BT.601 luminance — cheap and good enough to decide
+    'is this bg dark enough that black text would disappear?'.
+    """
+    r, g, b = rgb
+    return r * 0.299 + g * 0.587 + b * 0.114
+
+
+def _auto_invert_overrides(settings: dict) -> tuple[str | None, str | None]:
+    """If `auto-invert-text` is enabled, pick text + muted colours that
+    contrast with the effective background. Returns (text, muted) or
+    (None, None) when auto-invert is off or we can't infer a background.
+    """
+    if settings.get('auto-invert-text') != 'true':
+        return (None, None)
+    rgb = _effective_bg_rgb(settings)
+    if rgb is None:
+        return (None, None)
+    if _luma(rgb) < 128:
+        # Dark background — light text. Muted is a slightly darker white
+        # so it still reads as a secondary tone, not pure body text.
+        return ('#ffffff', '#cccccc')
+    # Light background — keep the classic dark stack.
+    return ('#000000', '#666666')
 
 
 # Per-chart override map: each schema key → (selector, css-property).
@@ -339,6 +414,15 @@ def _emit_css_block(settings: dict) -> str:
         # chain, which would defeat the toggle for non-default body fonts.
         css_vars['font-notes'] = composed_body or "'Times New Roman', Times, serif"
 
+    # Auto-invert text: overrides any manually-chosen text/muted colours
+    # so the user can't end up with unreadable black-on-dark. Runs after
+    # the explicit text-color/text-muted entries so we win.
+    auto_text, auto_muted = _auto_invert_overrides(settings)
+    if auto_text:
+        css_vars['text-color'] = auto_text
+    if auto_muted:
+        css_vars['text-muted'] = auto_muted
+
     custom_face = _custom_font_face_rule(settings)
 
     # Inline chart overrides — survive a stale browser cache of
@@ -380,16 +464,9 @@ def _emit_css_block(settings: dict) -> str:
             '\n  background-repeat: var(--bg-repeat, no-repeat);'
             '\n  filter: blur(var(--bg-image-blur, 0px));'
             '\n  opacity: var(--bg-image-opacity, 1);'
-            '\n}\n'
-            'body::after {'
-            '\n  content: "";'
-            '\n  position: fixed;'
-            '\n  inset: 0;'
-            '\n  z-index: -1;'
-            '\n  pointer-events: none;'
-            '\n  background: var(--bg-overlay, transparent);'
             '\n}'
         )
+
 
     if custom_face:
         parts.append(custom_face)

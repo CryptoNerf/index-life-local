@@ -66,7 +66,7 @@ header { width: 100%; }
 
 .sync-meta {
   font-size: 14px;
-  color: #888;
+  color: var(--text-muted, #888);
   margin-bottom: 8px;
 }
 .sync-meta code {
@@ -83,7 +83,7 @@ header { width: 100%; }
 .sync-form label {
   display: block;
   font-size: 15px;
-  color: #444;
+  color: var(--text-muted, #444);
   margin-bottom: 8px;
 }
 .sync-row {
@@ -142,11 +142,11 @@ header { width: 100%; }
   padding: 8px 0;
   border-bottom: 1px solid #f0f0f0;
   font-size: 14px;
-  color: #444;
+  color: var(--text-muted, #444);
 }
 .conflict-date { font-weight: bold; }
-.conflict-winner { color: #888; }
-.conflict-time { color: #aaa; margin-left: auto; }
+.conflict-winner { color: var(--text-muted, #888); }
+.conflict-time { color: var(--text-muted, #aaa); margin-left: auto; }
 
 /* ========== Backups ========== */
 .backup-list { margin-top: 16px; }
@@ -161,10 +161,10 @@ header { width: 100%; }
 .backup-name {
   font-family: 'Courier New', monospace;
   font-size: 13px;
-  color: #444;
+  color: var(--text-muted, #444);
 }
-.backup-size { color: #888; }
-.backup-date { color: #aaa; margin-left: auto; }
+.backup-size { color: var(--text-muted, #888); }
+.backup-date { color: var(--text-muted, #aaa); margin-left: auto; }
 
 /* ========== Footer ========== */
 .main-footer {
@@ -177,7 +177,7 @@ header { width: 100%; }
   flex-shrink: 0;
 }
 .footer-link {
-  color: #666;
+  color: var(--text-muted, #666);
   text-decoration: none;
   font-size: 14px;
 }

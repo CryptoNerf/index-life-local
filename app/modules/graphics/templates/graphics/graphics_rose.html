@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>rose {{ year }}</title>
+  <title>{{ t('graphics.rose.title') }} {{ year }}</title>
   <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/calendar.css') }}">
-  <link rel="stylesheet" href="{{ url_for('insights.static', filename='css/insights.css') }}">
+  <link rel="stylesheet" href="{{ url_for('graphics.static', filename='css/graphics.css') }}">
   <style>
     .rose-ref       { fill: none; stroke: #eaeaea; stroke-width: 0.6; }
     .rose-petal     { stroke: #000; stroke-width: 1.2; stroke-linejoin: round; }
@@ -34,7 +34,7 @@
     <nav class="top-menu">
       <a href="{{ url_for('main.mood_grid') }}" class="menu-link">{{ t('nav.mood_grid') }}</a>
       <a href="{{ url_for('main.life_calendar') }}" class="menu-link">{{ t('nav.life_calendar') }}</a>
-      <a href="{{ url_for('insights.insights_page') }}" class="menu-link active-link">{{ t('nav.insights') }}</a>
+      <a href="{{ url_for('graphics.graphics_page') }}" class="menu-link active-link">{{ t('nav.graphics') }}</a>
       {% if module_active('assistant') %}
         <a href="{{ url_for('assistant.chat') }}" class="menu-link">{{ t('nav.assistant') }}</a>
       {% endif %}
@@ -48,15 +48,15 @@
     </nav>
   </header>
 
-  <main class="insights-main">
+  <main class="graphics-main">
     <div class="detail-header">
-      <a href="{{ url_for('insights.insights_page') }}" class="back-link">← insights</a>
-      <p class="insights-title">rose<sup>{{ year }}</sup>{% if year != current_year %}<span class="archive-tag">(archive)</span>{% endif %}</p>
-      <p class="insights-summary">
+      <a href="{{ url_for('graphics.graphics_page') }}" class="back-link">{{ t('graphics.back') }}</a>
+      <p class="graphics-title">{{ t('graphics.rose.title') }}<sup>{{ year }}</sup>{% if year != current_year %}<span class="archive-tag">(archive)</span>{% endif %}</p>
+      <p class="graphics-summary">
         {% if total %}
-          {{ total }} entries · average {{ '%.2f'|format(avg) }} / 10 — each petal is one weekday; its shape reveals the rating distribution and its darkness reveals the average rating
+          {{ t('graphics.rose.summary', n=total, avg='%.2f'|format(avg)) }}
         {% else %}
-          no entries for this year
+          {{ t('graphics.no_entries_year') }}
         {% endif %}
       </p>
     </div>
@@ -114,7 +114,7 @@
     {% if available_years|length > 1 %}
       <nav class="years-nav">
         {% for y in available_years %}
-          <a href="{{ url_for('insights.rose', year=y) }}" class="year-link{% if y == year %} active{% endif %}">{{ y }}</a>
+          <a href="{{ url_for('graphics.rose', year=y) }}" class="year-link{% if y == year %} active{% endif %}">{{ y }}</a>
         {% endfor %}
       </nav>
     {% endif %}

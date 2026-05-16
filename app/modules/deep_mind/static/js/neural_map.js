@@ -83,7 +83,7 @@
 
   // ── Load graph data ────────────────────────────────────────────
   function loadGraph() {
-    statusBar.textContent = 'Загрузка...';
+    statusBar.textContent = (window.NEURAL_MAP_I18N && window.NEURAL_MAP_I18N.loading) || 'Loading...';
     fetch('/deep-mind/api/graph')
       .then(function (r) { return r.json(); })
       .then(function (data) {
@@ -96,13 +96,14 @@
         renderGraph(data);
       })
       .catch(function (e) {
-        statusBar.textContent = 'Ошибка загрузки: ' + e.message;
+        var _i = window.NEURAL_MAP_I18N || {};
+        statusBar.textContent = (_i.loadError || 'Load error: {msg}').replace('{msg}', e.message);
       });
   }
 
   function showEmpty() {
     graphContainer.innerHTML =
-      '<div class="empty-state">Нет данных для визуализации.<br>Нажмите «Проанализировать».</div>';
+      '<div class="empty-state">' + ((window.NEURAL_MAP_I18N && window.NEURAL_MAP_I18N.emptyState) || 'No data to visualize.') + '</div>';
   }
 
   // ── Radius scale ─────────────────────────────────────────────
@@ -500,8 +501,10 @@
     currentClusterId = d.id;
     detailLabel.textContent = d.label;
     detailDesc.textContent = d.description || '';
-    detailCount.textContent = d.size + ' записей';
-    detailWeight.textContent = 'вес: ' + Math.round(d.weight * 100) + '%';
+    var _ie = window.NEURAL_MAP_I18N || {};
+    detailCount.textContent = (_ie.entries || '{n} entries').replace('{n}', d.size);
+    var _iw = window.NEURAL_MAP_I18N || {};
+    detailWeight.textContent = (_iw.weight || 'weight: {pct}%').replace('{pct}', Math.round(d.weight * 100));
     if (detailConfidence) {
       detailConfidence.textContent = '\u0443\u0432\u0435\u0440\u0435\u043d\u043d\u043e\u0441\u0442\u044c: ' + (d.confidence_label || '\u2014');
     }
@@ -570,12 +573,13 @@
   if (btnAnalyze) {
     btnAnalyze.addEventListener('click', function () {
       btnAnalyze.disabled = true;
-      analyzeStatus.textContent = 'Запуск анализа...';
+      analyzeStatus.textContent = (window.NEURAL_MAP_I18N && window.NEURAL_MAP_I18N.analysisStart) || 'Starting analysis...';
       fetch('/deep-mind/api/analyze', { method: 'POST' })
         .then(function (r) { return r.json(); })
         .then(function () { pollStatus(); })
         .catch(function (e) {
-          analyzeStatus.textContent = 'Ошибка: ' + e.message;
+          var _ie2 = window.NEURAL_MAP_I18N || {};
+          analyzeStatus.textContent = (_ie2.analysisError || 'Error: {msg}').replace('{msg}', e.message);
           btnAnalyze.disabled = false;
         });
     });
@@ -597,13 +601,16 @@
               var total = (s.clusters_found != null) ? s.clusters_found : 0;
               var visible = (s.clusters_visible != null) ? s.clusters_visible : total;
               if (visible !== total && total > 0) {
-                analyzeStatus.textContent = 'Готово. Тем: ' + visible + ' из ' + total;
+                var _i3 = window.NEURAL_MAP_I18N || {};
+                analyzeStatus.textContent = (_i3.doneTotal || 'Done. Themes: {visible} of {total}').replace('{visible}', visible).replace('{total}', total);
               } else {
-                analyzeStatus.textContent = 'Готово. Найдено тем: ' + visible;
+                var _i4 = window.NEURAL_MAP_I18N || {};
+                analyzeStatus.textContent = (_i4.done || 'Done. Themes found: {n}').replace('{n}', visible);
               }
               loadGraph();
             } else if (s.stage === 'error') {
-              analyzeStatus.textContent = 'Ошибка: ' + s.error;
+              var _i5 = window.NEURAL_MAP_I18N || {};
+              analyzeStatus.textContent = (_i5.analysisError || 'Error: {msg}').replace('{msg}', s.error);
             } else {
               analyzeStatus.textContent = '';
             }
@@ -613,12 +620,13 @@
   }
 
   function formatStage(stage) {
-    if (!stage) return 'Анализ...';
-    if (stage === 'clustering') return 'Кластеризация...';
-    if (stage === 'loading_llm') return 'Загрузка модели...';
+    var _is = window.NEURAL_MAP_I18N || {};
+    if (!stage) return _is.analyzeStep || 'Analyzing...';
+    if (stage === 'clustering') return _is.clustering || 'Clustering...';
+    if (stage === 'loading_llm') return _is.loadingLlm || 'Loading model...';
     if (stage.startsWith('naming:')) {
       var parts = stage.split(':')[1].split('/');
-      return 'Именование тем: ' + parts[0] + ' из ' + parts[1];
+      return (_is.namingThemes || 'Naming themes: {current} of {total}').replace('{current}', parts[0]).replace('{total}', parts[1]);
     }
     return stage;
   }

@@ -4,7 +4,7 @@ html, body {
   overflow: auto !important;
 }
 
-.insights-main {
+.graphics-main {
   width: 100%;
   max-width: 1180px;
   margin: 0 auto;
@@ -40,7 +40,7 @@ html, body {
   height: auto;
 }
 
-.insights-header,
+.graphics-header,
 .detail-header {
   text-align: center;
   margin-bottom: 40px;
@@ -54,7 +54,7 @@ html, body {
   position: absolute;
   left: 0;
   top: 8px;
-  color: #666;
+  color: var(--text-muted, #666);
   text-decoration: none;
   font-size: 16px;
 }
@@ -63,7 +63,7 @@ html, body {
   color: var(--brand-color, #009AFA);
 }
 
-.insights-title {
+.graphics-title {
   font-size: 28px;
   color: var(--heading-color, #222);
   font-family: var(--font-heading, inherit);
@@ -71,21 +71,21 @@ html, body {
   font-weight: normal;
 }
 
-.insights-title sup {
+.graphics-title sup {
   font-size: 15px;
   margin-left: 4px;
-  color: #666;
+  color: var(--text-muted, #666);
 }
 
 .archive-tag {
   font-size: 14px;
-  color: #888;
+  color: var(--text-muted, #888);
   margin-left: 10px;
 }
 
-.insights-summary {
+.graphics-summary {
   font-size: 17px;
-  color: #555;
+  color: var(--text-muted, #555);
   margin: 8px 0 0;
 }
 
@@ -166,14 +166,14 @@ html, body {
 
 .viz-card-desc {
   font-size: 14px;
-  color: #666;
+  color: var(--text-muted, #666);
   margin: 0;
   line-height: 1.4;
 }
 
 .soon-tag {
   font-size: 11px;
-  color: #888;
+  color: var(--text-muted, #888);
   text-transform: uppercase;
   letter-spacing: 1px;
   margin-left: 6px;
@@ -339,7 +339,7 @@ html, body {
   align-items: center;
   gap: 10px;
   margin-top: 20px;
-  color: #888;
+  color: var(--text-muted, #888);
   font-size: 14px;
   font-family: 'Times New Roman', Times, serif;
 }
@@ -380,7 +380,7 @@ html, body {
   margin-top: 16px;
   justify-content: flex-end;
   font-size: 13px;
-  color: #888;
+  color: var(--text-muted, #888);
   font-family: 'Times New Roman', Times, serif;
 }
 
@@ -402,7 +402,7 @@ html, body {
 }
 
 .year-link {
-  color: #666;
+  color: var(--text-muted, #666);
   text-decoration: none;
   font-size: 16px;
 }

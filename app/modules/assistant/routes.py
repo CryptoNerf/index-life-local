@@ -1089,13 +1089,14 @@ def stream():
             yield f'data: {json.dumps({"error": "Недостаточно памяти. Попробуйте перезапустить приложение или закрыть другие программы.", "error_type": "memory"})}\n\n'
             yield 'data: [DONE]\n\n'
         except Exception as e:
+            from app.i18n import t as _t
             error_msg = str(e).lower()
             if 'context' in error_msg or 'token' in error_msg:
-                msg = 'Контекст слишком длинный. Попробуйте очистить чат или задать более короткий вопрос.'
+                msg = _t('assistant.context_too_long')
             elif 'memory' in error_msg or 'allocat' in error_msg:
-                msg = 'Недостаточно памяти для генерации ответа. Попробуйте перезапустить приложение.'
+                msg = _t('assistant.out_of_memory')
             else:
-                msg = f'Ошибка модели: {e}'
+                msg = _t('assistant.model_error', err=str(e))
             yield f'data: {json.dumps({"error": msg, "error_type": "general"})}\n\n'
             yield 'data: [DONE]\n\n'
         finally:

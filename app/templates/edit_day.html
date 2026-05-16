@@ -35,7 +35,7 @@
     <nav class="top-menu">
       <a href="{{ url_for('main.mood_grid') }}" class="menu-link active-link">{{ t('nav.mood_grid') }}</a>
       <a href="{{ url_for('main.life_calendar') }}" class="menu-link">{{ t('nav.life_calendar') }}</a>
-      {% if module_active('insights') %}<a href="{{ url_for('insights.insights_page') }}" class="menu-link">{{ t('nav.insights') }}</a>{% endif %}
+      {% if module_active('graphics') %}<a href="{{ url_for('graphics.graphics_page') }}" class="menu-link">{{ t('nav.graphics') }}</a>{% endif %}
       {% if module_active('assistant') %}
         <a href="{{ url_for('assistant.chat') }}" class="menu-link">{{ t('nav.assistant') }}</a>
       {% endif %}
@@ -301,6 +301,12 @@
   </script>
   {% if module_active('voice') %}
     <link rel="stylesheet" href="{{ url_for('voice.static', filename='css/voice.css') }}">
+    <script>
+      window.VOICE_I18N = {
+        recognizing:      {{ t('voice.recognizing')|tojson }},
+        recognizeFailed:  {{ t('voice.recognize_failed')|tojson }},
+      };
+    </script>
     <script src="{{ url_for('voice.static', filename='js/voice-recorder.js') }}"></script>
   {% endif %}
 </body>

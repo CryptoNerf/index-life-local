@@ -26,27 +26,30 @@ log = logging.getLogger(__name__)
 
 bp = Blueprint('modules', __name__)
 
-# Human-readable descriptions for each module
+# Human-readable descriptions for each module.
+# Title / description are translation KEYS (not literals) — resolved at
+# render time via {{ t(mod.title) }} so a language toggle takes effect
+# without restarting. Keep keys in sync with app/translations/*.json.
 MODULE_INFO = {
-    'insights': {
-        'title': 'Insights',
-        'description': 'Minimalist visualizations of your mood data — heatmaps, trends and more. Some charts require the AI Psychologist module.',
+    'graphics': {
+        'title': 'modules.graphics.title',
+        'description': 'modules.graphics.description',
         'size': '—',
     },
     'assistant': {
-        'title': 'AI Psychologist',
-        'description': 'Chat with an AI psychologist that understands your diary entries. Uses Qwen3.5-9B model with local GPU inference.',
+        'title': 'modules.assistant.title',
+        'description': 'modules.assistant.description',
         'size': '~5 GB (model download)',
     },
     'deep_mind': {
-        'title': 'Neural Map',
-        'description': 'Visualize emotional themes from your diary as a neural topic map.',
+        'title': 'modules.deep_mind.title',
+        'description': 'modules.deep_mind.description',
         'size': '~50 MB',
         'requires': ['assistant'],
     },
     'customization': {
-        'title': 'Customization',
-        'description': 'Personalise colors, fonts, the page background, and the calendar mosaic. No internet — everything stays local.',
+        'title': 'modules.customization.title',
+        'description': 'modules.customization.description',
         'size': '—',
     },
 }
@@ -571,7 +574,7 @@ def _run_install(module_name: str, profile: str):
     """Run install_modules.py in a subprocess, capturing output line by line."""
     try:
         # Sentinel-only modules (no pip deps) — just create the marker file.
-        if module_name in ('insights', 'customization'):
+        if module_name in ('graphics', 'customization'):
             from importlib import import_module
             mod = import_module(f'app.modules.{module_name}')
             p = mod.sentinel_path()

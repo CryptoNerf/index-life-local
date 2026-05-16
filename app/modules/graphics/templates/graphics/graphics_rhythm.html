@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>rhythm {{ year }}</title>
+  <title>{{ t('graphics.rhythm.title') }} {{ year }}</title>
   <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/calendar.css') }}">
-  <link rel="stylesheet" href="{{ url_for('insights.static', filename='css/insights.css') }}">
+  <link rel="stylesheet" href="{{ url_for('graphics.static', filename='css/graphics.css') }}">
   <style>
     .rhythm-cell        { stroke: #fff; stroke-width: 1.2; }
     .rhythm-cell.empty  { fill: #fff; stroke: #e4e4e4; stroke-dasharray: 2 3; }
@@ -35,7 +35,7 @@
     <nav class="top-menu">
       <a href="{{ url_for('main.mood_grid') }}" class="menu-link">{{ t('nav.mood_grid') }}</a>
       <a href="{{ url_for('main.life_calendar') }}" class="menu-link">{{ t('nav.life_calendar') }}</a>
-      <a href="{{ url_for('insights.insights_page') }}" class="menu-link active-link">{{ t('nav.insights') }}</a>
+      <a href="{{ url_for('graphics.graphics_page') }}" class="menu-link active-link">{{ t('nav.graphics') }}</a>
       {% if module_active('assistant') %}
         <a href="{{ url_for('assistant.chat') }}" class="menu-link">{{ t('nav.assistant') }}</a>
       {% endif %}
@@ -49,15 +49,15 @@
     </nav>
   </header>
 
-  <main class="insights-main">
+  <main class="graphics-main">
     <div class="detail-header">
-      <a href="{{ url_for('insights.insights_page') }}" class="back-link">← insights</a>
-      <p class="insights-title">rhythm<sup>{{ year }}</sup>{% if year != current_year %}<span class="archive-tag">(archive)</span>{% endif %}</p>
-      <p class="insights-summary">
+      <a href="{{ url_for('graphics.graphics_page') }}" class="back-link">{{ t('graphics.back') }}</a>
+      <p class="graphics-title">{{ t('graphics.rhythm.title') }}<sup>{{ year }}</sup>{% if year != current_year %}<span class="archive-tag">(archive)</span>{% endif %}</p>
+      <p class="graphics-summary">
         {% if total %}
-          {{ total }} entries · average {{ '%.2f'|format(avg) }} / 10 — every cell is the average rating for one (weekday, month) combination; the grid reveals your weekly rhythm across the seasons
+          {{ t('graphics.rhythm.summary', n=total, avg='%.2f'|format(avg)) }}
         {% else %}
-          no entries for this year
+          {{ t('graphics.no_entries_year') }}
         {% endif %}
       </p>
     </div>
@@ -132,7 +132,7 @@
     {% if available_years|length > 1 %}
       <nav class="years-nav">
         {% for y in available_years %}
-          <a href="{{ url_for('insights.rhythm', year=y) }}" class="year-link{% if y == year %} active{% endif %}">{{ y }}</a>
+          <a href="{{ url_for('graphics.rhythm', year=y) }}" class="year-link{% if y == year %} active{% endif %}">{{ y }}</a>
         {% endfor %}
       </nav>
     {% endif %}

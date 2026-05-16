@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>manage people</title>
+  <title>{{ t('graphics.people.manage_title') }}</title>
   <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/calendar.css') }}">
-  <link rel="stylesheet" href="{{ url_for('insights.static', filename='css/insights.css') }}">
+  <link rel="stylesheet" href="{{ url_for('graphics.static', filename='css/graphics.css') }}">
   <style>
     :root {
       --pm-accent: #009AFA;
@@ -229,7 +229,7 @@
     <nav class="top-menu">
       <a href="{{ url_for('main.mood_grid') }}" class="menu-link">{{ t('nav.mood_grid') }}</a>
       <a href="{{ url_for('main.life_calendar') }}" class="menu-link">{{ t('nav.life_calendar') }}</a>
-      <a href="{{ url_for('insights.insights_page') }}" class="menu-link active-link">{{ t('nav.insights') }}</a>
+      <a href="{{ url_for('graphics.graphics_page') }}" class="menu-link active-link">{{ t('nav.graphics') }}</a>
       {% if module_active('assistant') %}
         <a href="{{ url_for('assistant.chat') }}" class="menu-link">{{ t('nav.assistant') }}</a>
       {% endif %}
@@ -243,18 +243,18 @@
     </nav>
   </header>
 
-  <main class="insights-main">
+  <main class="graphics-main">
     <div class="detail-header">
-      <a href="{{ url_for('insights.people') }}" class="back-link">← people</a>
-      <p class="insights-title">manage names</p>
+      <a href="{{ url_for('graphics.people') }}" class="back-link">{{ t('graphics.people.back') }}</a>
+      <p class="graphics-title">{{ t('graphics.people.manage') }}</p>
     </div>
 
     <div class="pm-wrap">
       {% if not groups %}
-        <p class="pm-empty">no people extracted yet</p>
+        <p class="pm-empty">{{ t('graphics.people.no_people') }}</p>
       {% else %}
 
-        <form id="bulk-form" method="post" action="{{ url_for('insights.people_alias_bulk') }}">
+        <form id="bulk-form" method="post" action="{{ url_for('graphics.people_alias_bulk') }}">
           {# Sticky toolbar — visible while scrolling so the user can
              always see what they've selected and where it'll go. #}
           <div class="pm-toolbar">
@@ -280,7 +280,7 @@
               </span>
             </div>
             <div class="pm-toolbar-status">
-              <span id="status-text">no names selected yet</span>
+              <span id="status-text">{{ t('graphics.people.no_names_selected') }}</span>
               <button type="button" class="pm-clear-btn" onclick="clearSelection()" id="clear-link" style="display:none;">
                 clear selection
               </button>
@@ -288,7 +288,7 @@
           </div>
 
           <p class="pm-intro">
-            each card below is one person currently shown on the chart.
+            {{ t('graphics.people.manage_help') }}
             inside the card are all the name-forms grouped under that person.
             tick boxes for forms that actually refer to the same human (across cards too if needed),
             type the display name in the box at the top, then merge.
@@ -321,7 +321,7 @@
                   <span class="pm-name">
                     {{ m.name }}
                     {% if m.is_canonical and g.members|length > 1 %}
-                      <span class="pm-canon-tag">displayed now</span>
+                      <span class="pm-canon-tag">{{ t('graphics.people.displayed_now') }}</span>
                     {% endif %}
                   </span>
                   <span class="pm-count">{{ m.count }}×</span>

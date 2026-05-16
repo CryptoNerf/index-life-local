@@ -91,12 +91,12 @@ body {
 
 .chat-status {
   font-size: 12px;
-  color: #aaa;
+  color: var(--text-muted, #aaa);
   margin-right: auto;
 }
 .chat-context-label {
   font-size: 12px;
-  color: #aaa;
+  color: var(--text-muted, #aaa);
   white-space: nowrap;
 }
 
@@ -106,7 +106,7 @@ body {
   padding: 4px 10px;
   font-family: 'Times New Roman', Times, serif;
   font-size: 13px;
-  color: #666;
+  color: var(--text-muted, #666);
   cursor: pointer;
   transition: border-color 0.2s, color 0.2s;
 }
@@ -119,7 +119,7 @@ body {
   align-items: center;
   gap: 6px;
   font-size: 13px;
-  color: #666;
+  color: var(--text-muted, #666);
   cursor: pointer;
   user-select: none;
 }
@@ -238,7 +238,7 @@ body {
   border-color: #c00;
 }
 .chat-waiting-hint {
-  color: #999;
+  color: var(--text-muted, #999);
   font-style: italic;
 }
 
@@ -248,24 +248,24 @@ body {
   border: 1px solid #e0e0e0;
   border-radius: 4px;
   font-size: 14px;
-  color: #888;
+  color: var(--text-muted, #888);
 }
 .think-block summary {
   cursor: pointer;
   padding: 4px 10px;
-  color: #999;
+  color: var(--text-muted, #999);
   font-style: italic;
   -webkit-user-select: none;
   user-select: none;
 }
 .think-block summary:hover {
-  color: #666;
+  color: var(--text-muted, #666);
 }
 .think-block .think-content {
   padding: 8px 10px;
   border-top: 1px solid #e0e0e0;
   white-space: pre-wrap;
-  color: #888;
+  color: var(--text-muted, #888);
   font-size: 14px;
   line-height: 1.5;
 }
@@ -337,7 +337,7 @@ body {
   border-left: 4px solid #222;
   padding-left: 12px;
   margin: 8px 0;
-  color: #555;
+  color: var(--text-muted, #555);
 }
 .chat-bubble-assistant hr {
   border: none;
@@ -362,7 +362,7 @@ body {
 .chat-continue-indicator {
   margin-top: 8px;
   font-size: 12px;
-  color: #888;
+  color: var(--text-muted, #888);
   font-style: italic;
 }
 

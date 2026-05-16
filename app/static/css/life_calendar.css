@@ -70,7 +70,7 @@ body {
 
 .birthdate-prompt label {
   font-size: 18px;
-  color: #444;
+  color: var(--text-muted, #444);
 }
 
 .birthdate-input {
@@ -154,7 +154,7 @@ body {
   height: 14px;
   flex-shrink: 0;
   font-size: 14px;
-  color: #888;
+  color: var(--text-muted, #888);
   text-align: center;
   line-height: 14px;
   margin: 0 1px;
@@ -170,7 +170,7 @@ body {
 .year-label {
   width: 28px;
   font-size: 14px;
-  color: #888;
+  color: var(--text-muted, #888);
   text-align: right;
   padding-right: 4px;
   flex-shrink: 0;
@@ -202,7 +202,7 @@ body {
 /* ========== Stats line ========== */
 .life-stats {
   font-size: 14px;
-  color: #666;
+  color: var(--text-muted, #666);
   margin-top: 4px;
   margin-bottom: 16px;
   text-align: center;

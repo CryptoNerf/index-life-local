@@ -39,9 +39,6 @@ DEFAULTS = {
     'bg-size':     'cover',
     'bg-position': 'center',
     'bg-repeat':   'no-repeat',
-    # Overlay sits between bg-image and content. Empty string = no overlay.
-    # Useful to dim a busy photo so text stays readable.
-    'bg-overlay':  'transparent',
     # Stored gradient settings — kept separately so user can flip
     # between 'gradient' and 'image' types without losing each one's
     # configuration.
@@ -124,6 +121,22 @@ DEFAULTS = {
     'neural-node-active-color': '#009afa',
     'neural-edge-color': '#bfbfbf',
     'neural-glow-color': '#80c8fa',
+    # Canvas backdrop on the neural map page. Matches the historic
+    # `background: #fafafa` baked into neural_map.css so an unchanged
+    # setting reproduces the original look.
+    'neural-canvas-bg': '#fafafa',
+
+    # ── Readability / contrast (Stage 7) ────────────────────
+    # Muted/grey text colour — used for captions, hints, secondary
+    # metadata in lists and forms. Pulled out of hardcoded #888/#666/#999
+    # rules so changing text-color also pulls all the secondary text along.
+    'text-muted': '#888888',
+    # Auto-invert text against effective page background luminance.
+    # When 'true', the context processor recomputes --text-color (and
+    # --text-muted) to white-on-dark or black-on-light, overriding the
+    # user's manual text-color pick. Useful when a dark photo background
+    # would otherwise leave black text unreadable.
+    'auto-invert-text': 'false',
 }
 
 

@@ -15,7 +15,7 @@
     <nav class="top-menu">
       <a href="{{ url_for('main.mood_grid') }}" class="menu-link">{{ t('nav.mood_grid') }}</a>
       <a href="{{ url_for('main.life_calendar') }}" class="menu-link">{{ t('nav.life_calendar') }}</a>
-      {% if module_active('insights') %}<a href="{{ url_for('insights.insights_page') }}" class="menu-link">{{ t('nav.insights') }}</a>{% endif %}
+      {% if module_active('graphics') %}<a href="{{ url_for('graphics.graphics_page') }}" class="menu-link">{{ t('nav.graphics') }}</a>{% endif %}
       <a href="{{ url_for('assistant.chat') }}" class="menu-link active-link">{{ t('nav.assistant') }}</a>
       {% if module_active('deep_mind') %}
         <a href="{{ url_for('deep_mind.neural_map') }}" class="menu-link">{{ t('nav.deep_mind') }}</a>
@@ -75,9 +75,39 @@
 
   <script>
     window.CHAT_I18N = {
-      deleteMessages: {{ t('assistant.delete_messages')|tojson }},
-      contextMinimal: {{ t('assistant.context_minimal')|tojson }},
-      clearConfirm: {{ t('assistant.clear_confirm')|tojson }},
+      deleteMessages:   {{ t('assistant.delete_messages')|tojson }},
+      contextMinimal:   {{ t('assistant.context_minimal')|tojson }},
+      clearConfirm:     {{ t('assistant.clear_confirm')|tojson }},
+      syncStarting:     {{ t('assistant.sync_starting')|tojson }},
+      syncFailed:       {{ t('assistant.sync_failed')|tojson }},
+      syncUnavailable:  {{ t('assistant.sync_unavailable')|tojson }},
+      reindexConfirm:   {{ t('assistant.reindex_confirm')|tojson }},
+      reindexing:       {{ t('assistant.reindexing')|tojson }},
+      rebuildConfirm:   {{ t('assistant.rebuild_confirm')|tojson }},
+      rebuilding:       {{ t('assistant.rebuilding')|tojson }},
+      loadingModel:     {{ t('assistant.loading_model')|tojson }},
+      importingLibs:    {{ t('assistant.importing_libs')|tojson }},
+      detectingHw:      {{ t('assistant.detecting_hw')|tojson }},
+      loadingGpu:       {{ t('assistant.loading_gpu')|tojson }},
+      loadingCpu:       {{ t('assistant.loading_cpu')|tojson }},
+      syncScanning:     {{ t('assistant.sync_scanning')|tojson }},
+      syncDone:         {{ t('assistant.sync_done')|tojson }},
+      syncDoneErrors:   {{ t('assistant.sync_done_errors')|tojson }},
+      syncError:        {{ t('assistant.sync_error')|tojson }},
+      loadingModelWait: {{ t('assistant.loading_model_wait')|tojson }},
+      preparing:        {{ t('assistant.preparing')|tojson }},
+      generating:       {{ t('assistant.generating')|tojson }},
+      continuation:     {{ t('assistant.continuation')|tojson }},
+      thoughtProcess:   {{ t('assistant.thought_process')|tojson }},
+      thinking:         {{ t('assistant.thinking')|tojson }},
+      fetchingData:     {{ t('assistant.fetching_data')|tojson }},
+      thinkingResponse: {{ t('assistant.thinking_response')|tojson }},
+      connectionError:  {{ t('assistant.connection_error')|tojson }},
+      diaryData:        {{ t('assistant.diary_data')|tojson }},
+      about:            {{ t('assistant.about')|tojson }},
+      forPeriod:        {{ t('assistant.for_period')|tojson }},
+      moodTrend:        {{ t('assistant.mood_trend')|tojson }},
+      periodCompare:    {{ t('assistant.period_compare')|tojson }},
     };
     window.CHAT_AVATARS = {
       model: "{{ url_for('static', filename='images/model.png') }}",

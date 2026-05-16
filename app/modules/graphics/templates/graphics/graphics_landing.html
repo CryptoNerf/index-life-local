@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>insights</title>
+  <title>{{ t('graphics.title') }}</title>
   <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/calendar.css') }}">
-  <link rel="stylesheet" href="{{ url_for('insights.static', filename='css/insights.css') }}">
+  <link rel="stylesheet" href="{{ url_for('graphics.static', filename='css/graphics.css') }}">
   {{ customization_css }}
 </head>
 <body>
@@ -14,7 +14,7 @@
     <nav class="top-menu">
       <a href="{{ url_for('main.mood_grid') }}" class="menu-link">{{ t('nav.mood_grid') }}</a>
       <a href="{{ url_for('main.life_calendar') }}" class="menu-link">{{ t('nav.life_calendar') }}</a>
-      <a href="{{ url_for('insights.insights_page') }}" class="menu-link active-link">{{ t('nav.insights') }}</a>
+      <a href="{{ url_for('graphics.graphics_page') }}" class="menu-link active-link">{{ t('nav.graphics') }}</a>
       {% if module_active('assistant') %}
         <a href="{{ url_for('assistant.chat') }}" class="menu-link">{{ t('nav.assistant') }}</a>
       {% endif %}
@@ -28,15 +28,15 @@
     </nav>
   </header>
 
-  <main class="insights-main">
-    <div class="insights-header">
-      <p class="insights-title">insights</p>
-      <p class="insights-summary">visualizations of your mood data</p>
+  <main class="graphics-main">
+    <div class="graphics-header">
+      <p class="graphics-title">{{ t('graphics.title') }}</p>
+      <p class="graphics-summary">{{ t('graphics.subtitle') }}</p>
     </div>
 
     <div class="cards-grid">
       {# ── Overview card ── #}
-      <a href="{{ url_for('insights.overview') }}" class="viz-card">
+      <a href="{{ url_for('graphics.overview') }}" class="viz-card">
         <div class="viz-preview">
           <svg viewBox="0 0 {{ preview_heat.grid_w }} {{ preview_heat.grid_h }}"
                preserveAspectRatio="xMidYMid meet">
@@ -58,12 +58,12 @@
             {% endfor %}
           </svg>
         </div>
-        <p class="viz-card-title">overview</p>
-        <p class="viz-card-desc">year heatmap, monthly averages and rating distribution — a condensed annual summary.</p>
+        <p class="viz-card-title">{{ t('graphics.card.overview.title') }}</p>
+        <p class="viz-card-desc">{{ t('graphics.card.overview.desc') }}</p>
       </a>
 
       {# ── Coming soon cards ── #}
-      <a href="{{ url_for('insights.spiral') }}" class="viz-card">
+      <a href="{{ url_for('graphics.spiral') }}" class="viz-card">
         <div class="viz-preview">
           <svg viewBox="0 0 120 120" preserveAspectRatio="xMidYMid meet">
             <g fill="none" stroke="currentColor" stroke-width="1" opacity="0.75">
@@ -78,12 +78,12 @@
             {% endfor %}
           </svg>
         </div>
-        <p class="viz-card-title">spiral year</p>
-        <p class="viz-card-desc">polar view of the year — each day as a point on an unwinding spiral, shaded by mood.</p>
+        <p class="viz-card-title">{{ t('graphics.card.spiral.title') }}</p>
+        <p class="viz-card-desc">{{ t('graphics.card.spiral.desc') }}</p>
       </a>
 
       {# ── Rose (weekday distributions) ── #}
-      <a href="{{ url_for('insights.rose') }}" class="viz-card">
+      <a href="{{ url_for('graphics.rose') }}" class="viz-card">
         <div class="viz-preview">
           <svg viewBox="0 0 120 120" preserveAspectRatio="xMidYMid meet">
             {# 7 symbolic petals approximating the rose #}
@@ -102,12 +102,12 @@
             {% endfor %}
           </svg>
         </div>
-        <p class="viz-card-title">rose</p>
-        <p class="viz-card-desc">seven petals, one per weekday — shape shows that weekday's rating distribution, darkness shows its average; reveals the rhythm of your week.</p>
+        <p class="viz-card-title">{{ t('graphics.card.rose.title') }}</p>
+        <p class="viz-card-desc">{{ t('graphics.card.rose.desc') }}</p>
       </a>
 
       {# ── Ridgeline ── #}
-      <a href="{{ url_for('insights.ridgeline') }}" class="viz-card">
+      <a href="{{ url_for('graphics.ridgeline') }}" class="viz-card">
         <div class="viz-preview">
           <svg viewBox="0 0 120 120" preserveAspectRatio="xMidYMid meet">
             {% set ridges = [
@@ -124,12 +124,12 @@
             {% endfor %}
           </svg>
         </div>
-        <p class="viz-card-title">ridgeline</p>
-        <p class="viz-card-desc">twelve ridges, one per month — each ridge is that month's rating distribution; shape reveals the mood texture, not just the average.</p>
+        <p class="viz-card-title">{{ t('graphics.card.ridgeline.title') }}</p>
+        <p class="viz-card-desc">{{ t('graphics.card.ridgeline.desc') }}</p>
       </a>
 
       {# ── Rhythm (weekday × month heatmap) ── #}
-      <a href="{{ url_for('insights.rhythm') }}" class="viz-card">
+      <a href="{{ url_for('graphics.rhythm') }}" class="viz-card">
         <div class="viz-preview">
           <svg viewBox="0 0 120 120" preserveAspectRatio="xMidYMid meet">
             {% set rhythm_opacities = [
@@ -150,12 +150,12 @@
             {% endfor %}
           </svg>
         </div>
-        <p class="viz-card-title">rhythm</p>
-        <p class="viz-card-desc">seven weekdays × twelve months — each cell is the average rating for that combination; reveals your weekly rhythm across the seasons.</p>
+        <p class="viz-card-title">{{ t('graphics.card.rhythm.title') }}</p>
+        <p class="viz-card-desc">{{ t('graphics.card.rhythm.desc') }}</p>
       </a>
 
       {# ── Words ── #}
-      <a href="{{ url_for('insights.words') }}" class="viz-card">
+      <a href="{{ url_for('graphics.words') }}" class="viz-card">
         <div class="viz-preview">
           <svg viewBox="0 0 120 120" preserveAspectRatio="xMidYMid meet">
             {% set bars = [
@@ -176,8 +176,8 @@
             {% endfor %}
           </svg>
         </div>
-        <p class="viz-card-title">words</p>
-        <p class="viz-card-desc">which words appear on your best days and which appear on your worst — average rating for each recurring word in your notes.</p>
+        <p class="viz-card-title">{{ t('graphics.card.words.title') }}</p>
+        <p class="viz-card-desc">{{ t('graphics.card.words.desc') }}</p>
       </a>
 
       {# ── Activities (requires AI Psychologist for LLM extraction) ── #}
@@ -200,19 +200,19 @@
         </svg>
       {% endset %}
       {% if activities_ready %}
-        <a href="{{ url_for('insights.activities') }}" class="viz-card">
+        <a href="{{ url_for('graphics.activities') }}" class="viz-card">
           <div class="viz-preview">{{ activities_preview|safe }}</div>
-          <p class="viz-card-title">activities</p>
-          <p class="viz-card-desc">what you do, packed as bubbles — circle size is frequency, shade is mood on those days.</p>
+          <p class="viz-card-title">{{ t('graphics.card.activities.title') }}</p>
+          <p class="viz-card-desc">{{ t('graphics.card.activities.desc') }}</p>
         </a>
       {% else %}
-        <div class="viz-card disabled" title="Requires the AI Psychologist module">
+        <div class="viz-card disabled" title="{{ t('graphics.requires_ai_tooltip') }}">
           <div class="viz-preview">{{ activities_preview|safe }}</div>
           <p class="viz-card-title">
-            activities
-            <span class="soon-tag needs-ai">requires ai psychologist</span>
+            {{ t('graphics.card.activities.title') }}
+            <span class="soon-tag needs-ai">{{ t('graphics.requires_ai') }}</span>
           </p>
-          <p class="viz-card-desc">what you do, packed as bubbles — circle size is frequency, shade is mood on those days.</p>
+          <p class="viz-card-desc">{{ t('graphics.card.activities.desc') }}</p>
         </div>
       {% endif %}
 
@@ -239,19 +239,19 @@
         </svg>
       {% endset %}
       {% if az_ready %}
-        <a href="{{ url_for('insights.activities_zoom') }}" class="viz-card">
+        <a href="{{ url_for('graphics.activities_zoom') }}" class="viz-card">
           <div class="viz-preview">{{ az_preview|safe }}</div>
-          <p class="viz-card-title">activities zoom</p>
-          <p class="viz-card-desc">zoomable circle packing — click an activity to drill into individual mentions, hover for the actual diary text.</p>
+          <p class="viz-card-title">{{ t('graphics.card.activities_zoom.title') }}</p>
+          <p class="viz-card-desc">{{ t('graphics.card.activities_zoom.desc') }}</p>
         </a>
       {% else %}
-        <div class="viz-card disabled" title="Requires the AI Psychologist module">
+        <div class="viz-card disabled" title="{{ t('graphics.requires_ai_tooltip') }}">
           <div class="viz-preview">{{ az_preview|safe }}</div>
           <p class="viz-card-title">
-            activities zoom
-            <span class="soon-tag needs-ai">requires ai psychologist</span>
+            {{ t('graphics.card.activities_zoom.title') }}
+            <span class="soon-tag needs-ai">{{ t('graphics.requires_ai') }}</span>
           </p>
-          <p class="viz-card-desc">zoomable circle packing — click an activity to drill into individual mentions, hover for the actual diary text.</p>
+          <p class="viz-card-desc">{{ t('graphics.card.activities_zoom.desc') }}</p>
         </div>
       {% endif %}
 
@@ -275,23 +275,23 @@
         </svg>
       {% endset %}
       {% if people_ready %}
-        <a href="{{ url_for('insights.people') }}" class="viz-card">
+        <a href="{{ url_for('graphics.people') }}" class="viz-card">
           <div class="viz-preview">{{ people_preview|safe }}</div>
-          <p class="viz-card-title">people</p>
-          <p class="viz-card-desc">names and roles mentioned in your notes, scored by context — who lifts you up and who drags you down.</p>
+          <p class="viz-card-title">{{ t('graphics.card.people.title') }}</p>
+          <p class="viz-card-desc">{{ t('graphics.card.people.desc') }}</p>
         </a>
       {% else %}
-        <div class="viz-card disabled" title="Requires the AI Psychologist module">
+        <div class="viz-card disabled" title="{{ t('graphics.requires_ai_tooltip') }}">
           <div class="viz-preview">{{ people_preview|safe }}</div>
           <p class="viz-card-title">
-            people
-            <span class="soon-tag needs-ai">requires ai psychologist</span>
+            {{ t('graphics.card.people.title') }}
+            <span class="soon-tag needs-ai">{{ t('graphics.requires_ai') }}</span>
           </p>
-          <p class="viz-card-desc">names and roles mentioned in your notes, scored by context — who lifts you up and who drags you down.</p>
+          <p class="viz-card-desc">{{ t('graphics.card.people.desc') }}</p>
         </div>
       {% endif %}
 
-      <a href="{{ url_for('insights.river') }}" class="viz-card">
+      <a href="{{ url_for('graphics.river') }}" class="viz-card">
         <div class="viz-preview">
           <svg viewBox="0 0 120 120" preserveAspectRatio="xMidYMid meet">
             <path d="M0,100 C15,70 25,85 40,65 S70,45 85,60 S110,40 120,50"
@@ -300,8 +300,8 @@
                   fill="rgba(0,0,0,0.08)" stroke="none"/>
           </svg>
         </div>
-        <p class="viz-card-title">river of mood</p>
-        <p class="viz-card-desc">continuous flowing line across time with 14-day rolling-average smoothing.</p>
+        <p class="viz-card-title">{{ t('graphics.card.river.title') }}</p>
+        <p class="viz-card-desc">{{ t('graphics.card.river.desc') }}</p>
       </a>
     </div>
   </main>

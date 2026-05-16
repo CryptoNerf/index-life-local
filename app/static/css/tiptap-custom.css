@@ -28,7 +28,7 @@
 .ProseMirror p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
   float: left;
-  color: #999;
+  color: var(--text-muted, #999);
   font-style: italic;
   pointer-events: none;
   height: 0;
@@ -97,7 +97,7 @@
   border-left: 4px solid #b0b0b0;
   padding: 8px 16px;
   margin: 12px 0;
-  color: #555;
+  color: var(--text-muted, #555);
   background: #f7f7f7;
   border-radius: 0 4px 4px 0;
 }

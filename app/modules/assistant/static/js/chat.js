@@ -126,39 +126,41 @@
   });
 
   document.getElementById('btn-sync').addEventListener('click', function () {
+    var I18N = window.CHAT_I18N || {};
     fetch('/assistant/sync', { method: 'POST' })
       .then(function (r) { return r.json(); })
       .then(function (data) {
         if (data.status === 'started') {
-          statusEl.textContent = 'Sync: запуск...';
+          statusEl.textContent = I18N.syncStarting || 'Sync: starting...';
           pollSyncStatus();
         } else {
-          // busy / disabled — show message and refresh status normally
-          statusEl.textContent = data.message || 'Sync недоступен';
+          statusEl.textContent = data.message || I18N.syncUnavailable || 'Sync unavailable';
           setTimeout(function () { loadStatus(); }, 2000);
         }
       })
       .catch(function () {
-        statusEl.textContent = 'Sync: ошибка запроса';
+        statusEl.textContent = I18N.syncFailed || 'Sync: request error';
       });
   });
 
   document.getElementById('btn-reindex').addEventListener('click', function () {
-    if (!confirm('Полный реиндекс всех записей? Это займёт время.')) return;
+    var I18N = window.CHAT_I18N || {};
+    if (!confirm(I18N.reindexConfirm || 'Full reindex of all entries? This will take time.')) return;
     fetch('/assistant/reindex', { method: 'POST' })
       .then(function (r) { return r.json(); })
       .then(function (data) {
-        statusEl.textContent = data.message || 'Реиндексация...';
+        statusEl.textContent = data.message || I18N.reindexing || 'Reindexing...';
         pollStatus();
       });
   });
 
   document.getElementById('btn-reset-profile').addEventListener('click', function () {
-    if (!confirm('Пересобрать психологический профиль?')) return;
+    var I18N = window.CHAT_I18N || {};
+    if (!confirm(I18N.rebuildConfirm || 'Rebuild the psychological profile?')) return;
     fetch('/assistant/reset-profile', { method: 'POST' })
       .then(function (r) { return r.json(); })
       .then(function (data) {
-        statusEl.textContent = data.message || 'Пересборка профиля...';
+        statusEl.textContent = data.message || I18N.rebuilding || 'Rebuilding profile...';
         setTimeout(function () { loadStatus(); }, 10000);
       });
   });
@@ -168,12 +170,14 @@
   warmupModel();
 
   function formatLoadingStage(stage, progress) {
-    if (!stage) return 'загрузка модели...';
-    if (stage === 'importing') return 'импорт библиотек...';
-    if (stage === 'detecting') return 'определение оборудования...';
-    if (stage.startsWith('gpu:')) return 'загрузка на GPU (' + progress + '%)';
-    if (stage.startsWith('cpu:')) return 'загрузка на CPU (' + progress + '%)';
-    return 'загрузка модели (' + progress + '%)';
+    var I18N = window.CHAT_I18N || {};
+    function tpl(s, pct) { return (s || '').replace('{pct}', pct); }
+    if (!stage) return I18N.loadingModel || 'loading model...';
+    if (stage === 'importing') return I18N.importingLibs || 'importing libraries...';
+    if (stage === 'detecting') return I18N.detectingHw || 'detecting hardware...';
+    if (stage.startsWith('gpu:')) return tpl(I18N.loadingGpu, progress) || ('loading on GPU (' + progress + '%)');
+    if (stage.startsWith('cpu:')) return tpl(I18N.loadingCpu, progress) || ('loading on CPU (' + progress + '%)');
+    return (I18N.loadingModel || 'loading model') + ' (' + progress + '%)';
   }
 
   function formatReindexStatus(reindex) {
@@ -195,7 +199,8 @@
     // Suppress fully-idle state. Show "done" briefly so the user sees the
     // result, then hide on next loadStatus tick (the polling clears phase).
     if (!sync.running && !sync.phase) return '';
-    if (sync.phase === 'scanning') return 'sync: сканирование...';
+    var I18N = window.CHAT_I18N || {};
+    if (sync.phase === 'scanning') return I18N.syncScanning || 'sync: scanning...';
     if (sync.phase === 'processing') {
       var current = sync.current || 0;
       var total = sync.total || 0;
@@ -208,13 +213,14 @@
       return text;
     }
     if (sync.phase === 'done') {
-      return 'sync: ' + (sync.message || 'готово');
+      return sync.message ? ('sync: ' + sync.message) : (I18N.syncDone || 'sync: done');
     }
     if (sync.phase === 'done_with_errors') {
-      return 'sync: ' + (sync.message || 'готово с ошибками');
+      return sync.message ? ('sync: ' + sync.message) : (I18N.syncDoneErrors || 'sync: done with errors');
     }
     if (sync.phase === 'error') {
-      return 'sync ошибка: ' + (sync.message || 'неизвестно');
+      var tpl = I18N.syncError || 'sync error: {err}';
+      return tpl.replace('{err}', sync.message || '?');
     }
     return '';
   }
@@ -281,8 +287,9 @@
           }
         })
         .catch(function () {
+          var I18N = window.CHAT_I18N || {};
           clearInterval(interval);
-          statusEl.textContent = 'Sync: ошибка опроса статуса';
+          statusEl.textContent = I18N.syncFailed || 'Sync: request error';
         });
     }, 2000);
   }
@@ -302,7 +309,7 @@
           }
           parts.push(data.embedded + '/' + data.total_entries + ' embedded');
           parts.push(data.summarized + '/' + data.total_entries + ' summarized');
-          statusEl.textContent = parts.join(' В· ');
+          statusEl.textContent = parts.join(' · ');
           if (data.reindex && !data.reindex.running) {
             if (data.reindex.phase === 'done') {
               statusEl.textContent = 'Reindex complete';
@@ -570,7 +577,7 @@
     if (container && container.dataset && container.dataset.continuation === '1') {
       var indicator = document.createElement('div');
       indicator.className = 'chat-continue-indicator';
-      indicator.textContent = 'продолжение ответа...';
+      indicator.textContent = (window.CHAT_I18N && window.CHAT_I18N.continuation) || 'response continuation...';
       container.appendChild(indicator);
     }
   }
@@ -599,8 +606,9 @@
       }
     }
 
+    var I18N = window.CHAT_I18N || {};
     if (!llmReady) {
-      showWaitingHint('Загрузка модели, пожалуйста подождите...');
+      showWaitingHint(I18N.loadingModelWait || 'Loading model, please wait...');
       loadingHintInterval = setInterval(function () {
         fetch('/assistant/status')
           .then(function (r) { return r.json(); })
@@ -609,18 +617,19 @@
             if (data.llm_loading) {
               showWaitingHint(formatLoadingStage(data.llm_loading_stage, data.llm_loading_progress));
             } else {
-              showWaitingHint('Подготовка ответа...');
+              showWaitingHint(I18N.preparing || 'Preparing response...');
             }
           }).catch(function () {});
       }, 1500);
     } else {
       // Model is ready but context assembly + first token still takes time
-      showWaitingHint('Генерация ответа...');
+      var genBase = I18N.generating || 'Generating response';
+      showWaitingHint(genBase + '...');
       loadingHintInterval = setInterval(function () {
         if (fullText) return;
         dotCount = (dotCount + 1) % 4;
         var dots = '.'.repeat(dotCount || 1);
-        showWaitingHint('Генерация ответа' + dots);
+        showWaitingHint(genBase + dots);
       }, 600);
     }
 
@@ -670,29 +679,34 @@
                 // accumulate them so the user sees the full sequence.
                 if (data.tool && !fullText) {
                   if (!window.__toolHints) window.__toolHints = [];
-                  var hint = 'данных из дневника';
+                  var I18N2 = window.CHAT_I18N || {};
+                  var about = I18N2.about || 'about';
+                  var forP = I18N2.forPeriod || 'for';
+                  var hint = I18N2.diaryData || 'diary data';
                   if (data.tool === 'person_history' && data.args && data.args.name) {
-                    hint = 'про ' + data.args.name;
+                    hint = about + ' ' + data.args.name;
                   } else if (data.tool === 'period_entries' && data.args) {
                     var y = data.args.year;
                     var m = data.args.month;
                     hint = m
-                      ? 'за ' + y + '-' + (m < 10 ? '0' + m : m)
-                      : 'за ' + y + ' год';
+                      ? forP + ' ' + y + '-' + (m < 10 ? '0' + m : m)
+                      : forP + ' ' + y;
                   } else if (data.tool === 'search_topic' && data.args && data.args.query) {
                     hint = '«' + data.args.query + '»';
                   } else if (data.tool === 'mood_trend' && data.args) {
                     var d = data.args.window_days || 30;
-                    hint = 'тренд настроения за ' + d + ' дн.';
+                    hint = (I18N2.moodTrend || 'mood trend for') + ' ' + d + ' d.';
                   } else if (data.tool === 'compare_periods' && data.args) {
-                    hint = 'сравнение периодов ' + data.args.period_a + ' и ' + data.args.period_b;
+                    hint = (I18N2.periodCompare || 'period comparison') + ' ' + data.args.period_a + ' / ' + data.args.period_b;
                   }
                   window.__toolHints.push(hint);
-                  showWaitingHint('Поднимаю данные: ' + window.__toolHints.join(', ') + '...');
+                  var fetchTpl = I18N2.fetchingData || 'Fetching data: {what}';
+                  showWaitingHint(fetchTpl.replace('{what}', window.__toolHints.join(', ')) + '...');
                 }
                 if (data.tool_done && !fullText) {
                   window.__toolHints = [];
-                  showWaitingHint('Думаю над ответом...');
+                  var I18N3 = window.CHAT_I18N || {};
+                  showWaitingHint(I18N3.thinkingResponse || 'Thinking about a response...');
                 }
                 if (data.token) {
                   if (!fullText && loadingHintInterval) {
@@ -727,7 +741,7 @@
       })
       .catch(function (err) {
         if (!fullText) {
-          assistantDiv.textContent = 'Ошибка соединения. Проверьте, загружена ли модель.';
+          assistantDiv.textContent = (window.CHAT_I18N && window.CHAT_I18N.connectionError) || 'Connection error. Check whether the model is loaded.';
           assistantDiv.classList.add('chat-bubble-error');
         }
         finish();

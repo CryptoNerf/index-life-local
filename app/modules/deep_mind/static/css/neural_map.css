@@ -40,7 +40,7 @@ body {
 .status-bar {
   padding: 4px 70px;
   font-size: 13px;
-  color: #888;
+  color: var(--text-muted, #888);
   min-height: 22px;
 }
 
@@ -54,7 +54,7 @@ body {
   flex: 1;
   position: relative;
   overflow: hidden;
-  background: #fafafa;
+  background: var(--neural-canvas-bg, #fafafa);
 }
 #graph-container canvas {
   display: block;
@@ -80,7 +80,7 @@ body {
   border: none;
   font-size: 24px;
   cursor: pointer;
-  color: #888;
+  color: var(--text-muted, #888);
   font-family: 'Times New Roman', Times, serif;
 }
 .detail-close:hover { color: #000; }
@@ -93,14 +93,14 @@ body {
 
 .detail-description {
   font-size: 15px;
-  color: #444;
+  color: var(--text-muted, #444);
   margin: 0 0 12px;
   line-height: 1.5;
 }
 
 .detail-meta {
   font-size: 13px;
-  color: #888;
+  color: var(--text-muted, #888);
   margin-bottom: 16px;
 }
 
@@ -128,7 +128,7 @@ body {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #777;
+  color: var(--text-muted, #777);
   margin-bottom: 8px;
 }
 
@@ -140,7 +140,7 @@ body {
 }
 
 .detail-evidence-meta {
-  color: #888;
+  color: var(--text-muted, #888);
   margin-right: 6px;
 }
 
@@ -155,11 +155,11 @@ body {
 }
 .entry-date {
   font-size: 13px;
-  color: #888;
+  color: var(--text-muted, #888);
 }
 .entry-rating {
   font-size: 13px;
-  color: #444;
+  color: var(--text-muted, #444);
   margin-left: 8px;
 }
 .entry-note {
@@ -210,7 +210,7 @@ body {
 
 .analyze-status {
   font-size: 13px;
-  color: #888;
+  color: var(--text-muted, #888);
 }
 
 /* ── Empty state ── */
@@ -220,7 +220,7 @@ body {
   left: 50%;
   transform: translate(-50%, -50%);
   text-align: center;
-  color: #888;
+  color: var(--text-muted, #888);
   font-size: 18px;
   line-height: 1.6;
   pointer-events: none;

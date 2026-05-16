@@ -6,7 +6,7 @@
   <title>{{ name }} · people</title>
   <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/calendar.css') }}">
-  <link rel="stylesheet" href="{{ url_for('insights.static', filename='css/insights.css') }}">
+  <link rel="stylesheet" href="{{ url_for('graphics.static', filename='css/graphics.css') }}">
   <style>
     .pd-wrap {
       max-width: 760px;
@@ -219,7 +219,7 @@
     <nav class="top-menu">
       <a href="{{ url_for('main.mood_grid') }}" class="menu-link">{{ t('nav.mood_grid') }}</a>
       <a href="{{ url_for('main.life_calendar') }}" class="menu-link">{{ t('nav.life_calendar') }}</a>
-      <a href="{{ url_for('insights.insights_page') }}" class="menu-link active-link">{{ t('nav.insights') }}</a>
+      <a href="{{ url_for('graphics.graphics_page') }}" class="menu-link active-link">{{ t('nav.graphics') }}</a>
       {% if module_active('assistant') %}
         <a href="{{ url_for('assistant.chat') }}" class="menu-link">{{ t('nav.assistant') }}</a>
       {% endif %}
@@ -233,27 +233,27 @@
     </nav>
   </header>
 
-  <main class="insights-main">
+  <main class="graphics-main">
     <div class="detail-header">
-      <a href="{{ url_for('insights.people') }}" class="back-link">← people</a>
-      <p class="insights-title">{{ name }}</p>
+      <a href="{{ url_for('graphics.people') }}" class="back-link">{{ t('graphics.people.back') }}</a>
+      <p class="graphics-title">{{ name }}</p>
     </div>
 
     <div class="pd-wrap">
       {% if incoming_aliases %}
         <div class="pd-aliases">
-          <p class="pd-aliases-title">also known as · click ↑ to display this name instead, × to unmerge</p>
+          <p class="pd-aliases-title">{{ t('graphics.people.aliases_title') }}</p>
           {% for a in incoming_aliases %}
             <span class="pd-alias-row">
               <span class="pd-alias-name">{{ a }}</span>
-              <form method="post" action="{{ url_for('insights.people_alias_set_canonical') }}" style="display:inline">
+              <form method="post" action="{{ url_for('graphics.people_alias_set_canonical') }}" style="display:inline">
                 <input type="hidden" name="new_canonical" value="{{ a }}">
                 <input type="hidden" name="current_canonical" value="{{ name }}">
                 <button class="pd-alias-btn promote" type="submit"
                         onclick="return confirm('Display this person as ' + {{ a|tojson }} + ' instead? All merged names will continue to count toward the same person.');"
                         title="Display as {{ a }}">↑</button>
               </form>
-              <form method="post" action="{{ url_for('insights.people_alias_delete') }}" style="display:inline">
+              <form method="post" action="{{ url_for('graphics.people_alias_delete') }}" style="display:inline">
                 <input type="hidden" name="alias" value="{{ a }}">
                 <input type="hidden" name="return_to" value="{{ name }}">
                 <button class="pd-alias-btn unmerge" type="submit"
@@ -266,7 +266,7 @@
 
         <div class="pd-rename">
           <p class="pd-rename-title">or display under a different name</p>
-          <form method="post" action="{{ url_for('insights.people_alias_set_canonical') }}">
+          <form method="post" action="{{ url_for('graphics.people_alias_set_canonical') }}">
             <input type="hidden" name="current_canonical" value="{{ name }}">
             <input type="text" name="new_canonical" placeholder="type a new name…" required maxlength="100">
             <button class="pd-merge-btn" type="submit"
@@ -285,7 +285,7 @@
           </div>
           <div class="pd-stat-block">
             <span class="pd-stat-num">{{ '%+.2f'|format(tone_score) }}</span>
-            <span class="pd-stat-label">tone score</span>
+            <span class="pd-stat-label">{{ t('graphics.people.tone_score') }}</span>
           </div>
 
           <div class="pd-tone-row">
@@ -317,13 +317,13 @@
           </div>
         {% endfor %}
       {% else %}
-        <p class="pd-empty">no entries found for this person</p>
+        <p class="pd-empty">{{ t('graphics.people.no_entries_person') }}</p>
       {% endif %}
 
       {% if other_canonicals %}
         <div class="pd-merge">
           <p class="pd-merge-title">merge "{{ name }}" into another person</p>
-          <form method="post" action="{{ url_for('insights.people_alias_create') }}">
+          <form method="post" action="{{ url_for('graphics.people_alias_create') }}">
             <input type="hidden" name="alias" value="{{ name }}">
             <select name="canonical" required>
               <option value="" disabled selected>— select target —</option>
