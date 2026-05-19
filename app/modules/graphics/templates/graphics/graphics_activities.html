@@ -105,6 +105,10 @@
       vertical-align: middle;
       margin-right: 6px;
       border: 1px solid rgba(0,0,0,0.2);
+      /* Tint follows the parent .activities-legend's --legend-color
+         (set in graphics.css), so the swatches track the chart's
+         actual color when the user customises it. */
+      background-color: var(--legend-color, #000);
     }
   </style>
   {{ customization_css }}
@@ -123,8 +127,8 @@
       {% endif %}
       <a href="{{ url_for('main.account') }}" class="menu-link">{{ t('nav.account') }}</a>
       <a href="{{ url_for('sync.sync_page') }}" class="menu-link">{{ t('nav.sync') }}</a>
-      <a href="{{ url_for('modules.modules_page') }}" class="menu-link">{{ t('nav.modules') }}</a>
       {% if module_active('customization') %}<a href="{{ url_for('customization.settings') }}" class="menu-link">{{ t('nav.customize') }}</a>{% endif %}
+      <a href="{{ url_for('modules.modules_page') }}" class="menu-link">{{ t('nav.modules') }}</a>
     </nav>
   </header>
 
@@ -157,16 +161,16 @@
 
         <div class="activities-legend">
           <span>
-            <span class="legend-swatch" style="background: rgba(0,0,0,0.85)"></span>
-            worse days
+            <span class="legend-swatch" style="opacity:0.85"></span>
+            {{ t('graphics.activities.worse') }}
           </span>
           <span>
-            <span class="legend-swatch" style="background: rgba(0,0,0,0.5)"></span>
-            near average
+            <span class="legend-swatch" style="opacity:0.5"></span>
+            {{ t('graphics.activities.near') }}
           </span>
           <span>
-            <span class="legend-swatch" style="background: rgba(0,0,0,0.15)"></span>
-            better days
+            <span class="legend-swatch" style="opacity:0.15"></span>
+            {{ t('graphics.activities.better') }}
           </span>
         </div>
 
@@ -178,7 +182,7 @@
       {% if module_active('assistant') %}
         <div class="reextract-section">
           <button id="reextract-btn" class="reextract-btn" onclick="reextractActivities()">
-            re-extract activities
+            {{ t('graphics.activities.reextract') }}
           </button>
           <p class="reextract-status" id="reextract-status"></p>
         </div>

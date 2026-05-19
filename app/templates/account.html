@@ -33,8 +33,8 @@
       {% endif %}
       <a href="{{ url_for('main.account') }}" class="menu-link active-link">{{ t('nav.account') }}</a>
       <a href="{{ url_for('sync.sync_page') }}" class="menu-link">{{ t('nav.sync') }}</a>
-      <a href="{{ url_for('modules.modules_page') }}" class="menu-link">{{ t('nav.modules') }}</a>
       {% if module_active('customization') %}<a href="{{ url_for('customization.settings') }}" class="menu-link">{{ t('nav.customize') }}</a>{% endif %}
+      <a href="{{ url_for('modules.modules_page') }}" class="menu-link">{{ t('nav.modules') }}</a>
     </nav>
   </header>
   <div class="center-account-block">
@@ -125,11 +125,10 @@
         {{ t('account.export_desc') }}
       </div>
 
-      <a href="{{ url_for('main.export_markdown') }}"
-         class="account-btn"
-         style="display: inline-block; text-decoration: none;">
-         {{ t('account.export_md') }}
-      </a>
+      <button type="button" id="cz-export-md-btn" class="account-btn">
+        {{ t('account.export_md') }}
+      </button>
+      <span id="cz-export-md-status" style="margin-left:12px;font-size:13px;color:var(--text-muted,#888);"></span>
 
       <div style="margin-top: 12px; font-size: 13px; color: #888;">
         {{ t('account.export_hint') }}
@@ -166,6 +165,75 @@
         const fileName = input.files.length ? input.files[0].name : NO_FILE_LABEL;
         document.getElementById('file-name').textContent = fileName;
       }
+
+      // ── Markdown export ────────────────────────────────────────
+      // Inside pywebview/WKWebView, Content-Disposition is ignored —
+      // a normal <a href=".../export/markdown"> would render the file
+      // inline with no way back. So we fetch JSON content and either:
+      //   • bridge to a native Save dialog via window.pywebview.api,
+      //   • or, in a regular browser, trigger a Blob download.
+      var EXPORT_I18N = {
+        preparing:   {{ t('account.export_preparing')|tojson }},
+        noEntries:   {{ t('account.export_no_entries')|tojson }},
+        cancelled:   {{ t('account.export_cancelled')|tojson }},
+        saved:       {{ t('account.export_saved')|tojson }},
+        failed:      {{ t('account.export_failed')|tojson }},
+        downloaded:  {{ t('account.export_downloaded')|tojson }},
+      };
+      (function () {
+        var btn = document.getElementById('cz-export-md-btn');
+        var status = document.getElementById('cz-export-md-status');
+        if (!btn) return;
+        function setStatus(msg) { if (status) status.textContent = msg || ''; }
+
+        btn.addEventListener('click', function () {
+          btn.disabled = true;
+          setStatus(EXPORT_I18N.preparing);
+
+          fetch('/api/export/markdown')
+            .then(function (r) {
+              if (r.status === 404) {
+                return r.json().then(function () {
+                  throw new Error(EXPORT_I18N.noEntries);
+                });
+              }
+              if (!r.ok) throw new Error('HTTP ' + r.status);
+              return r.json();
+            })
+            .then(function (data) {
+              var content = data.content;
+              var filename = data.filename || 'mood_diary.md';
+              // pywebview js_api is exposed at window.pywebview.api once
+              // the bridge is ready. Browsers won't have it.
+              if (window.pywebview && window.pywebview.api &&
+                  typeof window.pywebview.api.save_text_file === 'function') {
+                return window.pywebview.api.save_text_file(content, filename)
+                  .then(function (savedPath) {
+                    if (!savedPath) {
+                      setStatus(EXPORT_I18N.cancelled);
+                    } else {
+                      setStatus(EXPORT_I18N.saved.replace('{path}', savedPath));
+                    }
+                  });
+              }
+              // Browser fallback: Blob + <a download>
+              var blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+              var url = URL.createObjectURL(blob);
+              var a = document.createElement('a');
+              a.href = url;
+              a.download = filename;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              setTimeout(function () { URL.revokeObjectURL(url); }, 0);
+              setStatus(EXPORT_I18N.downloaded);
+            })
+            .catch(function (err) {
+              setStatus(EXPORT_I18N.failed.replace('{err}', err.message || err));
+            })
+            .then(function () { btn.disabled = false; });
+        });
+      })();
     </script>
   </div>
   <footer class="main-footer">

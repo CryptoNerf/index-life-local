@@ -44,21 +44,17 @@ fallbacks. Per-chart keys override them when set.
 #   unit   → 0..1 percentage slider
 CHARTS = [
     {
-        'id': 'river',
-        'label': 'River of mood',
+        'id': 'overview',
+        'label': 'Overview heatmap',
         'description': (
-            'Smoothed line crossing the year, raw daily dots, soft area '
-            'fill underneath, and a vertical "today" marker.'
+            'Year heatmap of daily ratings; the landing-page summary view.'
         ),
-        'preview_id': 'preview-chart-river',
+        'preview_id': 'preview-chart-overview',
         'controls': [
-            {'key': 'river-line-color',    'type': 'color',  'label': 'Line color',         'default': '#000000'},
-            {'key': 'river-line-width',    'type': 'slider', 'unit': 'px',       'min': 1, 'max': 4, 'step': 0.2, 'label': 'Line width',         'default': '1.6px'},
-            {'key': 'river-area-color',    'type': 'color',  'label': 'Area fill color',    'default': '#000000'},
-            {'key': 'river-area-opacity',  'type': 'unit',   'label': 'Area fill opacity',  'default': '0.08'},
-            {'key': 'river-dot-color',     'type': 'color',  'label': 'Raw daily dot color','default': '#000000'},
-            {'key': 'river-today-color',   'type': 'color',  'label': 'Today marker',       'default': '#009afa'},
-            {'key': 'river-grid-color',    'type': 'color',  'label': 'Gridlines',          'default': '#c8c8c8'},
+            {'key': 'overview-heat-color',  'type': 'color', 'label': 'Cell color',          'default': '#000000'},
+            {'key': 'overview-empty-color', 'type': 'color', 'label': 'Empty cell color',    'default': '#ffffff'},
+            {'key': 'overview-bar-color',   'type': 'color', 'label': 'Bar color (sidebar)', 'default': '#000000'},
+            {'key': 'overview-today-color', 'type': 'color', 'label': 'Today highlight',     'default': '#009afa'},
         ],
     },
     {
@@ -74,20 +70,6 @@ CHARTS = [
             {'key': 'spiral-guide-color',  'type': 'color', 'label': 'Guide rings',    'default': '#d8d8d8'},
             {'key': 'spiral-today-color', 'type': 'color', 'label': 'Today ring',      'default': '#009afa'},
             {'key': 'spiral-month-color',  'type': 'color', 'label': 'Month markers',  'default': '#666666'},
-        ],
-    },
-    {
-        'id': 'rhythm',
-        'label': 'Rhythm (weekday × month)',
-        'description': (
-            'Heatmap with weekday rows and month columns. Cell darkness '
-            'encodes average rating for that combination.'
-        ),
-        'preview_id': 'preview-chart-rhythm',
-        'controls': [
-            {'key': 'rhythm-cell-color',    'type': 'color', 'label': 'Cell color (data)',     'default': '#000000'},
-            {'key': 'rhythm-empty-color',   'type': 'color', 'label': 'Empty cell color',      'default': '#f0f0f0'},
-            {'key': 'rhythm-weekend-color', 'type': 'color', 'label': 'Weekend separator',     'default': '#cccccc'},
         ],
     },
     {
@@ -120,17 +102,17 @@ CHARTS = [
         ],
     },
     {
-        'id': 'overview',
-        'label': 'Overview heatmap',
+        'id': 'rhythm',
+        'label': 'Rhythm (weekday × month)',
         'description': (
-            'Year heatmap of daily ratings; the landing-page summary view.'
+            'Heatmap with weekday rows and month columns. Cell darkness '
+            'encodes average rating for that combination.'
         ),
-        'preview_id': 'preview-chart-overview',
+        'preview_id': 'preview-chart-rhythm',
         'controls': [
-            {'key': 'overview-heat-color',  'type': 'color', 'label': 'Cell color',          'default': '#000000'},
-            {'key': 'overview-empty-color', 'type': 'color', 'label': 'Empty cell color',    'default': '#ffffff'},
-            {'key': 'overview-bar-color',   'type': 'color', 'label': 'Bar color (sidebar)', 'default': '#000000'},
-            {'key': 'overview-today-color', 'type': 'color', 'label': 'Today highlight',     'default': '#009afa'},
+            {'key': 'rhythm-cell-color',    'type': 'color', 'label': 'Cell color (data)',     'default': '#000000'},
+            {'key': 'rhythm-empty-color',   'type': 'color', 'label': 'Empty cell color',      'default': '#f0f0f0'},
+            {'key': 'rhythm-weekend-color', 'type': 'color', 'label': 'Weekend separator',     'default': '#cccccc'},
         ],
     },
     {
@@ -146,6 +128,24 @@ CHARTS = [
             {'key': 'az-circle-stroke', 'type': 'color', 'label': 'Circle stroke',      'default': '#4d4d4d'},
             {'key': 'az-canvas-bg',     'type': 'color', 'label': 'Canvas background',  'default': '#fafafa'},
             {'key': 'az-label-color',   'type': 'color', 'label': 'Label color',        'default': '#ffffff'},
+        ],
+    },
+    {
+        'id': 'river',
+        'label': 'River of mood',
+        'description': (
+            'Smoothed line crossing the year, raw daily dots, soft area '
+            'fill underneath, and a vertical "today" marker.'
+        ),
+        'preview_id': 'preview-chart-river',
+        'controls': [
+            {'key': 'river-line-color',    'type': 'color',  'label': 'Line color',         'default': '#000000'},
+            {'key': 'river-line-width',    'type': 'slider', 'unit': 'px',       'min': 1, 'max': 4, 'step': 0.2, 'label': 'Line width',         'default': '1.6px'},
+            {'key': 'river-area-color',    'type': 'color',  'label': 'Area fill color',    'default': '#000000'},
+            {'key': 'river-area-opacity',  'type': 'unit',   'label': 'Area fill opacity',  'default': '0.08'},
+            {'key': 'river-dot-color',     'type': 'color',  'label': 'Raw daily dot color','default': '#000000'},
+            {'key': 'river-today-color',   'type': 'color',  'label': 'Today marker',       'default': '#009afa'},
+            {'key': 'river-grid-color',    'type': 'color',  'label': 'Gridlines',          'default': '#c8c8c8'},
         ],
     },
 ]

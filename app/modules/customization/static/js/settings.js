@@ -519,6 +519,18 @@
       .then(function (data) {
         saveBtn.disabled = false;
         if (data.ok) {
+          // Merge just-saved keys into SAVED_KEYS so `isAuthoritative()`
+          // keeps returning true for them after Save (without a reload).
+          // Without this, the picker value would stop being trusted as
+          // soon as `dirtyKeys` is cleared below — leaving the preview
+          // showing the global chart-color fallback while the real
+          // page (next render) correctly uses the per-chart override.
+          var justSaved = (data.saved || Object.keys(settings));
+          for (var i = 0; i < justSaved.length; i++) {
+            if (SAVED_KEYS.indexOf(justSaved[i]) === -1) {
+              SAVED_KEYS.push(justSaved[i]);
+            }
+          }
           dirtyKeys = {};
           setSaved(true);
         } else {
@@ -769,6 +781,10 @@
         // Clear --bg-image (so the inactive state matches the freshly-reset look)
         rebuildBgImageVar();
 
+        // Full reset wipes all previously-saved per-chart overrides;
+        // SAVED_KEYS must drop them so `isAuthoritative()` correctly
+        // cascades preview colours back through chart-color.
+        SAVED_KEYS.length = 0;
         dirtyKeys = {};
         renderAll();
         setSaved(true);
@@ -808,20 +824,36 @@
   // Each preview function renders an SVG mirror of its insights chart,
   // pulling values straight from the live picker inputs so the user
   // sees the effect without saving. Resolution helper:
-  function getKey(key, fallback) {
-    // Prefer the picker input (live, dirty), then the saved CSS var,
-    // then the explicit fallback.
-    var el = document.querySelector('[data-key="' + key + '"]');
-    if (el) {
-      if (el.classList.contains('cz-color')) return el.value;
-      if (el.classList.contains('cz-slider')) {
-        var unit = el.getAttribute('data-unit');
-        if (unit === 'percent') return (parseInt(el.value, 10) / 100).toString();
-        return el.value + (unit || '');
-      }
+  //
+  // Per-chart keys (river-*, spiral-*, etc.) are AUTHORITATIVE only when:
+  //   (a) the user touched the picker this session (`dirtyKeys`), OR
+  //   (b) the value was saved server-side (`__CZ_SAVED_KEYS__`)
+  // Otherwise the picker is showing the schema default and the real
+  // page would cascade up to `chart-color` — so we mirror that here by
+  // ignoring the picker value and letting the caller's fallback win.
+  var SAVED_KEYS = window.__CZ_SAVED_KEYS__ || [];
+  function isAuthoritative(key) {
+    return dirtyKeys[key] === true || SAVED_KEYS.indexOf(key) !== -1;
+  }
+  function readPicker(el) {
+    if (el.classList.contains('cz-color')) return el.value;
+    if (el.classList.contains('cz-slider')) {
+      var unit = el.getAttribute('data-unit');
+      if (unit === 'percent') return (parseInt(el.value, 10) / 100).toString();
+      return el.value + (unit || '');
     }
-    var v = readVar(key);
-    return v || fallback;
+    return null;
+  }
+  function getKey(key, fallback) {
+    var el = document.querySelector('[data-key="' + key + '"]');
+    if (el && isAuthoritative(key)) {
+      var v = readPicker(el);
+      if (v !== null) return v;
+    }
+    var cssVar = readVar(key);
+    if (cssVar) return cssVar;
+    // No authoritative source — fall back to whatever the caller said.
+    return fallback;
   }
   function getColor(key, fallback) {
     return getKey(key, fallback) || fallback;
@@ -871,12 +903,18 @@
       return [pad + i * stepX, H - pad - ((v - 1) / 9) * (H - pad * 2)];
     });
 
-    var lineColor   = getColor('river-line-color',  getColor('chart-color', '#000'));
+    // Per-chart picker values are only authoritative when dirty/saved
+    // (see getKey). For untouched keys, fall back along the same chain
+    // the server uses: chart-color global → CSS default. river-area
+    // falls back to '#000' (not lineColor) because the server emits
+    // rgba(0,0,0,opacity) when only opacity is set, not rgba(lineColor).
+    var chartColor  = getColor('chart-color', '#000');
+    var lineColor   = getColor('river-line-color',  chartColor);
     var lineWidth   = getNum('river-line-width', 1.6);
-    var areaColor   = getColor('river-area-color',  lineColor);
+    var areaColor   = getColor('river-area-color',  '#000000');
     var areaOpacity = getNum('river-area-opacity', 0.08);
-    var dotColor    = getColor('river-dot-color',   lineColor);
-    var todayColor  = getColor('river-today-color', '#009afa');
+    var dotColor    = getColor('river-dot-color',   chartColor);
+    var todayColor  = getColor('river-today-color', getColor('brand-color', '#009afa'));
     var gridColor   = getColor('river-grid-color',  getColor('chart-grid-color', '#c8c8c8'));
 
     // Gridlines (3 dashed horizontals at 4, 6, 8)
@@ -921,7 +959,7 @@
     var W = 240, H = 140, cx = W / 2, cy = H / 2;
     var dotColor   = getColor('spiral-dot-color',   getColor('chart-color', '#000'));
     var guideColor = getColor('spiral-guide-color', getColor('chart-grid-color', '#d8d8d8'));
-    var todayColor = getColor('spiral-today-color', '#009afa');
+    var todayColor = getColor('spiral-today-color', getColor('brand-color', '#009afa'));
     var monthColor = getColor('spiral-month-color', '#666');
 
     // Guide concentric circles
@@ -1034,9 +1072,12 @@
     var rows = 6;
     var rowH = (H - padT - 6) / rows;
 
-    var fillColor    = getColor('ridge-fill-color',    getColor('chart-color', '#000'));
+    // ridge-fill-color defaults to '#000000' on the server (see
+    // _composed_fill); ridge-line-color falls through chart-color, NOT
+    // fillColor — the real chart emits .ridge-line { stroke: var(--chart-color) }.
+    var fillColor    = getColor('ridge-fill-color',    '#000000');
     var fillOpacity  = getNum('ridge-fill-opacity', 0.20);
-    var lineColor    = getColor('ridge-line-color',    fillColor);
+    var lineColor    = getColor('ridge-line-color',    getColor('chart-color', '#000'));
     var baseColor    = getColor('ridge-baseline-color', '#888');
 
     for (var r = 0; r < rows; r++) {
@@ -1076,9 +1117,11 @@
     clear(svg);
     var W = 240, H = 140;
     var heatColor  = getColor('overview-heat-color',  getColor('chart-color', '#000'));
-    var emptyColor = getColor('overview-empty-color', '#fff');
+    // overview-empty-color falls back through cube-empty-color (real CSS:
+    // .heat-empty { fill: var(--cube-empty-color, #fff); }).
+    var emptyColor = getColor('overview-empty-color', getColor('cube-empty-color', '#fff'));
     var barColor   = getColor('overview-bar-color',   getColor('chart-color', '#000'));
-    var todayColor = getColor('overview-today-color', '#009afa');
+    var todayColor = getColor('overview-today-color', getColor('brand-color', '#009afa'));
     var gridColor  = getColor('chart-grid-color',     '#d8d8d8');
 
     // Heatmap area (left 65%)

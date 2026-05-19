@@ -44,15 +44,15 @@
       {% endif %}
       <a href="{{ url_for('main.account') }}" class="menu-link">{{ t('nav.account') }}</a>
       <a href="{{ url_for('sync.sync_page') }}" class="menu-link">{{ t('nav.sync') }}</a>
-      <a href="{{ url_for('modules.modules_page') }}" class="menu-link">{{ t('nav.modules') }}</a>
       {% if module_active('customization') %}<a href="{{ url_for('customization.settings') }}" class="menu-link">{{ t('nav.customize') }}</a>{% endif %}
+      <a href="{{ url_for('modules.modules_page') }}" class="menu-link">{{ t('nav.modules') }}</a>
     </nav>
   </header>
 
   <main class="graphics-main">
     <div class="detail-header">
       <a href="{{ url_for('graphics.graphics_page') }}" class="back-link">{{ t('graphics.back') }}</a>
-      <p class="graphics-title">{{ t('graphics.rhythm.title') }}<sup>{{ year }}</sup>{% if year != current_year %}<span class="archive-tag">(archive)</span>{% endif %}</p>
+      <p class="graphics-title">{{ t('graphics.rhythm.title') }}<sup>{{ year }}</sup>{% if year != current_year %}<span class="archive-tag">{{ t('graphics.archive_tag') }}</span>{% endif %}</p>
       <p class="graphics-summary">
         {% if total %}
           {{ t('graphics.rhythm.summary', n=total, avg='%.2f'|format(avg)) }}
@@ -81,12 +81,12 @@
             <rect x="{{ c.x }}" y="{{ c.y }}" width="{{ c.w }}" height="{{ c.h }}"
                   class="rhythm-cell"
                   fill-opacity="{{ c.fill_opacity }}">
-              <title>{{ c.weekday }} · month {{ c.month }} · {{ c.count }} entries · avg {{ '%.2f'|format(c.avg) }}/10</title>
+              <title>{{ t('graphics.weekday.' + c.weekday) }} · {{ c.month }} · {{ c.count }} · avg {{ '%.2f'|format(c.avg) }}/10</title>
             </rect>
           {% else %}
             <rect x="{{ c.x }}" y="{{ c.y }}" width="{{ c.w }}" height="{{ c.h }}"
                   class="rhythm-cell empty">
-              <title>{{ c.weekday }} · month {{ c.month }} · no entries</title>
+              <title>{{ t('graphics.weekday.' + c.weekday) }} · {{ c.month }} · {{ t('graphics.no_entries_year') }}</title>
             </rect>
           {% endif %}
         {% endfor %}
@@ -96,10 +96,11 @@
           <text x="{{ m.x }}" y="{{ m.y }}" class="rhythm-axis-label" text-anchor="middle">{{ m.label }}</text>
         {% endfor %}
 
-        {# Weekday labels (left) #}
+        {# Weekday labels (left) — short codes from the route get
+           resolved to the active language via the i18n catalog. #}
         {% for w in weekday_labels %}
           <text x="{{ w.x }}" y="{{ w.y }}" class="rhythm-axis-label"
-                text-anchor="end" dominant-baseline="middle">{{ w.label }}</text>
+                text-anchor="end" dominant-baseline="middle">{{ t('graphics.weekday.' + w.label) }}</text>
         {% endfor %}
 
         {# Month marginal averages (bottom) #}
@@ -114,17 +115,17 @@
         {% endfor %}
       </svg>
 
-      <div class="spiral-legend">
-        <span class="legend-label">{% if color_min is not none %}{{ '%.2f'|format(color_min) }}{% else %}low{% endif %}</span>
-        <span class="legend-dot" style="width:11px;height:11px;background:rgba(0,0,0,1)"></span>
-        <span class="legend-dot" style="width:9px;height:9px;background:rgba(0,0,0,0.7)"></span>
-        <span class="legend-dot" style="width:7px;height:7px;background:rgba(0,0,0,0.45)"></span>
-        <span class="legend-dot" style="width:5px;height:5px;background:rgba(0,0,0,0.25);border:1px solid #d8d8d8"></span>
-        <span class="legend-label">{% if color_max is not none %}{{ '%.2f'|format(color_max) }}{% else %}high{% endif %}</span>
+      <div class="spiral-legend rhythm-legend">
+        <span class="legend-label">{% if color_min is not none %}{{ '%.2f'|format(color_min) }}{% else %}{{ t('graphics.chart.legend_low') }}{% endif %}</span>
+        <span class="legend-dot" style="width:11px;height:11px;opacity:1"></span>
+        <span class="legend-dot" style="width:9px;height:9px;opacity:0.7"></span>
+        <span class="legend-dot" style="width:7px;height:7px;opacity:0.45"></span>
+        <span class="legend-dot" style="width:5px;height:5px;opacity:0.25;border:1px solid #d8d8d8"></span>
+        <span class="legend-label">{% if color_max is not none %}{{ '%.2f'|format(color_max) }}{% else %}{{ t('graphics.chart.legend_high') }}{% endif %}</span>
       </div>
       {% if color_min is not none and color_max is not none %}
         <p style="text-align:center; color:#999; font-size:13px; font-family:'Times New Roman',serif; margin-top:6px;">
-          color scaled to the actual cell range: {{ '%.2f'|format(color_min) }} → {{ '%.2f'|format(color_max) }} · numbers on the margins are row/column averages
+          {{ t('graphics.color_scaled_cells', lo='%.2f'|format(color_min), hi='%.2f'|format(color_max)) }}
         </p>
       {% endif %}
     </section>

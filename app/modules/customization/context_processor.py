@@ -330,6 +330,25 @@ def _chart_overrides(settings: dict) -> str:
         if key in settings:
             pieces.append(f'{selector}{{{prop}:{settings[key]};}}')
 
+    # Per-chart color keys are ALSO emitted as :root CSS variables so
+    # peripheral elements (legend dots, swatches, landing-page card
+    # miniatures) can pick them up via `var(--<key>, …)` and stay in
+    # sync with the chart proper. We include ALL color-type per-chart
+    # keys from the schema — including those (river-area-color,
+    # ridge-fill-color) that the override map handles via `_composed_fill`
+    # rather than a simple class rule, since meta-UI still needs the
+    # raw colour to render with.
+    from .chart_schema import ALL_CONTROLS as _CHART_CTRLS_FOR_VARS
+    _color_chart_keys = {
+        k for k, ctrl in _CHART_CTRLS_FOR_VARS.items() if ctrl.get('type') == 'color'
+    }
+    chart_vars = []
+    for key in settings:
+        if key in _color_chart_keys and _is_color_value(settings[key]):
+            chart_vars.append(f'  --{key}: {settings[key]};')
+    if chart_vars:
+        pieces.append(':root {\n' + '\n'.join(chart_vars) + '\n}')
+
     # ── Composed rgba() rules for area fills ─────────────
     # The river area and ridgeline ridge fills want a base colour with
     # a separate opacity. We compose rgba() so the user can pick a
@@ -346,6 +365,15 @@ def _chart_overrides(settings: dict) -> str:
     )
 
     return ''.join(p for p in pieces if p)
+
+
+def _is_color_value(value: str) -> bool:
+    """Loose check — accept '#hex' and rgb()/rgba() strings. Used to
+    avoid emitting opacity/width keys as colour vars by mistake."""
+    if not isinstance(value, str):
+        return False
+    v = value.strip().lower()
+    return v.startswith('#') or v.startswith('rgb')
 
 
 def _composed_fill(selector: str, color_hex: str | None, opacity: str | None) -> str:
@@ -448,24 +476,32 @@ def _emit_css_block(settings: dict) -> str:
             ':root {\n' + '\n'.join(f'  --{k}: {v};' for k, v in css_vars.items()) + '\n}'
         )
 
-    # Add bg-image render layer only when there's actually a bg image.
-    if composed_bg is not None:
-        parts.append(
-            'body { position: relative; }\n'
-            'body::before {'
-            '\n  content: "";'
-            '\n  position: fixed;'
-            '\n  inset: 0;'
-            '\n  z-index: -2;'
-            '\n  pointer-events: none;'
-            '\n  background-image: var(--bg-image, none);'
-            '\n  background-size: var(--bg-size, cover);'
-            '\n  background-position: var(--bg-position, center);'
-            '\n  background-repeat: var(--bg-repeat, no-repeat);'
-            '\n  filter: blur(var(--bg-image-blur, 0px));'
-            '\n  opacity: var(--bg-image-opacity, 1);'
-            '\n}'
-        )
+    # Emit the bg-image render layer unconditionally.
+    #
+    # Used to be gated on `composed_bg is not None` (i.e. the user had
+    # already saved a gradient / image). That blocked the customization
+    # page's live preview: switching bg-type to gradient or image with
+    # the picker would update --bg-image via JS, but the body::before
+    # pseudo-element wouldn't exist yet, so the change wasn't visible
+    # until after Save + reload. Emitting it for everyone is essentially
+    # free — when --bg-image resolves to `none`, the pseudo-element is
+    # invisible (no image to paint).
+    parts.append(
+        'body { position: relative; }\n'
+        'body::before {'
+        '\n  content: "";'
+        '\n  position: fixed;'
+        '\n  inset: 0;'
+        '\n  z-index: -2;'
+        '\n  pointer-events: none;'
+        '\n  background-image: var(--bg-image, none);'
+        '\n  background-size: var(--bg-size, cover);'
+        '\n  background-position: var(--bg-position, center);'
+        '\n  background-repeat: var(--bg-repeat, no-repeat);'
+        '\n  filter: blur(var(--bg-image-blur, 0px));'
+        '\n  opacity: var(--bg-image-opacity, 1);'
+        '\n}'
+    )
 
 
     if custom_face:

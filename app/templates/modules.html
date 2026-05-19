@@ -24,8 +24,8 @@
       {% endif %}
       <a href="{{ url_for('main.account') }}" class="menu-link">{{ t('nav.account') }}</a>
       <a href="{{ url_for('sync.sync_page') }}" class="menu-link">{{ t('nav.sync') }}</a>
-      <a href="{{ url_for('modules.modules_page') }}" class="menu-link active-link">{{ t('nav.modules') }}</a>
       {% if module_active('customization') %}<a href="{{ url_for('customization.settings') }}" class="menu-link">{{ t('nav.customize') }}</a>{% endif %}
+      <a href="{{ url_for('modules.modules_page') }}" class="menu-link active-link">{{ t('nav.modules') }}</a>
     </nav>
   </header>
 
@@ -120,10 +120,6 @@
       </details>
     </div>
   </div>
-
-  <footer class="main-footer">
-    <a href="{{ url_for('main.what_is_index') }}" class="footer-link">{{ t('footer.what_is_index') }}</a>
-  </footer>
 
   <script>
     const PROFILE = '{{ profile }}';

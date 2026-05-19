@@ -151,11 +151,27 @@ html, body {
   /* Setting `color:` here lets the inline SVG miniatures pick up the
      theme's chart-color via `stroke="currentColor"` / `fill="currentColor"`
      (SVG presentation attributes don't support var(), but currentColor
-     is inherited from the CSS color property). Data-encoded
-     `rgba(0,0,0,X)` values are intentionally NOT themed because their
-     meaning is *intensity*, not theme colour. */
+     is inherited from the CSS color property). Per-card classes below
+     override this to use the chart's own per-chart key, so each
+     preview matches the colour you set for that specific chart.
+     Data-encoded intensity is carried via `fill-opacity` on each
+     element, so the colour comes from theme and the intensity comes
+     from the data — exactly how the real chart pages render. */
   color: var(--chart-color, #000);
 }
+
+/* Per-card colour binding: each landing-page card paints in the same
+   colour as its corresponding chart, falling back through the global
+   chart-color to black. Adding a new chart needs a row here. */
+.viz-card-overview        .viz-preview svg { color: var(--overview-heat-color, var(--chart-color, #000)); }
+.viz-card-spiral          .viz-preview svg { color: var(--spiral-dot-color,    var(--chart-color, #000)); }
+.viz-card-rose            .viz-preview svg { color: var(--rose-petal-color,    var(--chart-color, #000)); }
+.viz-card-ridgeline       .viz-preview svg { color: var(--ridge-fill-color,    var(--chart-color, #000)); }
+.viz-card-rhythm          .viz-preview svg { color: var(--rhythm-cell-color,   var(--chart-color, #000)); }
+.viz-card-river           .viz-preview svg { color: var(--river-line-color,    var(--chart-color, #000)); }
+.viz-card-activities-zoom .viz-preview svg { color: var(--az-circle-color,     var(--chart-color, #000)); }
+/* words/activities/people don't have per-chart colour keys (yet) — the
+   default .viz-preview svg color above already wires them to chart-color. */
 
 .viz-card-title {
   font-size: 19px;
@@ -347,7 +363,18 @@ html, body {
 .legend-dot {
   display: inline-block;
   border-radius: 50%;
+  /* Tint follows the chart it lives next to. Each chart's `.<...>-legend`
+     parent below sets --legend-color from its per-chart key (falling
+     back to the global chart-color). The dot itself only controls its
+     opacity (gradient steps), set inline. */
+  background-color: var(--legend-color, #000);
 }
+
+/* Per-chart legend wrappers: pick the right tint for their dots. Falling
+   back through the per-chart key → global chart-color → black. */
+.spiral-legend { --legend-color: var(--spiral-dot-color,  var(--chart-color, #000)); }
+.rhythm-legend { --legend-color: var(--rhythm-cell-color, var(--chart-color, #000)); }
+.rose-legend   { --legend-color: var(--rose-petal-color,  var(--chart-color, #000)); }
 
 /* ── Heatmap ── */
 /* All these classes paint a single colour at a data-driven opacity.
@@ -382,12 +409,20 @@ html, body {
   font-size: 13px;
   color: var(--text-muted, #888);
   font-family: 'Times New Roman', Times, serif;
+  /* The swatches inside follow the heat-color cascade. */
+  --legend-color: var(--overview-heat-color, var(--chart-color, #000));
+}
+/* The activities page borrows .heat-legend's swatch layout but its own
+   chart uses .az-circle / global chart-color (no per-key for cells). */
+.activities-legend {
+  --legend-color: var(--chart-color, #000);
 }
 
 .legend-swatch {
   display: inline-block;
   width: 14px;
   height: 14px;
+  background-color: var(--legend-color, #000);
 }
 
 .legend-label { margin: 0 6px; }

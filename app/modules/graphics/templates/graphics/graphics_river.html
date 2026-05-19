@@ -23,15 +23,15 @@
       {% endif %}
       <a href="{{ url_for('main.account') }}" class="menu-link">{{ t('nav.account') }}</a>
       <a href="{{ url_for('sync.sync_page') }}" class="menu-link">{{ t('nav.sync') }}</a>
-      <a href="{{ url_for('modules.modules_page') }}" class="menu-link">{{ t('nav.modules') }}</a>
       {% if module_active('customization') %}<a href="{{ url_for('customization.settings') }}" class="menu-link">{{ t('nav.customize') }}</a>{% endif %}
+      <a href="{{ url_for('modules.modules_page') }}" class="menu-link">{{ t('nav.modules') }}</a>
     </nav>
   </header>
 
   <main class="graphics-main">
     <div class="detail-header">
       <a href="{{ url_for('graphics.graphics_page') }}" class="back-link">{{ t('graphics.back') }}</a>
-      <p class="graphics-title">{{ t('graphics.river.title') }}<sup>{{ year }}</sup>{% if year != current_year %}<span class="archive-tag">(archive)</span>{% endif %}</p>
+      <p class="graphics-title">{{ t('graphics.river.title') }}<sup>{{ year }}</sup>{% if year != current_year %}<span class="archive-tag">{{ t('graphics.archive_tag') }}</span>{% endif %}</p>
       <p class="graphics-summary">
         {% if total %}
           {{ t('graphics.river.summary', n=total, avg='%.2f'|format(avg)) }}

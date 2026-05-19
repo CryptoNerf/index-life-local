@@ -23,8 +23,8 @@
       {% endif %}
       <a href="{{ url_for('main.account') }}" class="menu-link">{{ t('nav.account') }}</a>
       <a href="{{ url_for('sync.sync_page') }}" class="menu-link">{{ t('nav.sync') }}</a>
-      <a href="{{ url_for('modules.modules_page') }}" class="menu-link">{{ t('nav.modules') }}</a>
       {% if module_active('customization') %}<a href="{{ url_for('customization.settings') }}" class="menu-link">{{ t('nav.customize') }}</a>{% endif %}
+      <a href="{{ url_for('modules.modules_page') }}" class="menu-link">{{ t('nav.modules') }}</a>
     </nav>
   </header>
 
@@ -36,7 +36,7 @@
 
     <div class="cards-grid">
       {# ── Overview card ── #}
-      <a href="{{ url_for('graphics.overview') }}" class="viz-card">
+      <a href="{{ url_for('graphics.overview') }}" class="viz-card viz-card-overview">
         <div class="viz-preview">
           <svg viewBox="0 0 {{ preview_heat.grid_w }} {{ preview_heat.grid_h }}"
                preserveAspectRatio="xMidYMid meet">
@@ -44,7 +44,7 @@
               {% if c.in_year %}
                 {% if c.rating %}
                   <rect x="{{ c.x }}" y="{{ c.y }}" width="{{ preview_heat.cell }}" height="{{ preview_heat.cell }}"
-                        fill="rgba(0,0,0,{{ 1.0 - (c.rating - 1) / 9 * 0.85 }})"/>
+                        fill="currentColor" fill-opacity="{{ 1.0 - (c.rating - 1) / 9 * 0.85 }}"/>
                 {% else %}
                   {# Empty heatmap cell — fill follows the calendar's
                      empty-cube colour, stroke is the chart's grid colour.
@@ -63,7 +63,7 @@
       </a>
 
       {# ── Coming soon cards ── #}
-      <a href="{{ url_for('graphics.spiral') }}" class="viz-card">
+      <a href="{{ url_for('graphics.spiral') }}" class="viz-card viz-card-spiral">
         <div class="viz-preview">
           <svg viewBox="0 0 120 120" preserveAspectRatio="xMidYMid meet">
             <g fill="none" stroke="currentColor" stroke-width="1" opacity="0.75">
@@ -83,7 +83,7 @@
       </a>
 
       {# ── Rose (weekday distributions) ── #}
-      <a href="{{ url_for('graphics.rose') }}" class="viz-card">
+      <a href="{{ url_for('graphics.rose') }}" class="viz-card viz-card-rose">
         <div class="viz-preview">
           <svg viewBox="0 0 120 120" preserveAspectRatio="xMidYMid meet">
             {# 7 symbolic petals approximating the rose #}
@@ -98,7 +98,7 @@
             ] %}
             <circle cx="60" cy="60" r="40" fill="none" style="stroke: var(--chart-grid-color, #eaeaea)" stroke-width="0.5"/>
             {% for p in petal_paths %}
-              <path d="{{ p[0] }}" fill="rgba(0,0,0,{{ p[1] }})" stroke="currentColor" stroke-width="0.7"/>
+              <path d="{{ p[0] }}" fill="currentColor" fill-opacity="{{ p[1] }}" stroke="currentColor" stroke-width="0.7"/>
             {% endfor %}
           </svg>
         </div>
@@ -107,7 +107,7 @@
       </a>
 
       {# ── Ridgeline ── #}
-      <a href="{{ url_for('graphics.ridgeline') }}" class="viz-card">
+      <a href="{{ url_for('graphics.ridgeline') }}" class="viz-card viz-card-ridgeline">
         <div class="viz-preview">
           <svg viewBox="0 0 120 120" preserveAspectRatio="xMidYMid meet">
             {% set ridges = [
@@ -120,7 +120,7 @@
               [110, 'M5,110 Q26,110 38,104 Q54,98 68,100 Q82,102 96,96 Q108,90 115,108 L115,110 Z']
             ] %}
             {% for r in ridges %}
-              <path d="{{ r[1] }}" fill="rgba(255,255,255,0.9)" stroke="currentColor" stroke-width="0.7"/>
+              <path d="{{ r[1] }}" fill="currentColor" fill-opacity="0.20" stroke="currentColor" stroke-width="0.7"/>
             {% endfor %}
           </svg>
         </div>
@@ -129,7 +129,7 @@
       </a>
 
       {# ── Rhythm (weekday × month heatmap) ── #}
-      <a href="{{ url_for('graphics.rhythm') }}" class="viz-card">
+      <a href="{{ url_for('graphics.rhythm') }}" class="viz-card viz-card-rhythm">
         <div class="viz-preview">
           <svg viewBox="0 0 120 120" preserveAspectRatio="xMidYMid meet">
             {% set rhythm_opacities = [
@@ -145,7 +145,7 @@
               {% set ry = 10 + loop.index0 * 14 %}
               {% for op in row %}
                 <rect x="{{ 6 + loop.index0 * 9 }}" y="{{ ry }}" width="8.5" height="13"
-                      fill="rgba(0,0,0,{{ op }})" stroke="#fff" stroke-width="0.6"/>
+                      fill="currentColor" fill-opacity="{{ op }}" stroke="#fff" stroke-width="0.6"/>
               {% endfor %}
             {% endfor %}
           </svg>
@@ -155,7 +155,7 @@
       </a>
 
       {# ── Words ── #}
-      <a href="{{ url_for('graphics.words') }}" class="viz-card">
+      <a href="{{ url_for('graphics.words') }}" class="viz-card viz-card-words">
         <div class="viz-preview">
           <svg viewBox="0 0 120 120" preserveAspectRatio="xMidYMid meet">
             {% set bars = [
@@ -169,9 +169,9 @@
             <line x1="60" y1="14" x2="60" y2="110" style="stroke: var(--chart-grid-color, #ccc)" stroke-width="0.4"/>
             {% for b in bars %}
               {% if loop.index <= 3 %}
-                <rect x="{{ 60 - b[2] }}" y="{{ b[1] - 4 }}" width="{{ b[2] }}" height="6" fill="rgba(0,0,0,{{ b[3] }})"/>
+                <rect x="{{ 60 - b[2] }}" y="{{ b[1] - 4 }}" width="{{ b[2] }}" height="6" fill="currentColor" fill-opacity="{{ b[3] }}"/>
               {% else %}
-                <rect x="60" y="{{ b[1] - 4 }}" width="{{ b[2] }}" height="6" fill="rgba(0,0,0,{{ b[3] }})"/>
+                <rect x="60" y="{{ b[1] - 4 }}" width="{{ b[2] }}" height="6" fill="currentColor" fill-opacity="{{ b[3] }}"/>
               {% endif %}
             {% endfor %}
           </svg>
@@ -180,48 +180,13 @@
         <p class="viz-card-desc">{{ t('graphics.card.words.desc') }}</p>
       </a>
 
-      {# ── Activities (requires AI Psychologist for LLM extraction) ── #}
-      {% set activities_ready = module_active('assistant') %}
-      {% set activities_preview %}
-        <svg viewBox="0 0 120 120" preserveAspectRatio="xMidYMid meet">
-          {% set bubbles = [
-            [40, 50, 22, 0.75],
-            [76, 38, 16, 0.45],
-            [82, 72, 18, 0.85],
-            [26, 82, 12, 0.30],
-            [58, 82, 9, 0.55],
-            [96, 22, 7, 0.40],
-            [18, 34, 10, 0.65]
-          ] %}
-          {% for b in bubbles %}
-            <circle cx="{{ b[0] }}" cy="{{ b[1] }}" r="{{ b[2] }}"
-                    fill="rgba(0,0,0,{{ b[3] }})" stroke="currentColor" stroke-width="0.4" stroke-opacity="0.35"/>
-          {% endfor %}
-        </svg>
-      {% endset %}
-      {% if activities_ready %}
-        <a href="{{ url_for('graphics.activities') }}" class="viz-card">
-          <div class="viz-preview">{{ activities_preview|safe }}</div>
-          <p class="viz-card-title">{{ t('graphics.card.activities.title') }}</p>
-          <p class="viz-card-desc">{{ t('graphics.card.activities.desc') }}</p>
-        </a>
-      {% else %}
-        <div class="viz-card disabled" title="{{ t('graphics.requires_ai_tooltip') }}">
-          <div class="viz-preview">{{ activities_preview|safe }}</div>
-          <p class="viz-card-title">
-            {{ t('graphics.card.activities.title') }}
-            <span class="soon-tag needs-ai">{{ t('graphics.requires_ai') }}</span>
-          </p>
-          <p class="viz-card-desc">{{ t('graphics.card.activities.desc') }}</p>
-        </div>
-      {% endif %}
-
-      {# ── Activities zoom (drill-down circle packing) ── #}
+      {# ── Activities (drill-down circle packing — was "activities zoom").
+           The flat "activities" bubble card was merged into this one. #}
       {% set az_ready = module_active('assistant') %}
       {% set az_preview %}
         <svg viewBox="0 0 120 120" preserveAspectRatio="xMidYMid meet">
           {# big parent circle on the left, with small children inside; smaller standalone on right #}
-          <circle cx="44" cy="60" r="36" fill="rgba(0,0,0,0.25)" stroke="rgba(0,0,0,0.4)" stroke-width="0.6"/>
+          <circle cx="44" cy="60" r="36" fill="currentColor" fill-opacity="0.25" stroke="currentColor" stroke-opacity="0.4" stroke-width="0.6"/>
           {% set kids = [
             [32, 50, 8, 0.45],
             [50, 48, 9, 0.20],
@@ -231,21 +196,21 @@
           ] %}
           {% for k in kids %}
             <circle cx="{{ k[0] }}" cy="{{ k[1] }}" r="{{ k[2] }}"
-                    fill="rgba(0,0,0,{{ k[3] }})" stroke="rgba(0,0,0,0.4)" stroke-width="0.4"/>
+                    fill="currentColor" fill-opacity="{{ k[3] }}" stroke="currentColor" stroke-opacity="0.4" stroke-width="0.4"/>
           {% endfor %}
-          <circle cx="92" cy="46" r="14" fill="rgba(0,0,0,0.55)" stroke="rgba(0,0,0,0.4)" stroke-width="0.6"/>
-          <circle cx="100" cy="84" r="10" fill="rgba(0,0,0,0.40)" stroke="rgba(0,0,0,0.4)" stroke-width="0.5"/>
-          <circle cx="80" cy="98" r="7" fill="rgba(0,0,0,0.30)" stroke="rgba(0,0,0,0.4)" stroke-width="0.4"/>
+          <circle cx="92" cy="46" r="14" fill="currentColor" fill-opacity="0.55" stroke="currentColor" stroke-opacity="0.4" stroke-width="0.6"/>
+          <circle cx="100" cy="84" r="10" fill="currentColor" fill-opacity="0.40" stroke="currentColor" stroke-opacity="0.4" stroke-width="0.5"/>
+          <circle cx="80" cy="98" r="7" fill="currentColor" fill-opacity="0.30" stroke="currentColor" stroke-opacity="0.4" stroke-width="0.4"/>
         </svg>
       {% endset %}
       {% if az_ready %}
-        <a href="{{ url_for('graphics.activities_zoom') }}" class="viz-card">
+        <a href="{{ url_for('graphics.activities_zoom') }}" class="viz-card viz-card-activities-zoom">
           <div class="viz-preview">{{ az_preview|safe }}</div>
           <p class="viz-card-title">{{ t('graphics.card.activities_zoom.title') }}</p>
           <p class="viz-card-desc">{{ t('graphics.card.activities_zoom.desc') }}</p>
         </a>
       {% else %}
-        <div class="viz-card disabled" title="{{ t('graphics.requires_ai_tooltip') }}">
+        <div class="viz-card viz-card-activities-zoom disabled" title="{{ t('graphics.requires_ai_tooltip') }}">
           <div class="viz-preview">{{ az_preview|safe }}</div>
           <p class="viz-card-title">
             {{ t('graphics.card.activities_zoom.title') }}
@@ -275,13 +240,13 @@
         </svg>
       {% endset %}
       {% if people_ready %}
-        <a href="{{ url_for('graphics.people') }}" class="viz-card">
+        <a href="{{ url_for('graphics.people') }}" class="viz-card viz-card-people">
           <div class="viz-preview">{{ people_preview|safe }}</div>
           <p class="viz-card-title">{{ t('graphics.card.people.title') }}</p>
           <p class="viz-card-desc">{{ t('graphics.card.people.desc') }}</p>
         </a>
       {% else %}
-        <div class="viz-card disabled" title="{{ t('graphics.requires_ai_tooltip') }}">
+        <div class="viz-card viz-card-people disabled" title="{{ t('graphics.requires_ai_tooltip') }}">
           <div class="viz-preview">{{ people_preview|safe }}</div>
           <p class="viz-card-title">
             {{ t('graphics.card.people.title') }}
@@ -291,13 +256,13 @@
         </div>
       {% endif %}
 
-      <a href="{{ url_for('graphics.river') }}" class="viz-card">
+      <a href="{{ url_for('graphics.river') }}" class="viz-card viz-card-river">
         <div class="viz-preview">
           <svg viewBox="0 0 120 120" preserveAspectRatio="xMidYMid meet">
             <path d="M0,100 C15,70 25,85 40,65 S70,45 85,60 S110,40 120,50"
                   stroke="currentColor" stroke-width="1.2" fill="none"/>
             <path d="M0,100 C15,70 25,85 40,65 S70,45 85,60 S110,40 120,50 L120,110 L0,110 Z"
-                  fill="rgba(0,0,0,0.08)" stroke="none"/>
+                  fill="currentColor" fill-opacity="0.08" stroke="none"/>
           </svg>
         </div>
         <p class="viz-card-title">{{ t('graphics.card.river.title') }}</p>

@@ -23,15 +23,15 @@
       {% endif %}
       <a href="{{ url_for('main.account') }}" class="menu-link">{{ t('nav.account') }}</a>
       <a href="{{ url_for('sync.sync_page') }}" class="menu-link">{{ t('nav.sync') }}</a>
-      <a href="{{ url_for('modules.modules_page') }}" class="menu-link">{{ t('nav.modules') }}</a>
       {% if module_active('customization') %}<a href="{{ url_for('customization.settings') }}" class="menu-link">{{ t('nav.customize') }}</a>{% endif %}
+      <a href="{{ url_for('modules.modules_page') }}" class="menu-link">{{ t('nav.modules') }}</a>
     </nav>
   </header>
 
   <main class="graphics-main">
     <div class="detail-header">
       <a href="{{ url_for('graphics.graphics_page') }}" class="back-link">{{ t('graphics.back') }}</a>
-      <p class="graphics-title">{{ t('graphics.overview.title') }}<sup>{{ year }}</sup>{% if year != current_year %}<span class="archive-tag">(archive)</span>{% endif %}</p>
+      <p class="graphics-title">{{ t('graphics.overview.title') }}<sup>{{ year }}</sup>{% if year != current_year %}<span class="archive-tag">{{ t('graphics.archive_tag') }}</span>{% endif %}</p>
       <p class="graphics-summary">
         {% if total %}
           {{ t('graphics.overview.summary', n=total, avg='%.2f'|format(avg)) }}
@@ -45,11 +45,11 @@
       <p class="chart-title">{{ t('graphics.overview.year_heatmap') }}</p>
       <div class="heatmap-wrap">
         <svg viewBox="0 0 {{ heat_svg_w }} {{ heat_svg_h }}" class="chart-svg heatmap-svg" preserveAspectRatio="xMidYMid meet">
-          {% set weekday_labels = [(0,'Mon'),(2,'Wed'),(4,'Fri')] %}
-          {% for row, lbl in weekday_labels %}
+          {% set weekday_labels = [(0,'mon'),(2,'wed'),(4,'fri')] %}
+          {% for row, key in weekday_labels %}
             <text x="{{ heat_pad_l - 6 }}"
                   y="{{ heat_pad_t + row * (heat.cell + heat.gap) + heat.cell * 0.75 }}"
-                  class="axis-label" text-anchor="end">{{ lbl }}</text>
+                  class="axis-label" text-anchor="end">{{ t('graphics.weekday.' + key) }}</text>
           {% endfor %}
           {% for m in heat.month_labels %}
             <text x="{{ heat_pad_l + m.x }}" y="{{ heat_pad_t - 8 }}" class="axis-label">{{ m.label }}</text>
@@ -77,13 +77,13 @@
         </svg>
       </div>
       <div class="heat-legend">
-        <span class="legend-label">low</span>
-        <span class="legend-swatch" style="background: rgba(0,0,0,1)"></span>
-        <span class="legend-swatch" style="background: rgba(0,0,0,0.78)"></span>
-        <span class="legend-swatch" style="background: rgba(0,0,0,0.57)"></span>
-        <span class="legend-swatch" style="background: rgba(0,0,0,0.36)"></span>
-        <span class="legend-swatch" style="background: rgba(0,0,0,0.15); border: 1px solid #d8d8d8"></span>
-        <span class="legend-label">high</span>
+        <span class="legend-label">{{ t('graphics.chart.legend_low') }}</span>
+        <span class="legend-swatch" style="opacity:1"></span>
+        <span class="legend-swatch" style="opacity:0.78"></span>
+        <span class="legend-swatch" style="opacity:0.57"></span>
+        <span class="legend-swatch" style="opacity:0.36"></span>
+        <span class="legend-swatch" style="opacity:0.15;border: 1px solid #d8d8d8"></span>
+        <span class="legend-label">{{ t('graphics.chart.legend_high') }}</span>
       </div>
     </section>
 
@@ -106,7 +106,7 @@
     </section>
 
     <section class="chart-block">
-      <p class="chart-title">distribution</p>
+      <p class="chart-title">{{ t('graphics.overview.distribution') }}</p>
       <svg viewBox="0 0 {{ dist_w }} {{ dist_h }}" class="chart-svg" preserveAspectRatio="xMidYMid meet">
         <line x1="{{ dist_pad_l }}" y1="{{ dist_baseline_y }}" x2="{{ dist_w - 10 }}" y2="{{ dist_baseline_y }}" class="axis"/>
         {% for b in dist_bars %}

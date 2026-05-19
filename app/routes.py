@@ -552,74 +552,88 @@ def life_set_birthdate():
     return redirect(url_for('main.life_calendar'))
 
 
-@bp.route('/export/markdown')
-def export_markdown():
-    """Export all diary entries to Markdown format"""
-    # Get user profile
+def _build_markdown_export() -> tuple[str, str] | None:
+    """Render the full diary as a single Markdown document.
+
+    Returns (content, suggested_filename) or None when the diary is empty.
+    Split out from the HTTP endpoint so the JSON API + pywebview save
+    flow can reuse it without duplicating the layout logic.
+    """
     profile = UserProfile.query.first()
     username = profile.username if profile else 'User'
-
-    # Get all entries sorted by date (newest first)
     entries = MoodEntry.query.order_by(MoodEntry.date.desc()).all()
-
     if not entries:
-        flash('No entries to export', 'error')
-        return redirect(url_for('main.account'))
+        return None
 
-    # Build Markdown content
-    markdown_lines = []
-    markdown_lines.append(f"# {username}'s Mood Diary")
-    markdown_lines.append("")
-    markdown_lines.append(f"**Total Entries:** {len(entries)}")
+    lines = []
+    lines.append(f"# {username}'s Mood Diary")
+    lines.append("")
+    lines.append(f"**Total Entries:** {len(entries)}")
     if profile:
-        markdown_lines.append(f"**Average Mood:** {profile.avg_rating}/10")
-    markdown_lines.append(f"**Exported:** {datetime.now().strftime('%Y-%m-%d %H:%M')}")
-    markdown_lines.append("")
-    markdown_lines.append("---")
-    markdown_lines.append("")
+        lines.append(f"**Average Mood:** {profile.avg_rating}/10")
+    lines.append(f"**Exported:** {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    lines.append("")
+    lines.append("---")
+    lines.append("")
 
-    # Group entries by year and month
     current_year = None
     current_month = None
-
     for entry in entries:
-        entry_year = entry.date.year
-        entry_month = entry.date.month
-
-        # Add year header if changed
-        if entry_year != current_year:
-            markdown_lines.append("")
-            markdown_lines.append(f"## {entry_year}")
-            markdown_lines.append("")
-            current_year = entry_year
+        if entry.date.year != current_year:
+            lines.append("")
+            lines.append(f"## {entry.date.year}")
+            lines.append("")
+            current_year = entry.date.year
             current_month = None
-
-        # Add month header if changed
-        if entry_month != current_month:
-            month_name = calendar.month_name[entry_month]
-            markdown_lines.append(f"### {month_name}")
-            markdown_lines.append("")
-            current_month = entry_month
-
-        # Add entry
-        day_str = entry.date.strftime('%Y-%m-%d, %A')
-        markdown_lines.append(f"#### {day_str}")
-        markdown_lines.append("")
-        markdown_lines.append(f"**Mood Rating:** {entry.rating}/10")
-        markdown_lines.append("")
-
+        if entry.date.month != current_month:
+            lines.append(f"### {calendar.month_name[entry.date.month]}")
+            lines.append("")
+            current_month = entry.date.month
+        lines.append(f"#### {entry.date.strftime('%Y-%m-%d, %A')}")
+        lines.append("")
+        lines.append(f"**Mood Rating:** {entry.rating}/10")
+        lines.append("")
         if entry.note and entry.note.strip():
-            markdown_lines.append(entry.note.strip())
-            markdown_lines.append("")
+            lines.append(entry.note.strip())
+            lines.append("")
+        lines.append("---")
+        lines.append("")
 
-        markdown_lines.append("---")
-        markdown_lines.append("")
+    filename = f'mood_diary_{datetime.now().strftime("%Y%m%d_%H%M%S")}.md'
+    return '\n'.join(lines), filename
 
-    # Create response with file download
-    markdown_content = '\n'.join(markdown_lines)
 
-    response = make_response(markdown_content)
+@bp.route('/api/export/markdown')
+def api_export_markdown():
+    """Return the markdown export as JSON.
+
+    Used by the account-page Export button so the front-end can route
+    the content through pywebview's native save dialog (the HTTP
+    download path doesn't work inside WKWebView — Content-Disposition
+    is ignored and the file renders inline with no way back).
+    """
+    from flask import jsonify
+    result = _build_markdown_export()
+    if result is None:
+        return jsonify({'error': 'No entries to export'}), 404
+    content, filename = result
+    return jsonify({'content': content, 'filename': filename})
+
+
+@bp.route('/export/markdown')
+def export_markdown():
+    """HTTP-download fallback for the markdown export.
+
+    Kept for environments without pywebview (running in a regular
+    browser). The native-app account button targets
+    `/api/export/markdown` instead and bridges to a save dialog.
+    """
+    result = _build_markdown_export()
+    if result is None:
+        flash('No entries to export', 'error')
+        return redirect(url_for('main.account'))
+    content, filename = result
+    response = make_response(content)
     response.headers['Content-Type'] = 'text/markdown; charset=utf-8'
-    response.headers['Content-Disposition'] = f'attachment; filename=mood_diary_{datetime.now().strftime("%Y%m%d_%H%M%S")}.md'
-
+    response.headers['Content-Disposition'] = f'attachment; filename={filename}'
     return response

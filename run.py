@@ -154,6 +154,31 @@ def main():
     signal.signal(signal.SIGINT, lambda *_: os._exit(0))
     signal.signal(signal.SIGTERM, lambda *_: os._exit(0))
 
+    # JS ↔ native bridge for things the WebView can't do on its own.
+    # Right now: save-file dialog for markdown export. WKWebView ignores
+    # `Content-Disposition: attachment`, so without this bridge the
+    # exported markdown would render inline with no way to go back.
+    class JsApi:
+        def save_text_file(self, content: str, suggested_name: str) -> str | None:
+            """Open native Save dialog; write `content` to the chosen path.
+            Returns the resolved path on success, None when cancelled.
+            """
+            try:
+                paths = window.create_file_dialog(
+                    webview.SAVE_DIALOG,
+                    save_filename=suggested_name or 'export.txt',
+                )
+                if not paths:
+                    return None
+                # pywebview returns either a single string or a list.
+                target = paths[0] if isinstance(paths, (list, tuple)) else paths
+                with open(target, 'w', encoding='utf-8') as f:
+                    f.write(content)
+                return str(target)
+            except Exception as exc:
+                logging.getLogger(__name__).error('save_text_file failed: %s', exc)
+                return None
+
     window = webview.create_window(
         'index.life',
         server_url,
@@ -162,6 +187,7 @@ def main():
         min_size=(900, 600),
         easy_drag=False,
         text_select=True,
+        js_api=JsApi(),
     )
 
     # Clean shutdown when user closes the window — avoids crash-prone

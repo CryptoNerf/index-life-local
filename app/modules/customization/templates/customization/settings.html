@@ -21,8 +21,8 @@
       {% if module_active('deep_mind') %}<a href="{{ url_for('deep_mind.neural_map') }}" class="menu-link">{{ t('nav.deep_mind') }}</a>{% endif %}
       <a href="{{ url_for('main.account') }}" class="menu-link">{{ t('nav.account') }}</a>
       <a href="{{ url_for('sync.sync_page') }}" class="menu-link">{{ t('nav.sync') }}</a>
-      <a href="{{ url_for('modules.modules_page') }}" class="menu-link">{{ t('nav.modules') }}</a>
       <a href="{{ url_for('customization.settings') }}" class="menu-link active-link">{{ t('nav.customize') }}</a>
+      <a href="{{ url_for('modules.modules_page') }}" class="menu-link">{{ t('nav.modules') }}</a>
     </nav>
   </header>
 
@@ -280,14 +280,14 @@
       </div>
       <div class="cz-preview">
         <span class="cz-preview-label">{{ t('cz.preview_prefix') }}{{ t('cz.preview.navigation') }}</span>
-        <div class="cz-preview-frame">
+        <div class="cz-preview-frame preview-mini-nav-frame">
           <nav class="preview-mini-header">
             <a class="preview-mini-link">index.life</a>
             <a class="preview-mini-link">graphics</a>
             <a class="preview-mini-link active">customize</a>
             <a class="preview-mini-link">account</a>
           </nav>
-          <p class="preview-mini-muted" style="margin-top:6px;font-size:12px;color:var(--text-muted,#888);">
+          <p class="preview-mini-muted">
             {{ t('customization.preview_muted_sample') }}
           </p>
         </div>
@@ -508,34 +508,37 @@
       </div>
     </section>
 
-    {# Per-chart subsections rendered from chart_schema.CHARTS #}
+    {# Per-chart subsections rendered from chart_schema.CHARTS.
+       Labels are stored as translation KEYS (chart_label.*, chart_desc.*,
+       chart_ctrl.*) so the schema stays language-neutral. #}
     {% for chart in chart_schema %}
     <section class="cz-section cz-chart-section" id="sec-chart-{{ chart.id }}">
       <div>
         <div class="cz-section-head">
-          <h2 class="cz-section-title">{{ chart.label }}</h2>
+          <h2 class="cz-section-title">{{ t('chart_label.' + chart.id) }}</h2>
           <button type="button" class="cz-section-reset" data-section="sec-chart-{{ chart.id }}">{{ t('cz.reset_section') }}</button>
-          <p class="cz-section-desc">{{ chart.description }}</p>
+          <p class="cz-section-desc">{{ t('chart_desc.' + chart.id) }}</p>
         </div>
         <div class="cz-controls">
           {% for ctrl in chart.controls %}
             {% set safe_id = 'cz-' + ctrl.key %}
+            {% set ctrl_label = t('chart_ctrl.' + ctrl.key) %}
             <div class="cz-row">
               {% if ctrl.type == 'color' %}
-                <label for="{{ safe_id }}">{{ ctrl.label }}</label>
+                <label for="{{ safe_id }}">{{ ctrl_label }}</label>
                 <input type="color" class="cz-color" id="{{ safe_id }}"
                        data-key="{{ ctrl.key }}" value="{{ current[ctrl.key] }}">
                 <input type="text" class="cz-hex" data-hex-for="{{ safe_id }}"
                        value="{{ current[ctrl.key] }}">
               {% elif ctrl.type == 'slider' %}
-                <label for="{{ safe_id }}">{{ ctrl.label }}</label>
+                <label for="{{ safe_id }}">{{ ctrl_label }}</label>
                 <input type="range" class="cz-slider" id="{{ safe_id }}"
                        min="{{ ctrl.min }}" max="{{ ctrl.max }}" step="{{ ctrl.step }}"
                        data-key="{{ ctrl.key }}" data-unit="{{ ctrl.unit }}"
                        value="{{ current[ctrl.key]|replace(ctrl.unit, '') }}">
                 <span class="cz-slider-val" id="{{ safe_id }}-val">{{ current[ctrl.key] }}</span>
               {% elif ctrl.type == 'unit' %}
-                <label for="{{ safe_id }}">{{ ctrl.label }}</label>
+                <label for="{{ safe_id }}">{{ ctrl_label }}</label>
                 <input type="range" class="cz-slider" id="{{ safe_id }}"
                        min="0" max="100" step="2"
                        data-key="{{ ctrl.key }}" data-unit="percent"
@@ -547,7 +550,7 @@
         </div>
       </div>
       <div class="cz-preview">
-        <span class="cz-preview-label">preview · {{ chart.label }}</span>
+        <span class="cz-preview-label">{{ t('cz.preview_prefix') }}{{ t('chart_label.' + chart.id) }}</span>
         <div class="cz-preview-frame">
           <svg class="preview-mini-svg" id="{{ chart.preview_id }}"
                data-chart="{{ chart.id }}"
@@ -638,6 +641,12 @@
   {% if module_active('deep_mind') %}
   <script src="{{ url_for('deep_mind.static', filename='js/d3.v7.min.js') }}"></script>
   {% endif %}
+  <script>
+    // Keys that the user explicitly saved (server-side persisted) — the
+    // live preview cascades through chart-color for any per-chart key
+    // NOT in this set, matching what the page actually renders.
+    window.__CZ_SAVED_KEYS__ = {{ saved_keys|tojson }};
+  </script>
   <script src="{{ url_for('customization.static', filename='js/settings.js') }}"></script>
 </body>
 </html>

@@ -258,13 +258,22 @@ def settings():
     """Settings page with live previews."""
     from .fonts_catalog import FONT_CATALOG
     from .chart_schema import CHARTS as CHART_SCHEMA
-    current = merge_with_defaults(_current_settings())
+    raw_saved = _current_settings()
+    current = merge_with_defaults(raw_saved)
+    # Pass through the set of keys the user explicitly saved (vs picker
+    # defaults). The live preview uses it to decide whether a per-chart
+    # picker's value is authoritative or whether to cascade up to the
+    # global chart-color fallback — matching what the server-side
+    # `_chart_overrides()` actually emits to the real page.
+    saved_keys = sorted(k for k in raw_saved
+                        if isinstance(raw_saved.get(k), str) and raw_saved[k].strip())
     return render_template(
         'customization/settings.html',
         current=current,
         defaults=DEFAULTS,
         font_catalog=FONT_CATALOG,
         chart_schema=CHART_SCHEMA,
+        saved_keys=saved_keys,
     )
 
 
