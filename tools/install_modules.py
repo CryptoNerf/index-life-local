@@ -68,7 +68,7 @@ MODEL_URL = f"https://huggingface.co/{MODEL_HF_REPO}/resolve/main/{MODEL_FILENAM
 # Pre-built Vulkan wheel (GitHub Release — no Vulkan SDK needed for users)
 GITHUB_REPO = "CryptoNerf/index-life-local"
 LLAMA_CPP_VERSION = "0.3.20"
-VULKAN_WHEEL_TAG = "v2.5.0"  # Release tag containing Vulkan wheels
+VULKAN_WHEEL_TAG = "v3.0.0"  # Release tag containing Vulkan wheels
 
 
 def _get_vulkan_wheel_url() -> tuple[str, str]:
