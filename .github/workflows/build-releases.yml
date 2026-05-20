@@ -42,14 +42,23 @@ jobs:
           }
 
       - name: Create zip archive
+        # Only needed as a Release asset (GitHub Releases serve a single
+        # file, so the app folder must be zipped). The Actions artifact
+        # below intentionally does NOT use this zip — see its comment.
+        if: github.event_name == 'release'
         run: |
           Compress-Archive -Path dist\index-life\* -DestinationPath index-life_windows_x64.zip
 
       - name: Upload Windows artifact
+        # upload-artifact ALWAYS wraps the uploaded path in its own zip.
+        # If we handed it our pre-made index-life_windows_x64.zip the user
+        # would get a zip-inside-a-zip (two unzips). Pointing it at the
+        # unpacked folder makes the single artifact zip contain the app
+        # directly — one unzip.
         uses: actions/upload-artifact@v6
         with:
           name: windows-build
-          path: index-life_windows_x64.zip
+          path: dist/index-life/*
 
       - name: Upload to Release
         if: github.event_name == 'release'

@@ -44,6 +44,7 @@ a = Analysis(
     datas=[
         ('app/templates', 'app/templates'),
         ('app/static', 'app/static'),
+        ('app/translations', 'app/translations'),
         ('config.py', '.'),
         ('MODULES.md', '.'),
         ('install_modules.bat', '.'),

@@ -29,6 +29,7 @@ breaks page rendering.
 """
 import json
 import logging
+import sys
 from pathlib import Path
 
 from flask import g, request
@@ -43,19 +44,44 @@ DEFAULT_LANG = 'ru'
 _CATALOGS: dict[str, dict] = {}
 
 
+def _candidate_dirs() -> list[Path]:
+    """Possible locations of the translations folder.
+
+    In dev the JSON lives next to this file. In a PyInstaller build the
+    module source is inside the archive, so `__file__` may not have a
+    real `translations` sibling on disk — the data files are extracted
+    under `sys._MEIPASS/app/translations` instead. Try both so the
+    Windows/macOS frozen build finds the catalogs (otherwise `t()` would
+    fall back to raw keys like "nav.mood_grid").
+    """
+    here = Path(__file__).resolve().parent
+    dirs = [here / 'translations']
+    meipass = getattr(sys, '_MEIPASS', None)
+    if meipass:
+        dirs.append(Path(meipass) / 'app' / 'translations')
+        dirs.append(Path(meipass) / 'translations')
+    return dirs
+
+
 def _load_catalogs():
-    """Load every `<lang>.json` from app/translations/ into _CATALOGS."""
-    base = Path(__file__).parent / 'translations'
+    """Load every `<lang>.json` into _CATALOGS, trying each candidate dir."""
+    bases = _candidate_dirs()
     for lang in SUPPORTED_LANGS:
-        path = base / f'{lang}.json'
-        try:
-            with open(path, 'r', encoding='utf-8') as f:
-                _CATALOGS[lang] = json.load(f)
-        except FileNotFoundError:
-            log.warning('i18n: catalog %s missing — falling back to key', path)
-            _CATALOGS[lang] = {}
-        except Exception as exc:
-            log.error('i18n: failed to load %s: %s', path, exc)
+        loaded = False
+        for base in bases:
+            path = base / f'{lang}.json'
+            try:
+                with open(path, 'r', encoding='utf-8') as f:
+                    _CATALOGS[lang] = json.load(f)
+                loaded = True
+                break
+            except FileNotFoundError:
+                continue
+            except Exception as exc:
+                log.error('i18n: failed to load %s: %s', path, exc)
+        if not loaded:
+            log.warning('i18n: catalog %s.json not found in %s — falling back to key',
+                        lang, [str(b) for b in bases])
             _CATALOGS[lang] = {}
 
 
