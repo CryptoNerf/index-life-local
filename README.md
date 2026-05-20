@@ -4,10 +4,12 @@
 
 A mood tracker app designed to help people remember and become more aware of themselves and their time.
 
-![Version](https://img.shields.io/badge/version-2.1.0-blue)
+![Version](https://img.shields.io/badge/version-3.0.0-blue)
 ![Python](https://img.shields.io/badge/python-3.8%2B-green)
 ![Flask](https://img.shields.io/badge/flask-3.0.0-lightgrey)
 ![License](https://img.shields.io/badge/license-MIT-yellow)
+
+> 📖 **Full documentation:** [docs/](docs/README.md) — the app & database, sync, modules, AI psychologist, neural map, every chart, customization.
 
 ---
 
@@ -46,7 +48,7 @@ Download the ready-to-use version for your operating system from Releases:
    ./index-life_linux_x86_64.AppImage
    ```
 
-**Optional modules (AI + Voice):**
+**Optional modules (AI):**
 - In the release folder, run `install_modules.bat` (Windows) or `install_modules.sh` (macOS/Linux).
 - Python 3.10 is recommended. On Windows the installer auto-installs Python if missing.
 
@@ -67,7 +69,7 @@ chmod +x install.sh start.sh
 ./start.sh    # Subsequent runs
 ```
 
-**Optional modules (AI + Voice):**
+**Optional modules (AI):**
 - Run `install_modules.bat` / `install_modules.sh`
 - See `MODULES.md` for details
 
@@ -82,7 +84,7 @@ chmod +x install.sh start.sh
 - 100% privacy - all data stored locally (SQLite)
 - Works completely offline
 - Simple web interface
-- Optional AI psychologist chat and voice dictation (after installing modules)
+- Optional AI psychologist chat (after installing modules)
 
 ---
 
@@ -91,7 +93,7 @@ chmod +x install.sh start.sh
 ```
 index-life-local/
 ├─ app/
-│  ├─ modules/            # Optional modules (assistant, voice)
+│  ├─ modules/            # Optional modules (assistant, etc.)
 │  ├─ templates/          # HTML templates
 │  └─ static/             # Static files (CSS, JS, images)
 ├─ tools/                 # Helper scripts (module installer)
@@ -113,7 +115,7 @@ index-life-local/
 - **Database**: SQLite (via Flask-SQLAlchemy)
 - **Frontend**: HTML, CSS, Vanilla JavaScript
 - **Images**: Pillow (Python Imaging Library)
-- **Optional**: llama-cpp-python, sentence-transformers, faster-whisper
+- **Optional**: llama-cpp-python, sentence-transformers
 
 ---
 
@@ -123,7 +125,7 @@ index-life-local/
 In the `diary.db` file in the application directory. For backups, simply copy this file.
 
 **Can I use this on multiple devices?**
-This is a local-only application. For syncing between devices, you can use cloud storage (Dropbox, Google Drive) for the `diary.db` file.
+Yes — built-in sync keeps the current version of your diary on every device through a shared folder (Dropbox, Google Drive, iCloud…) or a WebDAV link (Nextcloud, Yandex.Disk, Box…). Set it up on the **Sync** page. See [docs/en/sync.md](docs/en/sync.md). (Do **not** just share the `diary.db` file across a cloud — the built-in sync handles merging and conflicts safely.)
 
 **Is my data encrypted?**
 The database is not encrypted by default. Make sure your device is password protected.
@@ -137,7 +139,7 @@ Yes, all data is stored in standard SQLite format in the `diary.db` file, which 
 **Do I need to register or log in?**
 No, just launch the application and start using it. No accounts or passwords required.
 
-**How do I enable AI and voice modules?**
+**How do I enable the AI module?**
 Run `install_modules.bat` (Windows) or `install_modules.sh` (macOS/Linux) and follow the prompts.
 
 **Which Python version is required?**

@@ -11,7 +11,6 @@ enabled only if their dependencies are installed.
 ### Available modules
 
 - `assistant` — AI psychologist chat
-- `voice` — voice dictation for notes
 
 ### Install (Windows)
 
@@ -23,7 +22,6 @@ Common commands:
 - `install_modules.bat --module assistant --profile cpu`
 - `install_modules.bat --module assistant --profile vulkan`
 - `install_modules.bat --module assistant --profile cuda`
-- `install_modules.bat --module voice`
 
 ### Install (macOS Apple Silicon — M1/M2/M3/M4)
 
@@ -32,13 +30,11 @@ Common commands:
 **Source users:**
 
 - `bash install_modules.sh --module assistant --profile metal`
-- `bash install_modules.sh --module voice`
 
 ### Install (macOS Intel / Linux)
 
 - `bash install_modules.sh --module assistant --profile auto`
 - `bash install_modules.sh --module assistant --profile cpu`
-- `bash install_modules.sh --module voice`
 
 ### Assistant profiles
 
@@ -84,7 +80,6 @@ The GGUF model (~4.7 GB) is downloaded automatically during installation.
 ### Доступные модули
 
 - `assistant` — чат‑психолог
-- `voice` — голосовая диктовка заметок
 
 ### Установка (Windows)
 
@@ -96,7 +91,6 @@ The GGUF model (~4.7 GB) is downloaded automatically during installation.
 - `install_modules.bat --module assistant --profile cpu`
 - `install_modules.bat --module assistant --profile vulkan`
 - `install_modules.bat --module assistant --profile cuda`
-- `install_modules.bat --module voice`
 
 ### Установка (macOS / Linux)
 
@@ -108,7 +102,6 @@ The GGUF model (~4.7 GB) is downloaded automatically during installation.
 - `bash install_modules.sh --module assistant --profile cpu`
 - `bash install_modules.sh --module assistant --profile vulkan`
 - `bash install_modules.sh --module assistant --profile metal`
-- `bash install_modules.sh --module voice`
 
 ### Профили assistant
 

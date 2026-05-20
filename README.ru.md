@@ -4,10 +4,12 @@
 
 Приложение для отслеживания настроения, призванное помочь людям лучше помнить и осознавать себя и своё время.
 
-![Version](https://img.shields.io/badge/version-2.1.0-blue)
+![Version](https://img.shields.io/badge/version-3.0.0-blue)
 ![Python](https://img.shields.io/badge/python-3.8%2B-green)
 ![Flask](https://img.shields.io/badge/flask-3.0.0-lightgrey)
 ![License](https://img.shields.io/badge/license-MIT-yellow)
+
+> 📖 **Полная документация:** [docs/](docs/README.md) — приложение и база, синхронизация, модули, AI-психолог, нейронная карта, каждый график, кастомизация.
 
 ---
 
@@ -46,7 +48,7 @@
    ./index-life_linux_x86_64.AppImage
    ```
 
-**Опциональные модули (AI + Voice):**
+**Опциональные модули (AI):**
 - В папке релиза запустите `install_modules.bat` (Windows) или `install_modules.sh` (macOS/Linux).
 - Рекомендуется Python 3.10. В Windows установщик сам поставит Python, если его нет.
 
@@ -67,7 +69,7 @@ chmod +x install.sh start.sh
 ./start.sh    # Последующие запуски
 ```
 
-**Опциональные модули (AI + Voice):**
+**Опциональные модули (AI):**
 - Запустите `install_modules.bat` / `install_modules.sh`
 - Подробности — в `MODULES.md`
 
@@ -82,7 +84,7 @@ chmod +x install.sh start.sh
 - 100% приватность - все данные хранятся локально (SQLite)
 - Работает полностью офлайн
 - Простой веб-интерфейс
-- Опциональный AI‑психолог и голосовая диктовка (после установки модулей)
+- Опциональный AI‑психолог (после установки модулей)
 
 ---
 
@@ -91,7 +93,7 @@ chmod +x install.sh start.sh
 ```
 index-life-local/
 ├─ app/
-│  ├─ modules/            # Опциональные модули (assistant, voice)
+│  ├─ modules/            # Опциональные модули (assistant и др.)
 │  ├─ templates/          # HTML шаблоны
 │  └─ static/             # Статические файлы (CSS, JS, изображения)
 ├─ tools/                 # Вспомогательные скрипты (установщик модулей)
@@ -113,7 +115,7 @@ index-life-local/
 - **База данных**: SQLite (через Flask-SQLAlchemy)
 - **Frontend**: HTML, CSS, Vanilla JavaScript
 - **Изображения**: Pillow (Python Imaging Library)
-- **Опционально**: llama-cpp-python, sentence-transformers, faster-whisper
+- **Опционально**: llama-cpp-python, sentence-transformers
 
 ---
 
@@ -123,7 +125,7 @@ index-life-local/
 В файле `diary.db` в директории приложения. Для резервного копирования просто скопируйте этот файл.
 
 **Можно ли использовать на нескольких устройствах?**
-Это локальное приложение. Для синхронизации между устройствами можно использовать облачное хранилище (Dropbox, Google Drive) для файла `diary.db`.
+Да — встроенная синхронизация держит актуальную версию дневника на всех устройствах через общую папку (Dropbox, Google Drive, iCloud…) или WebDAV-ссылку (Nextcloud, Яндекс.Диск, Box…). Настраивается на странице **Синхронизация**. См. [docs/ru/sync.md](docs/ru/sync.md). (Не нужно просто класть файл `diary.db` в облако — встроенная синхронизация сама безопасно сливает изменения и разрешает конфликты.)
 
 **Зашифрованы ли мои данные?**
 База данных не зашифрована по умолчанию. Убедитесь, что ваше устройство защищено паролем.
@@ -137,7 +139,7 @@ index-life-local/
 **Нужно ли регистрироваться?**
 Нет, просто запустите приложение и начните пользоваться. Никаких аккаунтов или паролей.
 
-**Как включить AI и голосовые модули?**
+**Как включить AI-модуль?**
 Запустите `install_modules.bat` (Windows) или `install_modules.sh` (macOS/Linux) и следуйте подсказкам.
 
 **Какая версия Python нужна?**
