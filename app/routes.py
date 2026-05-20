@@ -130,9 +130,10 @@ def mood_grid(year=None):
     if year is None:
         year = date.today().year
 
-    # Get all entries for specified year
+    # Get all entries for specified year (exclude soft-deleted tombstones)
     entries = MoodEntry.query.filter(
-        db.extract('year', MoodEntry.date) == year
+        db.extract('year', MoodEntry.date) == year,
+        MoodEntry.deleted == False,  # noqa: E712
     ).all()
 
     # Create set of filled days for quick lookup
@@ -158,7 +159,8 @@ def mood_grid(year=None):
     # Get all available years for navigation
     all_years = db.session.query(
         db.extract('year', MoodEntry.date).label('year')
-    ).distinct().order_by(db.text('year DESC')).all()
+    ).filter(MoodEntry.deleted == False).distinct(  # noqa: E712
+    ).order_by(db.text('year DESC')).all()
     available_years = [int(y.year) for y in all_years]
 
     # Add current year if not in list
@@ -194,23 +196,23 @@ def delete_day(day):
     if entry:
         entry_year = entry.date.year
         try:
-            # Soft-delete for sync, then hard-delete
+            # Soft-delete only. The tombstone (deleted=True) stays in the
+            # DB so the deletion propagates to every other device via the
+            # snapshot — a hard-delete would let a peer that still has the
+            # entry resurrect it on the next merge. Tombstones are hidden
+            # from the UI by the deleted=False filter on read queries.
             entry.deleted = True
             entry.updated_at = datetime.utcnow()
             db.session.commit()
 
-            # Export deletion to sync folder
+            # Push the deletion to shared storage right away (best-effort).
             try:
-                from app.sync import get_sync_folder, write_changeset_to_folder
-                sync_folder = get_sync_folder()
-                if sync_folder:
-                    write_changeset_to_folder(sync_folder)
+                from app.sync import is_sync_configured, export_now
+                if is_sync_configured():
+                    export_now(current_app._get_current_object())
             except Exception:
                 pass
 
-            # Now hard-delete locally
-            db.session.delete(entry)
-            db.session.commit()
             return redirect(url_for('main.mood_grid', year=entry_year))
         except Exception as e:
             db.session.rollback()
@@ -272,6 +274,7 @@ def edit_day(day):
                         entry = existing
                         entry.rating = rating
                         entry.note = note
+                        entry.deleted = False  # revive a tombstone if present
                         entry.updated_at = datetime.utcnow()
                         if _device_id:
                             entry.device_id = _device_id
@@ -289,6 +292,7 @@ def edit_day(day):
                     else:
                         entry.rating = rating
                         entry.note = note
+                        entry.deleted = False  # revive a tombstone if present
                         entry.updated_at = datetime.utcnow()
                         if _device_id:
                             entry.device_id = _device_id
@@ -323,21 +327,23 @@ def edit_day(day):
                 except ImportError:
                     pass
 
-            # Export change-set to sync folder (if configured)
+            # Push our snapshot to shared storage (if configured)
             try:
-                from app.sync import get_sync_folder, write_changeset_to_folder
-                sync_folder = get_sync_folder()
-                if sync_folder:
-                    write_changeset_to_folder(sync_folder)
+                from app.sync import is_sync_configured, export_now
+                if is_sync_configured():
+                    export_now(current_app._get_current_object())
             except Exception:
                 pass
 
             return redirect(url_for('main.mood_grid', year=day_date.year))
 
+    # A soft-deleted day shows an empty form (the tombstone is invisible
+    # to the user; saving will revive the row).
+    display_entry = None if (entry and entry.deleted) else entry
     return render_template('edit_day.html',
                          day=day_date,
-                         entry=entry,
-                         is_new=is_new,
+                         entry=display_entry,
+                         is_new=display_entry is None,
                          current_year=date.today().year)
 
 
@@ -352,17 +358,19 @@ def account():
         db.session.add(profile)
         db.session.commit()
 
-    # Get all years with entries for archive
+    # Get all years with entries for archive (exclude soft-deleted)
     all_years = db.session.query(
         db.extract('year', MoodEntry.date).label('year')
-    ).distinct().order_by(db.text('year DESC')).all()
+    ).filter(MoodEntry.deleted == False).distinct(  # noqa: E712
+    ).order_by(db.text('year DESC')).all()
     archive_years = [int(y.year) for y in all_years]
 
     # Get entry count for each year
     year_stats = {}
     for year in archive_years:
         count = MoodEntry.query.filter(
-            db.extract('year', MoodEntry.date) == year
+            db.extract('year', MoodEntry.date) == year,
+            MoodEntry.deleted == False,  # noqa: E712
         ).count()
         year_stats[year] = count
 
@@ -458,7 +466,7 @@ def what_is_index():
 def stats():
     """Statistics page"""
     profile = UserProfile.query.first()
-    entries = MoodEntry.query.order_by(MoodEntry.date.desc()).all()
+    entries = MoodEntry.query.filter(MoodEntry.deleted == False).order_by(MoodEntry.date.desc()).all()  # noqa: E712
 
     # Calculate stats
     total_entries = len(entries)
@@ -561,7 +569,7 @@ def _build_markdown_export() -> tuple[str, str] | None:
     """
     profile = UserProfile.query.first()
     username = profile.username if profile else 'User'
-    entries = MoodEntry.query.order_by(MoodEntry.date.desc()).all()
+    entries = MoodEntry.query.filter(MoodEntry.deleted == False).order_by(MoodEntry.date.desc()).all()  # noqa: E712
     if not entries:
         return None
 

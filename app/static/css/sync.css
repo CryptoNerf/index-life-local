@@ -100,6 +100,42 @@ header { width: 100%; }
 }
 .sync-input:focus { border-color: #222; }
 
+/* Sync mode (local / webdav) selector + panes */
+.sync-mode-row { gap: 24px; margin-bottom: 14px; }
+.sync-mode-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 15px;
+}
+.sync-pane > label {
+  display: block;
+  margin-bottom: 6px;
+}
+/* The single full-width URL/folder input needs its own bottom gap so it
+   doesn't visually collide with the credentials row beneath it. */
+.sync-pane > .sync-input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 10px;
+}
+.sync-pane .sync-row { margin-bottom: 6px; }
+.sync-creds-label {
+  display: block;
+  font-size: 14px;
+  color: var(--text-muted, #444);
+  margin: 4px 0 6px;
+}
+.sync-hint {
+  font-size: 13px;
+  color: var(--text-muted, #888);
+  margin: 6px 0 0;
+  line-height: 1.45;
+}
+
 /* ========== Buttons ========== */
 .sync-btn {
   background: #000;

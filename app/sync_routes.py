@@ -4,12 +4,11 @@ Routes for sync & backup management UI.
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app
 from datetime import date
 
-from app import db
-from app.models import SyncMeta, SyncConflict
+from app.models import SyncConflict
 from app.backup import list_backups, backup_and_rotate, restore_backup
 from app.sync import (
-    get_device_id, get_sync_folder, set_sync_folder,
-    get_last_sync, full_sync, scan_and_import, write_changeset_to_folder,
+    get_device_id, get_sync_config, set_sync_config, is_sync_configured,
+    get_last_sync, full_sync, import_now, export_now, test_connection,
 )
 
 bp = Blueprint('sync', __name__)
@@ -18,19 +17,19 @@ bp = Blueprint('sync', __name__)
 @bp.route('/sync', methods=['GET'])
 def sync_page():
     """Sync & backup settings page."""
-    device_id = get_device_id()
-    sync_folder = get_sync_folder()
-    last_sync = get_last_sync()
-
+    cfg = get_sync_config()
     backup_dir = current_app.config.get('BACKUP_DIR', '')
     backups = list_backups(backup_dir) if backup_dir else []
-
     conflicts = SyncConflict.query.order_by(SyncConflict.resolved_at.desc()).limit(20).all()
 
     return render_template('sync.html',
-                           device_id=device_id,
-                           sync_folder=sync_folder,
-                           last_sync=last_sync,
+                           device_id=get_device_id(),
+                           sync_mode=cfg['mode'],
+                           sync_folder=cfg['folder'],
+                           webdav_url=cfg['url'],
+                           webdav_user=cfg['username'],
+                           webdav_pass=cfg['password'],
+                           last_sync=get_last_sync(),
                            backups=backups,
                            conflicts=conflicts,
                            current_year=date.today().year)
@@ -38,14 +37,34 @@ def sync_page():
 
 @bp.route('/sync/settings', methods=['POST'])
 def sync_settings():
-    """Save sync folder path."""
+    """Save sync configuration (mode + folder/webdav)."""
+    mode = request.form.get('sync_mode', 'local').strip()
     folder = request.form.get('sync_folder', '').strip()
-    set_sync_folder(folder)
-    if folder:
-        flash('Sync folder saved', 'success')
+    url = request.form.get('webdav_url', '').strip()
+    username = request.form.get('webdav_user', '').strip()
+    password = request.form.get('webdav_pass', '')
+
+    set_sync_config(mode, folder=folder, url=url, username=username, password=password)
+    if is_sync_configured():
+        flash('Sync settings saved', 'success')
     else:
         flash('Sync disabled', 'success')
     return redirect(url_for('sync.sync_page'))
+
+
+@bp.route('/sync/test', methods=['POST'])
+def sync_test():
+    """Test connection to the configured (or posted) backend. JSON response."""
+    mode = request.form.get('sync_mode', 'local').strip()
+    folder = request.form.get('sync_folder', '').strip()
+    url = request.form.get('webdav_url', '').strip()
+    username = request.form.get('webdav_user', '').strip()
+    password = request.form.get('webdav_pass', '')
+    error = test_connection(mode, folder=folder, url=url,
+                            username=username, password=password)
+    if error:
+        return jsonify({'ok': False, 'error': error})
+    return jsonify({'ok': True})
 
 
 @bp.route('/sync/now', methods=['POST'])
@@ -56,19 +75,7 @@ def sync_now():
         if stats.get('error'):
             flash(stats['error'], 'error')
         else:
-            msg_parts = []
-            if stats.get('inserted'):
-                msg_parts.append(f"{stats['inserted']} new entries")
-            if stats.get('updated'):
-                msg_parts.append(f"{stats['updated']} updated")
-            if stats.get('chat_inserted'):
-                msg_parts.append(f"{stats['chat_inserted']} chat messages")
-            if stats.get('conflicts'):
-                msg_parts.append(f"{stats['conflicts']} conflicts resolved")
-            if msg_parts:
-                flash('Synced: ' + ', '.join(msg_parts), 'success')
-            else:
-                flash('Everything is up to date', 'success')
+            _flash_sync_stats(stats)
     except Exception as e:
         flash(f'Sync error: {e}', 'error')
     return redirect(url_for('sync.sync_page'))
@@ -76,17 +83,13 @@ def sync_now():
 
 @bp.route('/sync/export', methods=['POST'])
 def sync_export():
-    """Manual export of all entries."""
-    sync_folder = get_sync_folder()
-    if not sync_folder:
-        flash('Set a sync folder first', 'error')
+    """Manual push of our snapshot."""
+    if not is_sync_configured():
+        flash('Configure sync first', 'error')
         return redirect(url_for('sync.sync_page'))
     try:
-        result = write_changeset_to_folder(sync_folder)
-        if result:
-            flash(f'Exported: {result.name}', 'success')
-        else:
-            flash('Nothing to export', 'success')
+        ok = export_now(current_app._get_current_object())
+        flash('Snapshot uploaded' if ok else 'Upload failed', 'success' if ok else 'error')
     except Exception as e:
         flash(f'Export error: {e}', 'error')
     return redirect(url_for('sync.sync_page'))
@@ -94,22 +97,35 @@ def sync_export():
 
 @bp.route('/sync/import', methods=['POST'])
 def sync_import():
-    """Manual import from sync folder."""
-    sync_folder = get_sync_folder()
-    if not sync_folder:
-        flash('Set a sync folder first', 'error')
+    """Manual pull from peers."""
+    if not is_sync_configured():
+        flash('Configure sync first', 'error')
         return redirect(url_for('sync.sync_page'))
     try:
-        stats = scan_and_import(sync_folder)
+        stats = import_now(current_app._get_current_object())
         if stats.get('error'):
             flash(stats['error'], 'error')
-        elif stats.get('files', 0) > 0:
-            flash(f"Imported from {stats['files']} file(s): {stats.get('inserted', 0)} new, {stats.get('updated', 0)} updated", 'success')
         else:
-            flash('No new files to import', 'success')
+            _flash_sync_stats(stats)
     except Exception as e:
         flash(f'Import error: {e}', 'error')
     return redirect(url_for('sync.sync_page'))
+
+
+def _flash_sync_stats(stats: dict):
+    parts = []
+    if stats.get('inserted'):
+        parts.append(f"{stats['inserted']} new entries")
+    if stats.get('updated'):
+        parts.append(f"{stats['updated']} updated")
+    if stats.get('chat_inserted'):
+        parts.append(f"{stats['chat_inserted']} chat messages")
+    if stats.get('conflicts'):
+        parts.append(f"{stats['conflicts']} conflicts resolved")
+    if parts:
+        flash('Synced: ' + ', '.join(parts), 'success')
+    else:
+        flash('Everything is up to date', 'success')
 
 
 @bp.route('/backup/create', methods=['POST'])
@@ -120,10 +136,8 @@ def backup_create():
         backup_dir = current_app.config['BACKUP_DIR']
         max_count = current_app.config.get('BACKUP_MAX_COUNT', 10)
         result = backup_and_rotate(db_path, backup_dir, max_count)
-        if result:
-            flash(f'Backup created: {result.name}', 'success')
-        else:
-            flash('Backup failed', 'error')
+        flash(f'Backup created: {result.name}' if result else 'Backup failed',
+              'success' if result else 'error')
     except Exception as e:
         flash(f'Backup error: {e}', 'error')
     return redirect(url_for('sync.sync_page'))
@@ -136,7 +150,6 @@ def backup_restore():
     if not backup_path:
         flash('No backup selected', 'error')
         return redirect(url_for('sync.sync_page'))
-
     try:
         db_path = current_app.config['DB_PATH']
         success = restore_backup(backup_path, db_path)

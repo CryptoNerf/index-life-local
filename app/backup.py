@@ -100,6 +100,18 @@ def backup_and_rotate(db_path: str | Path, backup_dir: str | Path, max_count: in
     return result
 
 
+def presync_backup(app, max_count: int = 5) -> Path | None:
+    """Take a safety backup right before a sync merge.
+
+    Stored in a SEPARATE pool (`<backup_dir>/pre-sync/`) with its own
+    small rotation, so frequent sync backups never evict the daily
+    historical backups in the main pool. Returns the path or None.
+    """
+    db_path = Path(app.config['DB_PATH'])
+    presync_dir = Path(app.config['BACKUP_DIR']) / 'pre-sync'
+    return backup_and_rotate(db_path, presync_dir, max_count)
+
+
 def restore_backup(backup_path: str | Path, db_path: str | Path) -> bool:
     """Restore database from a backup file. Returns True on success."""
     backup_path = Path(backup_path)

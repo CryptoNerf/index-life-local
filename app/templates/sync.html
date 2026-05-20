@@ -46,15 +46,50 @@
         <div class="sync-meta">{{ t('sync.last_sync') }}: {{ last_sync.strftime('%Y-%m-%d %H:%M') }}</div>
       {% endif %}
 
-      <form method="post" action="{{ url_for('sync.sync_settings') }}" class="sync-form">
-        <label>{{ t('sync.folder_label') }}</label>
-        <div class="sync-row">
-          <input type="text" name="sync_folder" value="{{ sync_folder }}" placeholder="/Users/you/Dropbox/index-life-sync" class="sync-input">
-          <button type="submit" class="sync-btn">{{ t('sync.save') }}</button>
+      <form method="post" action="{{ url_for('sync.sync_settings') }}" class="sync-form" id="sync-settings-form">
+        <div class="sync-row sync-mode-row">
+          <label class="sync-mode-opt">
+            <input type="radio" name="sync_mode" value="local" {% if sync_mode != 'webdav' %}checked{% endif %}>
+            {{ t('sync.mode_local') }}
+          </label>
+          <label class="sync-mode-opt">
+            <input type="radio" name="sync_mode" value="webdav" {% if sync_mode == 'webdav' %}checked{% endif %}>
+            {{ t('sync.mode_webdav') }}
+          </label>
+        </div>
+
+        <!-- Local folder pane -->
+        <div class="sync-pane" data-pane="local" {% if sync_mode == 'webdav' %}style="display:none"{% endif %}>
+          <label>{{ t('sync.folder_label') }}</label>
+          <input type="text" name="sync_folder" value="{{ sync_folder }}"
+                 placeholder="/Users/you/Dropbox/index-life-sync" class="sync-input">
+          <p class="sync-hint">{{ t('sync.local_hint') }}</p>
+        </div>
+
+        <!-- WebDAV pane -->
+        <div class="sync-pane" data-pane="webdav" {% if sync_mode != 'webdav' %}style="display:none"{% endif %}>
+          <label>{{ t('sync.webdav_url_label') }}</label>
+          <input type="text" name="webdav_url" value="{{ webdav_url }}"
+                 placeholder="https://dav.example.com/remote.php/dav/files/me/diary/" class="sync-input">
+          <span class="sync-creds-label">{{ t('sync.webdav_creds_label') }}</span>
+          <div class="sync-row">
+            <input type="text" name="webdav_user" value="{{ webdav_user }}"
+                   placeholder="{{ t('sync.webdav_user') }}" class="sync-input" autocomplete="username">
+            <input type="password" name="webdav_pass" value="{{ webdav_pass }}"
+                   placeholder="{{ t('sync.webdav_pass') }}" class="sync-input" autocomplete="current-password">
+          </div>
+          <p class="sync-hint">{{ t('sync.webdav_hint') }}</p>
+          <p class="sync-hint">{{ t('sync.webdav_creds_hint') }}</p>
+        </div>
+
+        <div class="sync-row" style="margin-top:12px">
+          <button type="submit" class="sync-btn sync-btn-primary">{{ t('sync.save') }}</button>
+          <button type="button" class="sync-btn" id="sync-test-btn">{{ t('sync.test') }}</button>
+          <span id="sync-test-result" class="sync-meta"></span>
         </div>
       </form>
 
-      {% if sync_folder %}
+      {% if (sync_mode == 'webdav' and webdav_url) or (sync_mode != 'webdav' and sync_folder) %}
         <div class="sync-actions">
           <form method="post" action="{{ url_for('sync.sync_now') }}" style="display:inline">
             <button class="sync-btn sync-btn-primary">{{ t('sync.sync_now') }}</button>
@@ -116,5 +151,51 @@
   <footer class="main-footer">
     <a href="{{ url_for('main.what_is_index') }}" class="footer-link">{{ t('footer.what_is_index') }}</a>
   </footer>
+
+  <script>
+    (function () {
+      var form = document.getElementById('sync-settings-form');
+      if (!form) return;
+
+      // Toggle local/webdav panes based on the selected mode.
+      function applyMode() {
+        var mode = (form.querySelector('input[name="sync_mode"]:checked') || {}).value || 'local';
+        form.querySelectorAll('.sync-pane').forEach(function (pane) {
+          pane.style.display = (pane.getAttribute('data-pane') === mode) ? '' : 'none';
+        });
+      }
+      form.querySelectorAll('input[name="sync_mode"]').forEach(function (r) {
+        r.addEventListener('change', applyMode);
+      });
+      applyMode();
+
+      // Test-connection: posts current form values, shows result inline.
+      var testBtn = document.getElementById('sync-test-btn');
+      var result = document.getElementById('sync-test-result');
+      var I18N = {
+        testing: {{ t('sync.testing')|tojson }},
+        ok: {{ t('sync.test_ok')|tojson }},
+      };
+      if (testBtn) {
+        testBtn.addEventListener('click', function () {
+          result.textContent = I18N.testing;
+          testBtn.disabled = true;
+          var fd = new FormData(form);
+          fetch('{{ url_for("sync.sync_test") }}', { method: 'POST', body: fd })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+              testBtn.disabled = false;
+              result.textContent = data.ok ? ('✓ ' + I18N.ok) : ('✗ ' + (data.error || ''));
+              result.style.color = data.ok ? '#2a8f2a' : '#c0392b';
+            })
+            .catch(function (err) {
+              testBtn.disabled = false;
+              result.textContent = '✗ ' + err;
+              result.style.color = '#c0392b';
+            });
+        });
+      }
+    })();
+  </script>
 </body>
 </html>

@@ -685,10 +685,10 @@ def create_app(config_class='config.Config'):
 
         # Auto-sync on startup + schedule periodic sync
         try:
-            from app.sync import get_sync_folder, full_sync, schedule_periodic_sync
-            if get_sync_folder():
+            from app.sync import is_sync_configured, full_sync, schedule_periodic_sync
+            if is_sync_configured():
                 full_sync(app)
-                schedule_periodic_sync(app, interval_seconds=60)
+                schedule_periodic_sync(app, interval_seconds=120)
         except Exception as exc:
             log.warning('Startup sync failed: %s', exc)
 

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>calendar {{ year }}</title>
+  <title>{{ t('calendar.title') }} {{ year }}</title>
   <meta property="og:title" content="index.life" />
   <meta property="og:description" content="mood book" />
   <meta property="og:type" content="website" />
@@ -47,9 +47,9 @@
     <div class="calendar-block">
       <div class="calendar-header-section">
         <p class="calendar-title" style="font-weight: normal;">
-          calendar<sup>{{ year }}</sup>
+          {{ t('calendar.title') }}<sup>{{ year }}</sup>
           {% if year != current_year %}
-            <span style="font-size: 16px; color: #888; margin-left: 10px;">(archive)</span>
+            <span style="font-size: 16px; color: #888; margin-left: 10px;">{{ t('calendar.archive') }}</span>
           {% endif %}
         </p>
         {% if available_years|length > 1 %}
@@ -61,19 +61,19 @@
             {% if older %}
               <a href="{{ url_for('main.mood_grid', year=older) }}" class="year-arrow">← {{ older }}</a>
             {% else %}
-              <span class="year-arrow disabled">← older</span>
+              <span class="year-arrow disabled">← {{ t('calendar.older') }}</span>
             {% endif %}
             <select class="year-select" onchange="window.location.href=this.value">
               {% for y in available_years %}
                 <option value="{{ url_for('main.mood_grid', year=y) }}" {% if y == year %}selected{% endif %}>
-                  {{ y }}{% if y == current_year %} (current){% endif %}
+                  {{ y }}{% if y == current_year %} ({{ t('calendar.current') }}){% endif %}
                 </option>
               {% endfor %}
             </select>
             {% if newer %}
               <a href="{{ url_for('main.mood_grid', year=newer) }}" class="year-arrow">{{ newer }} →</a>
             {% else %}
-              <span class="year-arrow disabled">newer →</span>
+              <span class="year-arrow disabled">{{ t('calendar.newer') }} →</span>
             {% endif %}
           </nav>
         {% endif %}

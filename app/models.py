@@ -62,8 +62,8 @@ class UserProfile(db.Model):
 
     @property
     def avg_rating(self):
-        """Calculate average mood rating"""
-        entries = MoodEntry.query.all()
+        """Calculate average mood rating (excludes soft-deleted)."""
+        entries = MoodEntry.query.filter_by(deleted=False).all()
         if not entries:
             return 0
         total = sum(entry.rating for entry in entries)
@@ -71,8 +71,8 @@ class UserProfile(db.Model):
 
     @property
     def total_entries(self):
-        """Count total mood entries"""
-        return MoodEntry.query.count()
+        """Count total mood entries (excludes soft-deleted)."""
+        return MoodEntry.query.filter_by(deleted=False).count()
 
     def to_dict(self):
         """Convert to dictionary"""

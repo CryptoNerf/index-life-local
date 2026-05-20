@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>life in weeks</title>
+  <title>{{ t('life.title') }}</title>
   <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
   <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='images/apple-touch-icon.png') }}">
   <link rel="manifest" href="{{ url_for('static', filename='images/site.webmanifest') }}">
@@ -34,8 +34,8 @@
     {% if not birthdate or show_change_form %}
       <!-- No birthdate set OR user clicked "change": show prompt -->
       <p class="life-title">
-        <span class="life-title-screen">Life in weeks</span>
-        <span class="life-title-print">Your life in weeks.</span>
+        <span class="life-title-screen">{{ t('life.heading') }}</span>
+        <span class="life-title-print">{{ t('life.heading_print') }}</span>
       </p>
       {# Three split selects for day / month / year. Replaces the native
          <input type="date">, whose displayed format is locked to the
@@ -47,43 +47,43 @@
       {% set bd_y = birthdate.year if birthdate else '' %}
       <form class="birthdate-prompt" method="POST" action="{{ url_for('main.life_set_birthdate') }}">
         <label>
-          {% if show_change_form %}change your date of birth{% else %}enter your date of birth{% endif %}
+          {% if show_change_form %}{{ t('life.change_dob') }}{% else %}{{ t('life.enter_dob') }}{% endif %}
         </label>
         <div class="birthdate-row">
           <select name="birthdate_day" class="birthdate-select" required aria-label="day">
-            <option value="" disabled {% if not bd_d %}selected{% endif %}>day</option>
+            <option value="" disabled {% if not bd_d %}selected{% endif %}>{{ t('life.day') }}</option>
             {% for d in range(1, 32) %}
               <option value="{{ d }}" {% if bd_d == d %}selected{% endif %}>{{ '%02d'|format(d) }}</option>
             {% endfor %}
           </select>
           <select name="birthdate_month" class="birthdate-select" required aria-label="month">
-            <option value="" disabled {% if not bd_m %}selected{% endif %}>month</option>
-            {% for m, label in [
-              (1, 'January'), (2, 'February'), (3, 'March'), (4, 'April'),
-              (5, 'May'), (6, 'June'), (7, 'July'), (8, 'August'),
-              (9, 'September'), (10, 'October'), (11, 'November'), (12, 'December')
+            <option value="" disabled {% if not bd_m %}selected{% endif %}>{{ t('life.month') }}</option>
+            {% for m, mkey in [
+              (1, 'jan'), (2, 'feb'), (3, 'mar'), (4, 'apr'),
+              (5, 'may'), (6, 'jun'), (7, 'jul'), (8, 'aug'),
+              (9, 'sep'), (10, 'oct'), (11, 'nov'), (12, 'dec')
             ] %}
-              <option value="{{ m }}" {% if bd_m == m %}selected{% endif %}>{{ label }}</option>
+              <option value="{{ m }}" {% if bd_m == m %}selected{% endif %}>{{ t('life.month_full.' + mkey) }}</option>
             {% endfor %}
           </select>
           <select name="birthdate_year" class="birthdate-select" required aria-label="year">
-            <option value="" disabled {% if not bd_y %}selected{% endif %}>year</option>
+            <option value="" disabled {% if not bd_y %}selected{% endif %}>{{ t('life.year') }}</option>
             {% for y in range(today_year, today_year - 121, -1) %}
               <option value="{{ y }}" {% if bd_y == y %}selected{% endif %}>{{ y }}</option>
             {% endfor %}
           </select>
         </div>
-        <button type="submit" class="life-btn">save</button>
+        <button type="submit" class="life-btn">{{ t('life.save') }}</button>
         {% if show_change_form %}
-          <a href="{{ url_for('main.life_calendar') }}" class="menu-link" style="font-size:14px;color:#888;">cancel</a>
+          <a href="{{ url_for('main.life_calendar') }}" class="menu-link" style="font-size:14px;color:#888;">{{ t('life.cancel') }}</a>
         {% endif %}
       </form>
 
     {% else %}
       <!-- Birthdate set: show grid then buttons below -->
       <p class="life-title">
-        <span class="life-title-screen">Life in weeks</span>
-        <span class="life-title-print">Your life in weeks.</span>
+        <span class="life-title-screen">{{ t('life.heading') }}</span>
+        <span class="life-title-print">{{ t('life.heading_print') }}</span>
       </p>
       
       <div class="life-grid-outer">
@@ -117,13 +117,13 @@
       <!-- Stats and actions below the grid -->
       {% if weeks_lived is not none %}
         <p class="life-stats no-print">
-          {{ weeks_lived }} weeks lived &nbsp;·&nbsp; {{ (weeks_lived / 52.18) | round(1) }} years
+          {{ t('life.weeks_lived', weeks=weeks_lived, years=(weeks_lived / 52.18) | round(1)) }}
         </p>
       {% endif %}
 
       <div class="life-actions no-print">
-        <button class="life-btn" onclick="window.print()">print</button>
-        <a href="{{ url_for('main.life_calendar', change=1) }}" class="life-btn-outline">change birthdate</a>
+        <button class="life-btn" onclick="window.print()">{{ t('life.print') }}</button>
+        <a href="{{ url_for('main.life_calendar', change=1) }}" class="life-btn-outline">{{ t('life.change_birthdate') }}</a>
       </div>
 
     {% endif %}
