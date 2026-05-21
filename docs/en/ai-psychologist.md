@@ -34,19 +34,39 @@ Layers 2–4 are built **in the background**: when you save an entry, it's quiet
 
 ## The agent / tool system
 
-Before answering, the model decides **what diary data it needs** and calls 0–2 tools (a mini "agent"). First routing runs (tools are chosen from your message), the tools fetch data, and only then the answer is composed.
+The AI psychologist isn't just "the model + your last message." Before composing a reply it runs a small **agent loop** that fetches exactly the diary data the question needs, so answers are grounded in real records instead of guesses.
 
-Available tools:
+**How a turn works:**
+
+1. **Routing.** A separate, cheap LLM call (the *router*) reads your message — and your previous message too, so follow-ups like "tell me more" keep their topic — and decides which tools to call, from **none to three**. It replies with a small JSON list of `{tool, args}`. Short or trivial messages skip routing entirely and are answered directly.
+2. **Execution.** Each chosen tool runs as a plain, fast database query (no LLM inside, so it's cheap) and returns a compact block of text — dates, ratings, excerpts, aggregates. The chat briefly shows which data is being fetched.
+3. **Grounding.** The tool results are appended to the system prompt in a dedicated "extra diary data" section, capped in size so they don't crowd out the rest of the context.
+4. **Answer.** Only now does the main model compose the reply, combining the freshly fetched facts with the always-on memory layers (profile, monthly timeline, recent and semantically-relevant entries).
+
+This keeps the model honest. A tool that finds nothing returns an explicit "no entries found" message rather than silence, and the system prompt forbids inventing entries — so on an empty diary, or for a person or period with no records, the model says so plainly instead of making things up.
+
+**Available tools:**
 
 | Tool | What it fetches | Example question |
 |---|---|---|
-| `person_history` | every entry mentioning a specific person (name or role) | "What did I write about my mom?" |
+| `person_history` | every entry mentioning one person (name or role), alias-resolved, with a tone breakdown | "What did I write about my mom?" |
+| `people_overview` | all people in the diary at once, ranked by mentions, each with a tone score | "Who lifts my mood and who drags it down?" |
 | `period_entries` | entries for a period (year required, month optional) | "How did March 2025 go?" |
-| `search_topic` | semantic search by theme/feeling/pattern | "What's going on with my anxiety?" |
-| `mood_trend` | mood dynamics over the last N days | "How have I been lately?" |
-| `compare_periods` | compare two periods | "Was this month better than last?" |
+| `search_topic` | semantic search by theme / feeling / pattern | "What's going on with my anxiety?" |
+| `mood_trend` | mood trajectory over the last N days (average, range, direction) | "How have I been lately?" |
+| `compare_periods` | headline stats for two periods plus the delta | "Was this month better than last?" |
+| `activity_impact` | each activity's average mood vs your overall average (what lifts or drains you) | "What helps me feel better?" |
+| `best_worst_days` | the highest- and lowest-rated days, with excerpts | "When was I at my worst?" |
+| `diary_stats` | totals, how long you've journaled, current and longest streaks, this month | "How long have I kept this diary?" |
+| `on_this_day` | entries from today's date in previous years | "What happened a year ago today?" |
 
-One question can use several tools (e.g. "What did I write about mom in March?" → `person_history` + `period_entries`). For short messages tools usually aren't called — the model answers directly.
+A single question can combine up to **three** tools — e.g. "What did I do with mom in March and how did it affect my mood?" → `person_history` + `period_entries` + `activity_impact`.
+
+**Notes:**
+
+- `activity_impact`, `people_overview`, and the tone in `person_history` rely on the **background extraction** of activities and people from your notes (the same data behind the [Graphics](graphics.md)). Right after new entries, give it a little time to catch up.
+- All tools **exclude soft-deleted entries**, so a deleted day is never quoted back to you.
+- Each tool is small and self-contained, so the toolset can grow over time.
 
 ---
 
@@ -69,6 +89,7 @@ One question can use several tools (e.g. "What did I write about mom in March?" 
 - Finds entries by meaning (semantic search), not just exact words.
 - Sees mood dynamics and can compare periods.
 - Remembers people and themes recurring in your notes.
+- Connects what you do and who you spend time with to how you feel (activities & people).
 - Runs offline and privately — nothing is sent to the network.
 
 ---

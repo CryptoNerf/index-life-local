@@ -11,7 +11,10 @@ from pathlib import Path
 from flask import render_template, request, Response, stream_with_context, jsonify, current_app
 from app import db
 from app.models import ChatMessage, UserPsychProfile, MoodEntry
-from .prompts import CRISIS_KEYWORDS, CRISIS_RESPONSE, SYSTEM_PROMPT
+from .prompts import (
+    CRISIS_KEYWORDS, CRISIS_RESPONSE, SYSTEM_PROMPT,
+    DIARY_ACCESS_PRESENT, DIARY_ACCESS_EMPTY,
+)
 from . import bp
 
 # Ensure CUDA runtime DLLs are findable on Windows (not needed for Vulkan/CPU)
@@ -47,6 +50,8 @@ _llm_inference_lock = threading.Lock()  # Protects all create_chat_completion ca
 _VALID_TOOLS = (
     'person_history', 'period_entries', 'search_topic',
     'mood_trend', 'compare_periods',
+    'activity_impact', 'people_overview', 'best_worst_days',
+    'diary_stats', 'on_this_day',
 )
 
 _ROUTER_PROMPT = """Ты — маршрутизатор для AI-психолога. Реши, какие данные из дневника нужно подтянуть, чтобы ответить на текущее сообщение пользователя.
@@ -62,14 +67,24 @@ _ROUTER_PROMPT = """Ты — маршрутизатор для AI-психоло
 - search_topic — семантический поиск по теме/чувству/паттерну. Для абстрактных вопросов.
 - mood_trend — динамика настроения за последние N дней. Для вопросов "как дела", "что в последнее время", "стало хуже/лучше".
 - compare_periods — сравнение двух периодов. Для вопросов "прошлый месяц был лучше?".
+- activity_impact — какие занятия/активности связаны с ростом или падением настроения. Для "что мне помогает?", "от чего мне лучше/хуже?", "что меня радует/выматывает?".
+- people_overview — обзор ВСЕХ людей в дневнике с тоном упоминаний (не один человек). Для "кто на меня хорошо/плохо влияет?", "расскажи про людей вокруг меня".
+- best_worst_days — лучшие и худшие дни по оценке. Для "когда мне было лучше/хуже всего?", "мой лучший день".
+- diary_stats — общая статистика: сколько записей, как давно ведётся дневник, серии подряд. Для "сколько я веду дневник?", "какая у меня статистика", "сколько я уже записал".
+- on_this_day — записи за сегодняшнюю дату в прошлые годы. Для "что было год назад?", "что у меня было в этот день раньше?".
 - none — данных из дневника не нужно. Для приветствий, благодарностей, мета-вопросов.
 
-Можно выбрать ОДИН ИЛИ ДВА инструмента, если вопрос составной (например, и про человека, и про период). Не больше двух.
+Можно выбрать от ОДНОГО до ТРЁХ инструментов, если вопрос составной (например, и про человека, и про период). Не больше трёх.
 
-Ответь СТРОГО JSON-массивом из 0–2 элементов, без markdown, без пояснений. Примеры:
+Ответь СТРОГО JSON-массивом из 0–3 элементов, без markdown, без пояснений. Примеры:
 - "Что я писал про маму в марте?" → [{{"tool": "person_history", "args": {{"name": "мама"}}}}, {{"tool": "period_entries", "args": {{"year": 2025, "month": 3}}}}]
 - "Как я последнее время?" → [{{"tool": "mood_trend", "args": {{"window_days": 30}}}}]
 - "Что у меня с тревожностью?" → [{{"tool": "search_topic", "args": {{"query": "тревожность стресс беспокойство"}}}}]
+- "Что мне помогает чувствовать себя лучше?" → [{{"tool": "activity_impact", "args": {{}}}}]
+- "Кто на меня плохо влияет?" → [{{"tool": "people_overview", "args": {{}}}}]
+- "Когда мне было хуже всего?" → [{{"tool": "best_worst_days", "args": {{"top_n": 5}}}}]
+- "Сколько я уже веду дневник?" → [{{"tool": "diary_stats", "args": {{}}}}]
+- "Что у меня было в этот день год назад?" → [{{"tool": "on_this_day", "args": {{}}}}]
 - "Привет" → []
 - "Этот месяц лучше прошлого?" → [{{"tool": "compare_periods", "args": {{"period_a": "2025-02", "period_b": "2025-03"}}}}]
 - "Что у меня с работой?" → [{{"tool": "search_topic", "args": {{"query": "работа"}}}}]"""
@@ -125,7 +140,7 @@ def _route_to_tools(llm, user_message: str,
         if not isinstance(data, list):
             return []
         out = []
-        for item in data[:2]:  # hard cap at 2 tools
+        for item in data[:3]:  # hard cap at 3 tools
             if not isinstance(item, dict):
                 continue
             tool = item.get('tool')
@@ -145,7 +160,20 @@ def _execute_tool(tool_name: str, args: dict) -> str | None:
         from .memory import (
             tool_topic_search, tool_person_history, tool_period_entries,
             tool_mood_trend, tool_compare_periods,
+            tool_activity_impact, tool_people_overview, tool_best_worst_days,
+            tool_diary_stats, tool_on_this_day,
         )
+        if tool_name == 'activity_impact':
+            return tool_activity_impact()
+        if tool_name == 'people_overview':
+            return tool_people_overview()
+        if tool_name == 'best_worst_days':
+            top_n = (args or {}).get('top_n', 5)
+            return tool_best_worst_days(top_n)
+        if tool_name == 'diary_stats':
+            return tool_diary_stats()
+        if tool_name == 'on_this_day':
+            return tool_on_this_day()
         if tool_name == 'person_history':
             name = str((args or {}).get('name') or '').strip()
             if not name:
@@ -517,9 +545,18 @@ def _build_continuation_messages(llm, system_text: str, assistant_text: str) -> 
 
 
 def _base_system_prompt() -> str:
+    """Minimal system prompt used as a fallback when context must be
+    trimmed/continued. Pick the diary-access framing from real data so a
+    trimmed prompt never claims entries exist when the diary is empty.
+    """
     from datetime import datetime
+    try:
+        has_data = MoodEntry.query.filter_by(deleted=False).count() > 0
+    except Exception:
+        has_data = True  # safer to assume data than to deny a real diary
     return SYSTEM_PROMPT.format(
         today=datetime.now().strftime('%Y-%m-%d'),
+        diary_access_section=DIARY_ACCESS_PRESENT if has_data else DIARY_ACCESS_EMPTY,
         profile_section='',
         timeline_section='',
         relevant_section='',
@@ -762,6 +799,50 @@ def _check_crisis(text: str) -> bool:
     return any(kw in text_lower for kw in CRISIS_KEYWORDS)
 
 
+def _build_proactive_note() -> str:
+    """A short, data-grounded line shown when the user opens an empty chat.
+
+    DB-only (no LLM) so it never delays the page. Returns '' when there's
+    no clear signal worth surfacing (incl. an empty diary — so we never
+    invent observations about a diary that has no data).
+    """
+    from datetime import date as _date, timedelta
+    from app.i18n import t as _t
+    try:
+        entries = (MoodEntry.query
+                   .filter_by(deleted=False)
+                   .order_by(MoodEntry.date)
+                   .all())
+    except Exception:
+        return ''
+    if not entries:
+        return ''
+
+    # 1) Logging-streak milestone — most rewarding, takes priority.
+    dates = {e.date for e in entries}
+    today = _date.today()
+    streak = 0
+    d = today if today in dates else today - timedelta(days=1)
+    while d in dates:
+        streak += 1
+        d -= timedelta(days=1)
+    if streak >= 7:
+        return _t('assistant.proactive_streak', days=streak)
+
+    # 2) Last-14-days mood trend vs the previous 14 days.
+    recent_cut = today - timedelta(days=13)
+    prev_cut = today - timedelta(days=27)
+    recent = [e.rating for e in entries if e.date >= recent_cut]
+    prev = [e.rating for e in entries if prev_cut <= e.date < recent_cut]
+    if len(recent) >= 3 and len(prev) >= 3:
+        delta = sum(recent) / len(recent) - sum(prev) / len(prev)
+        if delta > 0.5:
+            return _t('assistant.proactive_trend_up')
+        if delta < -0.5:
+            return _t('assistant.proactive_trend_down')
+    return ''
+
+
 @bp.route('/')
 def chat():
     """Render the chat page."""
@@ -795,6 +876,10 @@ def chat():
 
     thinking_default = _env_bool('LLM_ENABLE_THINKING', False)
 
+    # Proactive opener: only when starting a fresh chat (no history) and
+    # there's a clear data signal. Never shown for an empty diary.
+    proactive_note = _build_proactive_note() if not history else ''
+
     # User avatar URL
     from app.models import UserProfile
     profile = UserProfile.query.first()
@@ -808,12 +893,19 @@ def chat():
     return render_template('assistant/chat.html', history=history,
                            preload_message=preload_message,
                            thinking_default=thinking_default,
+                           proactive_note=proactive_note,
                            user_avatar=user_avatar)
 
 
 @bp.route('/stream', methods=['POST'])
 def stream():
-    """Streaming endpoint: streams AI response token by token."""
+    """Streaming endpoint: streams the AI reply token by token.
+
+    Generation runs inside the request. If the user navigates away, the
+    connection drops and generation stops — at that moment we persist whatever
+    was already produced, so the partial reply isn't lost (it just won't be
+    completed).
+    """
     data = request.get_json(silent=True) or {}
     user_message = data.get('message', '').strip()
     enable_thinking = data.get('enable_thinking', None)
@@ -839,6 +931,25 @@ def stream():
         )
 
     def generate():
+        full_response = ''
+        saved = False
+
+        def _save_partial():
+            # Persist the assistant reply once — at normal completion, or when
+            # the client disconnects mid-stream (user navigated away). Keeps
+            # the partial text instead of losing it.
+            nonlocal saved
+            if saved or not full_response:
+                return
+            try:
+                from .memory import _strip_think
+                save_text = _strip_think(full_response).strip() or full_response
+                db.session.add(ChatMessage(role='assistant', content=save_text))
+                db.session.commit()
+                saved = True
+            except Exception:
+                pass
+
         try:
             if enable_thinking is None:
                 _clear_request_thinking()
@@ -985,7 +1096,6 @@ def stream():
             try:
                 response = llm.create_chat_completion(**chat_kwargs)
 
-                full_response = ''
                 # The Qwen3.5 chat template injects <think>\n into the prompt
                 # (not into the generated output), so we prepend <think> when
                 # thinking is enabled to wrap reasoning for the UI.
@@ -1072,16 +1182,15 @@ def stream():
             finally:
                 _llm_inference_lock.release()
 
-
-            # Save assistant response to DB (strip think blocks to save context tokens)
-            if full_response:
-                from .memory import _strip_think
-                save_text = _strip_think(full_response).strip() or full_response
-                db.session.add(ChatMessage(role='assistant', content=save_text))
-                db.session.commit()
-
+            # Save assistant response to DB, then signal completion.
+            _save_partial()
             yield 'data: [DONE]\n\n'
 
+        except GeneratorExit:
+            # Client navigated away mid-stream: generation stops here, but keep
+            # whatever was already produced so the partial reply isn't lost.
+            _save_partial()
+            raise
         except FileNotFoundError as e:
             yield f'data: {json.dumps({"error": f"Модель не найдена: {e}", "error_type": "model_missing"})}\n\n'
             yield 'data: [DONE]\n\n'

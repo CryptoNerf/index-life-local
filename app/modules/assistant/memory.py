@@ -28,7 +28,7 @@ from .prompts import (
     SUMMARY_PROMPT, PROFILE_PROMPT, MONTH_SUMMARY_PROMPT, PEOPLE_PROMPT,
     ACTIVITIES_PROMPT,
     PROFILE_SECTION, TIMELINE_SECTION, RELEVANT_SECTION, RECENT_SECTION,
-    SYSTEM_PROMPT,
+    SYSTEM_PROMPT, DIARY_ACCESS_PRESENT, DIARY_ACCESS_EMPTY,
 )
 
 log = logging.getLogger(__name__)
@@ -44,7 +44,15 @@ import sys, json, base64
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
-model = SentenceTransformer('intfloat/multilingual-e5-small', device='cpu')
+# Prefer the local cache so the model loads OFFLINE — no network HEAD checks
+# to huggingface.co. Without internet those checks otherwise retry for ~30s
+# and the whole reply appears to hang. Fall back to an online load only if
+# the model isn't cached yet (the first run needs internet once).
+_NAME = 'intfloat/multilingual-e5-small'
+try:
+    model = SentenceTransformer(_NAME, device='cpu', local_files_only=True)
+except Exception:
+    model = SentenceTransformer(_NAME, device='cpu')
 sys.stdout.write('READY\n')
 sys.stdout.flush()
 
@@ -144,10 +152,17 @@ def _get_embed_model():
             _embed_model = _SubprocessEmbedder()
         else:
             from sentence_transformers import SentenceTransformer
-            _embed_model = SentenceTransformer(
-                'intfloat/multilingual-e5-small',
-                device='cpu',
-            )
+            name = 'intfloat/multilingual-e5-small'
+            try:
+                # Prefer the local cache → loads offline, no network HEAD
+                # checks (otherwise, with no internet, huggingface_hub retries
+                # for ~30s and the reply hangs).
+                _embed_model = SentenceTransformer(
+                    name, device='cpu', local_files_only=True,
+                )
+            except Exception:
+                # Not cached yet — allow a one-time online download.
+                _embed_model = SentenceTransformer(name, device='cpu')
         log.info('Embedding model ready')
     return _embed_model
 
@@ -354,7 +369,9 @@ def search_relevant_entries(query: str, top_k: int = 5,
     if not result_ids:
         return []
 
-    entries = MoodEntry.query.filter(MoodEntry.id.in_(result_ids)).all()
+    entries = (MoodEntry.query
+               .filter(MoodEntry.id.in_(result_ids), MoodEntry.deleted == False)
+               .all())
     id_to_entry = {e.id: e for e in entries}
     return [id_to_entry[eid] for eid in result_ids if eid in id_to_entry]
 
@@ -1116,7 +1133,7 @@ def _extract_date_entries(text: str) -> list:
     unique_dates = list(dict.fromkeys(dates_found))
     entries = []
     for d in unique_dates:
-        found = MoodEntry.query.filter_by(date=d).all()
+        found = MoodEntry.query.filter_by(date=d, deleted=False).all()
         entries.extend(found)
     return entries
 
@@ -1196,7 +1213,7 @@ def assemble_context(user_message: str, max_system_tokens: int = 0) -> str:
                 extra_dates.add(entry.date - timedelta(days=1))
                 extra_dates.add(entry.date + timedelta(days=1))
             for d in extra_dates:
-                found = MoodEntry.query.filter_by(date=d).all()
+                found = MoodEntry.query.filter_by(date=d, deleted=False).all()
                 date_entries.extend(found)
             log.info('Date extraction found %d entries (with neighbors): %s',
                      len(date_entries),
@@ -1236,9 +1253,13 @@ def assemble_context(user_message: str, max_system_tokens: int = 0) -> str:
         else:
             relevant_section = ''
 
-    # Layer 1: Recent raw entries (1 for greetings, 3 normally)
+    # Layer 1: Recent raw entries (1 for greetings, 3 normally).
+    # Exclude soft-deleted entries so the model never cites a deleted day.
     recent_limit = 1 if light else 3
-    recent = MoodEntry.query.order_by(MoodEntry.date.desc()).limit(recent_limit).all()
+    recent = (MoodEntry.query
+              .filter_by(deleted=False)
+              .order_by(MoodEntry.date.desc())
+              .limit(recent_limit).all())
     if recent:
         rec_lines = []
         for e in recent:
@@ -1248,9 +1269,22 @@ def assemble_context(user_message: str, max_system_tokens: int = 0) -> str:
     else:
         recent_section = ''
 
+    # Choose the diary-access framing by whether the diary actually holds
+    # data. If it's empty, telling the model "entries are below" makes it
+    # invent entries — so swap in an explicit empty-diary instruction.
+    has_diary_data = bool(
+        profile_section or timeline_section or relevant_section or recent_section
+    )
+    if not has_diary_data:
+        has_diary_data = MoodEntry.query.filter_by(deleted=False).count() > 0
+    diary_access_section = (
+        DIARY_ACCESS_PRESENT if has_diary_data else DIARY_ACCESS_EMPTY
+    )
+
     today_str = datetime.now().strftime('%Y-%m-%d')
     full_text = SYSTEM_PROMPT.format(
         today=today_str,
+        diary_access_section=diary_access_section,
         profile_section=profile_section,
         timeline_section=timeline_section,
         relevant_section=relevant_section,
@@ -1270,6 +1304,7 @@ def assemble_context(user_message: str, max_system_tokens: int = 0) -> str:
                 relevant_section = '\n'.join(lines[:4])  # header + 3 entries
                 full_text = SYSTEM_PROMPT.format(
                     today=today_str,
+                    diary_access_section=diary_access_section,
                     profile_section=profile_section,
                     timeline_section=timeline_section,
                     relevant_section=relevant_section,
@@ -1282,6 +1317,7 @@ def assemble_context(user_message: str, max_system_tokens: int = 0) -> str:
                 timeline_section = '\n'.join(lines[:1] + lines[-3:])
                 full_text = SYSTEM_PROMPT.format(
                     today=today_str,
+                    diary_access_section=diary_access_section,
                     profile_section=profile_section,
                     timeline_section=timeline_section,
                     relevant_section=relevant_section,
@@ -1403,7 +1439,8 @@ def tool_person_history(name: str, limit: int = 30) -> str:
         return f'Записей с упоминанием «{target}» не найдено.'
 
     entries = (MoodEntry.query
-               .filter(MoodEntry.id.in_(matching.keys()))
+               .filter(MoodEntry.id.in_(matching.keys()),
+                       MoodEntry.deleted == False)
                .order_by(MoodEntry.date.desc())
                .limit(limit)
                .all())
@@ -1447,7 +1484,7 @@ def tool_mood_trend(window_days: int = 30) -> str:
 
     cutoff = _date.today() - timedelta(days=window_days - 1)
     entries = (MoodEntry.query
-               .filter(MoodEntry.date >= cutoff)
+               .filter(MoodEntry.date >= cutoff, MoodEntry.deleted == False)
                .order_by(MoodEntry.date)
                .all())
     if not entries:
@@ -1513,7 +1550,8 @@ def tool_compare_periods(period_a: str, period_b: str) -> str:
         return ''
 
     def _stats(year: int, month: int | None):
-        q = MoodEntry.query.filter(db.extract('year', MoodEntry.date) == year)
+        q = MoodEntry.query.filter(db.extract('year', MoodEntry.date) == year,
+                                   MoodEntry.deleted == False)
         if month:
             q = q.filter(db.extract('month', MoodEntry.date) == month)
         rows = q.all()
@@ -1560,7 +1598,8 @@ def tool_period_entries(year: int, month: int | None = None,
         except (TypeError, ValueError):
             month = None
 
-    q = MoodEntry.query.filter(db.extract('year', MoodEntry.date) == year)
+    q = MoodEntry.query.filter(db.extract('year', MoodEntry.date) == year,
+                               MoodEntry.deleted == False)
     if month:
         q = q.filter(db.extract('month', MoodEntry.date) == month)
     entries = q.order_by(MoodEntry.date.desc()).limit(limit).all()
@@ -1575,4 +1614,222 @@ def tool_period_entries(year: int, month: int | None = None,
     lines.append(f'Всего {len(entries)} записей, среднее настроение {avg:.2f}/10.')
     for e in entries:
         lines.append(_format_entry_line(e))
+    return '\n'.join(lines)
+
+
+def tool_activity_impact(limit: int = 12, min_count: int = 2) -> str:
+    """How each activity correlates with mood.
+
+    Aggregates EntryActivity (what the user did) against each day's rating:
+    average mood on days featuring an activity vs the user's overall average.
+    Grounds answers to "что мне помогает?" / "от чего мне лучше или хуже?".
+    Activity labels come from the AI's background parsing of notes.
+    """
+    from app.models import EntryActivity
+
+    rows = (db.session.query(EntryActivity.activity, MoodEntry.rating)
+            .join(MoodEntry, EntryActivity.entry_id == MoodEntry.id)
+            .filter(MoodEntry.deleted == False)
+            .all())
+    if not rows:
+        return ('В дневнике пока не размечены активности — нужен фоновый разбор '
+                'записей AI-психологом (он идёт автоматически после новых записей).')
+
+    base_entries = MoodEntry.query.filter_by(deleted=False).all()
+    overall = (sum(e.rating for e in base_entries) / len(base_entries)
+               if base_entries else 0.0)
+
+    agg: dict[str, list[int]] = {}
+    for activity, rating in rows:
+        agg.setdefault(activity, []).append(rating)
+
+    stats = []
+    for activity, ratings in agg.items():
+        if len(ratings) < min_count:
+            continue
+        avg = sum(ratings) / len(ratings)
+        stats.append((activity, avg, len(ratings), avg - overall))
+    if not stats:
+        return 'Активностей с достаточным числом упоминаний пока нет.'
+
+    lifts = sorted([s for s in stats if s[3] > 0.1], key=lambda x: -x[3])[:limit]
+    drags = sorted([s for s in stats if s[3] < -0.1], key=lambda x: x[3])[:limit]
+
+    lines = [f'Влияние активностей на настроение (общее среднее {overall:.2f}/10):']
+    if lifts:
+        lines.append('Поднимают настроение:')
+        for a, avg, c, d in lifts:
+            lines.append(f'- {a}: {avg:.2f}/10 ({d:+.2f} к среднему), упоминаний {c}')
+    if drags:
+        lines.append('Связаны с понижением:')
+        for a, avg, c, d in drags:
+            lines.append(f'- {a}: {avg:.2f}/10 ({d:+.2f} к среднему), упоминаний {c}')
+    if not lifts and not drags:
+        lines.append('Заметной связи активностей с настроением не видно.')
+    return '\n'.join(lines)
+
+
+def tool_people_overview(limit: int = 15) -> str:
+    """All people in the diary at a glance (alias-resolved), with tone.
+
+    Complements tool_person_history (one person) — answers "кто в моей
+    жизни связан с хорошим/плохим настроением?". Tone is per-mention
+    (how the person is written about), not the day's overall rating.
+    """
+    from app.models import EntryPerson, PersonAlias
+
+    aliases = {a.alias: a.canonical for a in PersonAlias.query.all()}
+
+    def resolve(n: str) -> str:
+        seen: set = set()
+        while n in aliases and n not in seen:
+            seen.add(n)
+            n = aliases[n]
+        return n
+
+    rows = (db.session.query(EntryPerson.mention, EntryPerson.tone)
+            .join(MoodEntry, EntryPerson.entry_id == MoodEntry.id)
+            .filter(MoodEntry.deleted == False)
+            .all())
+    if not rows:
+        return ('В дневнике пока не размечены люди — нужен фоновый разбор '
+                'записей AI-психологом (он идёт автоматически после новых записей).')
+
+    agg: dict[str, dict] = {}
+    for mention, tone in rows:
+        key = resolve(_normalize_mention(mention))
+        d = agg.setdefault(key, {'pos': 0, 'neg': 0, 'neu': 0, 'total': 0})
+        d['total'] += 1
+        if tone == 'positive':
+            d['pos'] += 1
+        elif tone == 'negative':
+            d['neg'] += 1
+        else:
+            d['neu'] += 1
+
+    people = sorted(agg.items(), key=lambda kv: -kv[1]['total'])[:limit]
+    lines = [
+        f'Люди в дневнике (всего {len(agg)}; тон ∈ [−1; +1] — про упоминания, '
+        f'не про настроение дня):'
+    ]
+    for name, d in people:
+        score = (d['pos'] - d['neg']) / d['total']
+        lines.append(
+            f'- {name}: упоминаний {d["total"]} '
+            f'(+{d["pos"]} / −{d["neg"]} / нейтр. {d["neu"]}), тон {score:+.2f}'
+        )
+    return '\n'.join(lines)
+
+
+def tool_best_worst_days(top_n: int = 5) -> str:
+    """The highest- and lowest-rated days with short excerpts.
+
+    Answers "когда мне было лучше/хуже всего?". Distinct from mood_trend
+    (trajectory) — this surfaces the actual peak and trough days.
+    """
+    try:
+        top_n = int(top_n)
+    except (TypeError, ValueError):
+        top_n = 5
+    top_n = max(1, min(10, top_n))
+
+    entries = MoodEntry.query.filter_by(deleted=False).all()
+    if not entries:
+        return 'В дневнике пока нет записей.'
+    top_n = min(top_n, len(entries))
+
+    best = sorted(entries, key=lambda e: (-e.rating, e.date.toordinal()))[:top_n]
+    worst = sorted(entries, key=lambda e: (e.rating, -e.date.toordinal()))[:top_n]
+
+    lines = ['Лучшие дни (по оценке):']
+    for e in best:
+        lines.append(_format_entry_line(e, max_note=160))
+    lines.append('Худшие дни (по оценке):')
+    for e in worst:
+        lines.append(_format_entry_line(e, max_note=160))
+    return '\n'.join(lines)
+
+
+def tool_diary_stats() -> str:
+    """Meta-statistics about the diary: totals, span, streaks, this month.
+
+    Grounds answers like "сколько я веду дневник?" and lets the assistant
+    celebrate milestones ("ты ведёшь дневник уже N дней подряд").
+    """
+    from datetime import date as _date, timedelta
+
+    entries = (MoodEntry.query
+               .filter_by(deleted=False)
+               .order_by(MoodEntry.date)
+               .all())
+    if not entries:
+        return 'В дневнике пока нет записей.'
+
+    n = len(entries)
+    ratings = [e.rating for e in entries]
+    avg = sum(ratings) / n
+    first, last = entries[0].date, entries[-1].date
+    span_days = (last - first).days + 1
+    dates = {e.date for e in entries}
+
+    today = _date.today()
+    cur = 0
+    d = today if today in dates else today - timedelta(days=1)
+    while d in dates:
+        cur += 1
+        d -= timedelta(days=1)
+
+    longest = 0
+    run = 0
+    prev = None
+    for e in entries:
+        if prev is not None and (e.date - prev).days == 1:
+            run += 1
+        else:
+            run = 1
+        longest = max(longest, run)
+        prev = e.date
+
+    this_month = [e for e in entries
+                  if e.date.year == today.year and e.date.month == today.month]
+
+    lines = [
+        'Статистика дневника:',
+        f'- Всего записей: {n}',
+        f'- Период ведения: {first.isoformat()} — {last.isoformat()} ({span_days} дн.)',
+        f'- Среднее настроение за всё время: {avg:.2f}/10',
+        f'- Текущая серия записей подряд: {cur} дн.',
+        f'- Самая длинная серия: {longest} дн.',
+    ]
+    if this_month:
+        tm_avg = sum(e.rating for e in this_month) / len(this_month)
+        lines.append(f'- В этом месяце: {len(this_month)} записей, среднее {tm_avg:.2f}/10')
+    return '\n'.join(lines)
+
+
+def tool_on_this_day() -> str:
+    """Entries from the same calendar day in previous years.
+
+    A reflection prompt — answers "что было год назад?" / "что у меня было
+    в этот день раньше?".
+    """
+    from datetime import date as _date
+
+    today = _date.today()
+    entries = (MoodEntry.query
+               .filter(db.extract('month', MoodEntry.date) == today.month,
+                       db.extract('day', MoodEntry.date) == today.day,
+                       MoodEntry.date < today,
+                       MoodEntry.deleted == False)
+               .order_by(MoodEntry.date.desc())
+               .all())
+    if not entries:
+        return (f'Записей за этот день ({today.day:02d}.{today.month:02d}) '
+                f'в прошлые годы нет.')
+
+    lines = [f'Записи за {today.day:02d}.{today.month:02d} в прошлые годы:']
+    for e in entries:
+        years_ago = today.year - e.date.year
+        suffix = f'{years_ago} г. назад' if years_ago > 0 else 'в этом году'
+        lines.append(_format_entry_line(e, extra=suffix, max_note=200))
     return '\n'.join(lines)

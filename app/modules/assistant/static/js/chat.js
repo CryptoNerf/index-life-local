@@ -674,7 +674,7 @@
                   updateContextBar(data.context.pct);
                 }
                 // Tool routing — server may emit multiple `tool` events
-                // (1-2 per turn) before the main reply starts streaming.
+                // (1-3 per turn) before the main reply starts streaming.
                 // Each one tells us what data the AI is fetching; we
                 // accumulate them so the user sees the full sequence.
                 if (data.tool && !fullText) {

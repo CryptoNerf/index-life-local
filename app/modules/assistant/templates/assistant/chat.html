@@ -62,7 +62,7 @@
       {% else %}
         <div class="chat-row chat-row-assistant">
           <img class="chat-avatar" src="{{ url_for('static', filename='images/model.png') }}" alt="AI">
-          <div class="chat-bubble chat-bubble-assistant">{{ t('assistant.greeting') }}</div>
+          <div class="chat-bubble chat-bubble-assistant">{{ t('assistant.greeting') }}{% if proactive_note %} {{ proactive_note }}{% endif %}</div>
         </div>
       {% endif %}
     </div>
