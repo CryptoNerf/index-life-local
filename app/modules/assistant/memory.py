@@ -7,6 +7,7 @@ Layer 3 (Summary): Per-entry summaries + monthly overviews
 Layer 4 (Profile): Structured psychological profile (JSON)
 """
 import base64
+import collections
 import hashlib
 import json
 import logging
@@ -62,7 +63,8 @@ for line in sys.stdin:
         continue
     try:
         req = json.loads(line)
-        vec = model.encode(req['text'], normalize_embeddings=True)
+        vec = model.encode(req['text'], normalize_embeddings=True,
+                           show_progress_bar=False)
         data = base64.b64encode(vec.astype(np.float32).tobytes()).decode()
         sys.stdout.write(json.dumps({'ok': True, 'data': data}) + '\n')
     except Exception as e:
@@ -96,6 +98,17 @@ class _SubprocessEmbedder:
     def __init__(self):
         venv_python = _find_venv_python()
         self._lock = threading.Lock()
+        # Keep a rolling tail of the child's stderr for diagnostics.
+        self._stderr_tail: 'collections.deque[str]' = collections.deque(maxlen=80)
+
+        # Quiet the child so it writes little to stderr (the drain thread
+        # below already prevents a full-pipe deadlock, but less noise is
+        # cheaper and keeps logs readable).
+        env = dict(os.environ)
+        env.setdefault('HF_HUB_DISABLE_PROGRESS_BARS', '1')
+        env.setdefault('TRANSFORMERS_VERBOSITY', 'error')
+        env.setdefault('TOKENIZERS_PARALLELISM', 'false')
+
         self._proc = subprocess.Popen(
             [str(venv_python), '-c', _EMBED_WORKER_CODE],
             stdin=subprocess.PIPE,
@@ -103,13 +116,33 @@ class _SubprocessEmbedder:
             stderr=subprocess.PIPE,
             text=True,
             bufsize=1,
+            env=env,
         )
+
+        # CRITICAL: continuously drain the child's stderr. sentence-transformers
+        # / torch are chatty on stderr; if we never read it, the OS pipe buffer
+        # (~64 KB) fills and the child blocks on its next stderr write — which
+        # deadlocks every subsequent encode (parent waits forever on stdout).
+        self._stderr_thread = threading.Thread(
+            target=self._drain_stderr, daemon=True)
+        self._stderr_thread.start()
+
         # Wait for model to load (may take 10-30s first time — downloads ~90 MB)
         ready = self._proc.stdout.readline().strip()
         if ready != 'READY':
-            err = self._proc.stderr.read(4096)
+            # Child likely exited; let the drain thread flush its stderr.
+            self._stderr_thread.join(timeout=1.0)
+            err = ''.join(self._stderr_tail)[-4000:]
             raise RuntimeError(f'Embed worker failed: {err}')
         log.info('Subprocess embedder started (pid=%d)', self._proc.pid)
+
+    def _drain_stderr(self):
+        """Read the child's stderr forever so its pipe never fills up."""
+        try:
+            for line in self._proc.stderr:
+                self._stderr_tail.append(line)
+        except Exception:
+            pass
 
     def encode(self, text: str, normalize_embeddings: bool = True) -> np.ndarray:
         """Send text, get back float32 numpy vector."""
