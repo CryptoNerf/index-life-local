@@ -108,6 +108,15 @@ class _SubprocessEmbedder:
         env.setdefault('HF_HUB_DISABLE_PROGRESS_BARS', '1')
         env.setdefault('TRANSFORMERS_VERBOSITY', 'error')
         env.setdefault('TOKENIZERS_PARALLELISM', 'false')
+        # Force UTF-8 on both ends of the pipes. A GUI app launched from Finder
+        # (macOS) or Explorer (Windows) often has a non-UTF-8 locale (ASCII /
+        # ANSI codepage). Without forcing UTF-8, the parent's text-mode reads
+        # raise UnicodeDecodeError on the child's non-ASCII stderr — which kills
+        # the drain thread below and re-introduces the full-pipe deadlock that
+        # freezes every encode (reindex/sync stall at "1/225 embedded"). The
+        # module installer already does this; see app/module_routes.py.
+        env['PYTHONIOENCODING'] = 'utf-8'
+        env['PYTHONUTF8'] = '1'
 
         self._proc = subprocess.Popen(
             [str(venv_python), '-c', _EMBED_WORKER_CODE],
@@ -115,6 +124,8 @@ class _SubprocessEmbedder:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            encoding='utf-8',
+            errors='replace',
             bufsize=1,
             env=env,
         )
