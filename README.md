@@ -1,49 +1,64 @@
-﻿# index.life - Local Mood Diary
+﻿# index.life — Local app for tracking your mood and daily notes
 
 > **English version** | [Русская версия](README.ru.md)
 
-A local, offline mood diary built around one daily question — **"How was my day?"**
+Helps you better remember and become aware of yourself and your time.
 
 ![Version](https://img.shields.io/badge/version-3.0.0-blue)
 ![Python](https://img.shields.io/badge/python-3.8%2B-green)
 ![Flask](https://img.shields.io/badge/flask-3.0.0-lightgrey)
 ![License](https://img.shields.io/badge/license-MIT-yellow)
 
-> 📖 **Full documentation:** [docs/](docs/README.md) — the app & database, sync, modules, AI psychologist, neural map, every chart, customization.
+> **Full documentation:** [docs/](docs/README.md) — the app & database, sync, modules, AI psychologist, neural map, every chart, customization.
 
 ---
 
 ## About
 
 **index.life** is an app for tracking your mood and keeping notes about your
-days. Its main goal is simple: to get you to ask yourself *"How was my day?"*
-every day — and to write the answer down. I'm convinced this small daily
-practice has a genuinely positive effect on people's lives. index.life is also
-about archiving how you felt and what you were thinking, so you can look back
-on it later.
+days. The idea is to help you better remember and become aware of yourself and
+your time — which otherwise blurs into one indistinct stream of days.
 
-Everything runs **locally and offline** — no accounts, no servers, no
-telemetry. Your diary stays on your device.
+At its heart is a simple daily practice: stop for a moment each day and write
+down how the day went, how you felt, and what was on your mind. I'm convinced
+that making this kind of reflection a habit has a positive effect on a person's
+life.
+
+**What index.life is for:**
+
+- **Building a daily reflection habit** — gently encouraging you to write about
+  your well-being and your day, every day.
+- **Archiving your well-being and thoughts** — keeping your entries and mood
+  ratings for the long term, so you can return to them later: reread them,
+  notice how things changed, remember what mattered.
+- **Understanding yourself through your own data** — turning your accumulated
+  entries into observations about your mood and the themes, people, and
+  activities that shape it.
+- **Privacy and ownership of your data** — a diary is personal, so index.life
+  runs entirely locally and offline: no accounts, no servers, no telemetry, and
+  your data never leaves your device.
 
 ## What's inside
 
-Beyond the notes **calendar** and the **Markdown editor**, index.life gives you
-a set of tools to support the habit:
+The foundation of index.life is a **notes calendar** (the whole year as a
+heatmap that motivates you not to skip days), a **Markdown editor** for entries,
+a **life-in-weeks** view, **Markdown export**, and **sync** across your devices
+through your own cloud folder.
 
-- 🧠 **AI psychologist** — chat with a local language model that can read your
-  diary: it reflects back what you write, notices patterns, and grounds its
-  answers in your real entries. [Read more »](docs/en/ai-psychologist.md)
-- 🌌 **Neural map of your thoughts** — your entries clustered into topics you
-  can explore visually. [Read more »](docs/en/neural-map.md)
-- 📊 **Charts** that visualize different aspects of your well-being over time.
-  [Read more »](docs/en/graphics.md)
-- 🎨 **Customization & sync** — restyle the whole interface to your taste, and
-  keep your diary in step across devices.
-  [Customization »](docs/en/customization.md) · [Sync »](docs/en/sync.md)
+To help you make sense of what you write, index.life adds four optional modules:
 
-> The **AI psychologist** and **neural map** are optional modules you install on
-> demand (a local model is downloaded once). The calendar, editor, charts,
-> customization and sync are built in.
+1. **AI psychologist** — a chat with a local language model that has access to
+   your diary: it reflects back what you write, notices patterns, and grounds
+   its answers in your real entries. [Read more »](docs/en/ai-psychologist.md)
+2. **Neural map of your thoughts** — your entries grouped into topics you can
+   explore visually. [Read more »](docs/en/neural-map.md)
+3. **Charts** — visualizations of different aspects of your well-being over
+   time. [Read more »](docs/en/graphics.md)
+4. **Customization** — restyle the whole interface to your taste.
+   [Read more »](docs/en/customization.md)
+
+The AI psychologist and neural map are enabled on demand (a local model is
+downloaded once); charts and customization switch on right inside the app.
 
 ---
 
