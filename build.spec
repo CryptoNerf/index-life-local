@@ -9,10 +9,34 @@ block_cipher = None
 import sys
 import os
 from pathlib import Path
-from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.utils.hooks import collect_submodules, collect_all
 
 # Get the root directory
 root_dir = Path(SPECPATH)
+
+# ── pywebview (native window) ─────────────────────────────────────────
+# pywebview loads its platform backend dynamically, so PyInstaller's static
+# analysis misses it and the frozen app falls back to a browser window.
+# Collect the whole package (+ its own hook) so the native window works.
+# On Windows the EdgeChromium/WebView2 backend additionally needs pythonnet
+# (the `clr` module) and proxy_tools.
+_wv_datas, _wv_binaries, _wv_hidden = collect_all('webview')
+_wv_hook = str(Path(__import__('webview').__file__).parent / '__pyinstaller')
+
+if sys.platform == 'win32':
+    _wv_hidden += [
+        'clr', 'proxy_tools',
+        'webview.platforms.winforms',
+        'webview.platforms.edgechromium',
+    ]
+    for _pkg in ('pythonnet', 'clr_loader', 'proxy_tools'):
+        try:
+            _d, _b, _h = collect_all(_pkg)
+            _wv_datas += _d
+            _wv_binaries += _b
+            _wv_hidden += _h
+        except Exception:
+            pass
 
 
 def module_datas():
@@ -40,7 +64,7 @@ def module_datas():
 a = Analysis(
     ['run.py'],
     pathex=[str(root_dir)],
-    binaries=[],
+    binaries=_wv_binaries,
     datas=[
         ('app/templates', 'app/templates'),
         ('app/static', 'app/static'),
@@ -50,7 +74,7 @@ a = Analysis(
         ('install_modules.bat', '.'),
         ('install_modules.sh', '.'),
         ('tools/install_modules.py', 'tools'),
-    ] + module_datas(),
+    ] + module_datas() + _wv_datas,
     hiddenimports=[
         'flask',
         'flask_sqlalchemy',
@@ -61,8 +85,8 @@ a = Analysis(
         'ipaddress',
         'importlib.resources',
         'importlib.metadata',
-    ] + collect_submodules('app.modules'),
-    hookspath=[],
+    ] + collect_submodules('app.modules') + _wv_hidden,
+    hookspath=[_wv_hook],
     hooksconfig={},
     runtime_hooks=[],
     excludes=[],

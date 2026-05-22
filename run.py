@@ -131,12 +131,15 @@ def main():
     # --- Native window via pywebview (macOS WKWebView / Windows WebView2) ---
     try:
         import webview  # type: ignore
-    except ImportError:
+    except ImportError as e:
+        logging.getLogger(__name__).error('pywebview import failed: %s', e)
         webview = None
 
     def _browser_fallback(reason: str | None = None):
         import webbrowser
         if reason:
+            logging.getLogger(__name__).warning(
+                'Native window unavailable, falling back to browser: %s', reason)
             print(f"\n  [!] Native window unavailable: {reason}")
         print(f"  [>] Opening browser at {server_url}\n")
         webbrowser.open(server_url)
@@ -194,11 +197,22 @@ def main():
     # PyObjC cleanup on macOS. Only called on real user close, not errors.
     window.events.closing += lambda: os._exit(0)
 
+    start_kwargs = {}
+    if sys.platform == 'win32':
+        # Force the WebView2/EdgeChromium backend so Windows uses the modern
+        # engine and never silently falls back to the broken MSHTML (IE)
+        # renderer. Requires the WebView2 Runtime (preinstalled on Windows 11;
+        # Edge installs it on Windows 10). If it's missing, start() raises and
+        # we drop to a real browser — a better experience than MSHTML.
+        start_kwargs['gui'] = 'edgechromium'
+
     try:
-        webview.start()
+        webview.start(**start_kwargs)
     except SystemExit:
         os._exit(0)
     except Exception as e:
+        logging.getLogger(__name__).error(
+            'Native window failed to start: %s', e, exc_info=True)
         import traceback
         print('\n[Error] Native window failed to start:', file=sys.stderr)
         traceback.print_exc()

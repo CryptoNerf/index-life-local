@@ -26,6 +26,10 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          # pywebview's Windows (WebView2/EdgeChromium) backend needs pythonnet.
+          # Install it explicitly so PyInstaller bundles it and the native
+          # window works instead of falling back to a browser.
+          pip install pythonnet
           pip install pyinstaller
 
       - name: Build Windows executable
