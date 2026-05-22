@@ -24,7 +24,16 @@ Download the ready-to-use version for your operating system from Releases:
 2. Unzip the archive
 3. Run `index-life.exe`
 
-> On first launch, Windows may show an "Unrecognized Publisher" warning. This is normal for applications without a paid digital signature. Click "More info" → "Run anyway".
+> **First launch — "Windows protected your PC" (SmartScreen)**
+> Because index.life is free and open-source, the `.exe` isn't signed with a
+> paid certificate, so Windows SmartScreen shows a blue warning the first time.
+> The app is safe to run — to continue:
+> 1. Click **More info** in the dialog.
+> 2. Click **Run anyway**.
+>
+> You only need to do this once per version. If the warning keeps coming back,
+> right-click the downloaded `.zip` → **Properties** → tick **Unblock** →
+> **OK**, then unzip it again.
 
 **macOS:**
 1. Download `index-life_macos.dmg`
