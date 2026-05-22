@@ -135,14 +135,81 @@ def main():
         logging.getLogger(__name__).error('pywebview import failed: %s', e)
         webview = None
 
+    def _launch_app_mode_browser(url: str):
+        """Open a chromeless 'app mode' window via Edge/Chrome.
+
+        Looks like a native app (no tabs, no address bar) and uses the same
+        Chromium/WebView2 engine — but needs no pywebview/pythonnet, so it
+        works reliably on Windows where bundling pythonnet is fragile.
+        Returns the Popen handle, or None if no suitable browser was found.
+        """
+        import shutil
+        import subprocess
+        import tempfile
+
+        candidates: list[str] = []
+        if sys.platform == 'win32':
+            pf = os.environ.get('PROGRAMFILES', r'C:\Program Files')
+            pf86 = os.environ.get('PROGRAMFILES(X86)', r'C:\Program Files (x86)')
+            local = os.environ.get('LOCALAPPDATA', '')
+            candidates = [
+                os.path.join(pf86, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+                os.path.join(pf, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+                os.path.join(pf, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+                os.path.join(pf86, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+            ]
+            if local:
+                candidates.append(os.path.join(local, 'Google', 'Chrome', 'Application', 'chrome.exe'))
+        elif sys.platform == 'darwin':
+            candidates = [
+                '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+                '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+            ]
+        else:  # linux
+            for name in ('microsoft-edge', 'google-chrome', 'chromium', 'chromium-browser'):
+                found = shutil.which(name)
+                if found:
+                    candidates.append(found)
+
+        browser = next((c for c in candidates if c and os.path.exists(c)), None)
+        if browser is None:
+            for name in ('msedge', 'chrome', 'google-chrome', 'chromium'):
+                found = shutil.which(name)
+                if found:
+                    browser = found
+                    break
+        if not browser:
+            return None
+
+        # Dedicated profile (in temp) so it opens a fresh standalone window
+        # instead of merging into the user's existing browser session.
+        profile_dir = os.path.join(tempfile.gettempdir(), 'index_life_app_window')
+        try:
+            return subprocess.Popen([
+                browser,
+                f'--app={url}',
+                f'--user-data-dir={profile_dir}',
+                '--no-first-run',
+                '--no-default-browser-check',
+            ])
+        except Exception as exc:
+            logging.getLogger(__name__).warning('app-mode browser failed: %s', exc)
+            return None
+
     def _browser_fallback(reason: str | None = None):
         import webbrowser
         if reason:
             logging.getLogger(__name__).warning(
-                'Native window unavailable, falling back to browser: %s', reason)
+                'Native window unavailable, falling back: %s', reason)
             print(f"\n  [!] Native window unavailable: {reason}")
-        print(f"  [>] Opening browser at {server_url}\n")
-        webbrowser.open(server_url)
+
+        # Prefer a chromeless app-mode window (looks native) over a plain tab.
+        if _launch_app_mode_browser(server_url) is not None:
+            logging.getLogger(__name__).info('Opened app-mode browser window')
+            print(f"  [>] Opened app window at {server_url}\n")
+        else:
+            print(f"  [>] Opening browser at {server_url}\n")
+            webbrowser.open(server_url)
         try:
             flask_thread.join()
         except KeyboardInterrupt:
