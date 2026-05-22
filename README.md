@@ -37,14 +37,23 @@ Download the ready-to-use version for your operating system from Releases:
 
 **macOS:**
 1. Download `index-life_macos.dmg`
-2. Open the DMG file and drag the application to your Applications folder
-3. **Important!** macOS blocks unsigned apps. Open Terminal and run:
-   ```bash
-   xattr -d com.apple.quarantine /Applications/index.life.app
-   ```
-4. Now launch index.life from Applications
+2. Open the DMG and drag **index.life** into your Applications folder
+3. **First launch.** Double-click index.life. macOS shows *"Apple could not
+   verify 'index.life' is free of malware…"* with two buttons — click **Done**
+   (do **not** click "Move to Trash").
+4. Open **System Settings → Privacy & Security**, scroll down to the
+   **Security** section. There you'll see *"'index.life' was blocked…"* — click
+   **Open Anyway**, then confirm with **Open** (Touch ID / password if asked).
+5. index.life opens — and from now on it launches normally with a double-click.
 
-> The app will start the Flask server in the background and automatically open your browser.
+> **Why does this happen (on both Windows and macOS)?** index.life is free and
+> open-source, so its app isn't signed/notarized with a paid developer
+> certificate (Apple Developer is $99/yr; a Windows cert costs too). Both
+> systems therefore show a one-time warning for software downloaded from the
+> internet that isn't paid-signed. The app is safe and runs entirely on your
+> device — these steps just tell your OS you trust it once.
+>
+> *Alternative (Terminal):* `xattr -d com.apple.quarantine /Applications/index.life.app`
 
 **Linux:**
 1. Download `index-life_linux_x86_64.AppImage`

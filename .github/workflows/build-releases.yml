@@ -357,9 +357,10 @@ jobs:
             ### macOS
             1. Download `index-life_macos.dmg`
             2. Open DMG → drag **index.life** to Applications
-            3. **Right-click** the app → **Open** → click **Open** in the dialog
-               *(macOS blocks unsigned apps on first launch — this is a one-time step)*
-            4. The app opens in your browser at `127.0.0.1:5001`
+            3. Double-click index.life → in the dialog click **Done** (not "Move to Trash")
+            4. **System Settings → Privacy & Security** → scroll down → **Open Anyway** → confirm with **Open**
+               *(the app is free/open-source so it isn't paid-signed — one-time step; it opens normally afterward)*
+            5. The app opens at `127.0.0.1:5001`
 
             ### Windows
             1. Download `index-life_windows_x64.zip` and unzip to any folder
