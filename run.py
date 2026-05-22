@@ -278,11 +278,13 @@ def main():
     except SystemExit:
         os._exit(0)
     except Exception as e:
-        logging.getLogger(__name__).error(
-            'Native window failed to start: %s', e, exc_info=True)
-        import traceback
-        print('\n[Error] Native window failed to start:', file=sys.stderr)
-        traceback.print_exc()
+        # On Windows pywebview needs pythonnet/WebView2, which often can't load
+        # in a downloaded build — fall back to the app-mode window. Keep the
+        # full traceback in the log file, but don't dump it to the console:
+        # the app still opens fine via the fallback, so a scary wall of text
+        # would only worry the user.
+        logging.getLogger(__name__).warning(
+            'Native window (pywebview) unavailable: %s', e, exc_info=True)
         _browser_fallback(str(e))
 
 
