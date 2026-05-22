@@ -2,7 +2,7 @@
 
 > **English version** | [Русская версия](README.ru.md)
 
-A mood tracker app designed to help people remember and become more aware of themselves and their time.
+A local, offline mood diary built around one daily question — **"How was my day?"**
 
 ![Version](https://img.shields.io/badge/version-3.0.0-blue)
 ![Python](https://img.shields.io/badge/python-3.8%2B-green)
@@ -10,6 +10,40 @@ A mood tracker app designed to help people remember and become more aware of the
 ![License](https://img.shields.io/badge/license-MIT-yellow)
 
 > 📖 **Full documentation:** [docs/](docs/README.md) — the app & database, sync, modules, AI psychologist, neural map, every chart, customization.
+
+---
+
+## About
+
+**index.life** is an app for tracking your mood and keeping notes about your
+days. Its main goal is simple: to get you to ask yourself *"How was my day?"*
+every day — and to write the answer down. I'm convinced this small daily
+practice has a genuinely positive effect on people's lives. index.life is also
+about archiving how you felt and what you were thinking, so you can look back
+on it later.
+
+Everything runs **locally and offline** — no accounts, no servers, no
+telemetry. Your diary stays on your device.
+
+## What's inside
+
+Beyond the notes **calendar** and the **Markdown editor**, index.life gives you
+a set of tools to support the habit:
+
+- 🧠 **AI psychologist** — chat with a local language model that can read your
+  diary: it reflects back what you write, notices patterns, and grounds its
+  answers in your real entries. [Read more »](docs/en/ai-psychologist.md)
+- 🌌 **Neural map of your thoughts** — your entries clustered into topics you
+  can explore visually. [Read more »](docs/en/neural-map.md)
+- 📊 **Charts** that visualize different aspects of your well-being over time.
+  [Read more »](docs/en/graphics.md)
+- 🎨 **Customization & sync** — restyle the whole interface to your taste, and
+  keep your diary in step across devices.
+  [Customization »](docs/en/customization.md) · [Sync »](docs/en/sync.md)
+
+> The **AI psychologist** and **neural map** are optional modules you install on
+> demand (a local model is downloaded once). The calendar, editor, charts,
+> customization and sync are built in.
 
 ---
 
@@ -90,19 +124,6 @@ chmod +x install.sh start.sh
 **Optional modules (AI):**
 - Run `install_modules.bat` / `install_modules.sh`
 - See `MODULES.md` for details
-
----
-
-## Features
-
-- Calendar with visual heatmap of all your entries
-- Daily entries with mood rating (1-10) and notes
-- Statistics showing average mood and total entries
-- Profile with name, email, and photo
-- 100% privacy - all data stored locally (SQLite)
-- Works completely offline
-- Simple web interface
-- Optional AI psychologist chat (after installing modules)
 
 ---
 
