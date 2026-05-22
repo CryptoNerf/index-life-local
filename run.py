@@ -91,6 +91,47 @@ def _run_flask(app) -> None:
         logging.getLogger(__name__).error('Flask thread error: %s', exc)
 
 
+def _unblock_self() -> None:
+    """Strip the 'Mark of the Web' from our own bundled files (Windows).
+
+    Windows tags every file extracted from a downloaded .zip with a
+    Zone.Identifier stream ("came from the internet"). .NET Framework then
+    refuses to load such assemblies, so pywebview's pythonnet/WebView2 backend
+    fails (RuntimeError: Failed to resolve Python.Runtime.Loader.Initialize)
+    and the app drops to a browser-style window. Removing the tag from our own
+    files — the same thing `Unblock-File` does — lets the native window work
+    with no action from the user.
+
+    Frozen Windows builds only. Needs write access to the bundle (true for the
+    portable layout). Guarded by a sentinel so it only scans once per extract.
+    """
+    if sys.platform != 'win32' or not getattr(sys, 'frozen', False):
+        return
+    meipass = getattr(sys, '_MEIPASS', None)
+    if not meipass or not os.path.isdir(meipass):
+        return
+    sentinel = os.path.join(meipass, '.motw_cleared')
+    if os.path.exists(sentinel):
+        return
+    cleared = 0
+    targets = [os.path.join(root, name)
+               for root, _dirs, files in os.walk(meipass) for name in files]
+    targets.append(sys.executable)
+    for path in targets:
+        try:
+            os.remove(path + ':Zone.Identifier')
+            cleared += 1
+        except OSError:
+            pass  # no Zone.Identifier on this file, or not removable
+    try:
+        with open(sentinel, 'w', encoding='utf-8') as fh:
+            fh.write('1')
+    except OSError:
+        pass
+    logging.getLogger(__name__).info(
+        'MOTW unblock: cleared %d Zone.Identifier stream(s)', cleared)
+
+
 def main():
     """Main entry point"""
     # Enable UTF-8 output for Windows console
@@ -111,6 +152,10 @@ def main():
     print(f"  {'─' * 68}\n")
 
     setup_logging()
+
+    # Remove 'Mark of the Web' from our own files so pywebview's WebView2
+    # backend can load (otherwise it fails and we fall back to a browser).
+    _unblock_self()
 
     flask_app = create_app()
 
