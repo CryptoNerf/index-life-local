@@ -25,8 +25,8 @@ body {
   margin-left: 70px;
 }
 
-/* Ноутбучные экраны */
-@media (max-height: 960px) and (min-width: 769px) {
+/* Desktop: center the header (any height — not only short laptop screens) */
+@media (min-width: 769px) {
   .top-menu {
     margin-top: 40px;
     margin-left: 0;
@@ -34,6 +34,10 @@ body {
     font-size: 22px;
     gap: 20px;
   }
+}
+
+/* Laptop / short screens: compact the chat */
+@media (max-height: 960px) and (min-width: 769px) {
   .chat-container {
     padding: 14px 20px 14px;
   }

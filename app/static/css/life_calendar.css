@@ -17,8 +17,8 @@ body {
   margin-left: 70px;
 }
 
-/* Ноутбучные экраны */
-@media (max-height: 960px) and (min-width: 769px) {
+/* Desktop: center the header (any height — not only short laptop screens) */
+@media (min-width: 769px) {
   .top-menu {
     margin-top: 40px;
     margin-left: 0;
@@ -26,6 +26,10 @@ body {
     font-size: 22px;
     gap: 20px;
   }
+}
+
+/* Laptop / short screens: compact the page */
+@media (max-height: 960px) and (min-width: 769px) {
   .life-page {
     padding: 24px 20px 40px;
   }

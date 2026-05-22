@@ -26,7 +26,8 @@ header {
   margin-left: 70px;
 }
 
-@media (max-height: 960px) and (min-width: 769px) {
+/* Desktop: center the header (any height — not only short laptop screens) */
+@media (min-width: 769px) {
   .top-menu {
     margin-top: 40px;
     margin-left: 0;
