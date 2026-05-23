@@ -51,11 +51,11 @@ jobs:
         # below intentionally does NOT use this zip — see its comment.
         if: github.event_name == 'release'
         run: |
-          Compress-Archive -Path dist\index-life\* -DestinationPath index-life_windows_x64.zip
+          Compress-Archive -Path dist\index-life\* -DestinationPath windows-build.zip
 
       - name: Upload Windows artifact
         # upload-artifact ALWAYS wraps the uploaded path in its own zip.
-        # If we handed it our pre-made index-life_windows_x64.zip the user
+        # If we handed it our pre-made windows-build.zip the user
         # would get a zip-inside-a-zip (two unzips). Pointing it at the
         # unpacked folder makes the single artifact zip contain the app
         # directly — one unzip.
@@ -68,7 +68,7 @@ jobs:
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
-          files: index-life_windows_x64.zip
+          files: windows-build.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -363,7 +363,7 @@ jobs:
             5. The app opens at `127.0.0.1:5001`
 
             ### Windows
-            1. Download `index-life_windows_x64.zip` and unzip to any folder
+            1. Download `windows-build.zip` and unzip to any folder
             2. Run `index-life.exe`
                *(If SmartScreen warns — click "More info" → "Run anyway")*
 

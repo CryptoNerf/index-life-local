@@ -7,7 +7,7 @@ Helps you better remember and become aware of yourself and your time.
 ![Version](https://img.shields.io/badge/version-3.0.0-blue)
 ![Python](https://img.shields.io/badge/python-3.8%2B-green)
 ![Flask](https://img.shields.io/badge/flask-3.0.0-lightgrey)
-![License](https://img.shields.io/badge/license-MIT-yellow)
+![License](https://img.shields.io/badge/license-AGPL--3.0-blue)
 
 > **Full documentation:** [docs/](docs/README.md) — the app & database, sync, modules, AI psychologist, neural map, every chart, customization.
 
@@ -16,7 +16,7 @@ Helps you better remember and become aware of yourself and your time.
 ## About
 
 **index.life** is an app for tracking your mood and keeping notes about your
-days. The idea is to help you better remember and become aware of yourself and
+days. It's meant to help you better remember and become aware of yourself and
 your time — which otherwise blurs into one indistinct stream of days.
 
 At its heart is a simple daily practice: stop for a moment each day and write
@@ -36,7 +36,7 @@ life.
   activities that shape it.
 - **Privacy and ownership of your data** — a diary is personal, so index.life
   runs entirely locally and offline: no accounts, no servers, no telemetry, and
-  your data never leaves your device.
+  your data never leaves your device. Your data belongs to you alone.
 
 ## What's inside
 
@@ -69,7 +69,7 @@ downloaded once); charts and customization switch on right inside the app.
 Download the ready-to-use version for your operating system from Releases:
 
 **Windows:**
-1. Download `index-life_windows_x64.zip`
+1. Download `windows-build.zip`
 2. Unzip the archive
 3. Run `index-life.exe`
 
@@ -115,9 +115,11 @@ Download the ready-to-use version for your operating system from Releases:
    ./index-life_linux_x86_64.AppImage
    ```
 
-**Optional modules (AI):**
-- In the release folder, run `install_modules.bat` (Windows) or `install_modules.sh` (macOS/Linux).
-- Python 3.10 is recommended. On Windows the installer auto-installs Python if missing.
+**Optional modules.** Install them right inside the app: open the **Modules**
+page and click "Install" on the module you want — this is the main way on every
+OS, with progress shown in the window. Restart the app after installing a heavy
+module (AI psychologist or neural map — a local model is downloaded once).
+See [docs/en/modules.md](docs/en/modules.md).
 
 ### Option 2: Installation via Scripts (From Source)
 
@@ -136,9 +138,9 @@ chmod +x install.sh start.sh
 ./start.sh    # Subsequent runs
 ```
 
-**Optional modules (AI):**
-- Run `install_modules.bat` / `install_modules.sh`
-- See `MODULES.md` for details
+**Optional modules.** Same as above — via the **Modules** page in the app. For a
+source setup you can also run the `install_modules.bat` / `install_modules.sh`
+script. See `MODULES.md` for details.
 
 ---
 
@@ -193,8 +195,8 @@ Yes, all data is stored in standard SQLite format in the `diary.db` file, which 
 **Do I need to register or log in?**
 No, just launch the application and start using it. No accounts or passwords required.
 
-**How do I enable the AI module?**
-Run `install_modules.bat` (Windows) or `install_modules.sh` (macOS/Linux) and follow the prompts.
+**How do I enable the AI psychologist (or other modules)?**
+Open the **Modules** page inside the app and click "Install" on the module — it works on every OS, with progress shown in the window. Restart the app afterward. (For a source install you can also run the `install_modules` script.)
 
 **Which Python version is required?**
 Python 3.10 is recommended. The app also works with Python 3.8+.
@@ -203,7 +205,16 @@ Python 3.10 is recommended. The app also works with Python 3.8+.
 
 ## License
 
-MIT License - See LICENSE file for details
+index.life is licensed under the **GNU Affero General Public License v3.0
+(AGPL-3.0)** — see the [LICENSE](LICENSE) file.
+
+In short: you are free to use, study, modify, and share index.life. But if you
+distribute it — or run a modified version as a network service — you must make
+your full source code available under the same license. This keeps index.life
+free and open for everyone and prevents it from being turned into a closed,
+proprietary product.
+
+Copyright (C) 2026 Émile Alexanyan
 
 ---
 
