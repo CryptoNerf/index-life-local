@@ -352,20 +352,20 @@ jobs:
 
             ---
 
-            ## Installation
+            **index.life** — локальный дневник настроения. Помогает лучше помнить и осознавать себя и своё время. Всё работает локально и офлайн.
 
-            ### macOS
-            1. Download `index-life_macos.dmg`
-            2. Open DMG → drag **index.life** to Applications
-            3. Double-click index.life → in the dialog click **Done** (not "Move to Trash")
-            4. **System Settings → Privacy & Security** → scroll down → **Open Anyway** → confirm with **Open**
-               *(the app is free/open-source so it isn't paid-signed — one-time step; it opens normally afterward)*
-            5. The app opens at `127.0.0.1:5001`
+            ## Установка
 
             ### Windows
-            1. Download `windows-build.zip` and unzip to any folder
-            2. Run `index-life.exe`
-               *(If SmartScreen warns — click "More info" → "Run anyway")*
+            1. Скачайте `windows-build.zip` и распакуйте в любую папку
+            2. Запустите `index-life.exe`
+               *(SmartScreen покажет «Неизвестный издатель» → нажмите «Подробнее» → «Выполнить в любом случае». Так бывает с бесплатными приложениями без платной подписи — запускать безопасно.)*
+
+            ### macOS
+            1. Скачайте `index-life_macos.dmg`, откройте и перетащите **index.life** в Applications
+            2. Запустите index.life → в появившемся окне нажмите **Done** (не «Переместить в корзину»)
+            3. **Системные настройки → Конфиденциальность и безопасность** → пролистайте вниз → **Open Anyway** → подтвердите **Открыть**
+               *(разовый шаг для неподписанного приложения; дальше открывается обычным двойным кликом)*
 
             ### Linux
             ```bash
@@ -373,14 +373,18 @@ jobs:
             ./index-life_linux_x86_64.AppImage
             ```
 
-            ### AI Modules (optional)
-            Open **Modules** page inside the app and click **Install** on any module:
-            - **AI Psychologist** — chat with an AI that understands your diary (~5 GB)
-            - **Neural Map** — visualize emotional themes from your entries
-            - **Voice Dictation** — dictate entries with your voice
+            После запуска index.life откроется в отдельном окне.
+
+            ## Опциональные модули
+            Откройте в приложении страницу **Модули** и нажмите **Установить** у нужного:
+            - **AI-психолог** — чат с локальной моделью, у которой есть доступ к дневнику (~5 ГБ)
+            - **Нейронная карта** — визуальная карта тем из твоих записей
+            - **Графики** и **Кастомизация** — включаются мгновенно, без скачивания
+
+            Полная документация: https://github.com/CryptoNerf/index-life-local/blob/HEAD/docs/README.md
 
             ---
 
-            *Built automatically with GitHub Actions*
+            *Собрано автоматически через GitHub Actions · лицензия AGPL-3.0*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
