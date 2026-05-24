@@ -30,7 +30,7 @@ Enable/install from the **Modules** page inside the app ("Install" button) or wi
 
 ### Inside the app
 
-![Modules page](../../images/modules.png)
+![Modules page](../images/modules.png)
 
 Open the **Modules** page → click "Install" on the module. Progress shows right in the window. After installing a heavy module, restart the app.
 

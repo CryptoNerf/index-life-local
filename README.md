@@ -9,6 +9,8 @@ Helps you better remember and become aware of yourself and your time.
 ![Flask](https://img.shields.io/badge/flask-3.0.0-lightgrey)
 ![License](https://img.shields.io/badge/license-AGPL--3.0-blue)
 
+![index.life — your whole year as a heatmap calendar](docs/images/index.life.png)
+
 > **Full documentation:** [docs/](docs/README.md) — the app & database, sync, modules, AI psychologist, neural map, every chart, customization.
 
 ---

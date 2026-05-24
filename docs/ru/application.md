@@ -104,13 +104,13 @@ SQLite в режиме **WAL** (Write-Ahead Logging) — это даёт над�
 
 ## Страницы приложения
 
-![Главный календарь — год тепловой картой](../../images/index.life.png)
+![Главный календарь — год тепловой картой](../images/index.life.png)
 
-<!-- SCREENSHOT: редактор дня с заметкой в Markdown | ../../images/edit-day.png -->
+![редактор дня с заметкой в Markdown](../images/edit-day.png)
 
-![Жизнь в неделях](../../images/lifeinweeks.png)
+![Жизнь в неделях](../images/lifeinweeks.png)
 
-![Страница аккаунта](../../images/account.png)
+![Страница аккаунта](../images/account.png)
 
 | Страница | Назначение |
 |---|---|

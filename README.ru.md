@@ -9,6 +9,8 @@
 ![Flask](https://img.shields.io/badge/flask-3.0.0-lightgrey)
 ![License](https://img.shields.io/badge/license-AGPL--3.0-blue)
 
+![index.life — весь год тепловой картой-календарём](docs/images/index.life.png)
+
 > **Полная документация:** [docs/](docs/README.md) — приложение и база, синхронизация, модули, AI-психолог, нейронная карта, каждый график, кастомизация.
 
 ---

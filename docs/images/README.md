@@ -1,48 +1,38 @@
 # Documentation screenshots
 
-Screenshots live in the repository-root [`images/`](../../images/) folder.
-From a doc under `docs/en/` or `docs/ru/`, reference them as
-`../../images/<name>.png`.
+This folder holds the screenshots used in the guides. A doc under
+`docs/en/` or `docs/ru/` references them as `../images/<name>.png`; the
+repo-root README uses `docs/images/<name>.png`.
 
-The page-level screenshots are already wired into the guides:
-`index.life.png`, `lifeinweeks.png`, `account.png`, `sync.png`,
-`modules.png`, `ai-chat.png`, `graphics.png`, `customize.png`.
+Most pages and charts are already wired in. Two spots still have a
+placeholder comment instead of an image:
 
-## Placeholders still open
-
-Some spots still have a placeholder comment instead of an image:
-
-```
-<!-- SCREENSHOT: day editor with a Markdown note | ../../images/edit-day.png -->
+```text
+<!-- SCREENSHOT: the people chart | ../images/chart-people.png -->
+<!-- SCREENSHOT: before / after a theme change | ../images/customization-before-after.png -->
 ```
 
-To fill one in, drop the image into `images/` and replace the comment
+To fill one in, drop the image into this folder and replace the comment
 with a normal Markdown image:
 
-```
-![Day editor with a Markdown note](../../images/edit-day.png)
+```text
+![The people chart](../images/chart-people.png)
 ```
 
-Find every remaining spot:
+Find any remaining spots:
 
-```
+```text
 grep -rn "SCREENSHOT:" docs/
 ```
 
 | Suggested file | Screenshot still needed |
 |---|---|
-| `edit-day.png` | Day editor with a Markdown note |
-| `ai-tools.png` | Tool chips while the assistant pulls diary data |
-| `neural-map.png` | Neural map — entries clustered into topics |
+| `chart-people.png` | The "people" chart (Graphics → People) |
 | `customization-before-after.png` | Before / after a theme change |
-| `chart-*.png` | One per chart: overview, river, spiral, rose, ridgeline, rhythm, words, activities, people |
 
 ## Conventions
 
 - **Format:** PNG (or WebP for large shots). Keep files reasonably small.
-- **Filenames:** reuse the name suggested in each placeholder so the
-  English and Russian docs can share one image.
-- **Localized UI:** for language-specific captures, add a suffix
-  (`ai-chat-en.png` / `ai-chat-ru.png`) and point each doc at its own file.
+- **Filenames:** the English and Russian docs share one image per shot.
 - **Privacy:** these ship in a public repo — use sample/placeholder
   diary text, not real personal entries.
