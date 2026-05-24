@@ -108,7 +108,7 @@ body {
   background: none;
   border: 1px solid #ccc;
   padding: 4px 10px;
-  font-family: 'Times New Roman', Times, serif;
+  font-family: var(--font-body, 'Times New Roman', Times, serif);
   font-size: 13px;
   color: var(--text-muted, #666);
   cursor: pointer;
@@ -133,7 +133,7 @@ body {
   margin: 0;
 }
 .chat-toggle span {
-  font-family: 'Times New Roman', Times, serif;
+  font-family: var(--font-body, 'Times New Roman', Times, serif);
   text-transform: lowercase;
 }
 
@@ -169,7 +169,7 @@ body {
   font-size: 10px;
   line-height: 14px;
   color: #fff;
-  font-family: 'Times New Roman', Times, serif;
+  font-family: var(--font-body, 'Times New Roman', Times, serif);
   mix-blend-mode: difference;
 }
 
@@ -381,7 +381,7 @@ body {
 
 #chat-input {
   flex: 1;
-  font-family: 'Times New Roman', Times, serif;
+  font-family: var(--font-body, 'Times New Roman', Times, serif);
   font-size: 17px;
   padding: 10px 14px;
   border: 1px solid #ccc;
@@ -402,7 +402,7 @@ body {
   color: #fff;
   border: none;
   padding: 10px 24px;
-  font-family: 'Times New Roman', Times, serif;
+  font-family: var(--font-body, 'Times New Roman', Times, serif);
   font-size: 17px;
   cursor: pointer;
   transition: background 0.2s;

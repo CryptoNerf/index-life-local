@@ -92,7 +92,7 @@ header { width: 100%; }
 }
 .sync-input {
   flex: 1;
-  font-family: 'Times New Roman', Times, serif;
+  font-family: var(--font-body, 'Times New Roman', Times, serif);
   font-size: 15px;
   padding: 8px 12px;
   border: 1px solid #ccc;
@@ -107,7 +107,7 @@ header { width: 100%; }
   align-items: center;
   gap: 6px;
   cursor: pointer;
-  font-family: 'Times New Roman', Times, serif;
+  font-family: var(--font-body, 'Times New Roman', Times, serif);
   font-size: 15px;
 }
 .sync-pane > label {
@@ -142,7 +142,7 @@ header { width: 100%; }
   color: #fff;
   border: none;
   padding: 8px 18px;
-  font-family: 'Times New Roman', Times, serif;
+  font-family: var(--font-body, 'Times New Roman', Times, serif);
   font-size: 15px;
   cursor: pointer;
   transition: background 0.2s;

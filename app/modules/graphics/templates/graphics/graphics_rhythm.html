@@ -11,13 +11,13 @@
     .rhythm-cell        { stroke: #fff; stroke-width: 1.2; }
     .rhythm-cell.empty  { fill: #fff; stroke: #e4e4e4; stroke-dasharray: 2 3; }
     .rhythm-axis-label {
-      font-family: 'Times New Roman', serif;
+      font-family: var(--font-body, 'Times New Roman', Times, serif);
       font-size: 14px;
       fill: #000;
       font-style: italic;
     }
     .rhythm-margin {
-      font-family: 'Times New Roman', serif;
+      font-family: var(--font-body, 'Times New Roman', Times, serif);
       font-size: 13px;
       fill: #999;
       font-variant-numeric: tabular-nums;
@@ -124,7 +124,7 @@
         <span class="legend-label">{% if color_max is not none %}{{ '%.2f'|format(color_max) }}{% else %}{{ t('graphics.chart.legend_high') }}{% endif %}</span>
       </div>
       {% if color_min is not none and color_max is not none %}
-        <p style="text-align:center; color:#999; font-size:13px; font-family:'Times New Roman',serif; margin-top:6px;">
+        <p style="text-align:center; color:#999; font-size:13px; font-family: var(--font-body, 'Times New Roman', Times, serif); margin-top:6px;">
           {{ t('graphics.color_scaled_cells', lo='%.2f'|format(color_min), hi='%.2f'|format(color_max)) }}
         </p>
       {% endif %}

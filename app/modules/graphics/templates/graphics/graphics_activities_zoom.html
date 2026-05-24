@@ -45,7 +45,7 @@
       fill: #000;
     }
     .az-label {
-      font-family: 'Times New Roman', serif;
+      font-family: var(--font-body, 'Times New Roman', Times, serif);
       pointer-events: none;
       text-anchor: middle;
       /* `central` aligns to the geometric centre of the em-box, which
@@ -61,7 +61,7 @@
       border: 1px solid #ccc;
       padding: 12px 14px;
       max-width: 360px;
-      font-family: 'Times New Roman', serif;
+      font-family: var(--font-body, 'Times New Roman', Times, serif);
       font-size: 14px;
       line-height: 1.45;
       box-shadow: 0 4px 14px rgba(0,0,0,0.10);
@@ -78,7 +78,7 @@
       text-align: center;
       color: #777;
       font-size: 14px;
-      font-family: 'Times New Roman', serif;
+      font-family: var(--font-body, 'Times New Roman', Times, serif);
       margin: 18px auto 8px;
       max-width: 720px;
       line-height: 1.5;
@@ -91,7 +91,7 @@
     }
     .az-hint {
       color: #e8a83e;
-      font-family: 'Times New Roman', serif;
+      font-family: var(--font-body, 'Times New Roman', Times, serif);
       text-align: center;
       margin: 24px 0;
       font-size: 15px;
@@ -284,7 +284,7 @@
           }
 
           var label = svg.append('g')
-              .style('font-family', "'Times New Roman', serif")
+              .style('font-family', "var(--font-body, 'Times New Roman', Times, serif)")
               .attr('pointer-events', 'none')
               .attr('text-anchor', 'middle')
             .selectAll('text')

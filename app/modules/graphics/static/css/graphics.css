@@ -66,7 +66,7 @@ html, body {
 .graphics-title {
   font-size: 28px;
   color: var(--heading-color, #222);
-  font-family: var(--font-heading, inherit);
+  font-family: var(--font-heading, 'Times New Roman', Times, serif);
   margin: 0;
   font-weight: normal;
 }
@@ -177,7 +177,7 @@ html, body {
   font-size: 19px;
   margin: 0 0 6px;
   color: var(--heading-color, #222);
-  font-family: var(--font-heading, inherit);
+  font-family: var(--font-heading, 'Times New Roman', Times, serif);
 }
 
 .viz-card-desc {
@@ -204,7 +204,7 @@ html, body {
 .chart-title {
   font-size: 18px;
   color: var(--heading-color, #222);
-  font-family: var(--font-heading, inherit);
+  font-family: var(--font-heading, 'Times New Roman', Times, serif);
   margin: 0 0 16px;
 }
 
@@ -212,7 +212,7 @@ html, body {
   width: 100%;
   height: auto;
   display: block;
-  font-family: 'Times New Roman', Times, serif;
+  font-family: var(--font-body, 'Times New Roman', Times, serif);
 }
 
 .heatmap-wrap {
@@ -249,19 +249,19 @@ html, body {
 .axis-label {
   font-size: 11px;
   fill: #888;
-  font-family: 'Times New Roman', Times, serif;
+  font-family: var(--font-body, 'Times New Roman', Times, serif);
 }
 
 .axis-label-lg {
   font-size: 18px;
   fill: #666;
-  font-family: 'Times New Roman', Times, serif;
+  font-family: var(--font-body, 'Times New Roman', Times, serif);
 }
 
 .bar-label {
   font-size: 20px;
   fill: #222;
-  font-family: 'Times New Roman', Times, serif;
+  font-family: var(--font-body, 'Times New Roman', Times, serif);
 }
 
 .bar {
@@ -329,7 +329,7 @@ html, body {
 .spiral-month-label {
   font-size: 12px;
   fill: #666;
-  font-family: 'Times New Roman', Times, serif;
+  font-family: var(--font-body, 'Times New Roman', Times, serif);
 }
 
 .spiral-today {
@@ -341,13 +341,13 @@ html, body {
 .spiral-center-label {
   font-size: 22px;
   fill: #222;
-  font-family: 'Times New Roman', Times, serif;
+  font-family: var(--font-body, 'Times New Roman', Times, serif);
 }
 
 .spiral-center-sub {
   font-size: 12px;
   fill: #888;
-  font-family: 'Times New Roman', Times, serif;
+  font-family: var(--font-body, 'Times New Roman', Times, serif);
 }
 
 .spiral-legend {
@@ -357,7 +357,7 @@ html, body {
   margin-top: 20px;
   color: var(--text-muted, #888);
   font-size: 14px;
-  font-family: 'Times New Roman', Times, serif;
+  font-family: var(--font-body, 'Times New Roman', Times, serif);
 }
 
 .legend-dot {
@@ -408,7 +408,7 @@ html, body {
   justify-content: flex-end;
   font-size: 13px;
   color: var(--text-muted, #888);
-  font-family: 'Times New Roman', Times, serif;
+  font-family: var(--font-body, 'Times New Roman', Times, serif);
   /* The swatches inside follow the heat-color cascade. */
   --legend-color: var(--overview-heat-color, var(--chart-color, #000));
 }

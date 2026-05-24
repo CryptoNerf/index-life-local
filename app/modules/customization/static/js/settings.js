@@ -1210,7 +1210,7 @@
         x: a.cx, y: a.cy,
         'text-anchor': 'middle', 'dominant-baseline': 'central',
         'font-size': Math.max(8, a.r * 0.32), fill: labelColor,
-        'font-family': "'Times New Roman', serif",
+        'font-family': readVar('font-body') || "'Times New Roman', Times, serif",
       });
       lbl.textContent = a.label;
     });

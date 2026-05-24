@@ -19,7 +19,7 @@
       .words-grid { grid-template-columns: 1fr; gap: 32px; }
     }
     .words-col-title {
-      font-family: 'Times New Roman', serif;
+      font-family: var(--font-body, 'Times New Roman', Times, serif);
       font-size: 20px;
       font-style: italic;
       margin: 0 0 20px;
@@ -38,7 +38,7 @@
       gap: 12px;
       padding: 8px 0;
       border-bottom: 1px solid #f1f1f1;
-      font-family: 'Times New Roman', serif;
+      font-family: var(--font-body, 'Times New Roman', Times, serif);
     }
     .word-row:last-child { border-bottom: none; }
     .word-text {
@@ -77,7 +77,7 @@
       text-align: center;
       color: #777;
       font-size: 14px;
-      font-family: 'Times New Roman', serif;
+      font-family: var(--font-body, 'Times New Roman', Times, serif);
       margin-top: 28px;
     }
     .words-empty {

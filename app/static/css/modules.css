@@ -134,7 +134,7 @@ header { width: 100%; }
   color: #fff;
   border: none;
   padding: 8px 24px;
-  font-family: 'Times New Roman', Times, serif;
+  font-family: var(--font-body, 'Times New Roman', Times, serif);
   font-size: 15px;
   cursor: pointer;
   transition: background 0.2s;
