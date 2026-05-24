@@ -73,7 +73,7 @@ The **"Test connection"** button checks in advance whether the server is reachab
 
 ## Setting it up from scratch (example)
 
-<!-- SCREENSHOT: Sync settings page — mode, folder/WebDAV, last-sync status | ../images/sync-settings.png -->
+![Sync settings page](../../images/sync.png)
 
 1. On device A: **Sync** page → choose a mode → enter folder/URL → "Save".
 2. Click "Sync now" — `device_<A>.json` appears in storage.

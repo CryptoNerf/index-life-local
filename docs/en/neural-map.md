@@ -24,7 +24,7 @@ The pipeline runs when you click **"Analyze"** on the map page (and automaticall
 
 ## What the map shows
 
-<!-- SCREENSHOT: the neural map — entries clustered into topics | ../images/neural-map.png -->
+<!-- SCREENSHOT: the neural map — entries clustered into topics | ../../images/neural-map.png -->
 
 - A **neuron (node)** is a topic. Node size reflects **how many entries** fall into it.
 - **Color/intensity** reflects the topic's emotional weight (how emotionally charged it is).

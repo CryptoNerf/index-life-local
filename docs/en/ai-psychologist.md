@@ -10,7 +10,7 @@ The AI Psychologist is a chat with a **local** language model that has read acce
 
 ## The model
 
-<!-- SCREENSHOT: AI psychologist chat — a reply grounded in real diary entries | ../images/ai-chat.png -->
+![AI psychologist chat](../../images/ai-chat.png)
 
 - **Qwen3.5-9B** in **GGUF** format, **Q4_K_M** quantization (~4.7 GB). Downloaded automatically when you install the module.
 - Runs via **llama-cpp-python** (CPU or GPU — see [profiles](modules.md#ai-psychologist-gpu-profiles)).
@@ -36,7 +36,7 @@ Layers 2–4 are built **in the background**: when you save an entry, it's quiet
 
 ## The agent / tool system
 
-<!-- SCREENSHOT: tool chips shown live while the assistant pulls diary data (person_history, mood_trend...) | ../images/ai-tools.png -->
+<!-- SCREENSHOT: tool chips shown live while the assistant pulls diary data (person_history, mood_trend...) | ../../images/ai-tools.png -->
 
 The AI psychologist isn't just "the model + your last message." Before composing a reply it runs a small **agent loop** that fetches exactly the diary data the question needs, so answers are grounded in real records instead of guesses.
 

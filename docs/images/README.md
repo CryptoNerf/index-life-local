@@ -1,51 +1,48 @@
 # Documentation screenshots
 
-Drop screenshots here, then turn the matching placeholder in the docs
-into a real image.
+Screenshots live in the repository-root [`images/`](../../images/) folder.
+From a doc under `docs/en/` or `docs/ru/`, reference them as
+`../../images/<name>.png`.
 
-Throughout `docs/en/` and `docs/ru/` there are placeholder markers like:
+The page-level screenshots are already wired into the guides:
+`index.life.png`, `lifeinweeks.png`, `account.png`, `sync.png`,
+`modules.png`, `ai-chat.png`, `graphics.png`, `customize.png`.
+
+## Placeholders still open
+
+Some spots still have a placeholder comment instead of an image:
 
 ```
-<!-- SCREENSHOT: main calendar — the whole year as a heatmap | ../images/calendar-year.png -->
+<!-- SCREENSHOT: day editor with a Markdown note | ../../images/edit-day.png -->
 ```
 
-To fill one in, replace the comment with a normal Markdown image using
-the suggested path and a short alt text:
+To fill one in, drop the image into `images/` and replace the comment
+with a normal Markdown image:
 
 ```
-![Year calendar heatmap](../images/calendar-year.png)
+![Day editor with a Markdown note](../../images/edit-day.png)
 ```
 
-Find every spot that still needs a screenshot:
+Find every remaining spot:
 
 ```
 grep -rn "SCREENSHOT:" docs/
 ```
 
+| Suggested file | Screenshot still needed |
+|---|---|
+| `edit-day.png` | Day editor with a Markdown note |
+| `ai-tools.png` | Tool chips while the assistant pulls diary data |
+| `neural-map.png` | Neural map — entries clustered into topics |
+| `customization-before-after.png` | Before / after a theme change |
+| `chart-*.png` | One per chart: overview, river, spiral, rose, ridgeline, rhythm, words, activities, people |
+
 ## Conventions
 
 - **Format:** PNG (or WebP for large shots). Keep files reasonably small.
-- **Filenames:** use the name suggested in each placeholder
-  (`calendar-year.png`, `ai-chat.png`, `chart-river.png`, …) so the
-  English and Russian docs can share the same image.
-- **Localized UI:** if you want language-specific captures, add a suffix
-  (`ai-chat-en.png` / `ai-chat-ru.png`) and point each doc at its own
-  file.
+- **Filenames:** reuse the name suggested in each placeholder so the
+  English and Russian docs can share one image.
+- **Localized UI:** for language-specific captures, add a suffix
+  (`ai-chat-en.png` / `ai-chat-ru.png`) and point each doc at its own file.
 - **Privacy:** these ship in a public repo — use sample/placeholder
   diary text, not real personal entries.
-
-## Suggested shots (one per placeholder)
-
-| File | Screenshot |
-|---|---|
-| `calendar-year.png` | Main page — the year as a heatmap (the hero shot) |
-| `edit-day.png` | Day editor with a Markdown note |
-| `life-in-weeks.png` | Life-in-weeks grid |
-| `sync-settings.png` | Sync page — mode, folder/WebDAV, status |
-| `modules-page.png` | Modules page — install buttons + progress |
-| `ai-chat.png` | AI psychologist chat grounded in entries |
-| `ai-tools.png` | Tool chips while the assistant pulls diary data |
-| `neural-map.png` | Neural map — entries clustered into topics |
-| `customization-settings.png` | Customization settings with live preview |
-| `customization-before-after.png` | Before / after a theme change |
-| `chart-*.png` | One per chart (overview, river, spiral, rose, ridgeline, rhythm, words, activities, people) |
