@@ -29,6 +29,8 @@ Enable/install from the **Modules** page inside the app ("Install" button) or wi
 ## Installing modules
 
 ### Inside the app
+
+<!-- SCREENSHOT: Modules page with install buttons and progress | ../images/modules-page.png -->
 Open the **Modules** page → click "Install" on the module. Progress shows right in the window. After installing a heavy module, restart the app.
 
 ### Via scripts (from a release / source)

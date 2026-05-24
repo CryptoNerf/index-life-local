@@ -10,6 +10,9 @@ Technically: settings are stored as JSON in `user_customization`, and the app em
 
 ## What you can customize
 
+<!-- SCREENSHOT: customization settings with live preview | ../images/customization-settings.png -->
+<!-- SCREENSHOT: before / after a theme change | ../images/customization-before-after.png -->
+
 - **Page background** — a solid color, a gradient, or your own image (with blur and opacity). Applies instantly for all three types.
 - **Fonts** — separately for body text and headings. All fonts are bundled locally (the app works offline); you can upload your own `.ttf/.otf/.woff/.woff2` file (up to 5 MB). The "Apply body font to diary notes" option extends the font to the note editor.
 - **Text & accent** — body text color, muted (secondary) text, heading color, accent (active link).

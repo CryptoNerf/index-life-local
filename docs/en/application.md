@@ -104,6 +104,10 @@ On save the text is normalized: extra blank lines are removed, blank lines betwe
 
 ## App pages
 
+<!-- SCREENSHOT: main calendar — the whole year as a heatmap (the app's hero shot) | ../images/calendar-year.png -->
+<!-- SCREENSHOT: day editor with a Markdown note | ../images/edit-day.png -->
+<!-- SCREENSHOT: life-in-weeks grid | ../images/life-in-weeks.png -->
+
 | Page | Purpose |
 |---|---|
 | **index.life** (calendar) | The year as a heatmap grid of cubes: filled days are shaded. Click a day to write/edit |
