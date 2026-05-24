@@ -113,9 +113,9 @@ A single question can combine up to **three** tools — e.g. "What did I do with
 | Profile | What you need |
 |---|---|
 | **CPU** | ~16 GB RAM, any modern processor. Slow but works everywhere |
-| **NVIDIA (cuda)** | GPU 6 GB+ VRAM (8 GB+ recommended), driver 452.39+ |
-| **Any GPU (vulkan)** | GPU with Vulkan support (NVIDIA/AMD/Intel) |
-| **Apple Silicon (metal)** | M1/M2/M3/M4 Mac |
+| **NVIDIA (cuda)** | GPU 8 GB+ VRAM, driver 452.39+ |
+| **Any GPU (vulkan)** | GPU with Vulkan support (NVIDIA/AMD/Intel), 8 GB+ VRAM |
+| **Apple Silicon (metal)** | M1/M2/M3/M4 Mac with 16 GB+ unified memory (8 GB is not enough) |
 | **Disk** | ~5 GB for the GGUF model + space for the Python environment |
 | **Network** | only for the one-time model + package download; offline afterward |
 

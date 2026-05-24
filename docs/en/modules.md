@@ -59,9 +59,9 @@ The AI psychologist can run on CPU or GPU. The profile is chosen at install time
 |---|---|---|---|
 | `auto` | Auto-detect | Varies | **Recommended** — picks the best option itself |
 | `cpu` | None | ~3–5 tok/s | Any system with 16 GB RAM |
-| `vulkan` | Any GPU | ~40–55 tok/s | GPU with Vulkan support (NVIDIA/AMD/Intel), no SDK needed |
-| `cuda` | NVIDIA | ~40–50 tok/s | NVIDIA 6 GB+ VRAM, driver 452.39+ |
-| `metal` | Apple | ~15–25 tok/s | Apple Silicon Mac |
+| `vulkan` | Any GPU | ~40–55 tok/s | GPU with Vulkan support (NVIDIA/AMD/Intel), 8 GB+ VRAM, no SDK needed |
+| `cuda` | NVIDIA | ~40–50 tok/s | NVIDIA 8 GB+ VRAM, driver 452.39+ |
+| `metal` | Apple | ~15–25 tok/s | Apple Silicon Mac, 16 GB+ unified memory (8 GB is not enough) |
 | `vulkan-source` / `cuda-source` | — | — | Build from source (only if pre-built doesn't work) |
 
 **Which to choose:**
@@ -74,7 +74,7 @@ The AI psychologist can run on CPU or GPU. The profile is chosen at install time
 
 ### NVIDIA requirements
 - **Driver:** 452.39+. Check with `nvidia-smi`.
-- **VRAM:** 6 GB minimum, 8 GB+ recommended.
+- **VRAM:** 8 GB minimum.
 
 ---
 
@@ -86,4 +86,4 @@ If an install broke or hung, the **Modules** page has "Reset modules environment
 
 ## Python
 
-Python 3.10 is recommended (3.8+ supported). On Windows the installer auto-installs Python if missing.
+Python 3.12 is required — it must match the interpreter bundled in the release and the modules' virtual environment (C-extensions like `llama_cpp` are ABI-locked to the Python minor version). On Windows the installer auto-installs Python 3.12 if missing.

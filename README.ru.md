@@ -5,7 +5,7 @@
 Помогает лучше помнить и осознавать себя и своё время.
 
 ![Version](https://img.shields.io/badge/version-3.0.0-blue)
-![Python](https://img.shields.io/badge/python-3.8%2B-green)
+![Python](https://img.shields.io/badge/python-3.12-green)
 ![Flask](https://img.shields.io/badge/flask-3.0.0-lightgrey)
 ![License](https://img.shields.io/badge/license-AGPL--3.0-blue)
 
@@ -202,7 +202,7 @@ index-life-local/
 Откройте в приложении страницу **Модули** и нажмите «Установить» у нужного модуля — работает на всех ОС, прогресс виден в окне. После установки перезапустите приложение. (Для установки из исходников можно использовать и скрипт `install_modules`.)
 
 **Какая версия Python нужна?**
-Рекомендуется Python 3.10. Приложение также работает с Python 3.8+.
+Рекомендуется Python 3.12 — он совпадает с интерпретатором в готовых сборках и в окружении опциональных модулей.
 
 ---
 

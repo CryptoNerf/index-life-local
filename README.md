@@ -5,7 +5,7 @@
 Helps you better remember and become aware of yourself and your time.
 
 ![Version](https://img.shields.io/badge/version-3.0.0-blue)
-![Python](https://img.shields.io/badge/python-3.8%2B-green)
+![Python](https://img.shields.io/badge/python-3.12-green)
 ![Flask](https://img.shields.io/badge/flask-3.0.0-lightgrey)
 ![License](https://img.shields.io/badge/license-AGPL--3.0-blue)
 
@@ -199,7 +199,7 @@ No, just launch the application and start using it. No accounts or passwords req
 Open the **Modules** page inside the app and click "Install" on the module — it works on every OS, with progress shown in the window. Restart the app afterward. (For a source install you can also run the `install_modules` script.)
 
 **Which Python version is required?**
-Python 3.10 is recommended. The app also works with Python 3.8+.
+Python 3.12 is recommended — it matches the interpreter in the prebuilt releases and the optional modules' environment.
 
 ---
 
