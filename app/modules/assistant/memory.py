@@ -17,6 +17,7 @@ import subprocess
 import sys
 import threading
 from datetime import datetime
+from app.timeutil import utcnow
 from pathlib import Path
 
 import numpy as np
@@ -473,14 +474,14 @@ def generate_entry_summary(entry: MoodEntry, llm) -> EntrySummary | None:
     if existing:
         existing.summary = summary_text
         existing.themes = json.dumps(themes_list, ensure_ascii=False)
-        existing.created_at = datetime.utcnow()
+        existing.created_at = utcnow()
         obj = existing
     else:
         obj = EntrySummary(
             entry_id=entry_id,
             summary=summary_text,
             themes=json.dumps(themes_list, ensure_ascii=False),
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         db.session.add(obj)
     db.session.commit()
@@ -891,7 +892,7 @@ def generate_month_summary(year: int, month: int, llm) -> PeriodSummary | None:
         existing.summary = summary_text
         existing.avg_rating = round(avg, 1)
         existing.entry_count = n_entries
-        existing.created_at = datetime.utcnow()
+        existing.created_at = utcnow()
     else:
         db.session.add(PeriodSummary(
             period_type='month',
@@ -899,7 +900,7 @@ def generate_month_summary(year: int, month: int, llm) -> PeriodSummary | None:
             summary=summary_text,
             avg_rating=round(avg, 1),
             entry_count=n_entries,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         ))
     db.session.commit()
     return PeriodSummary.query.filter_by(period_key=period_key).first()
@@ -1021,14 +1022,14 @@ def update_profile(llm, force_rebuild: bool = False):
             profile_json=json.dumps(profile_data, ensure_ascii=False, indent=2),
             version=1,
             entries_analyzed=total_entries,
-            updated_at=datetime.utcnow(),
+            updated_at=utcnow(),
         )
         db.session.add(profile)
     else:
         profile.profile_json = json.dumps(profile_data, ensure_ascii=False, indent=2)
         profile.version += 1
         profile.entries_analyzed = total_entries
-        profile.updated_at = datetime.utcnow()
+        profile.updated_at = utcnow()
 
     db.session.commit()
     return profile

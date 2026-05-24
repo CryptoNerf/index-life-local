@@ -36,6 +36,7 @@ import json
 import logging
 import threading
 from datetime import datetime, date as date_type, timedelta
+from app.timeutil import utcnow
 
 from app import db
 from app.models import MoodEntry, UserProfile, ChatMessage, SyncMeta, SyncConflict
@@ -150,7 +151,7 @@ def build_snapshot() -> dict:
     return {
         'snapshot_version': SNAPSHOT_VERSION,
         'device_id': device_id,
-        'generated_at': datetime.utcnow().isoformat(),
+        'generated_at': utcnow().isoformat(),
         'mood_entries': [
             {
                 'uuid': e.uuid,
@@ -252,8 +253,8 @@ def apply_snapshot(snapshot: dict) -> dict:
                 uuid=ed.get('uuid'),
                 device_id=ed.get('device_id'),
                 deleted=remote_deleted,
-                created_at=_parse_dt(ed.get('created_at')) or datetime.utcnow(),
-                updated_at=remote_updated or datetime.utcnow(),
+                created_at=_parse_dt(ed.get('created_at')) or utcnow(),
+                updated_at=remote_updated or utcnow(),
             ))
             stats['inserted'] += 1
             continue
@@ -295,7 +296,7 @@ def apply_snapshot(snapshot: dict) -> dict:
             db.session.add(ChatMessage(
                 role=role, content=content, uuid=uuid,
                 device_id=md.get('device_id'),
-                created_at=_parse_dt(md.get('created_at')) or datetime.utcnow(),
+                created_at=_parse_dt(md.get('created_at')) or utcnow(),
             ))
             stats['chat_inserted'] += 1
 
@@ -329,12 +330,12 @@ def _record_conflict(entry_date, local_entry, remote_data, remote_device, winner
         remote_rating=remote_data.get('rating'),
         remote_device=remote_device,
         winner=winner,
-        resolved_at=datetime.utcnow(),
+        resolved_at=utcnow(),
     ))
 
 
 def cleanup_old_conflicts(days: int = 30):
-    cutoff = datetime.utcnow() - timedelta(days=days)
+    cutoff = utcnow() - timedelta(days=days)
     SyncConflict.query.filter(SyncConflict.resolved_at < cutoff).delete()
     db.session.commit()
 
@@ -407,7 +408,7 @@ def full_sync(app) -> dict:
 
             import_stats = pull_peers(backend)
             push_snapshot(backend)
-            _set_last_sync(datetime.utcnow())
+            _set_last_sync(utcnow())
 
             if import_stats.get('files'):
                 cleanup_old_conflicts()
@@ -436,7 +437,7 @@ def import_now(app) -> dict:
         stats = pull_peers(backend)
         if stats.get('inserted') or stats.get('updated'):
             _trigger_reprocessing(app)
-        _set_last_sync(datetime.utcnow())
+        _set_last_sync(utcnow())
         return stats
 
 

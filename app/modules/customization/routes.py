@@ -10,6 +10,7 @@ import os
 import re
 import secrets
 from datetime import datetime
+from app.timeutil import utcnow
 from pathlib import Path
 
 from flask import (
@@ -310,7 +311,7 @@ def api_save():
 
     row = _load_row()
     row.settings_json = json.dumps(current, ensure_ascii=False)
-    row.updated_at = datetime.utcnow()
+    row.updated_at = utcnow()
     db.session.commit()
 
     return jsonify({
@@ -554,7 +555,7 @@ def api_delete_bg():
         current['bg-type'] = 'color'
     row = _load_row()
     row.settings_json = json.dumps(current, ensure_ascii=False)
-    row.updated_at = datetime.utcnow()
+    row.updated_at = utcnow()
     db.session.commit()
     return jsonify({'ok': True, 'settings': merge_with_defaults(current)})
 
@@ -564,7 +565,7 @@ def api_reset():
     """Reset all settings to defaults (clears the row's JSON blob)."""
     row = _load_row()
     row.settings_json = '{}'
-    row.updated_at = datetime.utcnow()
+    row.updated_at = utcnow()
     db.session.commit()
     return jsonify({'ok': True, 'settings': dict(DEFAULTS)})
 
@@ -590,7 +591,7 @@ def api_reset_section():
 
     row = _load_row()
     row.settings_json = json.dumps(current, ensure_ascii=False)
-    row.updated_at = datetime.utcnow()
+    row.updated_at = utcnow()
     db.session.commit()
 
     return jsonify({
@@ -642,12 +643,12 @@ def api_export():
         'app': 'index.life',
         'kind': 'customization-theme',
         'version': _THEME_VERSION,
-        'exported_at': datetime.utcnow().isoformat() + 'Z',
+        'exported_at': utcnow().isoformat() + 'Z',
         'settings': overrides,
         'uploads': uploads,
     }
     body = json.dumps(payload, ensure_ascii=False, indent=2)
-    fname = f'index-life-theme-{datetime.utcnow():%Y%m%d-%H%M%S}.json'
+    fname = f'index-life-theme-{utcnow():%Y%m%d-%H%M%S}.json'
     return Response(
         body,
         mimetype='application/json',
@@ -704,7 +705,7 @@ def api_import():
     # exactly that theme, not a merge with whatever you had before.
     row = _load_row()
     row.settings_json = json.dumps(accepted, ensure_ascii=False)
-    row.updated_at = datetime.utcnow()
+    row.updated_at = utcnow()
     db.session.commit()
 
     return jsonify({

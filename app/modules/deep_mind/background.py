@@ -2,6 +2,7 @@
 import logging
 import threading
 from datetime import datetime
+from app.timeutil import utcnow
 
 log = logging.getLogger(__name__)
 
@@ -100,4 +101,4 @@ def _run(app):
 
 
 def _now():
-    return datetime.utcnow().isoformat()
+    return utcnow().isoformat()

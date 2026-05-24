@@ -3,9 +3,9 @@ Database models for local diary application
 Single-user version (no authentication needed)
 """
 import uuid as _uuid
-from datetime import datetime
 
 from app import db
+from app.timeutil import utcnow
 
 
 def _new_uuid() -> str:
@@ -20,8 +20,8 @@ class MoodEntry(db.Model):
     date = db.Column(db.Date, nullable=False, unique=True, index=True)
     rating = db.Column(db.Integer, nullable=False)  # 1-10 scale
     note = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utcnow)
+    updated_at = db.Column(db.DateTime, default=utcnow, onupdate=utcnow)
     # Sync fields
     uuid = db.Column(db.String(36), unique=True, index=True, default=_new_uuid)
     device_id = db.Column(db.String(36), nullable=True)
@@ -54,8 +54,8 @@ class UserProfile(db.Model):
     # ISO 639-1 two-letter code. Drives the i18n context processor.
     # Migration v7 backfills 'ru' for existing rows.
     language = db.Column(db.String(2), nullable=False, default='ru')
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utcnow)
+    updated_at = db.Column(db.DateTime, default=utcnow, onupdate=utcnow)
 
     def __repr__(self):
         return f'<UserProfile {self.username}>'
@@ -95,7 +95,7 @@ class EntrySummary(db.Model):
     entry_id = db.Column(db.Integer, db.ForeignKey('mood_entries.id'), unique=True, index=True)
     summary = db.Column(db.Text)
     themes = db.Column(db.Text)  # JSON list: ["работа", "тревога"]
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utcnow)
 
     entry = db.relationship('MoodEntry', backref=db.backref('summary_obj', uselist=False))
 
@@ -116,7 +116,7 @@ class PersonAlias(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     alias = db.Column(db.String(100), nullable=False, unique=True, index=True)
     canonical = db.Column(db.String(100), nullable=False, index=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utcnow)
 
 
 class EntryActivity(db.Model):
@@ -165,7 +165,7 @@ class PeriodSummary(db.Model):
     summary = db.Column(db.Text)
     avg_rating = db.Column(db.Float)
     entry_count = db.Column(db.Integer)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utcnow)
 
 
 class EntryEmbedding(db.Model):
@@ -188,7 +188,7 @@ class UserPsychProfile(db.Model):
     profile_json = db.Column(db.Text, default='{}')
     version = db.Column(db.Integer, default=0)
     entries_analyzed = db.Column(db.Integer, default=0)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=utcnow)
 
 
 class ChatMessage(db.Model):
@@ -198,7 +198,7 @@ class ChatMessage(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     role = db.Column(db.String(20), nullable=False)  # 'user' or 'assistant'
     content = db.Column(db.Text, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utcnow)
     # Sync fields
     uuid = db.Column(db.String(36), unique=True, index=True, default=_new_uuid)
     device_id = db.Column(db.String(36), nullable=True)
@@ -216,8 +216,8 @@ class MindCluster(db.Model):
     emotional_weight = db.Column(db.Float, default=0.0)  # 0.0–1.0
     centroid = db.Column(db.LargeBinary, nullable=True)   # float32 384-dim
     entry_count = db.Column(db.Integer, default=0)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utcnow)
+    updated_at = db.Column(db.DateTime, default=utcnow)
 
 
 class MindClusterEntry(db.Model):
@@ -254,7 +254,7 @@ class SyncConflict(db.Model):
     remote_rating = db.Column(db.Integer)
     remote_device = db.Column(db.String(36))
     winner = db.Column(db.String(10), default='remote')  # 'local' or 'remote'
-    resolved_at = db.Column(db.DateTime, default=datetime.utcnow)
+    resolved_at = db.Column(db.DateTime, default=utcnow)
 
 
 # ── Customization ───────────────────────────────────────────
@@ -272,5 +272,5 @@ class UserCustomization(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     settings_json = db.Column(db.Text, nullable=False, default='{}')
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow,
-                           onupdate=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=utcnow,
+                           onupdate=utcnow)

@@ -4,6 +4,7 @@ Single-user version (no authentication)
 """
 from flask import Blueprint, render_template, request, redirect, url_for, flash, make_response, send_from_directory, current_app
 from datetime import datetime, date
+from app.timeutil import utcnow
 import calendar
 from werkzeug.utils import secure_filename
 from pathlib import Path
@@ -202,7 +203,7 @@ def delete_day(day):
             # entry resurrect it on the next merge. Tombstones are hidden
             # from the UI by the deleted=False filter on read queries.
             entry.deleted = True
-            entry.updated_at = datetime.utcnow()
+            entry.updated_at = utcnow()
             db.session.commit()
 
             # Push the deletion to shared storage right away (best-effort).
@@ -275,7 +276,7 @@ def edit_day(day):
                         entry.rating = rating
                         entry.note = note
                         entry.deleted = False  # revive a tombstone if present
-                        entry.updated_at = datetime.utcnow()
+                        entry.updated_at = utcnow()
                         if _device_id:
                             entry.device_id = _device_id
                 else:
@@ -293,7 +294,7 @@ def edit_day(day):
                         entry.rating = rating
                         entry.note = note
                         entry.deleted = False  # revive a tombstone if present
-                        entry.updated_at = datetime.utcnow()
+                        entry.updated_at = utcnow()
                         if _device_id:
                             entry.device_id = _device_id
 
