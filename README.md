@@ -1,227 +1,230 @@
-﻿# index.life — Local app for tracking your mood and daily notes
+﻿# index.life — Локальное приложение для ведения учёта настроения и заметок о днях
 
-> **English version** | [Русская версия](README.ru.md)
+> **Русская версия** | [English version](README.en.md)
 
-Helps you better remember and become aware of yourself and your time.
+Помогает лучше помнить и осознавать себя и своё время.
 
 ![Version](https://img.shields.io/badge/version-3.0.0-blue)
 ![Python](https://img.shields.io/badge/python-3.12-green)
 ![Flask](https://img.shields.io/badge/flask-3.0.0-lightgrey)
 ![License](https://img.shields.io/badge/license-AGPL--3.0-blue)
 
-![index.life — your whole year as a heatmap calendar](docs/images/index.life.png)
+![index.life — весь год тепловой картой-календарём](docs/images/index.life.png)
 
-> **Full documentation:** [docs/](docs/README.md) — the app & database, sync, modules, AI psychologist, neural map, every chart, customization.
-
----
-
-## About
-
-**index.life** is an app for tracking your mood and keeping notes about your
-days. It's meant to help you better remember and become aware of yourself and
-your time — which otherwise blurs into one indistinct stream of days.
-
-At its heart is a simple daily practice: stop for a moment each day and write
-down how the day went, how you felt, and what was on your mind. I'm convinced
-that making this kind of reflection a habit has a positive effect on a person's
-life.
-
-**What index.life is for:**
-
-- **Building a daily reflection habit** — gently encouraging you to write about
-  your well-being and your day, every day.
-- **Archiving your well-being and thoughts** — keeping your entries and mood
-  ratings for the long term, so you can return to them later: reread them,
-  notice how things changed, remember what mattered.
-- **Understanding yourself through your own data** — turning your accumulated
-  entries into observations about your mood and the themes, people, and
-  activities that shape it.
-- **Privacy and ownership of your data** — a diary is personal, so index.life
-  runs entirely locally and offline: no accounts, no servers, no telemetry, and
-  your data never leaves your device. Your data belongs to you alone.
-
-## What's inside
-
-The foundation of index.life is a **notes calendar** (the whole year as a
-heatmap that motivates you not to skip days), a **Markdown editor** for entries,
-a **life-in-weeks** view, **Markdown export**, and **sync** across your devices
-through your own cloud folder.
-
-To help you make sense of what you write, index.life adds four optional modules:
-
-1. **AI psychologist** — a chat with a local language model that has access to
-   your diary: it reflects back what you write, notices patterns, and grounds
-   its answers in your real entries. [Read more »](docs/en/ai-psychologist.md)
-2. **Neural map of your thoughts** — your entries grouped into topics you can
-   explore visually. [Read more »](docs/en/neural-map.md)
-3. **Charts** — visualizations of different aspects of your well-being over
-   time. [Read more »](docs/en/graphics.md)
-4. **Customization** — restyle the whole interface to your taste.
-   [Read more »](docs/en/customization.md)
-
-The AI psychologist and neural map are enabled on demand (a local model is
-downloaded once); charts and customization switch on right inside the app.
+> **Полная документация:** [docs/](docs/README.md) — приложение и база, синхронизация, модули, AI-психолог, нейронная карта, каждый график, кастомизация.
 
 ---
 
-## Installation
+## О проекте
 
-### Option 1: Pre-built Releases (Recommended)
+**index.life** — приложение для отслеживания настроения и ведения заметок о
+днях. Он призван помочь человеку лучше помнить и осознавать себя и своё время,
+которое иначе сливается в один неразличимый поток дней.
 
-Download the ready-to-use version for your operating system from Releases:
+В основе простая ежедневная практика: каждый день остановиться на минуту и
+записать, как прошёл день, что ты чувствовал и о чём думал. Я убеждён, что
+превращение такой рефлексии в привычку положительно влияет на жизнь человека.
+
+**Для чего нужен index.life:**
+
+- **Привычка ежедневной рефлексии** — мягко побуждать писать о своём
+  самочувствии и о своём дне каждый день.
+- **Архив самочувствия и мыслей** — сохранять записи и оценки настроения
+  надолго, чтобы потом возвращаться к ним: перечитывать, замечать динамику,
+  вспоминать важное.
+- **Понимание себя через свои данные** — превращать накопленные записи в
+  наблюдения о настроении и о темах, людях и занятиях, которые на него влияют.
+- **Приватность и владение своими данными** — дневник личный, поэтому
+  index.life работает целиком локально и офлайн: без аккаунтов, серверов и
+  телеметрии, и данные никогда не покидают твоё устройство. Твои данные принадлежат только тебе.
+
+## Что внутри
+
+Основа index.life — **календарь заметок** (весь год в виде тепловой карты,
+которая мотивирует не пропускать дни), **markdown-редактор** для записей,
+страница **«жизнь в неделях»**, **экспорт** в Markdown и **синхронизация** между
+устройствами через твою облачную папку.
+
+Чтобы помочь разобраться в написанном, index.life добавляет четыре опциональных
+модуля:
+
+1. **AI-психолог** — чат с локальной языковой моделью, у которой есть доступ к
+   дневнику: она отражает написанное, замечает паттерны и опирается в ответах на
+   твои реальные записи. [Подробнее »](docs/ru/ai-psychologist.md)
+2. **Нейронная карта мыслей** — твои записи, собранные в темы, которые можно
+   исследовать визуально. [Подробнее »](docs/ru/neural-map.md)
+3. **Графики** — визуализация разных аспектов самочувствия во времени.
+   [Подробнее »](docs/ru/graphics.md)
+4. **Кастомизация** — настрой внешний вид всего приложения под себя.
+   [Подробнее »](docs/ru/customization.md)
+
+AI-психолог и нейронная карта подключаются по желанию (один раз скачивается
+локальная модель); графики и кастомизация включаются прямо в приложении.
+
+---
+
+## Установка
+
+### Вариант 1: Готовые сборки (рекомендуется)
+
+Скачайте готовую версию для вашей операционной системы из Releases:
 
 **Windows:**
-1. Download `windows-build.zip`
-2. Unzip the archive
-3. Run `index-life.exe`
+1. Скачайте `windows-build.zip`
+2. Распакуйте архив
+3. Запустите `index-life.exe`
 
-> **First launch — "Windows protected your PC" (SmartScreen)**
-> Because index.life is free and open-source, the `.exe` isn't signed with a
-> paid certificate, so Windows SmartScreen shows a blue warning the first time.
-> The app is safe to run — to continue:
-> 1. Click **More info** in the dialog.
-> 2. Click **Run anyway**.
+> **Первый запуск — «Система Windows защитила ваш компьютер» (SmartScreen)**
+> index.life — бесплатное приложение с открытым кодом, поэтому `.exe` не
+> подписан платным сертификатом, и при первом запуске Windows SmartScreen
+> показывает синее окно с «Неизвестный издатель». Запускать безопасно —
+> чтобы продолжить:
+> 1. Нажмите **Подробнее** в окне предупреждения.
+> 2. Нажмите **Выполнить в любом случае**.
 >
-> You only need to do this once per version. If the warning keeps coming back,
-> right-click the downloaded `.zip` → **Properties** → tick **Unblock** →
-> **OK**, then unzip it again.
+> Это нужно сделать один раз для каждой версии. Если предупреждение появляется
+> снова — ПКМ по скачанному `.zip` → **Свойства** → галочка **Разблокировать**
+> → **ОК**, затем распакуйте архив заново.
 
 **macOS:**
-1. Download `index-life_macos.dmg`
-2. Open the DMG and drag **index.life** into your Applications folder
-3. **First launch.** Double-click index.life. macOS shows *"Apple could not
-   verify 'index.life' is free of malware…"* with two buttons — click **Done**
-   (do **not** click "Move to Trash").
-4. Open **System Settings → Privacy & Security**, scroll down to the
-   **Security** section. There you'll see *"'index.life' was blocked…"* — click
-   **Open Anyway**, then confirm with **Open** (Touch ID / password if asked).
-5. index.life opens — and from now on it launches normally with a double-click.
+1. Скачайте `index-life_macos.dmg`
+2. Откройте DMG и перетащите **index.life** в папку Applications
+3. **Первый запуск.** Дважды кликните по index.life. macOS покажет окно
+   *«Не удалось проверить, что приложение не содержит вредоносных программ…»* с
+   двумя кнопками — нажмите **Done** (НЕ нажимайте «Переместить в корзину»).
+4. Откройте **Системные настройки → Конфиденциальность и безопасность**,
+   пролистайте вниз до раздела **Безопасность**. Там будет надпись
+   *«Приложение "index.life" заблокировано…»* — нажмите **Open Anyway
+   (Открыть всё равно)**, затем подтвердите кнопкой **Открыть** (Touch ID /
+   пароль, если попросят).
+5. index.life откроется — и дальше будет открываться обычным двойным кликом.
 
-> **Why does this happen (on both Windows and macOS)?** index.life is free and
-> open-source, so its app isn't signed/notarized with a paid developer
-> certificate (Apple Developer is $99/yr; a Windows cert costs too). Both
-> systems therefore show a one-time warning for software downloaded from the
-> internet that isn't paid-signed. The app is safe and runs entirely on your
-> device — these steps just tell your OS you trust it once.
+> **Почему так (и в Windows, и в macOS)?** index.life бесплатный и с открытым
+> кодом, поэтому приложение не подписано платным сертификатом разработчика
+> (Apple Developer — $99/год, сертификат для Windows тоже платный). Поэтому обе
+> системы один раз показывают предупреждение для скачанных из интернета
+> программ без платной подписи. Приложение безопасно и работает целиком на
+> твоём устройстве — эти шаги просто один раз говорят системе, что ты ему
+> доверяешь.
 >
-> *Alternative (Terminal):* `xattr -d com.apple.quarantine /Applications/index.life.app`
+> *Альтернатива (Терминал):* `xattr -d com.apple.quarantine /Applications/index.life.app`
 
 **Linux:**
-1. Download `index-life_linux_x86_64.AppImage`
-2. Make the file executable:
+1. Скачайте `index-life_linux_x86_64.AppImage`
+2. Сделайте файл исполняемым:
    ```bash
    chmod +x index-life_linux_x86_64.AppImage
    ```
-3. Run:
+3. Запустите:
    ```bash
    ./index-life_linux_x86_64.AppImage
    ```
 
-**Optional modules.** Install them right inside the app: open the **Modules**
-page and click "Install" on the module you want — this is the main way on every
-OS, with progress shown in the window. Restart the app after installing a heavy
-module (AI psychologist or neural map — a local model is downloaded once).
-See [docs/en/modules.md](docs/en/modules.md).
+**Опциональные модули.** Устанавливаются прямо в приложении: откройте страницу
+**Модули** и нажмите «Установить» у нужного модуля — это основной способ на всех
+ОС, прогресс виден прямо в окне. После установки тяжёлого модуля (AI-психолог
+или нейронная карта — один раз скачивается локальная модель) перезапустите
+приложение. Подробнее — [docs/ru/modules.md](docs/ru/modules.md).
 
-### Option 2: Installation via Scripts (From Source)
+### Вариант 2: Установка через скрипты (с исходным кодом)
 
-If you want to run from source code:
+Если вы хотите запускать из исходников:
 
 **Windows:**
 ```bash
-# Double-click install.bat (first time)
-# Double-click start.bat (subsequent runs)
+# Двойной клик на install.bat (первый запуск)
+# Двойной клик на start.bat (последующие запуски)
 ```
 
 **Linux/macOS:**
 ```bash
 chmod +x install.sh start.sh
-./install.sh  # First run (installs Python if needed)
-./start.sh    # Subsequent runs
+./install.sh  # Первый запуск (установит Python при необходимости)
+./start.sh    # Последующие запуски
 ```
 
-**Optional modules.** Same as above — via the **Modules** page in the app. For a
-source setup you can also run the `install_modules.bat` / `install_modules.sh`
-script. See `MODULES.md` for details.
+**Опциональные модули.** Так же — через страницу **Модули** в приложении. Для
+установки из исходников можно использовать и скрипт `install_modules.bat` /
+`install_modules.sh`. Подробности — в `MODULES.md`.
 
 ---
 
-## Project Structure
+## Структура проекта
 
 ```
 index-life-local/
 ├─ app/
-│  ├─ modules/            # Optional modules (assistant, etc.)
-│  ├─ templates/          # HTML templates
-│  └─ static/             # Static files (CSS, JS, images)
-├─ tools/                 # Helper scripts (module installer)
-├─ config.py              # Configuration
-├─ run.py                 # Application entry point
-├─ requirements.txt       # Python dependencies
-├─ install.bat/.sh        # Base installation
-├─ start.bat/.sh          # App launch
-├─ install_modules.bat/.sh# Module installer
-├─ MODULES.md             # Modules guide
-└─ diary.db               # SQLite database (created on first run)
+│  ├─ modules/            # Опциональные модули (assistant и др.)
+│  ├─ templates/          # HTML шаблоны
+│  └─ static/             # Статические файлы (CSS, JS, изображения)
+├─ tools/                 # Вспомогательные скрипты (установщик модулей)
+├─ config.py              # Конфигурация
+├─ run.py                 # Точка входа
+├─ requirements.txt       # Зависимости Python
+├─ install.bat/.sh        # Установка
+├─ start.bat/.sh          # Запуск
+├─ install_modules.bat/.sh# Установщик модулей
+├─ MODULES.md             # Гайд по модулям
+└─ diary.db               # База данных SQLite (создаётся при первом запуске)
 ```
 
 ---
 
-## Technologies
+## Технологии
 
 - **Backend**: Flask 3.0.0
-- **Database**: SQLite (via Flask-SQLAlchemy)
+- **База данных**: SQLite (через Flask-SQLAlchemy)
 - **Frontend**: HTML, CSS, Vanilla JavaScript
-- **Images**: Pillow (Python Imaging Library)
-- **Optional**: llama-cpp-python, sentence-transformers
+- **Изображения**: Pillow (Python Imaging Library)
+- **Опционально**: llama-cpp-python, sentence-transformers
 
 ---
 
-## FAQ
+## Частые вопросы
 
-**Where is my data stored?**
-In the `diary.db` file in the application directory. For backups, simply copy this file.
+**Где хранятся мои данные?**
+В файле `diary.db` в директории приложения. Для резервного копирования просто скопируйте этот файл.
 
-**Can I use this on multiple devices?**
-Yes — built-in sync keeps the current version of your diary on every device through a shared folder (Dropbox, Google Drive, iCloud…) or a WebDAV link (Nextcloud, Yandex.Disk, Box…). Set it up on the **Sync** page. See [docs/en/sync.md](docs/en/sync.md). (Do **not** just share the `diary.db` file across a cloud — the built-in sync handles merging and conflicts safely.)
+**Можно ли использовать на нескольких устройствах?**
+Да — встроенная синхронизация держит актуальную версию дневника на всех устройствах через общую папку (Dropbox, Google Drive, iCloud…) или WebDAV-ссылку (Nextcloud, Яндекс.Диск, Box…). Настраивается на странице **Синхронизация**. См. [docs/ru/sync.md](docs/ru/sync.md). (Не нужно просто класть файл `diary.db` в облако — встроенная синхронизация сама безопасно сливает изменения и разрешает конфликты.)
 
-**Is my data encrypted?**
-The database is not encrypted by default. Make sure your device is password protected.
+**Зашифрованы ли мои данные?**
+База данных не зашифрована по умолчанию. Убедитесь, что ваше устройство защищено паролем.
 
-**Do I need internet to use this?**
-No, the application works completely offline on your computer.
+**Нужен ли интернет для работы?**
+Нет, приложение работает полностью офлайн на вашем компьютере.
 
-**Can I export my data?**
-Yes, all data is stored in standard SQLite format in the `diary.db` file, which can be copied and opened with any SQLite tools.
+**Можно ли экспортировать данные?**
+Да, все данные хранятся в стандартном формате SQLite в файле `diary.db`, который можно копировать и открывать в любых SQLite инструментах.
 
-**Do I need to register or log in?**
-No, just launch the application and start using it. No accounts or passwords required.
+**Нужно ли регистрироваться?**
+Нет, просто запустите приложение и начните пользоваться. Никаких аккаунтов или паролей.
 
-**How do I enable the AI psychologist (or other modules)?**
-Open the **Modules** page inside the app and click "Install" on the module — it works on every OS, with progress shown in the window. Restart the app afterward. (For a source install you can also run the `install_modules` script.)
+**Как включить AI-психолога (или другие модули)?**
+Откройте в приложении страницу **Модули** и нажмите «Установить» у нужного модуля — работает на всех ОС, прогресс виден в окне. После установки перезапустите приложение. (Для установки из исходников можно использовать и скрипт `install_modules`.)
 
-**Which Python version is required?**
-Python 3.12 is recommended — it matches the interpreter in the prebuilt releases and the optional modules' environment.
+**Какая версия Python нужна?**
+Рекомендуется Python 3.12 — он совпадает с интерпретатором в готовых сборках и в окружении опциональных модулей.
 
 ---
 
-## License
+## Лицензия
 
-index.life is licensed under the **GNU Affero General Public License v3.0
-(AGPL-3.0)** — see the [LICENSE](LICENSE) file.
+index.life распространяется под **GNU Affero General Public License v3.0
+(AGPL-3.0)** — см. файл [LICENSE](LICENSE).
 
-In short: you are free to use, study, modify, and share index.life. But if you
-distribute it — or run a modified version as a network service — you must make
-your full source code available under the same license. This keeps index.life
-free and open for everyone and prevents it from being turned into a closed,
-proprietary product.
+Коротко: ты можешь свободно пользоваться, изучать, изменять и распространять
+index.life. Но если ты распространяешь его — или запускаешь изменённую версию
+как сетевой сервис — ты обязан открыть весь свой исходный код под той же
+лицензией. Это сохраняет index.life бесплатным и открытым для всех и не даёт
+превратить его в закрытый проприетарный продукт.
 
 Copyright (C) 2026 Émile Alexanyan
 
 ---
 
-## Author
+## Автор
 
-**Émile Alexanyan**
+**Эмиль Алексанян (Émile Alexanyan)**
 
-Created to help remember and understand yourself better through daily reflection.
+Создано, чтобы помочь лучше помнить и понимать себя через ежедневную рефлексию.

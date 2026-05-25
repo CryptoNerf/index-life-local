@@ -46,9 +46,9 @@ How to read it: streaks and seasons jump out — whole "turns" (months) being li
 
 ![the rose chart](../images/rose-graphic.png)
 
-Seven petals — one per weekday. **Petal length** = that weekday's average mood; **intensity** = how many entries you have on that day. Below the chart: a range legend and a note about the scale.
+Seven sectors, one per weekday (Monday at the top). **The petal's shape** is the distribution of your ratings on that weekday: a 1→10 scale runs along the sector (the "1" and "10" ticks sit on the Monday petal), and the petal bulges out wherever those ratings happened more often — the widest bulge is your typical rating for that day. Each petal is normalized to its own peak, so they all reach the same outer radius — look at **where** the bulge sits, not at overall size. **Saturation (color)** encodes the weekday's average rating relative to the other days: darker = worse on average, lighter = better (the scale is labeled below the chart).
 
-How to read it: a quick answer to "which weekday is best/worst for me?". Mondays vs. Saturdays at a glance.
+How to read it: color answers "which weekday tends to be better or worse for me?"; shape shows where your ratings usually land that day and how spread out they are. Hovering a petal shows its entry count and average.
 
 ---
 

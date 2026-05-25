@@ -15,7 +15,6 @@ The AI Psychologist is a chat with a **local** language model that has read acce
 - **Qwen3.5-9B** in **GGUF** format, **Q4_K_M** quantization (~4.7 GB). Downloaded automatically when you install the module.
 - Runs via **llama-cpp-python** (CPU or GPU — see [profiles](modules.md#ai-psychologist-gpu-profiles)).
 - **Context window:** 4096 tokens by default (overridable via `LLM_N_CTX`). The chat shows a "Context fill" indicator for how much of the window is used.
-- **Thinking (reasoning) mode:** a toggle in the chat. When on, the model "thinks" first (you can expand the thought process) and then answers — slower but more considered.
 
 ---
 
@@ -41,7 +40,7 @@ The AI psychologist isn't just "the model + your last message." Before composing
 **How a turn works:**
 
 1. **Routing.** A separate, cheap LLM call (the *router*) reads your message — and your previous message too, so follow-ups like "tell me more" keep their topic — and decides which tools to call, from **none to three**. It replies with a small JSON list of `{tool, args}`. Short or trivial messages skip routing entirely and are answered directly.
-2. **Execution.** Each chosen tool runs as a plain, fast database query (no LLM inside, so it's cheap) and returns a compact block of text — dates, ratings, excerpts, aggregates. The chat briefly shows which data is being fetched.
+2. **Execution.** Each chosen tool runs as a plain, fast database query (no LLM inside, so it's cheap) and returns a compact block of text — dates, ratings, excerpts, aggregates. While they run, the chat shows a brief status line naming what's being pulled (e.g. *"Fetching data: about Mom, for 2025-03…"*); it disappears once the reply starts streaming.
 3. **Grounding.** The tool results are appended to the system prompt in a dedicated "extra diary data" section, capped in size so they don't crowd out the rest of the context.
 4. **Answer.** Only now does the main model compose the reply, combining the freshly fetched facts with the always-on memory layers (profile, monthly timeline, recent and semantically-relevant entries).
 

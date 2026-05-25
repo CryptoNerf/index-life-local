@@ -25,11 +25,11 @@ The app picks a data directory based on platform and how it was launched:
 | Platform / launch | Data directory |
 |---|---|
 | Run from source (any OS) | the project folder (next to `run.py`) |
-| **Windows** (built .exe) | **next to the .exe** (portable). Legacy users: `%APPDATA%\index.life` |
+| **Windows** (built .exe) | **next to the .exe** (portable). |
 | **macOS** (.app) | `~/Library/Application Support/index.life` |
 | **Linux** (AppImage) | `~/.index-life` |
 
-> **Windows is portable:** data lives next to the program, so you can keep the whole app on any drive/USB and move it as one folder. If you have data in `%APPDATA%` from an old version, the app detects it via markers (`diary.db`, `modules_venv`, `models`, `profile_photos`) and keeps using it.
+> **Windows is portable:** data lives next to the program, so you can keep the whole app on any drive/USB and move it as one folder.
 
 Inside the data directory:
 
@@ -90,7 +90,7 @@ Supported:
 | Numbered list | the "1. list" button |
 | Link | the "link" button |
 | Quote | the `"` button |
-| ~~Strikethrough~~ | `Ctrl/Cmd+Shift+X` |
+| ~~Strikethrough~~ | `Ctrl/Cmd+Shift+S` |
 | `Code` | `Ctrl/Cmd+E` |
 | Horizontal rule | the `―` button |
 

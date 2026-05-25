@@ -10,15 +10,19 @@ The Neural Map turns your diary into a **map of topics**: recurring themes, feel
 
 ## How the map is built
 
-The pipeline runs when you click **"Analyze"** on the map page (and automatically in the background after new entries):
+The idea is simple: take every entry, work out which ones are "about the same thing", group them into topics, and draw each topic as one neuron. The map is rebuilt with the **Analyze** button (and automatically in the background after new entries).
 
-1. **Embeddings.** Vector representations of all entries are taken (model `intfloat/multilingual-e5-small`). Semantically similar entries sit close together in vector space.
-2. **Clustering.**
-   - fewer than 6 entries → a single topic;
-   - 6+ entries → **HDBSCAN** (density-based clustering); if it isn't installed, a fallback `AgglomerativeClustering` (cosine metric, average linkage, cluster count ≈ N/5, max 20).
-3. **Noise cleanup.** "Lone" points HDBSCAN flagged as noise are reassigned to the nearest cluster if close enough (cosine similarity ≥ 0.35). Remaining noise is gathered into micro-clusters (threshold 0.45) so rare but coherent themes aren't lost.
-4. **Naming.** For each cluster the local LLM invents a short name and description and rates its emotional weight.
-5. **Saving.** Topics are stored in `mind_clusters`. Topics from too few entries (`MIN_TOPIC_ENTRIES`, default 2) are hidden as insufficiently supported.
+Step by step:
+
+1. **Entries become numbers (embeddings).** Each entry is run through the `intfloat/multilingual-e5-small` model, which turns its text into a vector — a list of numbers that captures meaning. Entries about similar things end up close together in that space.
+2. **Similar entries are grouped (clustering).** The algorithm looks for dense "blobs" of nearby entries and makes each blob a topic:
+   - fewer than 6 entries → one single topic (nothing to group yet);
+   - 6+ entries → **HDBSCAN**, which finds blobs of any shape and decides their number on its own; if it isn't installed, a fallback (`AgglomerativeClustering`) is used.
+3. **Stray entries are placed.** Singletons the algorithm flagged as noise are attached to the nearest fitting topic when they're close enough; whatever is left is gathered into small but coherent topics, so rare threads aren't lost.
+4. **Topics get names.** For each topic the local model (the same one the AI Psychologist uses) reads a few representative entries and writes a short label and description, and rates the topic's emotional weight (shown in the topic panel).
+5. **Saving.** Topics are stored; ones built from too few entries (fewer than 2 by default) are hidden as not yet well-supported.
+
+Every Analyze run rebuilds the map from scratch — so it sharpens over time as you write more.
 
 ---
 
@@ -26,9 +30,9 @@ The pipeline runs when you click **"Analyze"** on the map page (and automaticall
 
 ![the neural map — entries clustered into topics](../images/neural-map.png)
 
-- A **neuron (node)** is a topic. Node size reflects **how many entries** fall into it.
-- **Color/intensity** reflects the topic's emotional weight (how emotionally charged it is).
-- **Links** between nodes show topic closeness.
+- A **neuron** is a topic. **Neuron size** = how many entries fell into it: the more entries, the bigger the neuron. This is the one visual cue of a topic's weight on the map.
+- **Color** is the same for every neuron (you can change it in [Customization](customization.md)) — color does not encode the topic. A neuron's size pulses slightly with its emotional weight, but that's barely perceptible.
+- **Links (lines)** connect topics whose meaning is related. The threshold is low and the model treats most diary topics as fairly similar, so there are usually many links and nearly every neuron ends up connected — read the web as ambient connectivity, not a precise closeness ranking.
 
 The **topic panel** (click a neuron) shows: name, description, entry count, emotional weight, supporting evidence quotes, and the entries themselves. If a topic has little data, the panel is marked "low confidence".
 
