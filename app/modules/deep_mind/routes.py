@@ -1,5 +1,6 @@
 """Routes for the deep-mind neural map module."""
 import logging
+import os
 
 import numpy as np
 from flask import render_template, jsonify, current_app
@@ -10,6 +11,18 @@ from . import bp
 from .analysis import MIN_TOPIC_ENTRIES, _is_insufficient_label
 
 log = logging.getLogger(__name__)
+
+# How many nearest topics each neuron links to. A flat similarity cutoff
+# can't work here: multilingual-e5 centroids of *any* two diary topics sit
+# in a narrow high band (~0.85–0.99), so any fixed threshold keeps either
+# every pair or none. Instead we keep each neuron's top-K most-similar
+# neighbours, so the map links genuinely-closer topics rather than wiring
+# everything to everything. Override with NEURAL_EDGE_TOP_K.
+try:
+    _EDGE_TOP_K = max(1, int(os.environ.get('NEURAL_EDGE_TOP_K', '3')))
+except ValueError:
+    _EDGE_TOP_K = 3
+_EDGE_MIN_SIM = 0.3  # absolute floor; rarely binds with these embeddings
 
 
 def _confidence_for_size(size):
@@ -139,17 +152,38 @@ def api_graph():
             'evidence': evidence,
         })
 
-    # Edges from centroid cosine similarity
+    # Edges: connect each topic only to its K most-similar topics (union),
+    # not every pair above a flat cutoff (which would link all-to-all — see
+    # _EDGE_TOP_K note above).
     edges = []
-    for i in range(len(clusters)):
-        for j in range(i + 1, len(clusters)):
-            sim = float(np.dot(centroids[i], centroids[j]))
-            if sim > 0.3:
-                edges.append({
-                    'source': clusters[i].id,
-                    'target': clusters[j].id,
-                    'strength': round(sim, 3),
-                })
+    n = len(clusters)
+    if n >= 2:
+        sim = np.zeros((n, n), dtype=np.float64)
+        for i in range(n):
+            for j in range(i + 1, n):
+                sim[i, j] = sim[j, i] = float(np.dot(centroids[i], centroids[j]))
+
+        k = min(_EDGE_TOP_K, n - 1)
+        kept = set()
+        for i in range(n):
+            # take this neuron's own K nearest neighbours (most similar first);
+            # the set dedups, so a popular topic may end up with a few more.
+            taken = 0
+            for j in np.argsort(sim[i])[::-1]:
+                if j == i or sim[i, j] < _EDGE_MIN_SIM:
+                    continue
+                a, b = (i, int(j)) if i < j else (int(j), i)
+                kept.add((a, b))
+                taken += 1
+                if taken >= k:
+                    break
+
+        for a, b in sorted(kept):
+            edges.append({
+                'source': clusters[a].id,
+                'target': clusters[b].id,
+                'strength': round(float(sim[a, b]), 3),
+            })
 
     return jsonify({'nodes': nodes, 'edges': edges, 'status': 'ready'})
 

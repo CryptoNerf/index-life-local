@@ -32,7 +32,7 @@ Every Analyze run rebuilds the map from scratch — so it sharpens over time as 
 
 - A **neuron** is a topic. **Neuron size** = how many entries fell into it: the more entries, the bigger the neuron. This is the one visual cue of a topic's weight on the map.
 - **Color** is the same for every neuron (you can change it in [Customization](customization.md)) — color does not encode the topic. A neuron's size pulses slightly with its emotional weight, but that's barely perceptible.
-- **Links (lines)** connect topics whose meaning is related. The threshold is low and the model treats most diary topics as fairly similar, so there are usually many links and nearly every neuron ends up connected — read the web as ambient connectivity, not a precise closeness ranking.
+- **Links (lines)** connect each topic to its **closest** topics by meaning — by default the 3 nearest neighbours per neuron. (A flat similarity cutoff doesn't work here: the embedding model rates almost any two diary topics as quite similar, so a fixed threshold would link everything to everything; picking each neuron's few nearest neighbours instead keeps only the real kinships.)
 
 The **topic panel** (click a neuron) shows: name, description, entry count, emotional weight, supporting evidence quotes, and the entries themselves. If a topic has little data, the panel is marked "low confidence".
 
