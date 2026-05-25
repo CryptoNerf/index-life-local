@@ -261,6 +261,9 @@ textarea {
   outline: none;
   white-space: pre-wrap;
   word-wrap: break-word;
+  /* Fixed light surface — keep text dark under auto-invert. */
+  color: #1a1a1a;
+  --text-muted: #666;
 }
 
 /* .wysiwyg-editor:focus {
@@ -339,6 +342,9 @@ textarea {
   overflow-y: auto;
   background: #fafafa;
   line-height: 1.6;
+  /* Fixed light surface — keep text dark under auto-invert. */
+  color: #1a1a1a;
+  --text-muted: #666;
 }
 
 /* Markdown styling */

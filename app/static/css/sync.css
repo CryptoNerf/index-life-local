@@ -71,6 +71,7 @@ header { width: 100%; }
 }
 .sync-meta code {
   background: #f5f5f5;
+  color: #1a1a1a;  /* fixed light chip — stay readable under auto-invert */
   padding: 2px 6px;
   font-family: 'Courier New', monospace;
   font-size: 13px;

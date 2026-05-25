@@ -330,7 +330,9 @@ input[type="color"].cz-color::-webkit-color-swatch {
      by default → falls back to Times. The toggle controls --font-notes. */
   font-family: var(--font-notes, 'Times New Roman', Times, serif);
   font-size: 15px;
-  color: var(--text-color, #222);
+  /* Mirrors the always-light notes editor, so pin dark text — otherwise
+     auto-invert turns it white-on-light. */
+  color: #1a1a1a;
   border: 1px solid #ddd;
   padding: 8px 10px;
   background: #fafafa;

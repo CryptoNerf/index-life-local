@@ -13,6 +13,11 @@
   overflow-y: auto;
   background: #fff;
   line-height: 1.6;
+  /* Fixed light surface: keep text dark so auto-invert (white --text-color
+     on a dark page) can't make typing invisible. Re-scope --text-muted for
+     nested blockquotes/code too. */
+  color: #1a1a1a;
+  --text-muted: #666;
 }
 
 /* ProseMirror editor content */

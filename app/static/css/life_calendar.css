@@ -83,6 +83,7 @@ body {
   border: 1px solid #222;
   padding: 8px 12px;
   background: #fff;
+  color: #1a1a1a;  /* fixed light field — stay readable under auto-invert */
   outline: none;
 }
 
@@ -104,6 +105,7 @@ body {
   border: 1px solid #222;
   padding: 8px 12px;
   background: #fff;
+  color: #1a1a1a;  /* fixed light field — stay readable under auto-invert */
   outline: none;
   cursor: pointer;
   min-width: 110px;
