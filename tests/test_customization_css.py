@@ -70,6 +70,15 @@ def test_auto_invert_image_bg_cannot_decide():
          'bg-image-filename': 'p.jpg'}) == (None, None)
 
 
+def test_auto_invert_also_inverts_heading_color():
+    # Regression: headings use var(--heading-color, ...) separately, so they
+    # must be inverted too — otherwise they stay dark and vanish on a dark bg.
+    out = str(cp._emit_css_block(
+        {'auto-invert-text': 'true', 'bg-type': 'color', 'bg-color': '#000000'}))
+    assert '--text-color: #ffffff' in out
+    assert '--heading-color: #ffffff' in out
+
+
 # ── background image composition ──────────────────────────────
 
 def test_compose_bg_gradient():

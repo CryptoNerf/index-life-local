@@ -222,6 +222,13 @@ body {
   line-height: 1.6;
   word-wrap: break-word;
   border-radius: 16px;
+  /* Bubbles are always a light surface (white / light grey), so their
+     text must stay dark regardless of the global --text-color. Without
+     this, auto-invert (white text on a dark page) makes bubble text
+     white-on-white and unreadable. Re-scope --text-muted too so nested
+     muted bits (blockquotes, hints, think blocks) stay legible. */
+  color: #1a1a1a;
+  --text-muted: #666;
 }
 
 .chat-bubble-user {

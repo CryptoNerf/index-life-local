@@ -448,6 +448,10 @@ def _emit_css_block(settings: dict) -> str:
     auto_text, auto_muted = _auto_invert_overrides(settings)
     if auto_text:
         css_vars['text-color'] = auto_text
+        # Headings use var(--heading-color, ...) separately from body text,
+        # so they must be inverted too — otherwise they keep the dark
+        # default (#222) and vanish on a dark background.
+        css_vars['heading-color'] = auto_text
     if auto_muted:
         css_vars['text-muted'] = auto_muted
 
