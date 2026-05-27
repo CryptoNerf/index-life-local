@@ -79,6 +79,8 @@
   "account.language_ru": "Русский",
   "account.language_en": "English",
   "account.language_save": "Save language",
+  "account.app_version_label": "Version",
+  "account.update_available_prefix": "update available:",
   "sync.title": "Sync & Backup",
   "sync.heading": "Sync",
   "sync.device_id": "Device ID",

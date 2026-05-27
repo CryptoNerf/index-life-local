@@ -236,6 +236,12 @@
       })();
     </script>
   </div>
+  {# Quiet version line — and, only when the offline-safe startup check
+     actually succeeded, a link to the newer release. `update_available`
+     is None when offline / check failed, so nothing intrusive ever shows. #}
+  <p style="text-align:center; color: var(--text-muted, #888); font-size:13px; margin: 24px 0 8px;">
+    {{ t('account.app_version_label') }}: {{ config.APP_VERSION }}{% if update_available %} — {{ t('account.update_available_prefix') }} <a href="{{ update_available.url }}" target="_blank" rel="noopener">{{ update_available.version }}</a>{% endif %}
+  </p>
   <footer class="main-footer">
     <a href="{{ url_for('main.what_is_index') }}" class="footer-link">{{ t('footer.what_is_index') }}</a>
   </footer>

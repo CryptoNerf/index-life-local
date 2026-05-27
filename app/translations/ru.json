@@ -79,6 +79,8 @@
   "account.language_ru": "Русский",
   "account.language_en": "English",
   "account.language_save": "Сохранить язык",
+  "account.app_version_label": "Версия",
+  "account.update_available_prefix": "доступна",
   "sync.title": "Синхронизация и бэкап",
   "sync.heading": "Синхронизация",
   "sync.device_id": "ID устройства",
