@@ -146,6 +146,77 @@ script. See `MODULES.md` for details.
 
 ---
 
+## Updating
+
+index.life keeps your data **separately from the app itself**, so upgrading is
+just replacing the binary — your diary, AI models and settings stay put.
+
+**Where your data lives:**
+
+| OS | Data folder |
+|---|---|
+| **Windows** | next to `index-life.exe` (portable); legacy users may have it in `%APPDATA%\index.life` (the app finds it automatically) |
+| **macOS** | `~/Library/Application Support/index.life` |
+| **Linux** | `~/.index-life` |
+
+Inside: `diary.db` (your main database), `models/` (downloaded AI models),
+`modules_venv/` (the modules' Python environment), `profile_photos/`,
+`backups/`, `customization_uploads/` and `*_enabled` marker files.
+
+### How to update
+
+**macOS:**
+1. Download the new `.dmg` from Releases.
+2. Open the DMG and drag `index.life` into `Applications`, **replacing** the
+   old one. The data folder is separate from `.app` — nothing to move by hand.
+3. Open the app. (macOS will show its first-run security dialog again; same
+   steps as during install.)
+
+**Windows:**
+1. Download the new `windows-build.zip`.
+2. **Simple path:** extract the archive **on top of** your existing app folder
+   and allow file replacement. The zip only contains `index-life.exe`, DLLs and
+   bundled assets — your `diary.db`, `models/`, `modules_venv/` and other data
+   subfolders are untouched.
+3. **Tidy path:** extract into a **new** folder next to the old one, then move
+   the following from the old folder: `diary.db`, `diary.db-wal`,
+   `diary.db-shm`, `models/`, `modules_venv/`, `profile_photos/`, `backups/`,
+   `customization_uploads/` and every `*_enabled` file. Run `index-life.exe`
+   from the new folder.
+
+**Linux (AppImage):**
+1. Download the new `index-life_linux_x86_64.AppImage`.
+2. Replace the old file with it and make it executable:
+   `chmod +x index-life_linux_x86_64.AppImage`
+3. Run it. Your data in `~/.index-life` is preserved.
+
+**From source (any OS):**
+```bash
+git pull
+./install.sh        # refreshes dependencies (install.bat on Windows)
+./start.sh          # normal launch
+```
+The project folder doubles as the data folder, so everything is in place.
+
+### What the app does for you
+
+- **Automatic backup** of the database on every startup (the last 10 copies are
+  kept under `backups/`) — there's always a recent snapshot to roll back to.
+- **Schema migrations** run on the first launch of a new version. They are
+  idempotent and additive — they only add new columns/tables, never drop.
+- If you have optional modules installed and the new build **changed Python's
+  minor version**, the app will prompt you to reinstall the modules. The
+  downloaded AI model (~5 GB under `models/`) is **kept** — you don't have to
+  re-download it.
+
+### Manual backup, just in case
+
+If you want extra peace of mind, copy `diary.db` (plus `diary.db-wal` and
+`diary.db-shm` if present) somewhere safe before updating. That's enough to
+restore your diary to any prior state if anything goes wrong.
+
+---
+
 ## Project Structure
 
 ```
@@ -196,6 +267,9 @@ Yes, all data is stored in standard SQLite format in the `diary.db` file, which 
 
 **Do I need to register or log in?**
 No, just launch the application and start using it. No accounts or passwords required.
+
+**How do I update to a new version without losing data?**
+Your data lives separately from the app, so updating is just replacing the binary: on macOS drag the new `.app` over the old one, on Windows extract the new zip over your existing app folder, on Linux replace the `.AppImage`. Full step-by-step and where exactly the data lives is in the [Updating](#updating) section above. The app takes an automatic backup of your database on first launch and runs schema migrations for you.
 
 **How do I enable the AI psychologist (or other modules)?**
 Open the **Modules** page inside the app and click "Install" on the module — it works on every OS, with progress shown in the window. Restart the app afterward. (For a source install you can also run the `install_modules` script.)
