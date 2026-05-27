@@ -8,11 +8,19 @@ block_cipher = None
 
 import sys
 import os
+import re
 from pathlib import Path
 from PyInstaller.utils.hooks import collect_submodules
 
 # Get the root directory
 root_dir = Path(SPECPATH)
+
+# Single source of truth for the version: config.py's APP_VERSION.
+# Without this, the .app's Info.plist drifts from the runtime version and
+# the macOS "About" dialog ends up reporting an old number.
+_cfg_text = (root_dir / 'config.py').read_text(encoding='utf-8')
+_m = re.search(r"APP_VERSION\s*=\s*['\"]([^'\"]+)['\"]", _cfg_text)
+APP_VERSION = _m.group(1) if _m else '0.0.0'
 
 
 def module_datas():
@@ -132,8 +140,8 @@ app = BUNDLE(
         'NSAppleScriptEnabled': False,
         'CFBundleName': 'index.life',
         'CFBundleDisplayName': 'index.life',
-        'CFBundleVersion': '2.1.0',
-        'CFBundleShortVersionString': '2.1.0',
+        'CFBundleVersion': APP_VERSION,
+        'CFBundleShortVersionString': APP_VERSION,
         'CFBundleIconFile': 'icon',  # Without .icns extension (macOS adds it automatically)
         'NSHighResolutionCapable': True,
         'LSBackgroundOnly': False,

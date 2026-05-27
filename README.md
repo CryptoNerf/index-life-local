@@ -158,7 +158,7 @@ index.life хранит данные **отдельно от самого при
 
 | ОС | Папка с данными |
 |---|---|
-| **Windows** | рядом с `index-life.exe` (портативно); у старых пользователей — `%APPDATA%\index.life` (приложение найдёт само) |
+| **Windows** | рядом с `index-life.exe` (портативно) |
 | **macOS** | `~/Library/Application Support/index.life` |
 | **Linux** | `~/.index-life` |
 
