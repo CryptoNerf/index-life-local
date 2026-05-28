@@ -1,3 +1,10 @@
+# index.life — Local mood diary
+# https://github.com/CryptoNerf/index-life-local
+# Copyright (C) 2026 Émile Alexanyan
+#
+# Licensed under AGPL-3.0 with additional terms per Section 7
+# (preservation of author attribution, no misrepresentation of
+# origin). See LICENSE and COPYRIGHT at the root of this project.
 """Inject customization CSS variables into every template.
 
 Renders a tiny `<style>` block with `:root { --name: value; ... }`

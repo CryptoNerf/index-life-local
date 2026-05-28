@@ -1,3 +1,10 @@
+# index.life — Local mood diary
+# https://github.com/CryptoNerf/index-life-local
+# Copyright (C) 2026 Émile Alexanyan
+#
+# Licensed under AGPL-3.0 with additional terms per Section 7
+# (preservation of author attribution, no misrepresentation of
+# origin). See LICENSE and COPYRIGHT at the root of this project.
 """Embedding-based topic clustering for the deep-mind module.
 
 Reuses EntryEmbedding rows already computed by the assistant module.
