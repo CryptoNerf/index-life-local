@@ -291,6 +291,17 @@ your full source code available under the same license. This keeps index.life
 free and open for everyone and prevents it from being turned into a closed,
 proprietary product.
 
+**Author attribution.** Additional terms under Section 7 of the AGPL-3.0
+apply to this project — see the [COPYRIGHT](COPYRIGHT) file. In particular,
+every distribution (forks and modified versions included) must preserve the
+attribution to the original author, Émile Alexanyan, in the README and in
+any "Appropriate Legal Notices" the running program shows (an "About"
+dialog, a footer credit, or similar). Modified versions may not be passed
+off as the original index.life, and the author's name may not be used for
+promotion of derivatives. Section 7 of the AGPL expressly permits these
+terms (categories b, c, d) and they **cannot be stripped** by any
+downstream redistribution.
+
 Copyright (C) 2026 Émile Alexanyan
 
 ---

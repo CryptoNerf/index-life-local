@@ -1,0 +1,83 @@
+index.life
+==========
+
+Copyright (C) 2026 Émile Alexanyan
+All rights reserved.
+
+This program is free software: you can redistribute it and/or modify it
+under the terms of the GNU Affero General Public License, version 3 (the
+"License"), as published by the Free Software Foundation. The full text
+of the License is in the LICENSE file at the root of this distribution.
+
+
+ADDITIONAL TERMS (AGPL-3.0, Section 7)
+--------------------------------------
+
+The following additional terms apply to this Program under Section 7 of
+the GNU Affero General Public License, version 3. They fall within the
+categories that Section 7 expressly permits — (b), (c) and (d) — and
+they REMAIN IN FORCE through every downstream distribution. They are
+not "further restrictions" in the sense of Section 10 of the License
+and may not be removed by anyone who conveys the Program or any work
+based on it.
+
+Anyone receiving this Program receives it on the condition that they
+abide by these additional terms when they convey it or any modified
+version of it.
+
+
+7(b) — Preservation of author attribution.
+
+  Any person who conveys this Program or a work based on it must
+  preserve attribution to the original author in:
+
+    1. The primary README file of the source distribution (README.md
+       and README.en.md at the root, or equivalent files if renamed).
+       The "Author" section, or any equivalent crediting the original
+       author, may not be removed or relocated to a place where a
+       reasonable reader would not see it.
+
+    2. Any "Appropriate Legal Notices" (in the sense of AGPL-3.0
+       Section 0) displayed by the running program — for example, an
+       "About" dialog, splash screen, footer credit, or any analogous
+       place where the program identifies itself to its user.
+
+    3. This COPYRIGHT file, which must accompany every source and
+       binary distribution and must remain readable.
+
+  At a minimum, the preserved attribution must contain the line:
+
+      Originally developed by Émile Alexanyan —
+      https://github.com/CryptoNerf/index-life-local
+
+  in English, or a faithful translation of it into the language of the
+  README / About text. You are welcome to add your own attribution
+  alongside, but you must not remove, obscure, or contradict the
+  original author's attribution.
+
+
+7(c) — No misrepresentation of origin.
+
+  You may not represent a modified version of this Program as the
+  original. Any modified version must be clearly marked as different
+  from the upstream "index.life" project — for example, by changing
+  the application name shown in the running UI and in any release
+  artifacts (installers, archives, binary names) to a name that is
+  not confusingly similar to "index.life".
+
+
+7(d) — Limited use of the original author's name.
+
+  The name "Émile Alexanyan" and the project name "index.life" may
+  not be used for publicity, endorsement, marketing, or promotional
+  purposes of any modified version, fork, or derivative work, without
+  prior written permission from the original author.
+
+
+--------------------------------------------------------------------
+
+Removing, relicensing, or weakening any of the above terms — or
+removing any copyright notice present in this Program — is a violation
+of the license under which you received this Program (see AGPL-3.0,
+Sections 4, 5, 7, and 10). Such a violation automatically terminates
+your rights under the License (Section 8).
