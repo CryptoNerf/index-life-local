@@ -100,6 +100,10 @@
           <form method="post" action="{{ url_for('sync.sync_import') }}" style="display:inline">
             <button class="sync-btn">{{ t('sync.import') }}</button>
           </form>
+          <form method="post" action="{{ url_for('sync.sync_disconnect') }}" style="display:inline"
+                onsubmit="return confirm({{ t('sync.disconnect_confirm')|tojson }})">
+            <button class="sync-btn">{{ t('sync.disconnect') }}</button>
+          </form>
         </div>
       {% endif %}
     </section>

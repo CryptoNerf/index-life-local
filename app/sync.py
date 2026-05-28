@@ -286,17 +286,24 @@ def apply_snapshot(snapshot: dict) -> dict:
             stats['updated'] += 1
 
     # ── Chat messages (append-only by uuid) ──
+    # If this device has cleared its chat history, drop any peer messages
+    # dated before that point so they can't silently reappear. New
+    # messages exchanged after the clear keep syncing normally.
+    chat_cleared_at = _parse_dt(_meta_get('chat_cleared_at'))
     for md in snapshot.get('chat_messages', []):
         uuid = md.get('uuid')
         role = md.get('role')
         content = md.get('content')
         if not uuid or role is None or content is None:
             continue
+        msg_created = _parse_dt(md.get('created_at'))
+        if chat_cleared_at and msg_created and msg_created < chat_cleared_at:
+            continue
         if not ChatMessage.query.filter_by(uuid=uuid).first():
             db.session.add(ChatMessage(
                 role=role, content=content, uuid=uuid,
                 device_id=md.get('device_id'),
-                created_at=_parse_dt(md.get('created_at')) or utcnow(),
+                created_at=msg_created or utcnow(),
             ))
             stats['chat_inserted'] += 1
 

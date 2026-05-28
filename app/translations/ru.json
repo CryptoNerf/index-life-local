@@ -102,6 +102,8 @@
   "sync.sync_now": "Синхронизировать сейчас",
   "sync.export": "Экспорт",
   "sync.import": "Импорт",
+  "sync.disconnect": "Отключить",
+  "sync.disconnect_confirm": "Отключить синхронизацию на этом устройстве? Локальные данные останутся, но новые записи перестанут расходиться по другим устройствам, пока ты не настроишь синк снова.",
   "sync.conflicts_heading": "Конфликты",
   "sync.conflict_winner_kept": "Сохранена версия: {winner}",
   "sync.backups_heading": "Бэкапы",

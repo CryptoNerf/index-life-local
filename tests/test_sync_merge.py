@@ -218,6 +218,38 @@ def test_non_dict_snapshot_is_skipped(app):
 
 # ── chat messages ─────────────────────────────────────────────
 
+def test_clear_chat_blocks_old_peer_messages(app):
+    # Regression: Clear chat used to be reversed by the next pull, because
+    # apply_snapshot would re-insert any peer messages whose uuid wasn't
+    # known locally. With chat_cleared_at in sync_meta, messages from
+    # *before* the clear must stay gone.
+    db.session.add(SyncMeta(key='chat_cleared_at', value=NEW.isoformat()))
+    db.session.commit()
+
+    stats = sync.apply_snapshot(_snapshot(messages=[
+        {'uuid': 'old-1', 'role': 'user', 'content': 'gone',
+         'created_at': OLD.isoformat(), 'device_id': 'peer1'},
+    ]))
+
+    assert stats['chat_inserted'] == 0
+    assert ChatMessage.query.count() == 0
+
+
+def test_clear_chat_lets_new_peer_messages_through(app):
+    # The Clear barrier is per-message-created-at: messages *after* the
+    # clear must still sync, otherwise the chat would be frozen forever.
+    db.session.add(SyncMeta(key='chat_cleared_at', value=OLD.isoformat()))
+    db.session.commit()
+
+    stats = sync.apply_snapshot(_snapshot(messages=[
+        {'uuid': 'new-1', 'role': 'assistant', 'content': 'fresh',
+         'created_at': NEW.isoformat(), 'device_id': 'peer1'},
+    ]))
+
+    assert stats['chat_inserted'] == 1
+    assert ChatMessage.query.count() == 1
+
+
 def test_chat_messages_dedup_by_uuid(app):
     snap = _snapshot(messages=[
         {'uuid': 'c1', 'role': 'user', 'content': 'hi',

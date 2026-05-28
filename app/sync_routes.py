@@ -52,6 +52,20 @@ def sync_settings():
     return redirect(url_for('sync.sync_page'))
 
 
+@bp.route('/sync/disconnect', methods=['POST'])
+def sync_disconnect():
+    """Disable sync on this device.
+
+    Wipes the saved folder/URL so `is_sync_configured()` is False and the
+    background timer no-ops. Local data is untouched; the snapshot file
+    already in the shared folder is left alone so other devices can
+    still read what we last pushed.
+    """
+    set_sync_config('local', folder='', url='', username='', password='')
+    flash('Sync disconnected — your data stays on this device', 'success')
+    return redirect(url_for('sync.sync_page'))
+
+
 @bp.route('/sync/test', methods=['POST'])
 def sync_test():
     """Test connection to the configured (or posted) backend. JSON response."""

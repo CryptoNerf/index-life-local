@@ -1291,8 +1291,23 @@ def compress_chat():
 
 @bp.route('/clear-chat', methods=['POST'])
 def clear_chat():
-    """Clear all chat history."""
+    """Clear all chat history.
+
+    Also writes a `chat_cleared_at` timestamp into sync_meta so the
+    next sync pull can't silently re-import the messages we just
+    removed: apply_snapshot filters chat messages whose `created_at`
+    is older than this device's clear time. The chat continues to
+    sync normally for any new messages exchanged after the clear.
+    """
+    from app.models import SyncMeta
+    from app.timeutil import utcnow
     ChatMessage.query.delete()
+    cleared_at = utcnow().isoformat()
+    row = db.session.get(SyncMeta, 'chat_cleared_at')
+    if row:
+        row.value = cleared_at
+    else:
+        db.session.add(SyncMeta(key='chat_cleared_at', value=cleared_at))
     db.session.commit()
     return jsonify({'status': 'ok'})
 

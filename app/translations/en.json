@@ -102,6 +102,8 @@
   "sync.sync_now": "Sync now",
   "sync.export": "Export",
   "sync.import": "Import",
+  "sync.disconnect": "Disconnect",
+  "sync.disconnect_confirm": "Disconnect sync on this device? Local data stays. New entries will stop syncing to other devices until you set sync up again.",
   "sync.conflicts_heading": "Conflicts",
   "sync.conflict_winner_kept": "{winner} version kept",
   "sync.backups_heading": "Backups",
