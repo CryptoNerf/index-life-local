@@ -350,6 +350,8 @@ jobs:
           append_body: true
           body: |
 
+            ![index.life preview](https://raw.githubusercontent.com/CryptoNerf/index-life-local/${{ github.ref_name }}/docs/images/preview.gif)
+
             ---
 
             **index.life** — локальный дневник настроения. Помогает лучше помнить и осознавать себя и своё время. Всё работает локально и офлайн.
