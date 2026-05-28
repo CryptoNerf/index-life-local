@@ -8,6 +8,7 @@
 ![Python](https://img.shields.io/badge/python-3.12-green)
 ![Flask](https://img.shields.io/badge/flask-3.0.0-lightgrey)
 ![License](https://img.shields.io/badge/license-AGPL--3.0-blue)
+[![Downloads](https://img.shields.io/github/downloads/CryptoNerf/index-life-local/total)](https://github.com/CryptoNerf/index-life-local/releases)
 
 ![index.life — весь год тепловой картой-календарём](docs/images/index.life.png)
 
