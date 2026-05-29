@@ -236,3 +236,33 @@ def test_avatar_type_is_metadata_not_emitted_as_var():
     assert '--avatar-type' not in out
     assert '--avatar-gradient-shape' not in out
     assert '--avatar-image-filename' not in out
+
+
+def test_avatar_keys_are_accepted_by_the_save_whitelist():
+    # Regression: the avatar UI silently saved nothing because /api/save
+    # validates every incoming key against a hardcoded whitelist
+    # (_VALIDATORS) and unrecognised ones are dropped. The composer
+    # could compute the CSS fine, but nothing ever made it to the DB.
+    # Lock the whitelist contents so the avatar feature stays wired.
+    from app.modules.customization.routes import _VALIDATORS
+    expected = {
+        'avatar-type', 'avatar-color',
+        'avatar-gradient-from', 'avatar-gradient-to',
+        'avatar-gradient-angle', 'avatar-gradient-shape',
+        'avatar-image-filename',
+    }
+    missing = expected - set(_VALIDATORS)
+    assert not missing, f'avatar keys missing from save whitelist: {missing}'
+
+
+def test_avatar_validators_reject_obvious_garbage():
+    # Cheap sanity that the validators we wired in actually validate.
+    from app.modules.customization.routes import _VALIDATORS
+    assert _VALIDATORS['avatar-type']('gradient') is True
+    assert _VALIDATORS['avatar-type']('nope') is False
+    assert _VALIDATORS['avatar-gradient-shape']('linear') is True
+    assert _VALIDATORS['avatar-gradient-shape']('weird') is False
+    assert _VALIDATORS['avatar-color']('#009afa') is True
+    assert _VALIDATORS['avatar-color']('not-a-color') is False
+    assert _VALIDATORS['avatar-gradient-angle']('180deg') is True
+    assert _VALIDATORS['avatar-gradient-angle']('180') is False

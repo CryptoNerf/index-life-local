@@ -67,6 +67,8 @@ _COLOR_KEYS = {
     'neural-edge-color', 'neural-glow-color', 'neural-canvas-bg',
     'bg-gradient-from', 'bg-gradient-to',
     'mosaic-empty-color', 'mosaic-empty-grad-from', 'mosaic-empty-grad-to',
+    # Chat avatar (AI psychologist) — colour + gradient endpoints.
+    'avatar-color', 'avatar-gradient-from', 'avatar-gradient-to',
 }
 
 # Per-chart color keys are pulled in programmatically from the schema.
@@ -140,6 +142,10 @@ def _is_valid_mosaic_mode(value: str) -> bool:
     return value in ('color', 'gradient', 'image')
 
 
+def _is_valid_avatar_shape(value: str) -> bool:
+    return value in ('linear', 'radial')
+
+
 # px length restricted to 1..4 with optional decimal (e.g. '1.6px').
 _LINE_WIDTH_RE = re.compile(r'^[1-4](?:\.\d)?px$')
 
@@ -169,6 +175,12 @@ _VALIDATORS.update({
     'mosaic-empty-mode':      _is_valid_mosaic_mode,
     'mosaic-empty-filename':  _is_valid_filename,
     'mosaic-empty-grad-angle': _is_valid_angle,
+    # Chat avatar (AI psychologist) — non-colour keys. Colour endpoints
+    # are in _COLOR_KEYS above and get _is_valid_color from the bulk add.
+    'avatar-type':            _is_valid_bg_type,      # color|gradient|image
+    'avatar-gradient-angle':  _is_valid_angle,
+    'avatar-gradient-shape':  _is_valid_avatar_shape,  # linear|radial
+    'avatar-image-filename':  _is_valid_filename,
 })
 
 # Per-chart controls: validator inferred from `type` in the schema.
