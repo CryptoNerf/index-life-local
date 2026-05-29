@@ -23,11 +23,11 @@
       font-size: 20px;
       font-style: italic;
       margin: 0 0 20px;
-      color: #000;
+      color: var(--text-color, #000);
     }
     .people-col-title .sub {
       font-style: normal;
-      color: #999;
+      color: var(--text-muted, #999);
       font-size: 14px;
       margin-left: 10px;
     }
@@ -37,7 +37,10 @@
       align-items: center;
       gap: 12px;
       padding: 8px 0;
-      border-bottom: 1px solid #f1f1f1;
+      /* See graphics_words.html — color-mix gives a separator that follows
+         the active text colour, instead of a flat #f1f1f1 that disappears
+         on dark backgrounds. */
+      border-bottom: 1px solid color-mix(in srgb, var(--text-color, #000) 10%, transparent);
       font-family: var(--font-body, 'Times New Roman', Times, serif);
       text-decoration: none;
       color: inherit;
@@ -45,11 +48,11 @@
     }
     .person-row:last-child { border-bottom: none; }
     a.person-row:hover {
-      background: #f7f7f7;
+      background: color-mix(in srgb, var(--text-color, #000) 5%, transparent);
     }
     .person-name {
       font-size: 16px;
-      color: #000;
+      color: var(--text-color, #000);
       text-align: right;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -64,25 +67,26 @@
       position: absolute;
       top: 0;
       height: 10px;
-      background: #000;
+      /* bars follow the user's chart colour (Customization → Charts global). */
+      background: var(--chart-color, #000);
     }
     .person-bar-fill.drag { opacity: 0.85; }
     .person-bar-fill.lift { opacity: 0.45; }
     .person-score {
       font-size: 15px;
-      color: #000;
+      color: var(--text-color, #000);
       text-align: right;
       font-variant-numeric: tabular-nums;
     }
     .person-count {
       font-size: 13px;
-      color: #999;
+      color: var(--text-muted, #999);
       text-align: right;
       font-variant-numeric: tabular-nums;
     }
     .people-summary-row {
       text-align: center;
-      color: #777;
+      color: var(--text-muted, #777);
       font-size: 14px;
       font-family: var(--font-body, 'Times New Roman', Times, serif);
       margin-top: 28px;
@@ -92,7 +96,7 @@
       line-height: 1.5;
     }
     .people-empty {
-      color: #999;
+      color: var(--text-muted, #999);
       font-style: italic;
       text-align: center;
       padding: 40px 0;

@@ -23,11 +23,11 @@
       font-size: 20px;
       font-style: italic;
       margin: 0 0 20px;
-      color: #000;
+      color: var(--text-color, #000);
     }
     .words-col-title .sub {
       font-style: normal;
-      color: #999;
+      color: var(--text-muted, #999);
       font-size: 14px;
       margin-left: 10px;
     }
@@ -37,13 +37,16 @@
       align-items: center;
       gap: 12px;
       padding: 8px 0;
-      border-bottom: 1px solid #f1f1f1;
+      /* color-mix derives a subtle separator from the active text colour:
+         dark text → faint dark line; light text (auto-invert on dark bg)
+         → faint light line. Beats a flat #f1f1f1 that vanishes on dark. */
+      border-bottom: 1px solid color-mix(in srgb, var(--text-color, #000) 10%, transparent);
       font-family: var(--font-body, 'Times New Roman', Times, serif);
     }
     .word-row:last-child { border-bottom: none; }
     .word-text {
       font-size: 16px;
-      color: #000;
+      color: var(--text-color, #000);
       text-align: right;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -57,31 +60,33 @@
       position: absolute;
       top: 0;
       height: 10px;
-      background: #000;
+      /* bars follow the user's chart colour so the chart theme
+         (Customization → Charts global) drives them too. */
+      background: var(--chart-color, #000);
     }
-    .word-bar-fill.drag  { background: #000; opacity: 0.85; }
-    .word-bar-fill.lift  { background: #000; opacity: 0.45; }
+    .word-bar-fill.drag  { background: var(--chart-color, #000); opacity: 0.85; }
+    .word-bar-fill.lift  { background: var(--chart-color, #000); opacity: 0.45; }
     .word-avg {
       font-size: 15px;
-      color: #000;
+      color: var(--text-color, #000);
       text-align: right;
       font-variant-numeric: tabular-nums;
     }
     .word-count {
       font-size: 13px;
-      color: #999;
+      color: var(--text-muted, #999);
       text-align: right;
       font-variant-numeric: tabular-nums;
     }
     .words-summary-row {
       text-align: center;
-      color: #777;
+      color: var(--text-muted, #777);
       font-size: 14px;
       font-family: var(--font-body, 'Times New Roman', Times, serif);
       margin-top: 28px;
     }
     .words-empty {
-      color: #999;
+      color: var(--text-muted, #999);
       font-style: italic;
       text-align: center;
       padding: 40px 0;

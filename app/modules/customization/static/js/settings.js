@@ -223,8 +223,13 @@
       // Restore manual values. The pickers carry the current intent.
       var tc = (document.getElementById('cz-text-color') || {}).value;
       var tm = (document.getElementById('cz-text-muted') || {}).value;
+      var hc = (document.getElementById('cz-heading-color') || {}).value;
       if (tc) applyVar('text-color', tc);
       if (tm) applyVar('text-muted', tm);
+      // Headings share the auto-invert treatment server-side, so mirror
+      // it here for live preview parity (without this the body text
+      // inverts instantly but headings only catch up after Save+reload).
+      if (hc) applyVar('heading-color', hc);
       return;
     }
     var rgb = effectiveBgRgb();
@@ -232,9 +237,11 @@
     if (luma(rgb) < 128) {
       applyVar('text-color', '#ffffff');
       applyVar('text-muted', '#cccccc');
+      applyVar('heading-color', '#ffffff');
     } else {
       applyVar('text-color', '#000000');
       applyVar('text-muted', '#666666');
+      applyVar('heading-color', '#000000');
     }
   }
 

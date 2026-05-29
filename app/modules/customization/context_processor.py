@@ -450,8 +450,11 @@ def _emit_css_block(settings: dict) -> str:
         'href="/modules/customization/static/fonts/fonts.css">'
     )
 
-    if not settings:
-        return Markup(fonts_link + '<style id="customization-vars"></style>')
+    # NB: no early return on empty settings. The body::before bg-layer
+    # below must be emitted unconditionally so the customization page's
+    # live preview of gradients/images works for first-time users who
+    # haven't saved anything yet (without the layer, JS-set --bg-image
+    # has nothing to render against).
 
     # Direct emit: every non-metadata key becomes its own CSS variable.
     css_vars = {
@@ -518,10 +521,8 @@ def _emit_css_block(settings: dict) -> str:
             and settings.get('mosaic-filled-filename')):
         mosaic_chunks = _mosaic_script_tags(settings)
 
-    if (not css_vars and not custom_face
-            and not mosaic_chunks and not chart_block):
-        return Markup(fonts_link + '<style id="customization-vars"></style>')
-
+    # No early return on empty composed state either — `parts.append(bg_layer)`
+    # below must always run for live preview to work. See note at top.
     parts = []
     if css_vars:
         parts.append(
