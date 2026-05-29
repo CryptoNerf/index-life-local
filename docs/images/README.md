@@ -9,7 +9,6 @@ placeholder comment instead of an image:
 
 ```text
 <!-- SCREENSHOT: the people chart | ../images/chart-people.png -->
-<!-- SCREENSHOT: before / after a theme change | ../images/customization-before-after.png -->
 ```
 
 To fill one in, drop the image into this folder and replace the comment
@@ -28,7 +27,6 @@ grep -rn "SCREENSHOT:" docs/
 | Suggested file | Screenshot still needed |
 |---|---|
 | `chart-people.png` | The "people" chart (Graphics → People) |
-| `customization-before-after.png` | Before / after a theme change |
 
 ## Conventions
 
