@@ -171,3 +171,68 @@ def test_custom_font_without_upload_emits_neither():
     out = str(cp._emit_css_block({'font-body-id': 'custom'}))
     assert '@font-face' not in out
     assert '--font-body' not in out
+
+
+# ── chat avatar composition ────────────────────────────────────
+
+def test_compose_avatar_color_mode_returns_none():
+    # In color mode the colour picker drives --avatar-color directly
+    # via the CSS fallback chain; nothing should be composed.
+    assert cp._compose_avatar_bg({}) is None
+    assert cp._compose_avatar_bg({'avatar-type': 'color'}) is None
+
+
+def test_compose_avatar_linear_gradient():
+    out = cp._compose_avatar_bg({
+        'avatar-type': 'gradient',
+        'avatar-gradient-shape': 'linear',
+        'avatar-gradient-from': '#fff',
+        'avatar-gradient-to': '#000',
+        'avatar-gradient-angle': '90deg',
+    })
+    assert out == 'linear-gradient(90deg, #fff, #000)'
+
+
+def test_compose_avatar_radial_gradient_ignores_angle():
+    # Radial gradients have no meaningful angle — the composer must not
+    # leak it into the CSS, otherwise the value would be invalid.
+    out = cp._compose_avatar_bg({
+        'avatar-type': 'gradient',
+        'avatar-gradient-shape': 'radial',
+        'avatar-gradient-from': '#fff',
+        'avatar-gradient-to': '#000',
+        'avatar-gradient-angle': '90deg',
+    })
+    assert out == 'radial-gradient(circle, #fff, #000)'
+
+
+def test_compose_avatar_image_with_filename():
+    out = cp._compose_avatar_bg({
+        'avatar-type': 'image', 'avatar-image-filename': 'abc.png',
+    })
+    assert out == 'url("/customization/uploads/abc.png") center / cover no-repeat'
+
+
+def test_compose_avatar_image_without_filename_is_none():
+    assert cp._compose_avatar_bg({'avatar-type': 'image'}) is None
+
+
+def test_emit_block_only_writes_avatar_bg_for_gradient_or_image():
+    # color mode: nothing composed
+    out_color = str(cp._emit_css_block({'avatar-type': 'color'}))
+    assert '--avatar-bg' not in out_color
+
+    # gradient mode: composed value present
+    out_grad = str(cp._emit_css_block({
+        'avatar-type': 'gradient',
+        'avatar-gradient-from': '#fff', 'avatar-gradient-to': '#000',
+    }))
+    assert '--avatar-bg: linear-gradient' in out_grad
+
+
+def test_avatar_type_is_metadata_not_emitted_as_var():
+    # The metadata keys must never leak into the :root block as raw vars.
+    out = str(cp._emit_css_block({'avatar-type': 'gradient'}))
+    assert '--avatar-type' not in out
+    assert '--avatar-gradient-shape' not in out
+    assert '--avatar-image-filename' not in out

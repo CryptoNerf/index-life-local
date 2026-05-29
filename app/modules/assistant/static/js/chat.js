@@ -378,11 +378,22 @@
     bubble.className = 'chat-bubble chat-bubble-' + role;
     bubble.textContent = content;
 
-    var avatar = document.createElement('img');
-    avatar.className = 'chat-avatar';
-    avatar.alt = role === 'user' ? 'You' : 'AI';
-    avatar.src = role === 'user' ? (avatars.user || '/static/images/usernophoto.png')
-                                 : (avatars.model || '/static/images/model.png');
+    // User avatar is still an <img> (their profile photo). The AI avatar
+    // is a themable <div> driven by --avatar-bg / --avatar-color in CSS
+    // — see .chat-avatar-bot in chat.css. This matches the server-rendered
+    // history above and lets Customization restyle it live.
+    var avatar;
+    if (role === 'user') {
+      avatar = document.createElement('img');
+      avatar.className = 'chat-avatar';
+      avatar.alt = 'You';
+      avatar.src = avatars.user || '/static/images/usernophoto.png';
+    } else {
+      avatar = document.createElement('div');
+      avatar.className = 'chat-avatar chat-avatar-bot';
+      avatar.setAttribute('role', 'img');
+      avatar.setAttribute('aria-label', 'AI');
+    }
 
     if (role === 'assistant') {
       row.appendChild(avatar);

@@ -467,6 +467,157 @@
     });
   }
 
+  // ── AI psychologist avatar (color / gradient / image) ────────
+  var avatarTypeBtns = Array.prototype.slice.call(
+    document.querySelectorAll('.cz-avatar-type-btn')
+  );
+  var avatarShapeBtns = Array.prototype.slice.call(
+    document.querySelectorAll('.cz-avatar-shape-btn')
+  );
+  var avatarTypeHidden  = document.getElementById('cz-avatar-type');
+  var avatarShapeHidden = document.getElementById('cz-avatar-shape');
+  var avatarFilename    = document.getElementById('cz-avatar-filename');
+  var avatarAngleRow    = document.getElementById('cz-avatar-angle-row');
+
+  // Mirror of server-side _compose_avatar_bg (see context_processor.py).
+  // In 'color' mode --avatar-bg is removed so the CSS chain
+  //   var(--avatar-bg, var(--avatar-color, …))
+  // falls through to --avatar-color, which the colour picker updates
+  // directly via the universal listener. Gradient and image modes
+  // compose the full background value and set --avatar-bg explicitly.
+  function rebuildAvatarBg() {
+    var type = avatarTypeHidden ? avatarTypeHidden.value : 'color';
+    if (type === 'gradient') {
+      var from  = (document.getElementById('cz-avatar-grad-from') || {}).value || '#009afa';
+      var to    = (document.getElementById('cz-avatar-grad-to')   || {}).value || '#005ea0';
+      var shape = (avatarShapeHidden && avatarShapeHidden.value) || 'linear';
+      if (shape === 'radial') {
+        applyVar('avatar-bg', 'radial-gradient(circle, ' + from + ', ' + to + ')');
+      } else {
+        var angSlider = document.getElementById('cz-avatar-angle');
+        var ang = angSlider ? angSlider.value + 'deg' : '180deg';
+        applyVar('avatar-bg', 'linear-gradient(' + ang + ', ' + from + ', ' + to + ')');
+      }
+    } else if (type === 'image') {
+      var fn = avatarFilename ? avatarFilename.value : '';
+      if (fn) {
+        applyVar('avatar-bg',
+          'url("/customization/uploads/' + fn + '") center / cover no-repeat');
+      } else {
+        ROOT.style.removeProperty('--avatar-bg');
+      }
+    } else {
+      ROOT.style.removeProperty('--avatar-bg');
+    }
+  }
+
+  function setAvatarShape(shape) {
+    avatarShapeBtns.forEach(function (b) {
+      b.classList.toggle('active', b.getAttribute('data-shape') === shape);
+    });
+    if (avatarShapeHidden) {
+      avatarShapeHidden.value = shape;
+      dirtyKeys['avatar-gradient-shape'] = true;
+    }
+    // Angle is only meaningful for linear gradients; hide for radial.
+    if (avatarAngleRow) {
+      avatarAngleRow.style.display = (shape === 'linear') ? '' : 'none';
+    }
+    rebuildAvatarBg();
+  }
+
+  function setAvatarType(type) {
+    avatarTypeBtns.forEach(function (b) {
+      b.classList.toggle('active', b.getAttribute('data-type') === type);
+    });
+    document.querySelectorAll('.cz-avatar-pane').forEach(function (p) {
+      p.classList.toggle('cz-pane-active', p.getAttribute('data-pane') === type);
+    });
+    if (avatarTypeHidden) {
+      avatarTypeHidden.value = type;
+      dirtyKeys['avatar-type'] = true;
+    }
+    rebuildAvatarBg();
+  }
+
+  avatarTypeBtns.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      setAvatarType(btn.getAttribute('data-type'));
+    });
+  });
+  avatarShapeBtns.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      setAvatarShape(btn.getAttribute('data-shape'));
+    });
+  });
+
+  // Live preview: rebuild --avatar-bg on any gradient input change. The
+  // colour pickers already mark dirty via the universal .cz-color listener;
+  // this just keeps the composed CSS variable in sync.
+  ['cz-avatar-grad-from', 'cz-avatar-grad-to', 'cz-avatar-angle'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('input', rebuildAvatarBg);
+  });
+  document.querySelectorAll(
+    '[data-hex-for="cz-avatar-grad-from"], [data-hex-for="cz-avatar-grad-to"]'
+  ).forEach(function (el) {
+    el.addEventListener('input', rebuildAvatarBg);
+  });
+
+  // ── Avatar image upload (reuses the generic upload-bg endpoint) ──
+  var avatarUploadTrig  = document.getElementById('cz-avatar-upload-trigger');
+  var avatarUploadInput = document.getElementById('cz-avatar-upload-input');
+  var avatarCurrentFile = document.getElementById('cz-avatar-current-file');
+  var avatarImageClear  = document.getElementById('cz-avatar-image-clear');
+
+  if (avatarUploadTrig && avatarUploadInput) {
+    avatarUploadTrig.addEventListener('click', function () { avatarUploadInput.click(); });
+    avatarUploadInput.addEventListener('change', function () {
+      var file = avatarUploadInput.files && avatarUploadInput.files[0];
+      if (!file) return;
+      if (file.size > 10 * 1024 * 1024) {
+        alert('File too large (max 10 MB).');
+        return;
+      }
+      avatarUploadTrig.disabled = true;
+      avatarUploadTrig.textContent = 'Uploading…';
+      var fd = new FormData();
+      fd.append('file', file);
+      fetch('/customization/api/upload-bg', { method: 'POST', body: fd })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          avatarUploadTrig.disabled = false;
+          avatarUploadTrig.textContent = 'Choose…';
+          if (data.error) {
+            alert('Upload failed: ' + data.error);
+            return;
+          }
+          if (avatarFilename) avatarFilename.value = data.filename;
+          dirtyKeys['avatar-image-filename'] = true;
+          if (avatarCurrentFile) avatarCurrentFile.textContent = data.filename.substr(0, 8) + '…';
+          if (avatarImageClear) avatarImageClear.disabled = false;
+          // Auto-switch to image mode so the upload is immediately visible.
+          setAvatarType('image');
+        })
+        .catch(function (err) {
+          avatarUploadTrig.disabled = false;
+          avatarUploadTrig.textContent = 'Choose…';
+          alert('Upload failed: ' + err);
+        });
+    });
+  }
+
+  if (avatarImageClear) {
+    avatarImageClear.addEventListener('click', function () {
+      if (avatarFilename) avatarFilename.value = '';
+      dirtyKeys['avatar-image-filename'] = true;
+      if (avatarCurrentFile) avatarCurrentFile.textContent = 'no image uploaded';
+      avatarImageClear.disabled = true;
+      // Drop back to color mode (default after removing the image).
+      setAvatarType('color');
+    });
+  }
+
   // ── Save / Reset ─────────────────────────────────────────────
   function setSaved(visible) {
     if (visible) {
@@ -1607,6 +1758,18 @@
     delete dirtyKeys['bg-type'];
   }
   rebuildBgImageVar();
+
+  // Activate the current avatar mode (and gradient shape) on page load —
+  // same trick as bg: setters mark dirty, undo for the initial state.
+  if (avatarShapeHidden) {
+    setAvatarShape(avatarShapeHidden.value || 'linear');
+    delete dirtyKeys['avatar-gradient-shape'];
+  }
+  if (avatarTypeHidden) {
+    setAvatarType(avatarTypeHidden.value || 'color');
+    delete dirtyKeys['avatar-type'];
+  }
+  rebuildAvatarBg();
 
   // Initial render of mini-previews
   renderAll();

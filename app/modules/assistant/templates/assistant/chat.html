@@ -51,7 +51,7 @@
         {% for msg in history %}
           <div class="chat-row chat-row-{{ msg.role }}">
             {% if msg.role == 'assistant' %}
-              <img class="chat-avatar" src="{{ url_for('static', filename='images/model.png') }}" alt="AI">
+              <div class="chat-avatar chat-avatar-bot" role="img" aria-label="AI"></div>
             {% endif %}
             <div class="chat-bubble chat-bubble-{{ msg.role }}">{{ msg.content }}</div>
             {% if msg.role == 'user' %}
@@ -61,7 +61,7 @@
         {% endfor %}
       {% else %}
         <div class="chat-row chat-row-assistant">
-          <img class="chat-avatar" src="{{ url_for('static', filename='images/model.png') }}" alt="AI">
+          <div class="chat-avatar chat-avatar-bot" role="img" aria-label="AI"></div>
           <div class="chat-bubble chat-bubble-assistant">{{ t('assistant.greeting') }}{% if proactive_note %} {{ proactive_note }}{% endif %}</div>
         </div>
       {% endif %}

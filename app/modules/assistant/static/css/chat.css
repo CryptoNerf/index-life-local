@@ -215,6 +215,18 @@ body {
   margin-bottom: 2px;
 }
 
+/* AI assistant avatar — themable via Customization. Renders as a
+   coloured / gradient / image circle. --avatar-bg is set by the
+   customization composer when the user picks gradient or image; in
+   plain 'color' mode it falls back to --avatar-color so the colour
+   picker drives the look live. The double-fallback (#009AFA) is the
+   historic brand cyan and stays as the default of defaults. */
+.chat-avatar-bot {
+  background: var(--avatar-bg, var(--avatar-color, #009AFA));
+  background-size: cover;
+  background-position: center;
+}
+
 .chat-bubble {
   max-width: 75%;
   padding: 12px 16px;

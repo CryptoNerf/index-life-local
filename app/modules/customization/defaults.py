@@ -137,6 +137,23 @@ DEFAULTS = {
     # user's manual text-color pick. Useful when a dark photo background
     # would otherwise leave black text unreadable.
     'auto-invert-text': 'false',
+
+    # ── AI psychologist chat avatar ─────────────────────────
+    # The avatar bubble next to each assistant message. Renders as a
+    # circle that can be a solid colour, a linear/radial gradient, or
+    # a user-uploaded image — same idea as the page background.
+    #
+    # avatar-type selects the mode (metadata, not emitted as a raw var):
+    #   'color'    — solid colour (uses --avatar-color)
+    #   'gradient' — linear or radial (composed into --avatar-bg)
+    #   'image'    — uploaded image (composed into --avatar-bg)
+    'avatar-type':            'color',
+    'avatar-color':           '#009afa',
+    'avatar-gradient-from':   '#009afa',
+    'avatar-gradient-to':     '#005ea0',
+    'avatar-gradient-angle':  '180deg',
+    'avatar-gradient-shape':  'linear',  # 'linear' | 'radial'
+    'avatar-image-filename':  '',
 }
 
 

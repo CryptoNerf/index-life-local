@@ -369,6 +369,29 @@ input[type="color"].cz-color::-webkit-color-swatch {
 .cz-bg-pane.cz-pane-active { display: flex; }
 .cz-bg-pane[data-pane="color"].cz-pane-active { display: flex; flex-direction: row; align-items: center; gap: 12px; }
 
+/* Avatar section uses the same pane mechanism (different controls). */
+.cz-avatar-pane { display: none; flex-direction: column; gap: 12px; }
+.cz-avatar-pane.cz-pane-active { display: flex; }
+.cz-avatar-pane[data-pane="color"].cz-pane-active { display: flex; flex-direction: row; align-items: center; gap: 12px; }
+
+/* Avatar preview circle — large enough to actually see a gradient,
+   centred in the preview frame. Drives off the same --avatar-bg /
+   --avatar-color variables the live chat avatar uses, so the preview
+   updates instantly as the user adjusts the controls. */
+.cz-avatar-preview-frame {
+  align-items: center;
+  justify-content: center;
+}
+.cz-avatar-preview {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: var(--avatar-bg, var(--avatar-color, #009AFA));
+  background-size: cover;
+  background-position: center;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
 /* Range slider: stripped down, monochrome */
 .cz-slider {
   -webkit-appearance: none;

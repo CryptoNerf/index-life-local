@@ -45,6 +45,8 @@ _METADATA_KEYS = {
     'font-body-id', 'font-heading-id', 'custom-font-filename',
     'notes-use-body-font',
     'auto-invert-text',
+    # Avatar settings (composed into --avatar-bg below).
+    'avatar-type', 'avatar-gradient-shape', 'avatar-image-filename',
     # Mosaic settings — JS reads them via window.__CZ_MOSAIC__ rather
     # than CSS variables (per-cube positioning needs DOM measurement).
     'mosaic-enabled', 'mosaic-filled-filename',
@@ -129,6 +131,38 @@ def _custom_font_face_rule(settings: dict) -> str:
         f'  src: url("/customization/uploads/{fn}");'
         '}'
     )
+
+
+def _compose_avatar_bg(settings: dict) -> str | None:
+    """Compute the effective `--avatar-bg` value from metadata fields.
+
+    Returns the full CSS `background` shorthand the chat avatar should
+    use. Returns None when the user is on the default 'color' mode —
+    the CSS rule's fallback (`var(--avatar-bg, var(--avatar-color, ...)`)
+    then resolves through --avatar-color, which the colour picker
+    writes directly. This way: solid-colour mode picks colour live;
+    gradient/image modes pre-compose the whole background.
+    """
+    mode = settings.get('avatar-type', 'color')
+
+    if mode == 'gradient':
+        a = settings.get('avatar-gradient-from', '#009afa')
+        b = settings.get('avatar-gradient-to',   '#005ea0')
+        shape = settings.get('avatar-gradient-shape', 'linear')
+        if shape == 'radial':
+            return f'radial-gradient(circle, {a}, {b})'
+        ang = settings.get('avatar-gradient-angle', '180deg')
+        return f'linear-gradient({ang}, {a}, {b})'
+
+    if mode == 'image':
+        fn = settings.get('avatar-image-filename', '')
+        if not fn:
+            return None
+        # Same filename validation as the bg image (see _FILENAME_RE in
+        # routes.py); url() is the only safe interpolation here.
+        return f'url("/customization/uploads/{fn}") center / cover no-repeat'
+
+    return None  # 'color' mode: let --avatar-color drive it via CSS fallback
 
 
 def _compose_bg_image(settings: dict) -> str | None:
@@ -430,6 +464,13 @@ def _emit_css_block(settings: dict) -> str:
     composed_bg = _compose_bg_image(settings)
     if composed_bg is not None:
         css_vars['bg-image'] = composed_bg
+
+    # Composed avatar background — only when in gradient/image mode;
+    # 'color' mode lets --avatar-color drive things directly so the
+    # colour picker updates live without a recompose.
+    composed_avatar = _compose_avatar_bg(settings)
+    if composed_avatar is not None:
+        css_vars['avatar-bg'] = composed_avatar
 
     # Composed fonts: only emit when the user picked a non-default.
     composed_body = _compose_font(settings, 'font-body-id')

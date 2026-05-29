@@ -608,6 +608,100 @@
       </div>
     </section>
 
+    <!-- ── 5. AI psychologist avatar ─────────────────────────── -->
+    <section class="cz-section" id="sec-avatar">
+      <div>
+        <div class="cz-section-head">
+          <h2 class="cz-section-title">{{ t('cz.sec.avatar') }}</h2>
+          <button type="button" class="cz-section-reset" data-section="sec-avatar">{{ t('cz.reset_section') }}</button>
+          <p class="cz-section-desc">{{ t('customization.avatar_desc') }}</p>
+        </div>
+        <div class="cz-controls">
+          <div class="cz-row cz-bg-type-row">
+            <label>{{ t('cz.lbl.type') }}</label>
+            <div class="cz-bg-type-toggle" id="cz-avatar-type-toggle">
+              <button type="button" class="cz-avatar-type-btn" data-type="color">{{ t('cz.lbl.color') }}</button>
+              <button type="button" class="cz-avatar-type-btn" data-type="gradient">{{ t('cz.lbl.gradient') }}</button>
+              <button type="button" class="cz-avatar-type-btn" data-type="image">{{ t('cz.lbl.image') }}</button>
+            </div>
+          </div>
+
+          <!-- Solid color -->
+          <div class="cz-row cz-avatar-pane" data-pane="color">
+            <label for="cz-avatar-color">{{ t('cz.lbl.color_label') }}</label>
+            <input type="color" class="cz-color" id="cz-avatar-color"
+                   data-key="avatar-color" value="{{ current['avatar-color'] }}">
+            <input type="text" class="cz-hex" data-hex-for="cz-avatar-color"
+                   value="{{ current['avatar-color'] }}">
+          </div>
+
+          <!-- Gradient: shape + from + to + angle -->
+          <div class="cz-avatar-pane" data-pane="gradient">
+            <div class="cz-row">
+              <label>{{ t('cz.lbl.shape') }}</label>
+              <div class="cz-bg-type-toggle" id="cz-avatar-shape-toggle">
+                <button type="button" class="cz-avatar-shape-btn" data-shape="linear">{{ t('cz.lbl.linear') }}</button>
+                <button type="button" class="cz-avatar-shape-btn" data-shape="radial">{{ t('cz.lbl.radial') }}</button>
+              </div>
+            </div>
+            <div class="cz-row">
+              <label for="cz-avatar-grad-from">{{ t('cz.lbl.from') }}</label>
+              <input type="color" class="cz-color" id="cz-avatar-grad-from"
+                     data-key="avatar-gradient-from" value="{{ current['avatar-gradient-from'] }}">
+              <input type="text" class="cz-hex" data-hex-for="cz-avatar-grad-from"
+                     value="{{ current['avatar-gradient-from'] }}">
+            </div>
+            <div class="cz-row">
+              <label for="cz-avatar-grad-to">{{ t('cz.lbl.to') }}</label>
+              <input type="color" class="cz-color" id="cz-avatar-grad-to"
+                     data-key="avatar-gradient-to" value="{{ current['avatar-gradient-to'] }}">
+              <input type="text" class="cz-hex" data-hex-for="cz-avatar-grad-to"
+                     value="{{ current['avatar-gradient-to'] }}">
+            </div>
+            <div class="cz-row" id="cz-avatar-angle-row">
+              <label for="cz-avatar-angle">{{ t('cz.lbl.angle') }}</label>
+              <input type="range" class="cz-slider" id="cz-avatar-angle"
+                     min="0" max="360" step="15"
+                     data-key="avatar-gradient-angle" data-unit="deg"
+                     value="{{ current['avatar-gradient-angle']|replace('deg','') }}">
+              <span class="cz-slider-val" id="cz-avatar-angle-val">{{ current['avatar-gradient-angle'] }}</span>
+            </div>
+          </div>
+
+          <!-- Image upload -->
+          <div class="cz-avatar-pane" data-pane="image">
+            <div class="cz-row">
+              <label>{{ t('cz.lbl.image_file') }}</label>
+              <button type="button" class="cz-btn-small" id="cz-avatar-upload-trigger">{{ t('cz.choose') }}</button>
+              <input type="file" id="cz-avatar-upload-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none">
+              <button type="button" class="cz-btn-small cz-btn-warn"
+                      id="cz-avatar-image-clear"
+                      {% if not current['avatar-image-filename'] %}disabled{% endif %}>{{ t('cz.remove') }}</button>
+            </div>
+            <div class="cz-row">
+              <span class="cz-current-file" id="cz-avatar-current-file">
+                {% if current['avatar-image-filename'] %}{{ current['avatar-image-filename'][:8] }}…{% else %}{{ t('cz.lbl.no_image') }}{% endif %}
+              </span>
+            </div>
+          </div>
+
+          <!-- Hidden fields carrying metadata -->
+          <input type="hidden" id="cz-avatar-filename" data-key="avatar-image-filename"
+                 value="{{ current['avatar-image-filename'] }}">
+          <input type="hidden" id="cz-avatar-type" data-key="avatar-type"
+                 value="{{ current['avatar-type'] }}">
+          <input type="hidden" id="cz-avatar-shape" data-key="avatar-gradient-shape"
+                 value="{{ current['avatar-gradient-shape'] }}">
+        </div>
+      </div>
+      <div class="cz-preview">
+        <span class="cz-preview-label">{{ t('cz.preview_prefix') }}{{ t('cz.preview.avatar') }}</span>
+        <div class="cz-preview-frame cz-avatar-preview-frame">
+          <div class="cz-avatar-preview" id="cz-avatar-preview"></div>
+        </div>
+      </div>
+    </section>
+
     <!-- ── Storage cleanup ─────────────────────────────────────── -->
     <details class="cz-cleanup">
       <summary class="cz-cleanup-summary">{{ t('cz.storage_cleanup') }}</summary>
