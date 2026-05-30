@@ -119,21 +119,29 @@ header {
   margin: 30px 0;
   gap: 6px;
 }
+/* Day-rating cubes share the same themable variables as the main
+   calendar grid — change cube colours once in Customization and both
+   the year heatmap AND the day editor follow. */
 .cube {
   width: 15px;
   height: 15px;
-  border: 1px solid #000;
-  background: #fff;
+  border: 1px solid var(--cube-border-color, #000);
+  background: var(--cube-empty-color, #fff);
   margin: 0 1px;
   display: inline-block;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background 0.15s, opacity 0.15s;
 }
 .cube.filled {
-  background: #000;
+  background: var(--cube-filled-color, #000);
+  border-color: var(--cube-border-color, #000);
 }
+/* Hover is a transient preview as the user mouses over the row;
+   keep the same theme colour but slightly translucent so it reads
+   as "not yet committed". Works on any cube-filled-color. */
 .cube.hovered {
-  background: #222;
+  background: var(--cube-filled-color, #000);
+  opacity: 0.7;
 }
 
 /* ========== Form & Textarea ========== */

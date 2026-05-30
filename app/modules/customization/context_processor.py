@@ -41,6 +41,7 @@ log = logging.getLogger(__name__)
 _METADATA_KEYS = {
     'bg-type',
     'bg-gradient-from', 'bg-gradient-to', 'bg-gradient-angle',
+    'bg-gradient-shape',
     'bg-image-filename',
     'font-body-id', 'font-heading-id', 'custom-font-filename',
     'notes-use-body-font',
@@ -176,6 +177,9 @@ def _compose_bg_image(settings: dict) -> str | None:
     if bg_type == 'gradient':
         a = settings.get('bg-gradient-from', '#ffffff')
         b = settings.get('bg-gradient-to', '#dddddd')
+        shape = settings.get('bg-gradient-shape', 'linear')
+        if shape == 'radial':
+            return f'radial-gradient(circle, {a}, {b})'
         ang = settings.get('bg-gradient-angle', '180deg')
         return f'linear-gradient({ang}, {a}, {b})'
     if bg_type == 'image':

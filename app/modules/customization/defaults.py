@@ -45,6 +45,9 @@ DEFAULTS = {
     'bg-gradient-from':   '#ffffff',
     'bg-gradient-to':     '#dddddd',
     'bg-gradient-angle':  '180deg',
+    # Gradient shape (metadata, not emitted as a raw var). 'linear' uses
+    # the angle above; 'radial' ignores it and draws a circle from centre.
+    'bg-gradient-shape':  'linear',  # 'linear' | 'radial'
     # Filename of the uploaded background image. The settings UI builds
     # url() from this; raw filename is stored so we can serve it directly
     # and so JSON stays inspectable.

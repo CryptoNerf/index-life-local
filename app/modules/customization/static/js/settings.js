@@ -368,7 +368,12 @@
   var bgTypeBtns = Array.prototype.slice.call(
     document.querySelectorAll('.cz-bg-type-btn')
   );
-  var bgTypeHidden = document.getElementById('cz-bg-type');
+  var bgShapeBtns = Array.prototype.slice.call(
+    document.querySelectorAll('.cz-bg-shape-btn')
+  );
+  var bgTypeHidden  = document.getElementById('cz-bg-type');
+  var bgShapeHidden = document.getElementById('cz-bg-shape');
+  var bgAngleRow    = document.getElementById('cz-bg-angle-row');
 
   function setBgType(type) {
     bgTypeBtns.forEach(function (b) {
@@ -384,9 +389,30 @@
     rebuildBgImageVar();
   }
 
+  // Linear vs radial gradient shape (mirrors the avatar's shape toggle).
+  function setBgShape(shape) {
+    bgShapeBtns.forEach(function (b) {
+      b.classList.toggle('active', b.getAttribute('data-shape') === shape);
+    });
+    if (bgShapeHidden) {
+      bgShapeHidden.value = shape;
+      dirtyKeys['bg-gradient-shape'] = true;
+    }
+    // Angle is meaningless for radial gradients; hide its row.
+    if (bgAngleRow) {
+      bgAngleRow.style.display = (shape === 'linear') ? '' : 'none';
+    }
+    rebuildBgImageVar();
+  }
+
   bgTypeBtns.forEach(function (btn) {
     btn.addEventListener('click', function () {
       setBgType(btn.getAttribute('data-type'));
+    });
+  });
+  bgShapeBtns.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      setBgShape(btn.getAttribute('data-shape'));
     });
   });
 
@@ -394,11 +420,16 @@
   function rebuildBgImageVar() {
     var type = bgTypeHidden ? bgTypeHidden.value : 'color';
     if (type === 'gradient') {
-      var from = (document.getElementById('cz-grad-from') || {}).value || '#ffffff';
-      var to   = (document.getElementById('cz-grad-to')   || {}).value || '#dddddd';
-      var angSlider = document.getElementById('cz-grad-angle');
-      var ang = angSlider ? angSlider.value + 'deg' : '180deg';
-      applyVar('bg-image', 'linear-gradient(' + ang + ', ' + from + ', ' + to + ')');
+      var from  = (document.getElementById('cz-grad-from') || {}).value || '#ffffff';
+      var to    = (document.getElementById('cz-grad-to')   || {}).value || '#dddddd';
+      var shape = (bgShapeHidden && bgShapeHidden.value) || 'linear';
+      if (shape === 'radial') {
+        applyVar('bg-image', 'radial-gradient(circle, ' + from + ', ' + to + ')');
+      } else {
+        var angSlider = document.getElementById('cz-grad-angle');
+        var ang = angSlider ? angSlider.value + 'deg' : '180deg';
+        applyVar('bg-image', 'linear-gradient(' + ang + ', ' + from + ', ' + to + ')');
+      }
     } else if (type === 'image') {
       var fnInput = document.getElementById('cz-bg-filename');
       var fn = fnInput ? fnInput.value : '';
@@ -1757,10 +1788,16 @@
     renderNeural();
   });
 
-  // Activate the current bg-type pane and compose the initial bg-image var
+  // Activate the current bg gradient shape first, then the bg-type pane
+  // — setBgType triggers rebuildBgImageVar which reads the shape, so the
+  // shape must be in place before that runs. Both setters mark dirty;
+  // undo for the initial state.
+  if (bgShapeHidden) {
+    setBgShape(bgShapeHidden.value || 'linear');
+    delete dirtyKeys['bg-gradient-shape'];
+  }
   if (bgTypeHidden) {
     var initialType = bgTypeHidden.value || 'color';
-    // setBgType marks dirty — undo that since this is the initial state
     setBgType(initialType);
     delete dirtyKeys['bg-type'];
   }

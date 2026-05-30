@@ -88,6 +88,15 @@ def test_compose_bg_gradient():
     assert out == 'linear-gradient(90deg, #fff, #000)'
 
 
+def test_compose_bg_radial_gradient_ignores_angle():
+    out = cp._compose_bg_image({
+        'bg-type': 'gradient', 'bg-gradient-shape': 'radial',
+        'bg-gradient-from': '#fff', 'bg-gradient-to': '#000',
+        'bg-gradient-angle': '90deg',  # must be ignored
+    })
+    assert out == 'radial-gradient(circle, #fff, #000)'
+
+
 def test_compose_bg_image_url():
     out = cp._compose_bg_image({'bg-type': 'image', 'bg-image-filename': 'p.jpg'})
     assert out == 'url("/customization/uploads/p.jpg")'

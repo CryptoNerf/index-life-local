@@ -59,8 +59,15 @@
                    value="{{ current['bg-color'] }}">
           </div>
 
-          <!-- Gradient: from / to / angle -->
+          <!-- Gradient: shape + from / to / angle -->
           <div class="cz-bg-pane" data-pane="gradient">
+            <div class="cz-row">
+              <label>{{ t('cz.lbl.shape') }}</label>
+              <div class="cz-bg-type-toggle" id="cz-bg-shape-toggle">
+                <button type="button" class="cz-bg-shape-btn" data-shape="linear">{{ t('cz.lbl.linear') }}</button>
+                <button type="button" class="cz-bg-shape-btn" data-shape="radial">{{ t('cz.lbl.radial') }}</button>
+              </div>
+            </div>
             <div class="cz-row">
               <label for="cz-grad-from">{{ t('cz.lbl.from') }}</label>
               <input type="color" class="cz-color" id="cz-grad-from"
@@ -75,7 +82,7 @@
               <input type="text" class="cz-hex" data-hex-for="cz-grad-to"
                      value="{{ current['bg-gradient-to'] }}">
             </div>
-            <div class="cz-row">
+            <div class="cz-row" id="cz-bg-angle-row">
               <label for="cz-grad-angle">{{ t('cz.lbl.angle') }}</label>
               <input type="range" class="cz-slider" id="cz-grad-angle"
                      min="0" max="360" step="15"
@@ -124,6 +131,8 @@
                  value="{{ current['bg-image-filename'] }}">
           <input type="hidden" id="cz-bg-type" data-key="bg-type"
                  value="{{ current['bg-type'] }}">
+          <input type="hidden" id="cz-bg-shape" data-key="bg-gradient-shape"
+                 value="{{ current['bg-gradient-shape'] }}">
         </div>
       </div>
       <div class="cz-preview">

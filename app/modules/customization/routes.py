@@ -142,7 +142,8 @@ def _is_valid_mosaic_mode(value: str) -> bool:
     return value in ('color', 'gradient', 'image')
 
 
-def _is_valid_avatar_shape(value: str) -> bool:
+def _is_valid_gradient_shape(value: str) -> bool:
+    """linear | radial — used by both bg and avatar gradients."""
     return value in ('linear', 'radial')
 
 
@@ -162,6 +163,7 @@ _VALIDATORS = {k: _is_valid_color for k in _COLOR_KEYS}
 _VALIDATORS.update({
     'bg-type':            _is_valid_bg_type,
     'bg-gradient-angle':  _is_valid_angle,
+    'bg-gradient-shape':  _is_valid_gradient_shape,  # linear|radial
     'bg-image-filename':  _is_valid_filename,
     'bg-image-blur':      _is_valid_length,
     'bg-image-opacity':   _is_valid_unit_interval,
@@ -179,7 +181,7 @@ _VALIDATORS.update({
     # are in _COLOR_KEYS above and get _is_valid_color from the bulk add.
     'avatar-type':            _is_valid_bg_type,      # color|gradient|image
     'avatar-gradient-angle':  _is_valid_angle,
-    'avatar-gradient-shape':  _is_valid_avatar_shape,  # linear|radial
+    'avatar-gradient-shape':  _is_valid_gradient_shape,  # linear|radial
     'avatar-image-filename':  _is_valid_filename,
 })
 
