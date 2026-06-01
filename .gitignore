@@ -42,6 +42,10 @@ app/static/profile_photos/*
 !app/static/profile_photos/.gitkeep
 profile_photos/
 
+# Manim render output (promo/*.py → media/videos/<scene>/...).
+# Source scenes are tracked; rendered MP4s are heavy and rebuildable.
+media/
+
 # IDE
 .vscode/
 .idea/
