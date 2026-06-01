@@ -59,7 +59,11 @@ POSITIONS = [
     np.array([ 3.2, -2.0, 0]),
     np.array([ 0.2,  2.3, 0]),
     np.array([-0.6, -2.5, 0]),
-    np.array([ 5.4, -0.4, 0]),
+    # The 7th slot holds the longest label in both languages
+    # ("Усталость от ответственности" / "Worn down by responsibility").
+    # Kept inboard of x=5.0 so the label — centred on the neuron and
+    # ~3.6 manim units wide — doesn't overflow the ~7.1-unit frame edge.
+    np.array([ 4.9, -0.4, 0]),
 ]
 ENTRIES_PER_TOPIC = [18, 15, 11, 14, 19, 9, 12]   # ~98 dots total
 
@@ -164,7 +168,7 @@ def _render_neural_map(scene: Scene, labels_text, title_text, subtitle_text):
         # Smaller font than a typical topic-tag because the hypothesis
         # labels are 3-6 words, not one word.
         label = Text(n['name'], font="Times New Roman",
-                     slant=ITALIC, color="#eeeeee", font_size=22)
+                     slant=ITALIC, color="#eeeeee", font_size=20)
         # Top-row neurons get labels BELOW; bottom-row ABOVE — so
         # nothing pokes off-frame and labels never collide with the
         # outro title later.
