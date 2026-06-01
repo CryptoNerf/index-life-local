@@ -6,16 +6,25 @@ no manual keyframing.
 
 ## One-time setup (macOS)
 
-Manim needs Cairo, Pango (for fonts, incl. Cyrillic) and ffmpeg:
+Manim depends on the Cairo C library (drawing), Pango (font rendering,
+incl. Cyrillic), pkg-config (so the Python `pycairo` extension can
+find Cairo at build time), and ffmpeg (the video encoder):
 
 ```bash
-brew install py3cairo pango ffmpeg
+brew install cairo pango pkg-config ffmpeg
 ```
 
-Then install Manim itself into the project venv (keeps your global
-Python clean):
+> Without `pkg-config` and `cairo`, `pip install manim` fails when
+> building `pycairo` with errors like
+> *"Did not find pkg-config"* /
+> *"Run-time dependency cairo found: NO"*. The brew line above is the
+> fix.
+
+Then upgrade pip (newer pip handles meson-built wheels better) and
+install Manim into the project venv (keeps your global Python clean):
 
 ```bash
+./venv/bin/pip install --upgrade pip
 ./venv/bin/pip install manim
 ```
 
