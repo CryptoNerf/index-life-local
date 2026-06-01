@@ -72,8 +72,20 @@ one without touching the others.
 
 ## Scenes in this folder
 
-| File | Scene class | About |
-|---|---|---|
-| `neural_map_intro.py` | `NeuralMapIntro` | Diary entries drift together, coalesce into topic-neurons, get names, and link to their nearest neighbours (~17 s) |
+| File | Scene class | Language | About |
+|---|---|---|---|
+| `neural_map_intro.py` | `NeuralMapIntro` | Russian | Diary entries drift together, coalesce into hidden-question neurons, get labelled, and link to nearest neighbours (~17 s) |
+| `neural_map_intro.py` | `NeuralMapIntroEN` | English | Same motion, English labels and outro |
 
-More to come, one per module.
+Both scenes share the helper `_render_neural_map(...)` in the file —
+timing / colour / layout edits there hit both languages at once; only
+the label tables (`LABELS_RU` / `LABELS_EN` and titles) differ.
+
+Render either by class name:
+
+```bash
+./venv/bin/manim -qh -p promo/neural_map_intro.py NeuralMapIntro
+./venv/bin/manim -qh -p promo/neural_map_intro.py NeuralMapIntroEN
+```
+
+More scenes to come, one per module.
