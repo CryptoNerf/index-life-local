@@ -5,11 +5,19 @@ The visual story of how index.life's Neural Map gets built:
     entries scatter across the canvas
         → drift together by meaning
             → coalesce into neurons
-                → get topic names
-                    → link to their closest neighbours
+                → each neuron labelled with a *hidden question*
+                    → link to closest neighbours
+
+Important: the labels here are NOT simple topic tags ("work", "family").
+The actual feature uses a psychoanalytic prompt
+(app/modules/deep_mind/prompts.py) and produces formulations like
+"Страх потери контроля" — internal questions or problems the user may
+not have consciously articulated. The labels below are sample
+formulations of exactly that kind, so the promo doesn't misrepresent
+what users will actually see.
 
 Render:
-    pip install manim                # plus brew install ffmpeg pango py3cairo on macOS
+    pip install manim                # plus brew install ffmpeg pango cairo on macOS
     manim -qh promo/neural_map_intro.py NeuralMapIntro
     # output → media/videos/neural_map_intro/1080p60/NeuralMapIntro.mp4
 
@@ -35,16 +43,23 @@ PALETTE = [
     "#5DD3D3",   # mint
 ]
 
-# Topics chosen to resonate with a real diary. Keep them short enough
-# not to overlap when placed near a neuron, varied enough to feel real.
-TOPICS = [
-    ("работа",      np.array([-4.4,  1.7, 0])),
-    ("семья",       np.array([ 4.0,  1.4, 0])),
-    ("тревога",     np.array([-3.6, -1.8, 0])),
-    ("спорт",       np.array([ 3.2, -2.0, 0])),
-    ("друзья",      np.array([ 0.2,  2.3, 0])),
-    ("сон",         np.array([-0.6, -2.5, 0])),
-    ("путешествия", np.array([ 5.4, -0.4, 0])),
+# HIDDEN_QUESTIONS — each one is a sample of what the LLM actually
+# produces for a cluster: a 3-6 word psychoanalytic hypothesis about an
+# inner question or problem behind the entries (NOT a topic tag like
+# "work" or "family"). Match the tone of the examples in
+# app/modules/deep_mind/prompts.py.
+#
+# Position is the cluster centre on the manim canvas (~ -7..7 in x,
+# -4..4 in y). Shorter labels go in tight spots; the longest one is
+# parked on the right edge where it has nothing to bump into.
+HIDDEN_QUESTIONS = [
+    ("Поиск смысла в рутине",         np.array([-4.4,  1.7, 0])),
+    ("Потребность в признании",       np.array([ 4.0,  1.4, 0])),
+    ("Конфликт долга и желаний",      np.array([-3.6, -1.8, 0])),
+    ("Страх потери контроля",         np.array([ 3.2, -2.0, 0])),
+    ("Сопротивление переменам",       np.array([ 0.2,  2.3, 0])),
+    ("Тоска по близости",             np.array([-0.6, -2.5, 0])),
+    ("Усталость от ответственности",  np.array([ 5.4, -0.4, 0])),
 ]
 ENTRIES_PER_TOPIC = [18, 15, 11, 14, 19, 9, 12]   # ~98 dots total
 
@@ -67,7 +82,7 @@ class NeuralMapIntro(Scene):
         all_dots = []           # flat list for the staggered fade-in
         dot_to_centre = []      # parallel: each dot's target cluster
 
-        for (name, center), color, n in zip(TOPICS, PALETTE, ENTRIES_PER_TOPIC):
+        for (name, center), color, n in zip(HIDDEN_QUESTIONS, PALETTE, ENTRIES_PER_TOPIC):
             group = VGroup()
             for _ in range(n):
                 start = np.array([
@@ -99,7 +114,7 @@ class NeuralMapIntro(Scene):
 
         # ── ACT 3 ─ each cloud materialises into a neuron ────────
         neurons = []
-        for (name, center), color in zip(TOPICS, PALETTE):
+        for (name, center), color in zip(HIDDEN_QUESTIONS, PALETTE):
             halo = Circle(radius=0.55, color=color, fill_opacity=0.10,
                           stroke_width=0).move_to(center)
             body = Circle(radius=0.22, color=color, fill_opacity=0.95,
@@ -121,8 +136,10 @@ class NeuralMapIntro(Scene):
         # ── ACT 4 ─ topic names appear next to neurons ───────────
         labels = []
         for n in neurons:
+            # Smaller font than a typical topic-tag because the hypothesis
+            # labels are 3-6 words, not one word.
             label = Text(n['name'], font="Times New Roman",
-                         slant=ITALIC, color="#eeeeee", font_size=26)
+                         slant=ITALIC, color="#eeeeee", font_size=22)
             # Top-row neurons get labels BELOW; bottom-row ABOVE — so
             # nothing pokes off-frame and labels never collide with the
             # outro title later.
@@ -192,7 +209,7 @@ class NeuralMapIntro(Scene):
         )
         title = Text("Нейронная карта", font="Times New Roman",
                      color="#ffffff", font_size=44)
-        subtitle = Text("карта тем твоего дневника",
+        subtitle = Text("скрытые вопросы из твоих записей",
                         font="Times New Roman", slant=ITALIC,
                         color="#a0a0a0", font_size=22)
         title_group = VGroup(title, subtitle).arrange(DOWN, buff=0.15)
