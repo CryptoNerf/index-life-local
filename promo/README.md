@@ -76,16 +76,21 @@ one without touching the others.
 |---|---|---|---|
 | `neural_map_intro.py` | `NeuralMapIntro` | Russian | Diary entries drift together, coalesce into hidden-question neurons, get labelled, and link to nearest neighbours (~17 s) |
 | `neural_map_intro.py` | `NeuralMapIntroEN` | English | Same motion, English labels and outro |
+| `ai_psychologist_intro.py` | `AIPsychologistIntro` | Russian | A diary question rises through 4 memory layers (entries → embeddings → summaries → psychological profile), fragments fly into the answer, quotes from real entries highlight (~22 s) |
+| `ai_psychologist_intro.py` | `AIPsychologistIntroEN` | English | Same motion, English answer + layer labels |
 
-Both scenes share the helper `_render_neural_map(...)` in the file —
-timing / colour / layout edits there hit both languages at once; only
-the label tables (`LABELS_RU` / `LABELS_EN` and titles) differ.
+Each scene file has a `_render_*(...)` helper holding the motion logic;
+both languages call it with different text packs. Timing / colour /
+layout edits there hit every language at once; only the text constants
+differ.
 
 Render either by class name:
 
 ```bash
 ./venv/bin/manim -qh -p promo/neural_map_intro.py NeuralMapIntro
 ./venv/bin/manim -qh -p promo/neural_map_intro.py NeuralMapIntroEN
+./venv/bin/manim -qh -p promo/ai_psychologist_intro.py AIPsychologistIntro
+./venv/bin/manim -qh -p promo/ai_psychologist_intro.py AIPsychologistIntroEN
 ```
 
 More scenes to come, one per module.
