@@ -76,8 +76,8 @@ one without touching the others.
 |---|---|---|---|
 | `neural_map_intro.py` | `NeuralMapIntro` | Russian | Diary entries drift together, coalesce into hidden-question neurons, get labelled, and link to nearest neighbours (~17 s) |
 | `neural_map_intro.py` | `NeuralMapIntroEN` | English | Same motion, English labels and outro |
-| `ai_psychologist_intro.py` | `AIPsychologistIntro` | Russian | A diary question rises through 4 memory layers (entries → embeddings → summaries → psychological profile), fragments fly into the answer, quotes from real entries highlight (~22 s) |
-| `ai_psychologist_intro.py` | `AIPsychologistIntroEN` | English | Same motion, English answer + layer labels |
+| `ai_psychologist_intro.py` | `AIPsychologistIntro` | Russian | Chat-centric: user types a question into the input, the message rises into a bubble, three diary-excerpt cards drift in and converge as the AI "consults" them, the answer types in with the cited quotes highlighted (~20 s) |
+| `ai_psychologist_intro.py` | `AIPsychologistIntroEN` | English | Same motion, English text |
 
 Each scene file has a `_render_*(...)` helper holding the motion logic;
 both languages call it with different text packs. Timing / colour /
