@@ -76,8 +76,9 @@ one without touching the others.
 |---|---|---|---|
 | `neural_map_intro.py` | `NeuralMapIntro` | Russian | Diary entries drift together, coalesce into hidden-question neurons, get labelled, and link to nearest neighbours (~17 s) |
 | `neural_map_intro.py` | `NeuralMapIntroEN` | English | Same motion, English labels and outro |
-| `ai_psychologist_intro.py` | `AIPsychologistIntro` | Russian | Wireframe of the real chat shell appears on black; user types and sends a question; the chat ghosts and the three header tags ("embedded", "summarized", "profile v3") each spawn their layer in turn — a cloud of nearest-neighbour points, a stack of matching summary cards, a wireframe profile silhouette with trait tags; all three collapse into the AI's spot, the bubble materialises, and the answer types in with the quoted fragments tinted amber (~20 s) |
+| `ai_psychologist_intro.py` | `AIPsychologistIntro` | Russian | Wireframe chat shell on black; user types and sends a question; the AI shows a "thinking" status and a 4-step pipeline runs inside the chat: a pseudo-3D embedding scatter with cosine-similarity beams to the 4 nearest neighbours, a monospace list of matching summaries with sim scores, a syntax-coloured JSON psychoprofile, and the highlighted fragments converging into the AI bubble that types the final answer with the quoted bits tinted amber (~24 s) |
 | `ai_psychologist_intro.py` | `AIPsychologistIntroEN` | English | Same motion, English text |
+| `ai_psychologist_intro_xray.py` | `AIPsychXRayIntro` / `…EN` | Both | Backup take of the AI psychologist promo — earlier "three layers x-rayed around the chat" approach. Kept for reference; the current production scene above replaces it. |
 
 Each scene file has a `_render_*(...)` helper holding the motion logic;
 both languages call it with different text packs. Timing / colour /

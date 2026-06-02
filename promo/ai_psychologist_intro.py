@@ -1,24 +1,32 @@
-"""Promo motion graphics — AI Psychologist intro (~20 s, 1080p).
+"""Promo motion graphics — AI Psychologist intro (~24 s, 1080p).
 
-Black canvas; a wireframe sketch of the actual chat shell sits in the
-middle (status line counting embedded/summarized entries + a profile
-version, a toolbar row, the AI's pre-existing welcome bubble, the
-input row with a Send button). The user types a question and sends
-it. After Send, the chat ghosts and the three real powers the model
-leans on each expand from the very header tag that names them:
+Black canvas; wireframe sketch of the actual chat shell. The user types
+a question and sends it. The AI replies with a "thinking" status message
+and then, INSIDE THE CHAT, walks through the four real stages the model
+goes through to answer:
 
-    embedded     → a cloud of points fills the canvas; a beam from the
-                   user's bubble lights up its nearest semantic
-                   neighbours.
-    summarized   → a stack of compact summary cards rises on the right
-                   edge; the three that match glow.
-    profile v3   → a wireframe silhouette assembles on the left edge,
-                   surrounded by trait tags drawn from the diary.
+    1. semantic search   — a pseudo-3D scatter of embedded diary
+                            entries; the question lands as a vector,
+                            cosine-similarity beams light up the 4
+                            nearest neighbours.
+    2. summary extraction — a compact list of the matching summaries
+                            with their dates and similarity scores.
+    3. psychological profile — the user's stored profile rendered as
+                            real-looking JSON (the actual schema), with
+                            traits / patterns / themes visible.
+    4. answer composition — fragments retrieved from the previous steps
+                            flow into the AI bubble that types the
+                            final answer in, with the quoted fragments
+                            tinted amber.
 
-All three highlighted matches then trace back into a single point in
-the chat body, where the AI bubble materialises and the answer types
-in — with the quoted fragments tinted amber so the viewer can see the
-words came straight from the user's own entries.
+Each step's viz takes the chat-body area while it's active; the
+previous steps stay above as a checked-off list ("✓ Step 1: …"), so
+the viewer can follow the pipeline as it runs. After step 4 the
+checklist collapses and the AI's final answer appears in its own
+wireframe bubble.
+
+A backup of the earlier "three-layer x-ray around the chat" take is
+preserved in ai_psychologist_intro_xray.py.
 
 Render:
     manim -qh promo/ai_psychologist_intro.py AIPsychologistIntro
@@ -29,20 +37,25 @@ import numpy as np
 
 
 # ── Palette ──────────────────────────────────────────────────────
-# Everything reads against the black scene bg — no white panels.
 BG          = "#0a0a0a"
 LINE        = "#3a3a3a"    # base wireframe strokes
-LINE_BRIGHT = "#8a8a8a"    # active stroke (input focus, active message)
-TEXT_DIM    = "#7a7a7a"    # status counts, toolbar labels, placeholder
-TEXT_BODY   = "#d4d4d4"    # bubble text, summary text
-TEXT_BRIGHT = "#ffffff"    # the active question and final answer
+LINE_BRIGHT = "#8a8a8a"    # accented stroke (active step, send btn)
+TEXT_DIM    = "#7a7a7a"    # status counts, toolbar labels, placeholders
+TEXT_BODY   = "#d4d4d4"    # bubble text, list text
+TEXT_BRIGHT = "#ffffff"    # user's typed message, final answer
 TEXT_HEAD   = "#e6e6e6"    # title
 
-AI_AVATAR_COLOR   = "#009AFA"   # brand cyan (matches in-app default)
+AI_AVATAR_COLOR   = "#009AFA"   # brand cyan
 USER_AVATAR_COLOR = "#FFA340"   # warm amber
 
-HIGHLIGHT   = "#FFB347"    # quoted fragments in the answer (warm amber)
-MATCH_GLOW  = "#FFD24A"    # mustard — lit-up matches across all three layers
+HIGHLIGHT   = "#FFB347"    # quoted fragments in the answer
+MATCH_GLOW  = "#FFD24A"    # mustard — matched embeddings, summary glow
+
+# JSON code-block syntax colours (high contrast on black, but muted)
+JSON_KEY    = "#7AB6FF"    # keys (light blue)
+JSON_STR    = "#A5D6A7"    # string values (light green)
+JSON_NUM    = "#FFCC66"    # numbers (amber)
+JSON_PUNCT  = "#888888"    # braces, brackets, commas
 
 SEND_BG     = "#1f1f1f"
 SEND_TEXT   = "#dcdcdc"
@@ -50,28 +63,28 @@ SEND_TEXT   = "#dcdcdc"
 
 # ── Layout ───────────────────────────────────────────────────────
 # Manim default camera: ~-7.11..7.11 horizontal × -4..4 vertical.
-# Chat panel sits centred, with room on the sides + above for the
-# three-layer x-ray to expand into.
-CHAT_W, CHAT_H = 8.0, 5.4
-CHAT_CTR       = np.array([0, 0.05, 0])
+CHAT_W, CHAT_H = 10.4, 6.6
+CHAT_CTR       = np.array([0, 0.10, 0])
 
 CHAT_LEFT   = CHAT_CTR[0] - CHAT_W / 2
 CHAT_RIGHT  = CHAT_CTR[0] + CHAT_W / 2
 CHAT_TOP    = CHAT_CTR[1] + CHAT_H / 2
 CHAT_BOTTOM = CHAT_CTR[1] - CHAT_H / 2
 
-# Inner row y-coords (top → bottom)
-ROW_STATUS_Y    = CHAT_TOP - 0.34
+# Inner rows (top → bottom, y-coords)
+ROW_STATUS_Y    = CHAT_TOP - 0.32
 ROW_TOOLBAR_Y   = CHAT_TOP - 0.92
-WELCOME_Y       = CHAT_TOP - 1.85
-USER_MSG_Y      = CHAT_TOP - 2.95
-AI_MSG_Y        = CHAT_TOP - 4.05
-INPUT_Y         = CHAT_BOTTOM + 0.50
+USER_MSG_Y      = CHAT_TOP - 1.70
+THINK_HEAD_Y    = CHAT_TOP - 2.55
+# The active-step viz occupies the band from ~ y=-0.30 down to y=-2.05
+VIZ_TOP_Y       = CHAT_TOP - 3.20
+VIZ_BOTTOM_Y    = CHAT_BOTTOM + 1.10
+VIZ_CTR_Y       = (VIZ_TOP_Y + VIZ_BOTTOM_Y) / 2
+VIZ_W           = CHAT_W - 1.80   # 1.8 of side padding
+INPUT_Y         = CHAT_BOTTOM + 0.42
 
 
 # ── Text packs ───────────────────────────────────────────────────
-# The toolbar + status string are intentionally in English in both
-# versions — that's how the real app shows them today.
 TOOLBAR        = ["Compress", "Clear chat", "Sync", "Reindex", "Rebuild profile"]
 STATUS_EMBED   = "238/238 embedded"
 STATUS_SUMM    = "238/238 summarized"
@@ -80,8 +93,6 @@ CONTEXT_LABEL  = "Context fill:"
 CONTEXT_PCT    = "13%"
 
 # Russian pack ────────────────────────────────────────────────────
-WELCOME_RU = ("Привет. Я твой ИИ-психолог. У меня есть доступ к твоему\n"
-              "дневнику настроения. Чем сегодня поделишься?")
 QUESTION_RU = "Почему я в последнее время устаю?"
 ANSWER_RU = (
     "За последние два месяца ты часто упоминал «опять никуда не\n"
@@ -89,23 +100,46 @@ ANSWER_RU = (
     "гонки против времени. Что важнее всего отпустить прямо сейчас?"
 )
 HIGHLIGHTS_RU = ["«опять никуда не\nуспеваю»", "«перерабатываю»"]
-SUMMARIES_RU = [
-    # Compact paraphrases — must fit inside a 2.25-unit card next to a
-    # date label. The full quotes still appear in the typed AI answer.
-    ("12 мар", "не успеваю"),
-    ("5 апр",  "перерабатываю"),
-    ("21 апр", "гонка со временем"),
+THINK_LABEL_RU = "думаю над ответом"
+STEP_LABELS_RU = [
+    "Поиск похожих записей",
+    "Извлечение саммари",
+    "Загрузка психопрофиля",
+    "Формирование ответа",
 ]
-TRAITS_RU = ["переутомление", "гонка со временем", "трудно отпускать"]
-PROFILE_TITLE_RU = "профиль"
+SUMMARIES_RU = [
+    ("12 мар", "опять никуда не успеваю", 0.87),
+    ("5 апр",  "снова перерабатываю",      0.82),
+    ("21 апр", "гонка против времени",     0.79),
+]
+# Sample of what app/modules/deep_mind actually stores per user: the
+# psychological profile that informs every reply. Keys are illustrative
+# but mirror the real schema (traits, patterns, themes…).
+PROFILE_JSON_RU = [
+    ('{',                   [('{', JSON_PUNCT)]),
+    ('  "v"',               [('"v"', JSON_KEY), (': 3,', JSON_PUNCT)]),
+    ('  "traits"',          [('"traits"', JSON_KEY), (': {', JSON_PUNCT)]),
+    ('    "трудоголизм"',   [('"трудоголизм"', JSON_STR),
+                             (': ',  JSON_PUNCT), ('0.81', JSON_NUM),
+                             (',', JSON_PUNCT)]),
+    ('    "перфекционизм"', [('"перфекционизм"', JSON_STR),
+                             (': ', JSON_PUNCT), ('0.74', JSON_NUM)]),
+    ('  },',                [('  },', JSON_PUNCT)]),
+    ('  "pattern"',         [('"pattern"', JSON_KEY), (': ', JSON_PUNCT),
+                             ('"гонка со временем"', JSON_STR)]),
+    ('}',                   [('}', JSON_PUNCT)]),
+]
+COMPOSE_FRAGMENTS_RU = [
+    "«опять никуда не успеваю»",
+    "«перерабатываю»",
+    "гонка со временем",
+]
 INPUT_HINT_RU = "Сообщение…"
 SEND_RU = "Отправить"
 TITLE_RU    = "ИИ-психолог"
 SUBTITLE_RU = "видит, что стоит за словами"
 
 # English pack ────────────────────────────────────────────────────
-WELCOME_EN = ("Hi. I'm your AI psychologist. I have access to your\n"
-              "mood diary. What's on your mind today?")
 QUESTION_EN = "Why have I been so tired lately?"
 ANSWER_EN = (
     "Over the past two months you've often written «I never make it»\n"
@@ -113,14 +147,37 @@ ANSWER_EN = (
     "against time. What feels most important to let go of right now?"
 )
 HIGHLIGHTS_EN = ["«I never make it»", "«I keep overworking»"]
-SUMMARIES_EN = [
-    # Compact paraphrases — see SUMMARIES_RU.
-    ("Mar 12", "never make it"),
-    ("Apr 5",  "overworking"),
-    ("Apr 21", "racing the clock"),
+THINK_LABEL_EN = "thinking"
+STEP_LABELS_EN = [
+    "Search similar entries",
+    "Extract summaries",
+    "Load psychological profile",
+    "Compose the answer",
 ]
-TRAITS_EN = ["overextension", "racing the clock", "letting go is hard"]
-PROFILE_TITLE_EN = "profile"
+SUMMARIES_EN = [
+    ("Mar 12", "I never make it",      0.87),
+    ("Apr 5",  "I keep overworking",   0.82),
+    ("Apr 21", "racing against time",  0.79),
+]
+PROFILE_JSON_EN = [
+    ('{',                   [('{', JSON_PUNCT)]),
+    ('  "v"',               [('"v"', JSON_KEY), (': 3,', JSON_PUNCT)]),
+    ('  "traits"',          [('"traits"', JSON_KEY), (': {', JSON_PUNCT)]),
+    ('    "workaholism"',   [('"workaholism"', JSON_STR),
+                             (': ',  JSON_PUNCT), ('0.81', JSON_NUM),
+                             (',', JSON_PUNCT)]),
+    ('    "perfectionism"', [('"perfectionism"', JSON_STR),
+                             (': ', JSON_PUNCT), ('0.74', JSON_NUM)]),
+    ('  },',                [('  },', JSON_PUNCT)]),
+    ('  "pattern"',         [('"pattern"', JSON_KEY), (': ', JSON_PUNCT),
+                             ('"racing the clock"', JSON_STR)]),
+    ('}',                   [('}', JSON_PUNCT)]),
+]
+COMPOSE_FRAGMENTS_EN = [
+    "«I never make it»",
+    "«I keep overworking»",
+    "racing against time",
+]
 INPUT_HINT_EN = "Write a message…"
 SEND_EN = "Send"
 TITLE_EN    = "AI Psychologist"
@@ -130,15 +187,13 @@ SUBTITLE_EN = "sees what's behind the words"
 # ── Small builders ───────────────────────────────────────────────
 
 def _panel():
-    """The wireframe outline of the whole chat shell."""
     return RoundedRectangle(
         width=CHAT_W, height=CHAT_H, corner_radius=0.22,
         color=LINE, stroke_width=1.6, fill_opacity=0,
     ).move_to(CHAT_CTR)
 
 
-def _divider(y, x_inset=0.25):
-    """Thin horizontal rule across the chat."""
+def _divider(y, x_inset=0.30):
     return Line(
         np.array([CHAT_LEFT + x_inset, y, 0]),
         np.array([CHAT_RIGHT - x_inset, y, 0]),
@@ -146,8 +201,13 @@ def _divider(y, x_inset=0.25):
     )
 
 
-def _ui_text(s, size=14, color=TEXT_DIM):
-    return Text(s, font="Helvetica", color=color, font_size=size)
+def _ui_text(s, size=14, color=TEXT_DIM, font="Helvetica"):
+    return Text(s, font=font, color=color, font_size=size)
+
+
+def _mono(s, size=14, color=TEXT_BODY):
+    """Monospace text — used for JSON, lists, similarity numbers."""
+    return Text(s, font="Menlo", color=color, font_size=size)
 
 
 def _body_text(s, size=17, color=TEXT_BODY, italic=False):
@@ -182,44 +242,229 @@ def _wireframe_bubble(text_mob, pad_x=0.25, pad_y=0.18, min_w=2.0):
     return rect
 
 
-def _summary_card(date_str, snippet, width=2.6, highlighted=False):
-    stroke_color = MATCH_GLOW if highlighted else LINE
-    stroke_w = 1.5 if highlighted else 1.0
-    text_color = TEXT_BRIGHT if highlighted else TEXT_DIM
-    rect = RoundedRectangle(
-        width=width, height=0.46, corner_radius=0.08,
-        color=stroke_color, stroke_width=stroke_w, fill_opacity=0,
-    )
-    date = _ui_text(date_str, size=11, color=text_color)
-    quote = _ui_text(snippet, size=12, color=text_color)
-    row = VGroup(date, quote).arrange(RIGHT, buff=0.20, aligned_edge=DOWN)
-    row.move_to(rect.get_center())
-    return VGroup(rect, row)
+# ── Step header builder (the checklist line at the top of the body) ─
+
+def _step_header(idx, label, state="pending"):
+    """One row of the thinking checklist.
+
+    state: 'pending' | 'active' | 'done'
+    Layout: [⟳/✓/·] [Step N: <label>]
+    """
+    marker_text = {"pending": "·", "active": "⟳", "done": "✓"}[state]
+    marker_color = {"pending": LINE, "active": MATCH_GLOW, "done": "#7DC36A"}[state]
+    label_color  = {"pending": LINE, "active": TEXT_BODY, "done": TEXT_DIM}[state]
+    marker = _ui_text(marker_text, size=14, color=marker_color, font="Helvetica")
+    text = _ui_text(f"Шаг {idx}: {label}" if state != "header"
+                    else label,
+                    size=14, color=label_color)
+    row = VGroup(marker, text).arrange(RIGHT, buff=0.16)
+    return row
 
 
-def _placeholder_card(width=2.6):
-    rect = RoundedRectangle(
-        width=width, height=0.36, corner_radius=0.08,
-        color=LINE, stroke_width=0.8, fill_opacity=0,
+# ── Step 1: pseudo-3D embedding scatter ───────────────────────────
+
+def _build_embedding_viz(rng, viz_center, viz_w, viz_h):
+    """Pseudo-3D scatter — ~70 dots in a unit cube projected onto the
+    plane. Size + opacity vary with depth (z). Returns:
+      (group, query_dot, match_dots, q_lines, sim_labels)
+    """
+    n = 70
+    cube_pts = []
+    for _ in range(n):
+        cube_pts.append((
+            rng.uniform(-1, 1),
+            rng.uniform(-1, 1),
+            rng.uniform(-1, 1),
+        ))
+
+    def project(p):
+        x, y, z = p
+        # Slight tilt for perspective: shift x by z*0.08, scale y by 1.
+        px = viz_center[0] + x * viz_w * 0.45 + z * 0.20
+        py = viz_center[1] + y * viz_h * 0.42 + z * 0.10
+        return np.array([px, py, 0])
+
+    def depth_size(z):
+        return 0.025 + 0.030 * ((z + 1) / 2)
+
+    def depth_opacity(z):
+        return 0.30 + 0.55 * ((z + 1) / 2)
+
+    bg_dots = []
+    for p in cube_pts:
+        d = Dot(project(p), radius=depth_size(p[2]),
+                color=LINE_BRIGHT, fill_opacity=depth_opacity(p[2]))
+        bg_dots.append(d)
+
+    # Hand-pick 4 "match" coordinates in the front-ish region (z > 0.2)
+    match_pts_3d = [
+        ( 0.55,  0.35, 0.55),
+        (-0.30,  0.50, 0.40),
+        ( 0.10, -0.25, 0.65),
+        (-0.45, -0.10, 0.30),
+    ]
+    match_dots = []
+    for p in match_pts_3d:
+        d = Dot(project(p), radius=0.065, color=MATCH_GLOW, fill_opacity=0)
+        match_dots.append(d)
+
+    # Query "vector" — flies in from the left edge of the viz box,
+    # parks at the centre of the cube.
+    query_dot = Dot(
+        np.array([viz_center[0] - viz_w/2 + 0.1, viz_center[1], 0]),
+        radius=0.10, color=USER_AVATAR_COLOR, fill_opacity=0,
     )
-    dots = _ui_text("· · · · · · · · · · · ·", size=10, color=LINE)
-    dots.move_to(rect.get_center())
-    return VGroup(rect, dots)
+    query_target = project((0, 0, 0))
+
+    # Lines from query to each match.
+    q_lines = [
+        Line(query_target, m.get_center(),
+             stroke_color=MATCH_GLOW, stroke_width=1.2, stroke_opacity=0)
+        for m in match_dots
+    ]
+
+    # Similarity numbers (cosine sim) near each match dot.
+    sims = [0.87, 0.82, 0.79, 0.71]
+    sim_labels = []
+    for m, s in zip(match_dots, sims):
+        t = _mono(f"{s:.2f}", size=11, color=MATCH_GLOW)
+        t.set_opacity(0)
+        t.move_to(m.get_center() + np.array([0.32, 0.18, 0]))
+        sim_labels.append(t)
+
+    # Axis hint — three tiny tick marks suggesting (x, y, z) without
+    # being too literal. Just a corner gnomon.
+    gx = viz_center + np.array([-viz_w/2 + 0.20, -viz_h/2 + 0.20, 0])
+    gnomon = VGroup(
+        Line(gx, gx + np.array([0.35, 0, 0]),
+             stroke_color=LINE, stroke_width=1.2),
+        Line(gx, gx + np.array([0, 0.35, 0]),
+             stroke_color=LINE, stroke_width=1.2),
+        Line(gx, gx + np.array([0.20, 0.10, 0]),  # z fake-axis
+             stroke_color=LINE, stroke_width=1.2),
+    )
+    axis_labels = VGroup(
+        _mono("x", size=10, color=LINE).move_to(gx + np.array([0.42, -0.08, 0])),
+        _mono("y", size=10, color=LINE).move_to(gx + np.array([-0.08, 0.42, 0])),
+        _mono("z", size=10, color=LINE).move_to(gx + np.array([0.28, 0.18, 0])),
+    )
+
+    container = VGroup(
+        *bg_dots, *match_dots, *q_lines, *sim_labels,
+        gnomon, axis_labels, query_dot,
+    )
+    return container, query_dot, match_dots, q_lines, sim_labels, bg_dots, query_target
+
+
+# ── Step 2: summary list ──────────────────────────────────────────
+
+def _build_summary_viz(summaries, viz_center, viz_w, viz_h):
+    """A monospace-styled list:
+
+        [
+          {date: "12 мар", text: "…", sim: 0.87},
+          ...
+        ]
+    """
+    lines = []
+    lines.append(_mono("[", size=12, color=JSON_PUNCT))
+    for i, (date_s, text_s, sim) in enumerate(summaries):
+        comma = "," if i < len(summaries) - 1 else ""
+        # Build per-segment so we can colour key/value pairs.
+        parts = [
+            ("  { ", JSON_PUNCT),
+            ('date', JSON_KEY), (': ', JSON_PUNCT),
+            (f'"{date_s}"', JSON_STR), (', ', JSON_PUNCT),
+            ('text', JSON_KEY), (': ', JSON_PUNCT),
+            (f'"{text_s}"', JSON_STR), (', ', JSON_PUNCT),
+            ('sim', JSON_KEY), (': ', JSON_PUNCT),
+            (f'{sim:.2f}', JSON_NUM),
+            (' }' + comma, JSON_PUNCT),
+        ]
+        row = VGroup()
+        for s, c in parts:
+            row.add(_mono(s, size=11, color=c))
+        row.arrange(RIGHT, buff=0.03, aligned_edge=DOWN)
+        lines.append(row)
+    lines.append(_mono("]", size=12, color=JSON_PUNCT))
+
+    block = VGroup(*lines).arrange(DOWN, buff=0.08, aligned_edge=LEFT)
+    _fit_inside(block, viz_w, viz_h)
+    block.move_to(viz_center)
+    return block
+
+
+def _fit_inside(block, w, h, margin=0.40):
+    """Scale `block` down (never up) so it fits inside (w-margin, h-margin)."""
+    target_w = w - margin
+    target_h = h - margin
+    factor = min(1.0, target_w / max(block.width, 0.01),
+                      target_h / max(block.height, 0.01))
+    if factor < 1.0:
+        block.scale(factor)
+
+
+# ── Step 3: JSON profile ──────────────────────────────────────────
+
+def _build_profile_viz(profile_spec, viz_center, viz_w, viz_h):
+    """Render the profile JSON line-by-line with syntax colouring.
+
+    profile_spec: list of (plain_line, [(segment, colour), …]).
+    If the segments list is empty the plain_line is shown as JSON_PUNCT.
+    """
+    lines = []
+    JSON_FONT = 12
+    for plain, segments in profile_spec:
+        if not segments:
+            lines.append(_mono(plain, size=JSON_FONT, color=JSON_PUNCT))
+            continue
+        # Indent is preserved by prefixing the row with leading spaces
+        # rendered as a JSON_PUNCT-coloured mono blob.
+        indent = len(plain) - len(plain.lstrip(' '))
+        row = VGroup()
+        if indent > 0:
+            row.add(_mono(' ' * indent, size=JSON_FONT, color=JSON_PUNCT))
+        for s, c in segments:
+            row.add(_mono(s, size=JSON_FONT, color=c))
+        row.arrange(RIGHT, buff=0.02, aligned_edge=DOWN)
+        lines.append(row)
+
+    block = VGroup(*lines).arrange(DOWN, buff=0.06, aligned_edge=LEFT)
+    _fit_inside(block, viz_w, viz_h)
+    block.move_to(viz_center)
+    return block
+
+
+# ── Step 4: composition viz ───────────────────────────────────────
+
+def _build_compose_viz(fragments, viz_center, viz_w, viz_h):
+    """Three quote-fragments spread across the viz; they will glow,
+    contract, and travel toward the AI bubble that materialises below
+    afterwards."""
+    frag_group = VGroup()
+    n = len(fragments)
+    for i, f in enumerate(fragments):
+        t = Text(f, font="Times New Roman", slant=ITALIC,
+                 color=HIGHLIGHT, font_size=15)
+        # Spread vertically inside the viz.
+        y = viz_center[1] + viz_h/2 - 0.30 - (i * (viz_h - 0.55) / (n - 1 if n > 1 else 1))
+        t.move_to(np.array([viz_center[0], y, 0]))
+        frag_group.add(t)
+    return frag_group
 
 
 # ── Main scene helper ────────────────────────────────────────────
 
-def _render_chat(scene, *, question, welcome, answer, highlights,
-                 summaries, traits, profile_label, input_hint, send_label,
-                 title, subtitle):
+def _render_chat(scene, *, question, answer, highlights, summaries,
+                 profile_spec, fragments, think_label, step_labels,
+                 input_hint, send_label, title, subtitle):
     scene.camera.background_color = BG
-    rng = np.random.default_rng(11)
+    rng = np.random.default_rng(23)
 
     # ─────────────── BUILD: chat shell ───────────────
     panel = _panel()
 
-    # Status row — three separately positioned tags so we can pulse + spawn
-    # the visualisation FROM each one.
+    # Status row
     status_embed = _ui_text(STATUS_EMBED, size=14)
     status_dot1  = _ui_text("·", size=14)
     status_summ  = _ui_text(STATUS_SUMM, size=14)
@@ -227,7 +472,7 @@ def _render_chat(scene, *, question, welcome, answer, highlights,
     status_prof  = _ui_text(STATUS_PROF, size=14)
     status_row = VGroup(status_embed, status_dot1, status_summ,
                         status_dot2, status_prof).arrange(RIGHT, buff=0.20)
-    status_row.move_to([CHAT_LEFT + status_row.width / 2 + 0.35,
+    status_row.move_to([CHAT_LEFT + status_row.width / 2 + 0.40,
                         ROW_STATUS_Y, 0])
 
     ctx_label = _ui_text(CONTEXT_LABEL, size=12)
@@ -241,40 +486,29 @@ def _render_chat(scene, *, question, welcome, answer, highlights,
                          + RIGHT * ctx_bar_fill.width / 2)
     ctx_bar = VGroup(ctx_bar_outline, ctx_bar_fill)
     ctx_group = VGroup(ctx_label, ctx_bar, ctx_pct).arrange(RIGHT, buff=0.14)
-    ctx_group.move_to([CHAT_RIGHT - ctx_group.width / 2 - 0.35,
+    ctx_group.move_to([CHAT_RIGHT - ctx_group.width / 2 - 0.40,
                        ROW_STATUS_Y, 0])
 
-    status_divider = _divider(CHAT_TOP - 0.62)
+    status_divider = _divider(CHAT_TOP - 0.60)
 
     # Toolbar
     toolbar = VGroup(*[_wireframe_button(b) for b in TOOLBAR]).arrange(RIGHT, buff=0.14)
     toolbar.move_to([CHAT_CTR[0], ROW_TOOLBAR_Y, 0])
-
     toolbar_divider = _divider(CHAT_TOP - 1.20)
 
-    # AI welcome bubble (pre-existing in the chat history)
-    welcome_text = _body_text(welcome, size=16, color=TEXT_BODY)
-    welcome_bubble_outline = _wireframe_bubble(welcome_text, pad_x=0.30, pad_y=0.20)
-    welcome_avatar = _avatar_dot(AI_AVATAR_COLOR,
-                                 np.array([CHAT_LEFT + 0.55, WELCOME_Y, 0]),
-                                 radius=0.18)
-    welcome_group = VGroup(welcome_bubble_outline, welcome_text)
-    welcome_group.move_to([CHAT_LEFT + 0.95 + welcome_group.width / 2,
-                           WELCOME_Y, 0])
-
-    # Input row (initially placeholder + Send button)
+    # Input row
     send_text = _ui_text(send_label, size=14, color=SEND_TEXT)
     send_btn  = RoundedRectangle(
         width=send_text.width + 0.55, height=0.50, corner_radius=0.09,
         color=LINE_BRIGHT, stroke_width=1.0,
         fill_color=SEND_BG, fill_opacity=1.0,
     )
-    send_btn.move_to([CHAT_RIGHT - send_btn.width / 2 - 0.35,
+    send_btn.move_to([CHAT_RIGHT - send_btn.width / 2 - 0.40,
                       INPUT_Y, 0])
     send_text.move_to(send_btn.get_center())
     send_group = VGroup(send_btn, send_text)
 
-    input_left  = CHAT_LEFT + 0.35
+    input_left  = CHAT_LEFT + 0.40
     input_right = send_btn.get_left()[0] - 0.20
     input_w     = input_right - input_left
     input_box = RoundedRectangle(
@@ -289,19 +523,12 @@ def _render_chat(scene, *, question, welcome, answer, highlights,
 
     input_divider = _divider(INPUT_Y + 0.45)
 
-    # The question — starts in the input box, will travel into a user bubble.
+    # The question text — starts in the input, will move to user bubble.
     question_text = _body_text(question, size=17, color=TEXT_BRIGHT)
     question_text.move_to(input_box.get_left() + RIGHT * 0.35
                           + RIGHT * question_text.width / 2)
 
-    chat_shell = VGroup(
-        panel, status_row, ctx_group, status_divider,
-        toolbar, toolbar_divider,
-        welcome_avatar, welcome_group,
-        input_divider, input_box, send_group,
-    )
-
-    # ─────────────── BUILD: user message slot (revealed on Send) ───
+    # User message bubble (right-aligned)
     user_avatar = _avatar_dot(USER_AVATAR_COLOR,
                               np.array([CHAT_RIGHT - 0.55, USER_MSG_Y, 0]),
                               radius=0.18)
@@ -311,120 +538,104 @@ def _render_chat(scene, *, question, welcome, answer, highlights,
     user_msg_group.move_to(
         [CHAT_RIGHT - 0.95 - user_msg_group.width / 2, USER_MSG_Y, 0]
     )
-    # user_msg_group and user_avatar are NOT added to the scene at build
-    # time — FadeIn() in ACT 3 will both add them and animate them in
-    # from invisible. (Calling set_opacity(0) here would make FadeIn's
-    # target-opacity 0, leaving them invisible forever.)
 
-    # ─────────────── BUILD: layer 1 — embedded cloud ───────────────
-    # Pre-pick a deliberate cluster of 4 "matches" up-left of the chat,
-    # then sprinkle ~80 background dots across the canvas around (and
-    # behind) the chat. The chat strokes will read over the dots.
-    match_positions = [
-        np.array([-5.8,  2.2, 0]),
-        np.array([-5.0,  2.7, 0]),
-        np.array([-6.2,  1.5, 0]),
-        np.array([-5.3,  1.6, 0]),
-    ]
-    match_dots = [Dot(p, radius=0.07, color=MATCH_GLOW,
-                      fill_opacity=0) for p in match_positions]
-
-    bg_dots = []
-    for _ in range(82):
-        x = rng.uniform(-6.9, 6.9)
-        y = rng.uniform(-3.6, 3.6)
-        # Skip the inside of the chat panel — would look noisy
-        # under all the text.
-        if (CHAT_LEFT - 0.1 < x < CHAT_RIGHT + 0.1 and
-                CHAT_BOTTOM - 0.1 < y < CHAT_TOP + 0.1):
-            continue
-        d = Dot(np.array([x, y, 0]), radius=0.032,
-                color=LINE_BRIGHT, fill_opacity=0)
-        bg_dots.append(d)
-
-    embed_cloud = VGroup(*bg_dots, *match_dots)
-    # Lines from user bubble to each match (Q-vector)
-    q_origin = np.array([user_msg_group.get_center()[0],
-                         user_msg_group.get_center()[1], 0])
-
-    # ─────────────── BUILD: layer 2 — summarized stack ─────────────
-    # On the right margin (outside the chat). 6 cards total — 3 are
-    # the real matches (highlighted), 3 are placeholders so the stack
-    # feels like "many summaries scrolling".
-    # Card centred at x=5.65 with width 2.25 keeps the right edge at
-    # x=6.78, comfortably inside the ~7.1-unit frame edge, and the left
-    # edge at x=4.52, clear of the chat panel's right edge (x=4.0).
-    summary_x = 5.65
-    summary_w = 2.25
-    summary_ys = [2.6, 1.95, 1.30, 0.65, 0.00, -0.65]
-    summary_cards = []
-    real_idxs = [0, 2, 4]   # alternating
-    real_iter = iter(summaries)
-    for i, y in enumerate(summary_ys):
-        if i in real_idxs:
-            date_s, snippet = next(real_iter)
-            c = _summary_card(date_s, snippet, width=summary_w, highlighted=True)
-        else:
-            c = _placeholder_card(width=summary_w)
-        c.move_to([summary_x, y, 0])
-        summary_cards.append(c)
-
-    # ─────────────── BUILD: layer 3 — profile silhouette ────────────
-    # On the left margin (outside the chat). Stylised head + shoulders
-    # at the top; trait tags stacked vertically below it. Centred at
-    # x=-5.5 so the widest trait (~2 units across) sits clear of both
-    # the frame edge (x=-7.1) and the chat panel left edge (x=-4.0).
-    profile_x = -5.50
-    profile_top_y = 2.00
-    head = Circle(radius=0.30, color=LINE_BRIGHT, stroke_width=1.6,
-                  fill_opacity=0).move_to([profile_x, profile_top_y, 0])
-    sh_y = profile_top_y - 0.55
-    shoulders = Polygon(
-        np.array([profile_x - 0.58, sh_y - 0.28, 0]),
-        np.array([profile_x + 0.58, sh_y - 0.28, 0]),
-        np.array([profile_x + 0.34, sh_y + 0.22, 0]),
-        np.array([profile_x - 0.34, sh_y + 0.22, 0]),
-        color=LINE_BRIGHT, stroke_width=1.6, fill_opacity=0,
+    chat_shell = VGroup(
+        panel, status_row, ctx_group, status_divider,
+        toolbar, toolbar_divider,
+        input_divider, input_box, send_group,
     )
-    profile_label_text = _ui_text(profile_label, size=12,
-                                  color=TEXT_DIM)
-    profile_label_text.next_to(shoulders, DOWN, buff=0.16)
-    profile_silhouette = VGroup(head, shoulders, profile_label_text)
 
-    # Trait tags stacked vertically below the silhouette.
-    trait_anchors = [
-        np.array([profile_x, 0.50, 0]),
-        np.array([profile_x, -0.20, 0]),
-        np.array([profile_x, -0.90, 0]),
-    ]
-    trait_groups = []
-    for label, anchor in zip(traits, trait_anchors):
-        t = _ui_text(label, size=12, color=MATCH_GLOW)
-        rect = RoundedRectangle(
-            width=t.width + 0.20, height=0.36, corner_radius=0.07,
-            color=MATCH_GLOW, stroke_width=1.2, fill_opacity=0,
+    # ─────────────── BUILD: thinking area (the in-chat pipeline) ───
+    ai_think_avatar = _avatar_dot(AI_AVATAR_COLOR,
+                                  np.array([CHAT_LEFT + 0.55, THINK_HEAD_Y, 0]),
+                                  radius=0.18)
+    think_marker = _ui_text("⟳", size=15, color=MATCH_GLOW, font="Helvetica")
+    think_label_text = _ui_text(think_label + "…", size=15, color=TEXT_BODY)
+    think_header = VGroup(think_marker, think_label_text).arrange(RIGHT, buff=0.16)
+    think_header.move_to([CHAT_LEFT + 0.95 + think_header.width / 2,
+                          THINK_HEAD_Y, 0])
+
+    # Build the four checklist rows. We use Dot markers (geometry, not
+    # text) for the state indicator so we can morph their colour/size
+    # cleanly without Transform-ing Cyrillic Text glyphs (which loses
+    # the spacing between words in Pango). Labels stay as static Text
+    # mobjects whose colour we animate.
+    step_dots = []
+    step_labels_mobs = []
+    step_checks = []  # tiny green tick added when step completes
+    step_rows = []
+    for label in step_labels:
+        marker = Dot(radius=0.06, color=LINE, fill_opacity=0.35)
+        # No "Шаг N." prefix — the label is shorter and reads cleaner;
+        # the step's place in the pipeline is conveyed by its vertical
+        # position in the checklist + the active-marker state.
+        label_text = _ui_text(label, size=14, color=LINE)
+        # Pre-built check mark — full opacity but not yet in scene;
+        # FadeIn() in _complete_step adds and reveals it.
+        check = VGroup(
+            Line(np.array([-0.07, 0.00, 0]), np.array([-0.02, -0.06, 0]),
+                 stroke_color="#7DC36A", stroke_width=2.2),
+            Line(np.array([-0.02, -0.06, 0]), np.array([0.08, 0.06, 0]),
+                 stroke_color="#7DC36A", stroke_width=2.2),
         )
-        rect.move_to(t.get_center())
-        g = VGroup(rect, t).move_to(anchor)
-        trait_groups.append(g)
+        row = VGroup(marker, label_text).arrange(RIGHT, buff=0.16)
+        step_rows.append(row)
+        step_dots.append(marker)
+        step_labels_mobs.append(label_text)
+        step_checks.append(check)
+    step_block = VGroup(*step_rows).arrange(DOWN, buff=0.10, aligned_edge=LEFT)
+    step_block.move_to([CHAT_LEFT + 1.30 + step_block.width / 2,
+                        THINK_HEAD_Y - 0.85, 0])
+    # Move each step's check overlay to its marker's spot (after layout).
+    for marker, check in zip(step_dots, step_checks):
+        check.move_to(marker.get_center())
 
-    # ─────────────── BUILD: AI answer (revealed at the end) ────────
-    ai_avatar = _avatar_dot(AI_AVATAR_COLOR,
-                            np.array([CHAT_LEFT + 0.55, AI_MSG_Y, 0]),
-                            radius=0.18)
-    # t2c tints the quoted fragments amber — the visual proof that the
-    # quotes came straight from the diary the layers just showed.
+    # Visualisation pane — a thin wireframe rectangle that will hold
+    # each step's content in turn. Sits to the right of the step list.
+    viz_left_x   = step_block.get_right()[0] + 0.50
+    viz_right_x  = CHAT_RIGHT - 0.30
+    viz_w        = viz_right_x - viz_left_x
+    viz_h        = (THINK_HEAD_Y - 0.25) - (CHAT_BOTTOM + 1.00)
+    viz_ctr      = np.array([(viz_left_x + viz_right_x) / 2,
+                             (CHAT_BOTTOM + 1.00 + THINK_HEAD_Y - 0.25) / 2, 0])
+    viz_pane = RoundedRectangle(
+        width=viz_w, height=viz_h, corner_radius=0.14,
+        color=LINE, stroke_width=1.0, fill_opacity=0,
+    ).move_to(viz_ctr)
+
+    # ─────────────── BUILD: per-step viz content ───────────────────
+    embed_group, query_dot, match_dots, q_lines, sim_labels, bg_dots, query_target = \
+        _build_embedding_viz(rng, viz_ctr, viz_w - 0.50, viz_h - 0.50)
+    summary_block = _build_summary_viz(summaries, viz_ctr, viz_w - 0.50, viz_h - 0.50)
+    profile_block = _build_profile_viz(profile_spec, viz_ctr, viz_w - 0.50, viz_h - 0.50)
+    compose_block = _build_compose_viz(fragments, viz_ctr, viz_w - 0.50, viz_h - 0.50)
+
+    # ─────────────── BUILD: final answer bubble ─────────────────────
+    # Position: directly under the thinking checklist, well above the
+    # input divider so it never overlaps. We'll fade out the thinking
+    # block before this appears, so it owns the whole body.
+    answer_y = THINK_HEAD_Y - 1.30
+    ai_answer_avatar = _avatar_dot(
+        AI_AVATAR_COLOR,
+        np.array([CHAT_LEFT + 0.55, answer_y, 0]),
+        radius=0.18,
+    )
     ai_text = Text(answer, font="Times New Roman", color=TEXT_BODY,
                    font_size=15, line_spacing=0.55,
                    t2c={h: HIGHLIGHT for h in highlights})
     ai_bubble = _wireframe_bubble(ai_text, pad_x=0.30, pad_y=0.22, min_w=5.5)
     ai_msg_group = VGroup(ai_bubble, ai_text)
     ai_msg_group.move_to(
-        [CHAT_LEFT + 0.95 + ai_msg_group.width / 2, AI_MSG_Y, 0]
+        [CHAT_LEFT + 0.95 + ai_msg_group.width / 2, answer_y, 0]
     )
-    # ai_msg_group / ai_avatar are NOT added to scene at build time —
-    # FadeIn()/Write() in ACT 7 add and reveal them. Same reasoning as
-    # for user_msg_group above.
+    # Sanity: make sure the bubble's bottom clears the input divider
+    # with a margin. If not, this is a layout bug — fail loud.
+    bubble_bottom = ai_msg_group.get_bottom()[1]
+    divider_top   = INPUT_Y + 0.45
+    if bubble_bottom < divider_top + 0.30:
+        raise RuntimeError(
+            f"AI bubble ({bubble_bottom:.2f}) would overlap the input "
+            f"divider ({divider_top:.2f}). Move answer_y up.")
 
     # Outro
     title_text = Text(title, font="Times New Roman",
@@ -435,7 +646,7 @@ def _render_chat(scene, *, question, welcome, answer, highlights,
 
     # ═══════════════ ANIMATE ═══════════════════════════════════════
 
-    # ── ACT 1 ─ chat shell appears (wireframe assembles top-to-bottom)
+    # ── ACT 1 ─ chat shell assembles
     scene.play(Create(panel), run_time=0.7)
     scene.play(
         FadeIn(status_row, shift=DOWN * 0.1),
@@ -450,27 +661,22 @@ def _render_chat(scene, *, question, welcome, answer, highlights,
         run_time=0.7,
     )
     scene.play(
-        FadeIn(welcome_avatar, shift=RIGHT * 0.1),
-        FadeIn(welcome_group, shift=RIGHT * 0.15),
-        run_time=0.7,
-    )
-    scene.play(
         Create(input_divider),
         FadeIn(input_box),
         FadeIn(send_group),
         FadeIn(input_placeholder),
-        run_time=0.45,
+        run_time=0.5,
     )
-    scene.wait(0.3)
-
-    # ── ACT 2 ─ user types the question into the input box
-    scene.play(FadeOut(input_placeholder), run_time=0.15)
-    scene.play(Write(question_text), run_time=1.6)
     scene.wait(0.25)
 
-    # ── ACT 3 ─ Send pressed: text lifts into a user bubble, avatar fades in
+    # ── ACT 2 ─ user types the question
+    scene.play(FadeOut(input_placeholder), run_time=0.15)
+    scene.play(Write(question_text), run_time=1.6)
+    scene.wait(0.2)
+
+    # ── ACT 3 ─ Send pressed → user bubble appears
     scene.play(Indicate(send_group, color=AI_AVATAR_COLOR,
-                         scale_factor=1.05), run_time=0.35)
+                         scale_factor=1.05), run_time=0.30)
     target_in_bubble = user_msg_text.get_center()
     scene.play(
         question_text.animate.move_to(target_in_bubble),
@@ -478,111 +684,151 @@ def _render_chat(scene, *, question, welcome, answer, highlights,
         FadeIn(user_avatar),
         run_time=0.7,
     )
-    # Hand the on-screen text over to the bubble's own text object.
     scene.remove(question_text)
-    user_msg_text.set_opacity(1)
     scene.add(user_msg_text)
-    scene.wait(0.35)
+    scene.wait(0.30)
 
-    # ── ACT 4 ─ chat stays at full brightness throughout the x-ray.
-    # (Earlier attempts dimmed the whole chat via set_opacity, but that
-    # also filled the outline-only panel with its stroke colour, masking
-    # everything inside. The Indicate pulses on each header tag below
-    # are enough to lead the eye into the layers without masking the
-    # chat content.)
-    # Add the (still invisible) cloud behind the chat.
-    scene.add(embed_cloud)
-    embed_cloud.set_z_index(-2)
-
-    # ── ACT 5a ─ LAYER 1: embedded cloud expands from "238/238 embedded"
-    scene.play(Indicate(status_embed, color=MATCH_GLOW,
-                         scale_factor=1.10), run_time=0.4)
+    # ── ACT 4 ─ AI starts thinking
     scene.play(
-        LaggedStart(*[d.animate.set_fill(opacity=0.55) for d in bg_dots],
-                    lag_ratio=0.015),
-        run_time=1.1,
+        FadeIn(ai_think_avatar),
+        FadeIn(think_header, shift=RIGHT * 0.1),
+        run_time=0.6,
     )
-    # Q-beam from the user bubble to each match dot, then matches glow.
-    q_lines = [
-        Line(q_origin, p, stroke_color=MATCH_GLOW, stroke_width=1.5,
-             stroke_opacity=0)
-        for p in match_positions
-    ]
-    for ln in q_lines:
-        scene.add(ln)
-    scene.play(
-        *[ln.animate.set_stroke(opacity=0.55) for ln in q_lines],
-        *[d.animate.set_fill(opacity=1.0) for d in match_dots],
-        run_time=0.8,
-    )
-    scene.wait(0.35)
+    # Spin the ⟳ marker softly while we wait (one rotation).
+    scene.play(Rotate(think_marker, angle=2*PI, about_point=think_marker.get_center()),
+               run_time=0.9, rate_func=linear)
 
-    # ── ACT 5b ─ LAYER 2: summarized stack rises from "238/238 summarized"
-    scene.play(Indicate(status_summ, color=MATCH_GLOW,
-                         scale_factor=1.10), run_time=0.4)
-    # Cards slide up in sequence with a small lag — feels like
-    # scrolling through summaries.
-    # Each card slides up into place — FadeIn(shift=UP*0.4) gives both
-    # the slide and the reveal in a single primitive, and respects the
-    # placeholder cards' fill_opacity=0 instead of filling them.
+    # Step rows fade in as a dim placeholder list.
     scene.play(
-        LaggedStart(
-            *[FadeIn(c, shift=UP * 0.4) for c in summary_cards],
-            lag_ratio=0.08,
-        ),
-        run_time=1.2,
-    )
-    scene.wait(0.4)
-
-    # ── ACT 5c ─ LAYER 3: profile silhouette emerges from "profile v3"
-    scene.play(Indicate(status_prof, color=MATCH_GLOW,
-                         scale_factor=1.10), run_time=0.4)
-    scene.play(
-        Create(head), Create(shoulders),
-        FadeIn(profile_label_text, shift=UP * 0.1),
+        LaggedStart(*[FadeIn(r) for r in step_rows], lag_ratio=0.10),
+        FadeIn(viz_pane),
         run_time=0.7,
     )
+    scene.wait(0.20)
+
+    # ── ACT 5 ─ four pipeline steps, each highlighted in turn
+
+    def _activate_step(i):
+        """Light up step i's marker + brighten its label."""
+        return (
+            step_dots[i].animate.set_color(MATCH_GLOW)
+                                .set_fill(opacity=1.0)
+                                .scale(1.35),
+            step_labels_mobs[i].animate.set_color(TEXT_BODY),
+        )
+
+    def _complete_step(i):
+        """Mark step i done: hide the dot, fade in a green tick at the
+        same spot, dim the label."""
+        return (
+            step_dots[i].animate.set_fill(opacity=0),
+            FadeIn(step_checks[i], scale=1.4),
+            step_labels_mobs[i].animate.set_color(TEXT_DIM),
+        )
+
+    # ── Step 1: embedding scatter ───────────────────────────────
+    scene.play(*_activate_step(0), run_time=0.35)
+    # Build cloud (dots already at full opacity inside the viz_pane).
+    scene.add(embed_group)
+    # Re-make sure dots start invisible (we'll FadeIn them).
+    for d in bg_dots:
+        d.save_state()
+        d.set_fill(opacity=0)
+    for m in match_dots:
+        m.save_state()
+        m.set_fill(opacity=0)
+    query_dot.save_state()
+    query_dot.set_fill(opacity=0)
+    # Reveal cloud
     scene.play(
-        LaggedStart(*[FadeIn(g, scale=0.85) for g in trait_groups],
-                    lag_ratio=0.18),
+        LaggedStart(*[d.animate.restore() for d in bg_dots], lag_ratio=0.01),
+        run_time=0.9,
+    )
+    # Query vector lands at centre.
+    scene.play(
+        query_dot.animate.restore(),
+        run_time=0.25,
+    )
+    scene.play(
+        query_dot.animate.move_to(query_target),
+        run_time=0.45,
+    )
+    # Beams + matches light up + sim numbers fade in.
+    scene.play(
+        *[ln.animate.set_stroke(opacity=0.75) for ln in q_lines],
+        *[m.animate.restore() for m in match_dots],
+        LaggedStart(*[s.animate.set_opacity(1) for s in sim_labels],
+                    lag_ratio=0.10),
+        run_time=0.85,
+    )
+    scene.wait(0.45)
+    # Complete step 1, fade out its viz to make room for step 2.
+    scene.play(
+        *_complete_step(0),
+        FadeOut(embed_group),
+        run_time=0.45,
+    )
+
+    # ── Step 2: summary list ─────────────────────────────────────
+    scene.play(*_activate_step(1), run_time=0.35)
+    scene.play(Write(summary_block), run_time=1.5)
+    scene.wait(0.6)
+    scene.play(
+        *_complete_step(1),
+        FadeOut(summary_block),
+        run_time=0.45,
+    )
+
+    # ── Step 3: JSON profile ─────────────────────────────────────
+    scene.play(*_activate_step(2), run_time=0.35)
+    scene.play(Write(profile_block), run_time=2.0)
+    scene.wait(0.7)
+    scene.play(
+        *_complete_step(2),
+        FadeOut(profile_block),
+        run_time=0.45,
+    )
+
+    # ── Step 4: compose ──────────────────────────────────────────
+    scene.play(*_activate_step(3), run_time=0.35)
+    # Fragments fade in inside the viz pane, then converge toward
+    # the AI answer's position (off-screen until ACT 6 reveals it).
+    scene.play(
+        LaggedStart(*[FadeIn(f, shift=UP * 0.15) for f in compose_block],
+                    lag_ratio=0.20),
         run_time=1.0,
     )
-    scene.wait(0.5)
+    scene.wait(0.35)
+    # Pull the fragments toward where the answer will appear.
+    answer_anchor = np.array([CHAT_LEFT + 1.2, answer_y, 0])
+    scene.play(
+        *[f.animate.move_to(answer_anchor).scale(0.6).set_opacity(0)
+          for f in compose_block],
+        run_time=0.85,
+    )
+    scene.play(*_complete_step(3), run_time=0.35)
+    scene.wait(0.25)
 
-    # ── ACT 6 ─ all three layers compose into the AI's spot.
-    # Highlighted matches collapse toward the AI avatar position.
-    collapse_target = ai_avatar.get_center()
-    layer_movers = [
-        *[d.animate.move_to(collapse_target).scale(0.4).set_opacity(0)
-          for d in match_dots],
-        *[ln.animate.put_start_and_end_on(q_origin, collapse_target)
-                    .set_stroke(opacity=0)
-          for ln in q_lines],
-        *[c.animate.move_to(collapse_target).scale(0.3).set_opacity(0)
-          for i, c in enumerate(summary_cards) if i in real_idxs],
-        *[c.animate.set_opacity(0) for i, c in enumerate(summary_cards) if i not in real_idxs],
-        *[g.animate.move_to(collapse_target).scale(0.4).set_opacity(0)
-          for g in trait_groups],
-        profile_silhouette.animate.set_opacity(0),
-        embed_cloud.animate.set_opacity(0),
-    ]
-    scene.play(*layer_movers, run_time=1.1)
-
-    # ── ACT 7 ─ AI bubble materialises at the AI's spot; answer types in.
-    # FadeIn the outline + avatar separately; Write the text on top so
-    # the bubble stays a wireframe (set_opacity on the group would fill
-    # the outline-only rect with its stroke colour).
-    scene.play(FadeIn(ai_avatar), FadeIn(ai_bubble), run_time=0.5)
+    # ── ACT 6 ─ thinking area dissolves; AI answer types in
+    thinking_all = VGroup(
+        ai_think_avatar, think_header, step_block, viz_pane,
+        *step_checks,
+    )
+    scene.play(
+        FadeOut(thinking_all, shift=DOWN * 0.1),
+        run_time=0.55,
+    )
+    scene.play(FadeIn(ai_answer_avatar), FadeIn(ai_bubble), run_time=0.5)
     scene.play(Write(ai_text), run_time=2.6)
     scene.wait(0.6)
 
-    # ── OUTRO ─ chat shifts up + scales; title fades in below.
+    # ── OUTRO ─ shift the chat up + title appears below
     full_chat = VGroup(
-        chat_shell, user_avatar, user_msg_group, ai_avatar, ai_msg_group,
+        chat_shell, user_avatar, user_msg_group,
+        ai_answer_avatar, ai_msg_group,
     )
-    title_group.next_to(full_chat, DOWN, buff=0.15)
     scene.play(
-        full_chat.animate.scale(0.86).shift(UP * 0.40),
+        full_chat.animate.scale(0.82).shift(UP * 0.45),
         run_time=0.7,
     )
     title_group.next_to(full_chat, DOWN, buff=0.25)
@@ -601,12 +847,13 @@ class AIPsychologistIntro(Scene):
         _render_chat(
             self,
             question=QUESTION_RU,
-            welcome=WELCOME_RU,
             answer=ANSWER_RU,
             highlights=HIGHLIGHTS_RU,
             summaries=SUMMARIES_RU,
-            traits=TRAITS_RU,
-            profile_label=PROFILE_TITLE_RU,
+            profile_spec=PROFILE_JSON_RU,
+            fragments=COMPOSE_FRAGMENTS_RU,
+            think_label=THINK_LABEL_RU,
+            step_labels=STEP_LABELS_RU,
             input_hint=INPUT_HINT_RU,
             send_label=SEND_RU,
             title=TITLE_RU,
@@ -623,12 +870,13 @@ class AIPsychologistIntroEN(Scene):
         _render_chat(
             self,
             question=QUESTION_EN,
-            welcome=WELCOME_EN,
             answer=ANSWER_EN,
             highlights=HIGHLIGHTS_EN,
             summaries=SUMMARIES_EN,
-            traits=TRAITS_EN,
-            profile_label=PROFILE_TITLE_EN,
+            profile_spec=PROFILE_JSON_EN,
+            fragments=COMPOSE_FRAGMENTS_EN,
+            think_label=THINK_LABEL_EN,
+            step_labels=STEP_LABELS_EN,
             input_hint=INPUT_HINT_EN,
             send_label=SEND_EN,
             title=TITLE_EN,
