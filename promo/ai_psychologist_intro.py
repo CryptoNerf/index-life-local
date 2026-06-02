@@ -90,9 +90,11 @@ ANSWER_RU = (
 )
 HIGHLIGHTS_RU = ["«опять никуда не\nуспеваю»", "«перерабатываю»"]
 SUMMARIES_RU = [
-    ("12 мар", "опять никуда не успеваю"),
-    ("5 апр",  "снова перерабатываю"),
-    ("21 апр", "гонка против времени"),
+    # Compact paraphrases — must fit inside a 2.25-unit card next to a
+    # date label. The full quotes still appear in the typed AI answer.
+    ("12 мар", "не успеваю"),
+    ("5 апр",  "перерабатываю"),
+    ("21 апр", "гонка со временем"),
 ]
 TRAITS_RU = ["переутомление", "гонка со временем", "трудно отпускать"]
 PROFILE_TITLE_RU = "профиль"
@@ -112,9 +114,10 @@ ANSWER_EN = (
 )
 HIGHLIGHTS_EN = ["«I never make it»", "«I keep overworking»"]
 SUMMARIES_EN = [
-    ("Mar 12", "I never make it"),
-    ("Apr 5",  "I keep overworking"),
-    ("Apr 21", "racing against time"),
+    # Compact paraphrases — see SUMMARIES_RU.
+    ("Mar 12", "never make it"),
+    ("Apr 5",  "overworking"),
+    ("Apr 21", "racing the clock"),
 ]
 TRAITS_EN = ["overextension", "racing the clock", "letting go is hard"]
 PROFILE_TITLE_EN = "profile"
@@ -308,9 +311,10 @@ def _render_chat(scene, *, question, welcome, answer, highlights,
     user_msg_group.move_to(
         [CHAT_RIGHT - 0.95 - user_msg_group.width / 2, USER_MSG_Y, 0]
     )
-    # Reset opacity for the reveal
-    user_msg_group.set_opacity(0)
-    user_avatar.set_opacity(0)
+    # user_msg_group and user_avatar are NOT added to the scene at build
+    # time — FadeIn() in ACT 3 will both add them and animate them in
+    # from invisible. (Calling set_opacity(0) here would make FadeIn's
+    # target-opacity 0, leaving them invisible forever.)
 
     # ─────────────── BUILD: layer 1 — embedded cloud ───────────────
     # Pre-pick a deliberate cluster of 4 "matches" up-left of the chat,
@@ -347,7 +351,11 @@ def _render_chat(scene, *, question, welcome, answer, highlights,
     # On the right margin (outside the chat). 6 cards total — 3 are
     # the real matches (highlighted), 3 are placeholders so the stack
     # feels like "many summaries scrolling".
-    summary_x = 6.0
+    # Card centred at x=5.65 with width 2.25 keeps the right edge at
+    # x=6.78, comfortably inside the ~7.1-unit frame edge, and the left
+    # edge at x=4.52, clear of the chat panel's right edge (x=4.0).
+    summary_x = 5.65
+    summary_w = 2.25
     summary_ys = [2.6, 1.95, 1.30, 0.65, 0.00, -0.65]
     summary_cards = []
     real_idxs = [0, 2, 4]   # alternating
@@ -355,40 +363,39 @@ def _render_chat(scene, *, question, welcome, answer, highlights,
     for i, y in enumerate(summary_ys):
         if i in real_idxs:
             date_s, snippet = next(real_iter)
-            c = _summary_card(date_s, snippet, width=2.5, highlighted=True)
+            c = _summary_card(date_s, snippet, width=summary_w, highlighted=True)
         else:
-            c = _placeholder_card(width=2.5)
+            c = _placeholder_card(width=summary_w)
         c.move_to([summary_x, y, 0])
-        c.set_opacity(0)
         summary_cards.append(c)
 
     # ─────────────── BUILD: layer 3 — profile silhouette ────────────
     # On the left margin (outside the chat). Stylised head + shoulders
-    # outline, with trait tags orbiting it.
-    profile_x = -5.9
-    profile_ctr = np.array([profile_x, -1.5, 0])
-    head = Circle(radius=0.32, color=LINE_BRIGHT, stroke_width=1.6,
-                  fill_opacity=0).move_to(profile_ctr + UP * 0.55)
-    # A trapezoid-ish "shoulders" silhouette.
-    sh_y = profile_ctr[1] - 0.05
+    # at the top; trait tags stacked vertically below it. Centred at
+    # x=-5.5 so the widest trait (~2 units across) sits clear of both
+    # the frame edge (x=-7.1) and the chat panel left edge (x=-4.0).
+    profile_x = -5.50
+    profile_top_y = 2.00
+    head = Circle(radius=0.30, color=LINE_BRIGHT, stroke_width=1.6,
+                  fill_opacity=0).move_to([profile_x, profile_top_y, 0])
+    sh_y = profile_top_y - 0.55
     shoulders = Polygon(
-        np.array([profile_x - 0.72, sh_y - 0.35, 0]),
-        np.array([profile_x + 0.72, sh_y - 0.35, 0]),
-        np.array([profile_x + 0.42, sh_y + 0.25, 0]),
-        np.array([profile_x - 0.42, sh_y + 0.25, 0]),
+        np.array([profile_x - 0.58, sh_y - 0.28, 0]),
+        np.array([profile_x + 0.58, sh_y - 0.28, 0]),
+        np.array([profile_x + 0.34, sh_y + 0.22, 0]),
+        np.array([profile_x - 0.34, sh_y + 0.22, 0]),
         color=LINE_BRIGHT, stroke_width=1.6, fill_opacity=0,
     )
     profile_label_text = _ui_text(profile_label, size=12,
                                   color=TEXT_DIM)
-    profile_label_text.next_to(shoulders, DOWN, buff=0.20)
+    profile_label_text.next_to(shoulders, DOWN, buff=0.16)
     profile_silhouette = VGroup(head, shoulders, profile_label_text)
-    profile_silhouette.set_opacity(0)
 
-    # Trait tags around the silhouette
+    # Trait tags stacked vertically below the silhouette.
     trait_anchors = [
-        profile_ctr + UP * 2.20,                 # above the head
-        profile_ctr + LEFT * 1.20 + DOWN * 0.65, # bottom-left
-        profile_ctr + RIGHT * 1.30 + DOWN * 0.65,# bottom-right
+        np.array([profile_x, 0.50, 0]),
+        np.array([profile_x, -0.20, 0]),
+        np.array([profile_x, -0.90, 0]),
     ]
     trait_groups = []
     for label, anchor in zip(traits, trait_anchors):
@@ -399,7 +406,6 @@ def _render_chat(scene, *, question, welcome, answer, highlights,
         )
         rect.move_to(t.get_center())
         g = VGroup(rect, t).move_to(anchor)
-        g.set_opacity(0)
         trait_groups.append(g)
 
     # ─────────────── BUILD: AI answer (revealed at the end) ────────
@@ -416,8 +422,9 @@ def _render_chat(scene, *, question, welcome, answer, highlights,
     ai_msg_group.move_to(
         [CHAT_LEFT + 0.95 + ai_msg_group.width / 2, AI_MSG_Y, 0]
     )
-    ai_msg_group.set_opacity(0)
-    ai_avatar.set_opacity(0)
+    # ai_msg_group / ai_avatar are NOT added to scene at build time —
+    # FadeIn()/Write() in ACT 7 add and reveal them. Same reasoning as
+    # for user_msg_group above.
 
     # Outro
     title_text = Text(title, font="Times New Roman",
@@ -477,27 +484,15 @@ def _render_chat(scene, *, question, welcome, answer, highlights,
     scene.add(user_msg_text)
     scene.wait(0.35)
 
-    # ── ACT 4 ─ chat ghosts; the three header tags about to spawn layers
-    # stay bright while everything else dims.
-    bright_tags = VGroup(status_embed, status_summ, status_prof)
-    dim_targets = VGroup(
-        panel, status_dot1, status_dot2, ctx_group, status_divider,
-        toolbar, toolbar_divider,
-        welcome_avatar, welcome_group,
-        input_divider, input_box, send_group,
-        user_avatar, user_msg_group,
-    )
-    scene.play(
-        dim_targets.animate.set_opacity(0.18),
-        bright_tags.animate.set_color(LINE_BRIGHT),
-        run_time=0.55,
-    )
-
+    # ── ACT 4 ─ chat stays at full brightness throughout the x-ray.
+    # (Earlier attempts dimmed the whole chat via set_opacity, but that
+    # also filled the outline-only panel with its stroke colour, masking
+    # everything inside. The Indicate pulses on each header tag below
+    # are enough to lead the eye into the layers without masking the
+    # chat content.)
     # Add the (still invisible) cloud behind the chat.
     scene.add(embed_cloud)
-    embed_cloud.set_z_index(-1)
-    panel.set_z_index(2)
-    bright_tags.set_z_index(3)
+    embed_cloud.set_z_index(-2)
 
     # ── ACT 5a ─ LAYER 1: embedded cloud expands from "238/238 embedded"
     scene.play(Indicate(status_embed, color=MATCH_GLOW,
@@ -527,11 +522,12 @@ def _render_chat(scene, *, question, welcome, answer, highlights,
                          scale_factor=1.10), run_time=0.4)
     # Cards slide up in sequence with a small lag — feels like
     # scrolling through summaries.
-    for c in summary_cards:
-        c.shift(DOWN * 0.4)   # start a bit below their final position
+    # Each card slides up into place — FadeIn(shift=UP*0.4) gives both
+    # the slide and the reveal in a single primitive, and respects the
+    # placeholder cards' fill_opacity=0 instead of filling them.
     scene.play(
         LaggedStart(
-            *[c.animate.shift(UP * 0.4).set_opacity(1) for c in summary_cards],
+            *[FadeIn(c, shift=UP * 0.4) for c in summary_cards],
             lag_ratio=0.08,
         ),
         run_time=1.2,
@@ -546,14 +542,11 @@ def _render_chat(scene, *, question, welcome, answer, highlights,
         FadeIn(profile_label_text, shift=UP * 0.1),
         run_time=0.7,
     )
-    profile_silhouette.set_opacity(1)
     scene.play(
         LaggedStart(*[FadeIn(g, scale=0.85) for g in trait_groups],
                     lag_ratio=0.18),
         run_time=1.0,
     )
-    for g in trait_groups:
-        g.set_opacity(1)
     scene.wait(0.5)
 
     # ── ACT 6 ─ all three layers compose into the AI's spot.
@@ -575,18 +568,10 @@ def _render_chat(scene, *, question, welcome, answer, highlights,
     ]
     scene.play(*layer_movers, run_time=1.1)
 
-    # Chat brightens back up.
-    scene.play(
-        dim_targets.animate.set_opacity(1.0),
-        bright_tags.animate.set_color(TEXT_DIM),
-        run_time=0.5,
-    )
-
     # ── ACT 7 ─ AI bubble materialises at the AI's spot; answer types in.
-    ai_avatar.set_opacity(1)
-    ai_bubble.set_stroke(opacity=1)
-    ai_msg_group.set_opacity(1)
-    ai_text.set_opacity(0)
+    # FadeIn the outline + avatar separately; Write the text on top so
+    # the bubble stays a wireframe (set_opacity on the group would fill
+    # the outline-only rect with its stroke colour).
     scene.play(FadeIn(ai_avatar), FadeIn(ai_bubble), run_time=0.5)
     scene.play(Write(ai_text), run_time=2.6)
     scene.wait(0.6)
