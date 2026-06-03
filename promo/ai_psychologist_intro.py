@@ -211,7 +211,11 @@ def _mono(s, size=14, color=TEXT_BODY):
 
 
 def _body_text(s, size=17, color=TEXT_BODY, italic=False):
-    kw = dict(font="Times New Roman", color=color, font_size=size, line_spacing=0.55)
+    # Georgia rather than Times New Roman: Pango's shaping of Cyrillic
+    # under Times produces uneven letter spacing in some words
+    # (e.g. "последнее" rendered as "п оследн ее"). Georgia ships with
+    # macOS, has a similar serif look, and shapes Cyrillic cleanly.
+    kw = dict(font="Georgia", color=color, font_size=size, line_spacing=0.55)
     if italic:
         kw["slant"] = ITALIC
     return Text(s, **kw)
@@ -444,7 +448,7 @@ def _build_compose_viz(fragments, viz_center, viz_w, viz_h):
     frag_group = VGroup()
     n = len(fragments)
     for i, f in enumerate(fragments):
-        t = Text(f, font="Times New Roman", slant=ITALIC,
+        t = Text(f, font="Georgia", slant=ITALIC,
                  color=HIGHLIGHT, font_size=15)
         # Spread vertically inside the viz.
         y = viz_center[1] + viz_h/2 - 0.30 - (i * (viz_h - 0.55) / (n - 1 if n > 1 else 1))
@@ -611,22 +615,28 @@ def _render_chat(scene, *, question, answer, highlights, summaries,
     compose_block = _build_compose_viz(fragments, viz_ctr, viz_w - 0.50, viz_h - 0.50)
 
     # ─────────────── BUILD: final answer bubble ─────────────────────
-    # Position: directly under the thinking checklist, well above the
-    # input divider so it never overlaps. We'll fade out the thinking
-    # block before this appears, so it owns the whole body.
-    answer_y = THINK_HEAD_Y - 1.30
+    # The avatar stays at exactly the same y as the AI's "thinking"
+    # avatar was — the answer literally appears in place of the
+    # thinking, no vertical jump. The bubble extends DOWN from the
+    # avatar (avatar at top-left, real-chat convention for multi-line
+    # AI replies — keeps the gap to the user message tight instead of
+    # pushing the answer halfway down the chat body).
+    answer_avatar_y = THINK_HEAD_Y
     ai_answer_avatar = _avatar_dot(
         AI_AVATAR_COLOR,
-        np.array([CHAT_LEFT + 0.55, answer_y, 0]),
+        np.array([CHAT_LEFT + 0.55, answer_avatar_y, 0]),
         radius=0.18,
     )
-    ai_text = Text(answer, font="Times New Roman", color=TEXT_BODY,
+    ai_text = Text(answer, font="Georgia", color=TEXT_BODY,
                    font_size=15, line_spacing=0.55,
                    t2c={h: HIGHLIGHT for h in highlights})
     ai_bubble = _wireframe_bubble(ai_text, pad_x=0.30, pad_y=0.22, min_w=5.5)
     ai_msg_group = VGroup(ai_bubble, ai_text)
+    bubble_h = ai_msg_group.height
+    # Bubble top sits at the avatar's y; centre is bubble_h/2 below.
     ai_msg_group.move_to(
-        [CHAT_LEFT + 0.95 + ai_msg_group.width / 2, answer_y, 0]
+        [CHAT_LEFT + 0.95 + ai_msg_group.width / 2,
+         answer_avatar_y - bubble_h / 2, 0]
     )
     # Sanity: make sure the bubble's bottom clears the input divider
     # with a margin. If not, this is a layout bug — fail loud.
@@ -635,7 +645,7 @@ def _render_chat(scene, *, question, answer, highlights, summaries,
     if bubble_bottom < divider_top + 0.30:
         raise RuntimeError(
             f"AI bubble ({bubble_bottom:.2f}) would overlap the input "
-            f"divider ({divider_top:.2f}). Move answer_y up.")
+            f"divider ({divider_top:.2f}).")
 
     # Outro
     title_text = Text(title, font="Times New Roman",
@@ -761,7 +771,9 @@ def _render_chat(scene, *, question, answer, highlights, summaries,
                     lag_ratio=0.10),
         run_time=0.85,
     )
-    scene.wait(0.45)
+    # Hold the embedding scatter — viewer wants to actually see the
+    # 4 lit-up matches + their cosine sim numbers.
+    scene.wait(1.6)
     # Complete step 1, fade out its viz to make room for step 2.
     scene.play(
         *_complete_step(0),
@@ -772,7 +784,9 @@ def _render_chat(scene, *, question, answer, highlights, summaries,
     # ── Step 2: summary list ─────────────────────────────────────
     scene.play(*_activate_step(1), run_time=0.35)
     scene.play(Write(summary_block), run_time=1.5)
-    scene.wait(0.6)
+    # Hold the summaries long enough to actually read three rows of
+    # date + quote + sim.
+    scene.wait(2.6)
     scene.play(
         *_complete_step(1),
         FadeOut(summary_block),
@@ -782,7 +796,8 @@ def _render_chat(scene, *, question, answer, highlights, summaries,
     # ── Step 3: JSON profile ─────────────────────────────────────
     scene.play(*_activate_step(2), run_time=0.35)
     scene.play(Write(profile_block), run_time=2.0)
-    scene.wait(0.7)
+    # Hold the profile JSON — it's the densest step; needs time to read.
+    scene.wait(2.8)
     scene.play(
         *_complete_step(2),
         FadeOut(profile_block),
@@ -798,9 +813,12 @@ def _render_chat(scene, *, question, answer, highlights, summaries,
                     lag_ratio=0.20),
         run_time=1.0,
     )
-    scene.wait(0.35)
-    # Pull the fragments toward where the answer will appear.
-    answer_anchor = np.array([CHAT_LEFT + 1.2, answer_y, 0])
+    # Let the three retrieved fragments sit visibly before they fly
+    # toward the AI bubble — they're the bridge between "thinking" and
+    # "answer", needs a beat to read.
+    scene.wait(1.8)
+    # Pull the fragments toward where the answer's avatar will appear.
+    answer_anchor = np.array([CHAT_LEFT + 1.2, answer_avatar_y, 0])
     scene.play(
         *[f.animate.move_to(answer_anchor).scale(0.6).set_opacity(0)
           for f in compose_block],
@@ -820,7 +838,8 @@ def _render_chat(scene, *, question, answer, highlights, summaries,
     )
     scene.play(FadeIn(ai_answer_avatar), FadeIn(ai_bubble), run_time=0.5)
     scene.play(Write(ai_text), run_time=2.6)
-    scene.wait(0.6)
+    # Let the final answer breathe before the outro pulls focus off.
+    scene.wait(2.6)
 
     # ── OUTRO ─ shift the chat up + title appears below
     full_chat = VGroup(
