@@ -211,14 +211,17 @@ def _mono(s, size=14, color=TEXT_BODY):
 
 
 def _body_text(s, size=17, color=TEXT_BODY, italic=False):
-    # Georgia rather than Times New Roman: Pango's shaping of Cyrillic
-    # under Times produces uneven letter spacing in some words
-    # (e.g. "последнее" rendered as "п оследн ее"). Georgia ships with
-    # macOS, has a similar serif look, and shapes Cyrillic cleanly.
-    kw = dict(font="Georgia", color=color, font_size=size, line_spacing=0.55)
+    # DejaVu Serif renders Cyrillic + Latin with proper Pango shaping
+    # under manim. Previous attempts: Times New Roman split words
+    # internally ("п оследн ее"); Georgia looked loose at small sizes.
+    # MarkupText keeps the whole string in one Pango layout (Text+t2c
+    # would split it into per-chunk renders and lose kerning across
+    # chunks).
+    kw = dict(font="DejaVu Serif", color=color, font_size=size,
+              line_spacing=0.55)
     if italic:
         kw["slant"] = ITALIC
-    return Text(s, **kw)
+    return MarkupText(s, **kw)
 
 
 def _avatar_dot(color, position, radius=0.20):
@@ -448,8 +451,8 @@ def _build_compose_viz(fragments, viz_center, viz_w, viz_h):
     frag_group = VGroup()
     n = len(fragments)
     for i, f in enumerate(fragments):
-        t = Text(f, font="Georgia", slant=ITALIC,
-                 color=HIGHLIGHT, font_size=15)
+        t = MarkupText(f, font="DejaVu Serif", slant=ITALIC,
+                       color=HIGHLIGHT, font_size=15)
         # Spread vertically inside the viz.
         y = viz_center[1] + viz_h/2 - 0.30 - (i * (viz_h - 0.55) / (n - 1 if n > 1 else 1))
         t.move_to(np.array([viz_center[0], y, 0]))
@@ -627,9 +630,15 @@ def _render_chat(scene, *, question, answer, highlights, summaries,
         np.array([CHAT_LEFT + 0.55, answer_avatar_y, 0]),
         radius=0.18,
     )
-    ai_text = Text(answer, font="Georgia", color=TEXT_BODY,
-                   font_size=15, line_spacing=0.55,
-                   t2c={h: HIGHLIGHT for h in highlights})
+    # Wrap each highlighted fragment in a Pango <span foreground>; using
+    # MarkupText (vs Text with t2c) preserves kerning across the whole
+    # line — t2c splits the layout into per-chunk renders and loses it.
+    ai_markup = answer
+    for h in highlights:
+        ai_markup = ai_markup.replace(
+            h, f'<span foreground="{HIGHLIGHT}">{h}</span>')
+    ai_text = MarkupText(ai_markup, font="DejaVu Serif", color=TEXT_BODY,
+                         font_size=15, line_spacing=0.55)
     ai_bubble = _wireframe_bubble(ai_text, pad_x=0.30, pad_y=0.22, min_w=5.5)
     ai_msg_group = VGroup(ai_bubble, ai_text)
     bubble_h = ai_msg_group.height
@@ -784,9 +793,7 @@ def _render_chat(scene, *, question, answer, highlights, summaries,
     # ── Step 2: summary list ─────────────────────────────────────
     scene.play(*_activate_step(1), run_time=0.35)
     scene.play(Write(summary_block), run_time=1.5)
-    # Hold the summaries long enough to actually read three rows of
-    # date + quote + sim.
-    scene.wait(2.6)
+    scene.wait(1.6)
     scene.play(
         *_complete_step(1),
         FadeOut(summary_block),
@@ -796,8 +803,7 @@ def _render_chat(scene, *, question, answer, highlights, summaries,
     # ── Step 3: JSON profile ─────────────────────────────────────
     scene.play(*_activate_step(2), run_time=0.35)
     scene.play(Write(profile_block), run_time=2.0)
-    # Hold the profile JSON — it's the densest step; needs time to read.
-    scene.wait(2.8)
+    scene.wait(1.6)
     scene.play(
         *_complete_step(2),
         FadeOut(profile_block),
