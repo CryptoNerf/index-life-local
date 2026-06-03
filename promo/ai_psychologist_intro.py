@@ -96,8 +96,8 @@ CONTEXT_PCT    = "13%"
 QUESTION_RU = "Почему я в последнее время устаю?"
 ANSWER_RU = (
     "За последние два месяца ты часто упоминал «опять никуда не\n"
-    "успеваю» и «перерабатываю». Похоже, есть устойчивое чувство\n"
-    "гонки против времени. Что важнее всего отпустить прямо сейчас?"
+    "успеваю» и «перерабатываю». А вот про отдых в записях почти\n"
+    "ничего. Когда ты в последний раз давал себе день без задач?"
 )
 HIGHLIGHTS_RU = ["«опять никуда не\nуспеваю»", "«перерабатываю»"]
 THINK_LABEL_RU = "думаю над ответом"
@@ -110,7 +110,7 @@ STEP_LABELS_RU = [
 SUMMARIES_RU = [
     ("12 мар", "опять никуда не успеваю", 0.87),
     ("5 апр",  "снова перерабатываю",      0.82),
-    ("21 апр", "гонка против времени",     0.79),
+    ("21 апр", "опять не выспался",        0.79),
 ]
 # Sample of what app/modules/deep_mind actually stores per user: the
 # psychological profile that informs every reply. Keys are illustrative
@@ -126,25 +126,25 @@ PROFILE_JSON_RU = [
                              (': ', JSON_PUNCT), ('0.74', JSON_NUM)]),
     ('  },',                [('  },', JSON_PUNCT)]),
     ('  "pattern"',         [('"pattern"', JSON_KEY), (': ', JSON_PUNCT),
-                             ('"гонка со временем"', JSON_STR)]),
+                             ('"хроническая перегрузка"', JSON_STR)]),
     ('}',                   [('}', JSON_PUNCT)]),
 ]
 COMPOSE_FRAGMENTS_RU = [
     "«опять никуда не успеваю»",
     "«перерабатываю»",
-    "гонка со временем",
+    "опять не выспался",
 ]
 INPUT_HINT_RU = "Сообщение…"
 SEND_RU = "Отправить"
 TITLE_RU    = "ИИ-психолог"
-SUBTITLE_RU = "видит, что стоит за словами"
+SUBTITLE_RU = "опирается на твой дневник"
 
 # English pack ────────────────────────────────────────────────────
 QUESTION_EN = "Why have I been so tired lately?"
 ANSWER_EN = (
     "Over the past two months you've often written «I never make it»\n"
-    "and «I keep overworking». There's a persistent sense of racing\n"
-    "against time. What feels most important to let go of right now?"
+    "and «I keep overworking». But you barely mention rest at all.\n"
+    "When did you last give yourself a day with no tasks?"
 )
 HIGHLIGHTS_EN = ["«I never make it»", "«I keep overworking»"]
 THINK_LABEL_EN = "thinking"
@@ -155,9 +155,9 @@ STEP_LABELS_EN = [
     "Compose the answer",
 ]
 SUMMARIES_EN = [
-    ("Mar 12", "I never make it",      0.87),
-    ("Apr 5",  "I keep overworking",   0.82),
-    ("Apr 21", "racing against time",  0.79),
+    ("Mar 12", "I never make it",     0.87),
+    ("Apr 5",  "I keep overworking",  0.82),
+    ("Apr 21", "didn't sleep enough", 0.79),
 ]
 PROFILE_JSON_EN = [
     ('{',                   [('{', JSON_PUNCT)]),
@@ -170,18 +170,18 @@ PROFILE_JSON_EN = [
                              (': ', JSON_PUNCT), ('0.74', JSON_NUM)]),
     ('  },',                [('  },', JSON_PUNCT)]),
     ('  "pattern"',         [('"pattern"', JSON_KEY), (': ', JSON_PUNCT),
-                             ('"racing the clock"', JSON_STR)]),
+                             ('"chronic overload"', JSON_STR)]),
     ('}',                   [('}', JSON_PUNCT)]),
 ]
 COMPOSE_FRAGMENTS_EN = [
     "«I never make it»",
     "«I keep overworking»",
-    "racing against time",
+    "didn't sleep enough",
 ]
 INPUT_HINT_EN = "Write a message…"
 SEND_EN = "Send"
 TITLE_EN    = "AI Psychologist"
-SUBTITLE_EN = "sees what's behind the words"
+SUBTITLE_EN = "grounded in your diary"
 
 
 # ── Small builders ───────────────────────────────────────────────
