@@ -62,22 +62,32 @@ def _body_text(s, size=17, color=TEXT_BODY, italic=False):
 
 # ── Data generation ──────────────────────────────────────────────
 
+# Weekday bias on the synthetic ratings — gives the rose chart a real
+# story (Mondays slightly worse than weekends), so the weekday-average
+# petals come out with clearly different brightness instead of all
+# averaging to roughly the same number.
+# Index: 0 = Monday, 6 = Sunday.
+WEEKDAY_BIAS = [-0.7, -0.3, 0.0, 0.1, 0.5, 0.9, 0.6]
+
+
 def _generate_year(rng):
     """Return a list of (day_of_year, rating, jitter_a, jitter_b)
     tuples for ~310 days of the year — most days have an entry, ~15%
     are skipped so it looks like a real diary. The rating follows a
-    sinusoidal seasonal pattern (peak in mid-summer, trough in late
-    winter) plus Gaussian noise; jitter_a/_b are stable per-entry
-    random offsets used by the rose + scatter positions so a single
-    dot doesn't jump around during transitions.
+    seasonal sinusoid + a per-weekday bias (so weekends rate higher
+    than Mondays on average), plus Gaussian noise. jitter_a/_b are
+    stable per-entry random offsets used by the rose + scatter
+    positions so a dot doesn't jump around during transitions.
     """
     entries = []
     for d in range(1, 366):
         if rng.random() < 0.12:
             continue
+        weekday = (d - 1) % 7
         seasonal = 5.5 + 1.8 * math.sin(2 * math.pi * (d - 80) / 365)
         noise = rng.normal(0, 1.0)
-        rating = max(1, min(10, int(round(seasonal + noise))))
+        rating = max(1, min(10, int(round(
+            seasonal + WEEKDAY_BIAS[weekday] + noise))))
         jitter_a = rng.uniform(-1.0, 1.0)
         jitter_b = rng.uniform(-1.0, 1.0)
         entries.append((d, rating, jitter_a, jitter_b))
@@ -111,19 +121,32 @@ def _heatmap_positions(data):
     return out
 
 
+# Spiral parameters — kept module-level so the position function and
+# the structural-overlay builder share the same geometry.
+SPIRAL_CX,  SPIRAL_CY  = 0.0, 0.0
+SPIRAL_RMIN, SPIRAL_RMAX = 0.65, 2.80
+SPIRAL_TURNS = 12   # one turn per month — matches the real spiral page
+
+
+def _spiral_angle_radius(t):
+    """t ∈ [0,1] day fraction → (angle, radius) on the year spiral.
+
+    Starts at the top (Jan at +π/2 in manim's math-y-up coords) and
+    rotates clockwise — mirrors the real /graphics/spiral page (which
+    uses SVG y-down but otherwise the same formula)."""
+    angle = math.pi / 2 - 2 * math.pi * SPIRAL_TURNS * t
+    r = SPIRAL_RMIN + t * (SPIRAL_RMAX - SPIRAL_RMIN)
+    return angle, r
+
+
 def _spiral_positions(data):
-    """One spiral covering the year with 4 turns — wide enough that
-    individual dots stay legible, tight enough to read as a spiral."""
-    cx, cy = 0.0, 0.0
-    r_min, r_max = 0.45, 2.65
-    turns = 4
+    """The year wound into a 12-turn spiral — one turn per month, same
+    layout as the actual app's /graphics/spiral page."""
     out = []
     for d, _r, _ja, _jb in data:
-        t = (d - 1) / 364
-        angle = -math.pi / 2 + 2 * math.pi * turns * t
-        r = r_min + t * (r_max - r_min)
-        out.append(np.array([cx + r * math.cos(angle),
-                             cy + r * math.sin(angle), 0]))
+        angle, r = _spiral_angle_radius((d - 1) / 364)
+        out.append(np.array([SPIRAL_CX + r * math.cos(angle),
+                             SPIRAL_CY + r * math.sin(angle), 0]))
     return out
 
 
@@ -169,18 +192,24 @@ def _river_positions(data):
 # dots just form abstract shapes; with them the structure of each
 # chart is legible.
 
-# January-1 of a non-leap year (Jan 1 == Monday for our synthetic data)
+# Day-of-year for the first day of each month, and the centre of each
+# month, in a non-leap year (Jan 1 treated as Monday for our synthetic
+# data). Centre values are used to position month labels so they sit
+# above the middle of each month's columns rather than at the start
+# (which made December's label fall short of December's last dots).
 MONTH_STARTS_DAY = [1, 32, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335]
+MONTH_CENTRES_DAY = [16, 46, 75, 106, 136, 167, 197, 228, 259, 289, 320, 350]
 
 
 def _build_heatmap_struct():
-    """Heatmap calendar overlay: month numbers above the grid."""
+    """Heatmap calendar overlay: month numbers centred above their
+    column range in the grid."""
     cell_w = 0.13
     weeks = 53
     x0 = -weeks * cell_w / 2 + cell_w / 2
     y_label = (7 * 0.42) / 2 + 0.45
     labels = VGroup()
-    for m, day in enumerate(MONTH_STARTS_DAY):
+    for m, day in enumerate(MONTH_CENTRES_DAY):
         week = (day - 1) // 7
         x = x0 + week * cell_w
         t = _high_dpi(Text, f"{m+1:02d}", 11,
@@ -192,32 +221,32 @@ def _build_heatmap_struct():
 
 def _build_spiral_struct():
     """Spiral overlay: faint guide curve along the dot path + 12
-    month markers at the angle where each month begins."""
-    cx, cy = 0.0, 0.0
-    r_min, r_max = 0.45, 2.65
-    turns = 4
-
-    # Faint guide spiral — sample 200 points along the path.
+    month markers placed at each month's start angle (radially
+    outside the spiral path so they don't overlap dots) — matches
+    the layout of the real /graphics/spiral page."""
+    # Faint guide spiral — sample many points along the path so the
+    # curve reads as smooth even at 720p.
     guide_pts = []
-    for i in range(201):
-        t = i / 200
-        angle = -math.pi / 2 + 2 * math.pi * turns * t
-        r = r_min + t * (r_max - r_min)
-        guide_pts.append(np.array([cx + r * math.cos(angle),
-                                   cy + r * math.sin(angle), 0]))
+    for i in range(801):
+        t = i / 800
+        angle, r = _spiral_angle_radius(t)
+        guide_pts.append(np.array([SPIRAL_CX + r * math.cos(angle),
+                                   SPIRAL_CY + r * math.sin(angle), 0]))
     guide = VMobject(stroke_color=LINE_BRIGHT, stroke_width=0.8,
                      stroke_opacity=0.30)
     guide.set_points_smoothly(guide_pts)
 
     # 12 month markers at the spiral position where each month begins,
-    # nudged slightly outward so the label doesn't sit on a dot.
+    # nudged radially outward so the label sits clearly outside the
+    # current turn. Each consecutive month is one turn further out,
+    # so the labels arrange as a tight clockwise arc reaching outward.
     labels = VGroup()
     for m, day in enumerate(MONTH_STARTS_DAY):
         t = (day - 1) / 364
-        angle = -math.pi / 2 + 2 * math.pi * turns * t
-        r = r_min + t * (r_max - r_min) + 0.30
-        x = cx + r * math.cos(angle)
-        y = cy + r * math.sin(angle)
+        angle, r = _spiral_angle_radius(t)
+        label_r = r + 0.22
+        x = SPIRAL_CX + label_r * math.cos(angle)
+        y = SPIRAL_CY + label_r * math.sin(angle)
         label = _high_dpi(Text, f"{m+1:02d}", 10,
                           font="Helvetica", color=TEXT_DIM)
         label.move_to([x, y, 0])
@@ -275,16 +304,24 @@ def _build_river_struct(data):
         label.move_to([x, y_lo - 0.35, 0])
         elements.add(label)
 
-    # Y-axis: rating ticks at 1, 5, 10 + dashed horizontal gridlines
-    for rating in (1, 5, 10):
+    # Y-axis: rating ticks at every integer 1..10. Major gridlines
+    # (dashed, slightly brighter) at 1, 5, 10; minor (very faint) at
+    # the rest, so the chart reads as a 10-point scale without the
+    # ten gridlines competing for attention.
+    for rating in range(1, 11):
         y = y_lo + (rating - 1) / 9 * (y_hi - y_lo)
-        grid = DashedLine(np.array([x_left, y, 0]),
-                          np.array([x_right, y, 0]),
-                          stroke_color=LINE, stroke_width=0.5,
-                          stroke_opacity=0.4, dash_length=0.08)
+        is_major = rating in (1, 5, 10)
+        grid = DashedLine(
+            np.array([x_left, y, 0]),
+            np.array([x_right, y, 0]),
+            stroke_color=LINE, stroke_width=0.5 if is_major else 0.4,
+            stroke_opacity=0.4 if is_major else 0.18,
+            dash_length=0.08,
+        )
         elements.add(grid)
         label = _high_dpi(Text, str(rating), 10,
-                          font="Helvetica", color=TEXT_DIM)
+                          font="Helvetica",
+                          color=TEXT_DIM if is_major else "#5a5a5a")
         label.move_to([x_left - 0.35, y, 0])
         elements.add(label)
 
@@ -365,6 +402,33 @@ def _render_graphics_intro(scene: Scene, *, title_text, subtitle_text,
     p_rose    = _rose_positions(data)
     p_river   = _river_positions(data)
 
+    # Rose-phase opacity overrides — the petal for each weekday should
+    # encode the AVERAGE rating on that weekday (so worst-weekday-petal
+    # reads dimmer than best-weekday-petal), not the individual day's
+    # rating. Compute weekday averages, normalise to the observed
+    # min/max range so the contrast stays visible even when the actual
+    # spread is narrow.
+    by_weekday = [[] for _ in range(7)]
+    for d, r, *_ in data:
+        by_weekday[(d - 1) % 7].append(r)
+    weekday_avg = [sum(rs) / len(rs) if rs else 5.0 for rs in by_weekday]
+    wmin, wmax = min(weekday_avg), max(weekday_avg)
+    if wmax - wmin < 0.5:        # synthesise a min spread so contrast survives
+        wmin, wmax = wmin - 0.5, wmax + 0.5
+
+    def rose_opacity_for_weekday(w):
+        t = (weekday_avg[w] - wmin) / (wmax - wmin)
+        # Worst weekday → near-invisible (0.10), best → fully bright
+        # (1.0). Whole petal shares the same opacity so the eye can
+        # rank weekdays at a glance.
+        return 0.10 + 0.90 * t
+
+    rose_opacities    = []  # per-dot opacity for the rose phase
+    indiv_opacities   = []  # per-dot opacity for every other phase
+    for d, r, *_ in data:
+        rose_opacities.append(rose_opacity_for_weekday((d - 1) % 7))
+        indiv_opacities.append(opacity_for(r))
+
     # Place each dot at its scatter position so the opening reveal
     # is a cloud, not a flash from origin.
     for dot, pos in zip(dots, p_scatter):
@@ -433,18 +497,22 @@ def _render_graphics_intro(scene: Scene, *, title_text, subtitle_text,
     )
     scene.wait(2.3)
 
-    # ── ACT 5 ─ morph to rose
+    # ── ACT 5 ─ morph to rose; opacities recolour to weekday-average
+    # so each petal reads as "this weekday rates high / low on average"
     scene.play(
-        *[d.animate.move_to(p) for d, p in zip(dots, p_rose)],
+        *[d.animate.move_to(p).set_fill(opacity=op)
+          for d, p, op in zip(dots, p_rose, rose_opacities)],
         FadeOut(struct_spir), FadeOut(cap_spir),
         FadeIn(struct_rose), FadeIn(cap_rose, shift=UP * 0.1),
         run_time=1.7, rate_func=smooth,
     )
     scene.wait(2.3)
 
-    # ── ACT 6 ─ morph to river
+    # ── ACT 6 ─ morph to river; restore each dot's individual opacity
+    # so the scatter under the trend line shows daily variance again
     scene.play(
-        *[d.animate.move_to(p) for d, p in zip(dots, p_river)],
+        *[d.animate.move_to(p).set_fill(opacity=op)
+          for d, p, op in zip(dots, p_river, indiv_opacities)],
         FadeOut(struct_rose), FadeOut(cap_rose),
         FadeIn(struct_river), FadeIn(cap_river, shift=UP * 0.1),
         run_time=1.7, rate_func=smooth,
