@@ -637,32 +637,33 @@ def _render_chat(scene, *, question, answer, highlights, summaries,
         fragments, viz_ctr, viz_w - 0.50, viz_h - 0.50)
 
     # ─────────────── BUILD: final answer bubble ─────────────────────
-    # The avatar stays at exactly the same y as the AI's "thinking"
-    # avatar was — the answer literally appears in place of the
-    # thinking, no vertical jump. The bubble extends DOWN from the
-    # avatar (avatar at top-left, real-chat convention for multi-line
-    # AI replies — keeps the gap to the user message tight instead of
-    # pushing the answer halfway down the chat body).
-    answer_avatar_y = THINK_HEAD_Y
-    ai_answer_avatar = _avatar_dot(
-        AI_AVATAR_COLOR,
-        np.array([CHAT_LEFT + 0.55, answer_avatar_y, 0]),
-        radius=0.18,
-    )
+    # Avatar and bubble are vertically centred together — the same
+    # layout convention as the user message above (mirrored side).
+    # Build the bubble first to know its height, then place avatar at
+    # the bubble's centre.
     # Wrap each highlighted fragment in <span foreground="…">.
     ai_markup = answer
     for h in highlights:
         ai_markup = ai_markup.replace(
             h, f'<span foreground="{HIGHLIGHT}">{h}</span>')
     ai_text = _high_dpi(MarkupText, ai_markup, 15, font="DejaVu Serif",
-                        color=TEXT_BODY, line_spacing=0.55)
+                        color=TEXT_BODY, line_spacing=1.0)
     ai_bubble = _wireframe_bubble(ai_text, pad_x=0.30, pad_y=0.22, min_w=5.5)
     ai_msg_group = VGroup(ai_bubble, ai_text)
     bubble_h = ai_msg_group.height
-    # Bubble top sits at the avatar's y; centre is bubble_h/2 below.
+    # Place the bubble so its top sits with a small gap below the user
+    # message (matches the spacing between user and AI in a real chat),
+    # then put the avatar at the bubble's vertical centre.
+    user_msg_bottom_y = user_msg_group.get_bottom()[1]
+    bubble_top_y      = user_msg_bottom_y - 0.45
+    answer_avatar_y   = bubble_top_y - bubble_h / 2
+    ai_answer_avatar = _avatar_dot(
+        AI_AVATAR_COLOR,
+        np.array([CHAT_LEFT + 0.55, answer_avatar_y, 0]),
+        radius=0.18,
+    )
     ai_msg_group.move_to(
-        [CHAT_LEFT + 0.95 + ai_msg_group.width / 2,
-         answer_avatar_y - bubble_h / 2, 0]
+        [CHAT_LEFT + 0.95 + ai_msg_group.width / 2, answer_avatar_y, 0]
     )
     # Sanity: make sure the bubble's bottom clears the input divider
     # with a margin. If not, this is a layout bug — fail loud.
