@@ -201,21 +201,36 @@ def _divider(y, x_inset=0.30):
     )
 
 
+# Pango / Cairo quantise text metrics at small font_size values, which
+# is why manim Text/MarkupText renders Cyrillic + small Latin with
+# visible inter-letter gaps. Workaround (well-known in the manim
+# community): render the mobject at a larger internal font size so
+# Pango uses high-precision metrics, then scale the resulting SVG
+# down. 36 is enough to fix the kerning without changing how Pango
+# wraps multi-line text inside spans.
+HIGH_DPI_SIZE = 36
+
+
+def _high_dpi(mob_cls, s, size, **kwargs):
+    target = mob_cls(s, font_size=HIGH_DPI_SIZE, **kwargs)
+    target.scale(size / HIGH_DPI_SIZE)
+    return target
+
+
 def _ui_text(s, size=14, color=TEXT_DIM, font="Helvetica"):
-    return Text(s, font=font, color=color, font_size=size)
+    return _high_dpi(Text, s, size, font=font, color=color)
 
 
 def _mono(s, size=14, color=TEXT_BODY):
     """Monospace text — used for JSON, lists, similarity numbers."""
-    return Text(s, font="Menlo", color=color, font_size=size)
+    return _high_dpi(Text, s, size, font="Menlo", color=color)
 
 
 def _body_text(s, size=17, color=TEXT_BODY, italic=False):
-    kw = dict(font="DejaVu Serif", color=color, font_size=size,
-              line_spacing=0.55)
+    kw = dict(font="DejaVu Serif", color=color, line_spacing=0.55)
     if italic:
         kw["slant"] = ITALIC
-    return MarkupText(s, **kw)
+    return _high_dpi(MarkupText, s, size, **kw)
 
 
 def _avatar_dot(color, position, radius=0.20):
@@ -448,13 +463,13 @@ def _build_compose_viz(fragments, viz_center, viz_w, viz_h):
     fragment_idx = []   # indices of fragment mobjects inside `items`
     plus_idx     = []   # indices of "+" mobjects inside `items`
     for i, f in enumerate(fragments):
-        t = MarkupText(f, font="DejaVu Serif", slant=ITALIC,
-                       color=HIGHLIGHT, font_size=15)
+        t = _high_dpi(MarkupText, f, 15, font="DejaVu Serif",
+                      slant=ITALIC, color=HIGHLIGHT)
         fragment_idx.append(len(items))
         items.append(t)
         if i < len(fragments) - 1:
-            plus = MarkupText("+", font="DejaVu Serif",
-                              color=TEXT_DIM, font_size=20, weight=BOLD)
+            plus = _high_dpi(MarkupText, "+", 20, font="DejaVu Serif",
+                             color=TEXT_DIM, weight=BOLD)
             plus_idx.append(len(items))
             items.append(plus)
     group = VGroup(*items).arrange(DOWN, buff=0.20)
@@ -639,9 +654,8 @@ def _render_chat(scene, *, question, answer, highlights, summaries,
     for h in highlights:
         ai_markup = ai_markup.replace(
             h, f'<span foreground="{HIGHLIGHT}">{h}</span>')
-    ai_text = MarkupText(ai_markup, font="DejaVu Serif",
-                         color=TEXT_BODY, font_size=15,
-                         line_spacing=0.55)
+    ai_text = _high_dpi(MarkupText, ai_markup, 15, font="DejaVu Serif",
+                        color=TEXT_BODY, line_spacing=0.55)
     ai_bubble = _wireframe_bubble(ai_text, pad_x=0.30, pad_y=0.22, min_w=5.5)
     ai_msg_group = VGroup(ai_bubble, ai_text)
     bubble_h = ai_msg_group.height
@@ -659,11 +673,12 @@ def _render_chat(scene, *, question, answer, highlights, summaries,
             f"AI bubble ({bubble_bottom:.2f}) would overlap the input "
             f"divider ({divider_top:.2f}).")
 
-    # Outro
-    title_text = Text(title, font="Times New Roman",
+    # Outro — title is large enough that Pango quantisation isn't an
+    # issue, but the subtitle is small so go through the high-DPI path.
+    title_text = Text(title, font="DejaVu Serif",
                       color=TEXT_HEAD, font_size=38)
-    subtitle_text = Text(subtitle, font="Times New Roman", slant=ITALIC,
-                         color="#9a9a9a", font_size=20)
+    subtitle_text = _high_dpi(Text, subtitle, 20, font="DejaVu Serif",
+                              slant=ITALIC, color="#9a9a9a")
     title_group = VGroup(title_text, subtitle_text).arrange(DOWN, buff=0.14)
 
     # ═══════════════ ANIMATE ═══════════════════════════════════════
