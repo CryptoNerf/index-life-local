@@ -132,7 +132,7 @@ PROFILE_JSON_RU = [
 COMPOSE_FRAGMENTS_RU = [
     "«опять никуда не успеваю»",
     "«перерабатываю»",
-    "опять не выспался",
+    "«опять не выспался»",
 ]
 INPUT_HINT_RU = "Сообщение…"
 SEND_RU = "Отправить"
@@ -176,7 +176,7 @@ PROFILE_JSON_EN = [
 COMPOSE_FRAGMENTS_EN = [
     "«I never make it»",
     "«I keep overworking»",
-    "didn't sleep enough",
+    "«didn't sleep enough»",
 ]
 INPUT_HINT_EN = "Write a message…"
 SEND_EN = "Send"
@@ -211,12 +211,6 @@ def _mono(s, size=14, color=TEXT_BODY):
 
 
 def _body_text(s, size=17, color=TEXT_BODY, italic=False):
-    # DejaVu Serif renders Cyrillic + Latin with proper Pango shaping
-    # under manim. Previous attempts: Times New Roman split words
-    # internally ("п оследн ее"); Georgia looked loose at small sizes.
-    # MarkupText keeps the whole string in one Pango layout (Text+t2c
-    # would split it into per-chunk renders and lose kerning across
-    # chunks).
     kw = dict(font="DejaVu Serif", color=color, font_size=size,
               line_spacing=0.55)
     if italic:
@@ -445,19 +439,28 @@ def _build_profile_viz(profile_spec, viz_center, viz_w, viz_h):
 # ── Step 4: composition viz ───────────────────────────────────────
 
 def _build_compose_viz(fragments, viz_center, viz_w, viz_h):
-    """Three quote-fragments spread across the viz; they will glow,
-    contract, and travel toward the AI bubble that materialises below
-    afterwards."""
-    frag_group = VGroup()
-    n = len(fragments)
+    """Three quote-fragments interspersed with a '+' between each, to
+    say "all of these feed into the final answer." Returns the full
+    VGroup (fragments + pluses, alternating) plus the index list of
+    just-the-fragment children so the scene can animate them in
+    different beats."""
+    items = []
+    fragment_idx = []   # indices of fragment mobjects inside `items`
+    plus_idx     = []   # indices of "+" mobjects inside `items`
     for i, f in enumerate(fragments):
         t = MarkupText(f, font="DejaVu Serif", slant=ITALIC,
                        color=HIGHLIGHT, font_size=15)
-        # Spread vertically inside the viz.
-        y = viz_center[1] + viz_h/2 - 0.30 - (i * (viz_h - 0.55) / (n - 1 if n > 1 else 1))
-        t.move_to(np.array([viz_center[0], y, 0]))
-        frag_group.add(t)
-    return frag_group
+        fragment_idx.append(len(items))
+        items.append(t)
+        if i < len(fragments) - 1:
+            plus = MarkupText("+", font="DejaVu Serif",
+                              color=TEXT_DIM, font_size=20, weight=BOLD)
+            plus_idx.append(len(items))
+            items.append(plus)
+    group = VGroup(*items).arrange(DOWN, buff=0.20)
+    _fit_inside(group, viz_w, viz_h)
+    group.move_to(viz_center)
+    return group, fragment_idx, plus_idx
 
 
 # ── Main scene helper ────────────────────────────────────────────
@@ -531,7 +534,7 @@ def _render_chat(scene, *, question, answer, highlights, summaries,
     input_divider = _divider(INPUT_Y + 0.45)
 
     # The question text — starts in the input, will move to user bubble.
-    question_text = _body_text(question, size=17, color=TEXT_BRIGHT)
+    question_text = _body_text(question, size=15, color=TEXT_BRIGHT)
     question_text.move_to(input_box.get_left() + RIGHT * 0.35
                           + RIGHT * question_text.width / 2)
 
@@ -539,7 +542,7 @@ def _render_chat(scene, *, question, answer, highlights, summaries,
     user_avatar = _avatar_dot(USER_AVATAR_COLOR,
                               np.array([CHAT_RIGHT - 0.55, USER_MSG_Y, 0]),
                               radius=0.18)
-    user_msg_text = _body_text(question, size=17, color=TEXT_BRIGHT)
+    user_msg_text = _body_text(question, size=15, color=TEXT_BRIGHT)
     user_bubble = _wireframe_bubble(user_msg_text, pad_x=0.30, pad_y=0.20)
     user_msg_group = VGroup(user_bubble, user_msg_text)
     user_msg_group.move_to(
@@ -615,7 +618,8 @@ def _render_chat(scene, *, question, answer, highlights, summaries,
         _build_embedding_viz(rng, viz_ctr, viz_w - 0.50, viz_h - 0.50)
     summary_block = _build_summary_viz(summaries, viz_ctr, viz_w - 0.50, viz_h - 0.50)
     profile_block = _build_profile_viz(profile_spec, viz_ctr, viz_w - 0.50, viz_h - 0.50)
-    compose_block = _build_compose_viz(fragments, viz_ctr, viz_w - 0.50, viz_h - 0.50)
+    compose_block, compose_frag_idx, compose_plus_idx = _build_compose_viz(
+        fragments, viz_ctr, viz_w - 0.50, viz_h - 0.50)
 
     # ─────────────── BUILD: final answer bubble ─────────────────────
     # The avatar stays at exactly the same y as the AI's "thinking"
@@ -630,15 +634,14 @@ def _render_chat(scene, *, question, answer, highlights, summaries,
         np.array([CHAT_LEFT + 0.55, answer_avatar_y, 0]),
         radius=0.18,
     )
-    # Wrap each highlighted fragment in a Pango <span foreground>; using
-    # MarkupText (vs Text with t2c) preserves kerning across the whole
-    # line — t2c splits the layout into per-chunk renders and loses it.
+    # Wrap each highlighted fragment in <span foreground="…">.
     ai_markup = answer
     for h in highlights:
         ai_markup = ai_markup.replace(
             h, f'<span foreground="{HIGHLIGHT}">{h}</span>')
-    ai_text = MarkupText(ai_markup, font="DejaVu Serif", color=TEXT_BODY,
-                         font_size=15, line_spacing=0.55)
+    ai_text = MarkupText(ai_markup, font="DejaVu Serif",
+                         color=TEXT_BODY, font_size=15,
+                         line_spacing=0.55)
     ai_bubble = _wireframe_bubble(ai_text, pad_x=0.30, pad_y=0.22, min_w=5.5)
     ai_msg_group = VGroup(ai_bubble, ai_text)
     bubble_h = ai_msg_group.height
@@ -812,22 +815,29 @@ def _render_chat(scene, *, question, answer, highlights, summaries,
 
     # ── Step 4: compose ──────────────────────────────────────────
     scene.play(*_activate_step(3), run_time=0.35)
-    # Fragments fade in inside the viz pane, then converge toward
-    # the AI answer's position (off-screen until ACT 6 reveals it).
+    # Three retrieved quote-fragments fade in first; the "+" signs
+    # between them appear after to spell out that all of them feed
+    # into the answer (not just the last one).
+    fragment_mobs = [compose_block[i] for i in compose_frag_idx]
+    plus_mobs     = [compose_block[i] for i in compose_plus_idx]
     scene.play(
-        LaggedStart(*[FadeIn(f, shift=UP * 0.15) for f in compose_block],
+        LaggedStart(*[FadeIn(f, shift=UP * 0.15) for f in fragment_mobs],
                     lag_ratio=0.20),
         run_time=1.0,
     )
-    # Let the three retrieved fragments sit visibly before they fly
-    # toward the AI bubble — they're the bridge between "thinking" and
-    # "answer", needs a beat to read.
-    scene.wait(1.8)
-    # Pull the fragments toward where the answer's avatar will appear.
+    scene.play(
+        LaggedStart(*[FadeIn(p, scale=1.4) for p in plus_mobs],
+                    lag_ratio=0.20),
+        run_time=0.5,
+    )
+    # Let the assembled "fragment + fragment + fragment" sit visibly
+    # before everything flies toward the AI bubble.
+    scene.wait(1.6)
+    # Pull the whole stack toward where the answer's avatar will appear.
     answer_anchor = np.array([CHAT_LEFT + 1.2, answer_avatar_y, 0])
     scene.play(
-        *[f.animate.move_to(answer_anchor).scale(0.6).set_opacity(0)
-          for f in compose_block],
+        *[item.animate.move_to(answer_anchor).scale(0.6).set_opacity(0)
+          for item in compose_block],
         run_time=0.85,
     )
     scene.play(*_complete_step(3), run_time=0.35)
