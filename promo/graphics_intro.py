@@ -163,6 +163,151 @@ def _river_positions(data):
     return out
 
 
+# ── Structural overlays — axes, gridlines, labels, guide curves.
+# Each visualisation gets one VGroup that fades in with the morph and
+# fades out when the dots leave for the next phase. Without these the
+# dots just form abstract shapes; with them the structure of each
+# chart is legible.
+
+# January-1 of a non-leap year (Jan 1 == Monday for our synthetic data)
+MONTH_STARTS_DAY = [1, 32, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335]
+
+
+def _build_heatmap_struct():
+    """Heatmap calendar overlay: month numbers above the grid."""
+    cell_w = 0.13
+    weeks = 53
+    x0 = -weeks * cell_w / 2 + cell_w / 2
+    y_label = (7 * 0.42) / 2 + 0.45
+    labels = VGroup()
+    for m, day in enumerate(MONTH_STARTS_DAY):
+        week = (day - 1) // 7
+        x = x0 + week * cell_w
+        t = _high_dpi(Text, f"{m+1:02d}", 11,
+                      font="Helvetica", color=TEXT_DIM)
+        t.move_to([x, y_label, 0])
+        labels.add(t)
+    return labels
+
+
+def _build_spiral_struct():
+    """Spiral overlay: faint guide curve along the dot path + 12
+    month markers at the angle where each month begins."""
+    cx, cy = 0.0, 0.0
+    r_min, r_max = 0.45, 2.65
+    turns = 4
+
+    # Faint guide spiral — sample 200 points along the path.
+    guide_pts = []
+    for i in range(201):
+        t = i / 200
+        angle = -math.pi / 2 + 2 * math.pi * turns * t
+        r = r_min + t * (r_max - r_min)
+        guide_pts.append(np.array([cx + r * math.cos(angle),
+                                   cy + r * math.sin(angle), 0]))
+    guide = VMobject(stroke_color=LINE_BRIGHT, stroke_width=0.8,
+                     stroke_opacity=0.30)
+    guide.set_points_smoothly(guide_pts)
+
+    # 12 month markers at the spiral position where each month begins,
+    # nudged slightly outward so the label doesn't sit on a dot.
+    labels = VGroup()
+    for m, day in enumerate(MONTH_STARTS_DAY):
+        t = (day - 1) / 364
+        angle = -math.pi / 2 + 2 * math.pi * turns * t
+        r = r_min + t * (r_max - r_min) + 0.30
+        x = cx + r * math.cos(angle)
+        y = cy + r * math.sin(angle)
+        label = _high_dpi(Text, f"{m+1:02d}", 10,
+                          font="Helvetica", color=TEXT_DIM)
+        label.move_to([x, y, 0])
+        labels.add(label)
+
+    return VGroup(guide, labels)
+
+
+def _build_rose_struct(weekday_names):
+    """Rose overlay: three concentric reference rings + seven weekday
+    labels positioned outside the petals."""
+    cx, cy = 0.0, 0.0
+    inner_r, outer_r = 0.4, 2.75
+    label_r = outer_r + 0.30
+
+    rings = VGroup()
+    for r in [inner_r, (inner_r + outer_r) / 2, outer_r]:
+        ring = Circle(radius=r, stroke_color=LINE_BRIGHT,
+                      stroke_width=0.6, stroke_opacity=0.25,
+                      fill_opacity=0)
+        ring.move_to([cx, cy, 0])
+        rings.add(ring)
+
+    labels = VGroup()
+    for i, name in enumerate(weekday_names):
+        angle = -math.pi / 2 + (i + 0.5) * 2 * math.pi / 7
+        x = cx + label_r * math.cos(angle)
+        y = cy + label_r * math.sin(angle)
+        label = _high_dpi(Text, name, 12, font="Helvetica", color=TEXT_DIM)
+        label.move_to([x, y, 0])
+        labels.add(label)
+
+    return VGroup(rings, labels)
+
+
+def _build_river_struct(data):
+    """River overlay: x-axis with month numbers, y-axis with 1/5/10
+    ticks + dashed gridlines, plus a 14-day smoothed trend line drawn
+    over the dots so the underlying curve is obvious."""
+    x_left, x_right = -5.0, 5.0
+    y_lo,   y_hi    = -1.8,  2.0
+
+    elements = VGroup()
+
+    # X-axis baseline + month tick labels at month-start positions
+    baseline = Line(np.array([x_left, y_lo - 0.10, 0]),
+                    np.array([x_right, y_lo - 0.10, 0]),
+                    stroke_color=LINE_BRIGHT, stroke_width=0.8,
+                    stroke_opacity=0.6)
+    elements.add(baseline)
+    for m, day in enumerate(MONTH_STARTS_DAY):
+        x = x_left + (day - 1) / 364 * (x_right - x_left)
+        label = _high_dpi(Text, f"{m+1:02d}", 10,
+                          font="Helvetica", color=TEXT_DIM)
+        label.move_to([x, y_lo - 0.35, 0])
+        elements.add(label)
+
+    # Y-axis: rating ticks at 1, 5, 10 + dashed horizontal gridlines
+    for rating in (1, 5, 10):
+        y = y_lo + (rating - 1) / 9 * (y_hi - y_lo)
+        grid = DashedLine(np.array([x_left, y, 0]),
+                          np.array([x_right, y, 0]),
+                          stroke_color=LINE, stroke_width=0.5,
+                          stroke_opacity=0.4, dash_length=0.08)
+        elements.add(grid)
+        label = _high_dpi(Text, str(rating), 10,
+                          font="Helvetica", color=TEXT_DIM)
+        label.move_to([x_left - 0.35, y, 0])
+        elements.add(label)
+
+    # 14-day moving average over the year → trend line.
+    by_day = {d: r for d, r, *_ in data}
+    smoothed = []
+    for day in range(1, 366):
+        window = [by_day[k] for k in range(max(1, day - 7),
+                                            min(366, day + 8))
+                  if k in by_day]
+        if window:
+            avg = sum(window) / len(window)
+            x = x_left + (day - 1) / 364 * (x_right - x_left)
+            y = y_lo + (avg - 1) / 9 * (y_hi - y_lo)
+            smoothed.append(np.array([x, y, 0]))
+    trend = VMobject(stroke_color="#ffffff", stroke_width=2.0,
+                     stroke_opacity=0.85)
+    trend.set_points_smoothly(smoothed)
+    elements.add(trend)
+
+    return elements
+
+
 # ── Russian / English text packs ─────────────────────────────────
 
 TITLE_RU    = "Графики"
@@ -173,6 +318,7 @@ LABELS_RU = {
     "rose":    "Роза недели",
     "river":   "Река настроения",
 }
+WEEKDAYS_RU = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"]
 
 TITLE_EN    = "Graphics"
 SUBTITLE_EN = "Your mood, drawn from different angles"
@@ -182,22 +328,33 @@ LABELS_EN = {
     "rose":    "Weekday rose",
     "river":   "Mood river",
 }
+WEEKDAYS_EN = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 
 
 # ── Main scene helper ────────────────────────────────────────────
 
-def _render_graphics_intro(scene: Scene, *, title_text, subtitle_text, labels):
+def _render_graphics_intro(scene: Scene, *, title_text, subtitle_text,
+                           labels, weekdays):
     scene.camera.background_color = BG
     rng = np.random.default_rng(7)
     data = _generate_year(rng)
 
-    # Build one Dot per entry. Opacity ∝ rating (higher mood = brighter
-    # dot against the dark background); colour is uniform.
+    # Build one Dot per entry. Both opacity AND radius scale with the
+    # day's mood rating so the rating is visible at a glance: a 1/10
+    # day is small + dim, a 10/10 day is large + bright. Mirrors how
+    # the actual heatmap / spiral encode mood in the app (light = good,
+    # dark = bad, plus a size cue on the spiral page).
+    def opacity_for(r):
+        return 0.15 + 0.82 * (r - 1) / 9      # 0.15 .. 0.97
+    def radius_for(r):
+        return 0.028 + 0.044 * (r - 1) / 9    # 0.028 .. 0.072
+
     dots = []
     for _d, r, _ja, _jb in data:
-        opacity = 0.30 + 0.65 * (r - 1) / 9
-        dot = Dot(np.array([0, 0, 0]), radius=0.045,
-                  color=DOT_COLOR, fill_opacity=opacity)
+        dot = Dot(np.array([0, 0, 0]),
+                  radius=radius_for(r),
+                  color=DOT_COLOR,
+                  fill_opacity=opacity_for(r))
         dots.append(dot)
     dots_group = VGroup(*dots)
 
@@ -231,6 +388,12 @@ def _render_graphics_intro(scene: Scene, *, title_text, subtitle_text, labels):
     cap_rose  = caption(labels["rose"])
     cap_river = caption(labels["river"])
 
+    # Structural overlays — axes / labels / guides for each chart.
+    struct_heat  = _build_heatmap_struct()
+    struct_spir  = _build_spiral_struct()
+    struct_rose  = _build_rose_struct(weekdays)
+    struct_river = _build_river_struct(data)
+
     # ═══════════════ ANIMATE ═══════════════════════════════════════
 
     # ── ACT 1 ─ title + subtitle (no dots yet)
@@ -246,9 +409,16 @@ def _render_graphics_intro(scene: Scene, *, title_text, subtitle_text, labels):
     )
     scene.wait(0.3)
 
-    # ── ACT 3 ─ morph to heatmap
+    # Make sure the structural overlays sit behind the dots so dot
+    # bodies aren't obscured by grid lines / guide curves.
+    for struct in (struct_heat, struct_spir, struct_rose, struct_river):
+        struct.set_z_index(-1)
+    dots_group.set_z_index(1)
+
+    # ── ACT 3 ─ morph to heatmap (struct + caption fade in alongside)
     scene.play(
         *[d.animate.move_to(p) for d, p in zip(dots, p_heat)],
+        FadeIn(struct_heat),
         FadeIn(cap_heat, shift=UP * 0.1),
         run_time=1.7, rate_func=smooth,
     )
@@ -257,8 +427,8 @@ def _render_graphics_intro(scene: Scene, *, title_text, subtitle_text, labels):
     # ── ACT 4 ─ morph to spiral
     scene.play(
         *[d.animate.move_to(p) for d, p in zip(dots, p_spir)],
-        FadeOut(cap_heat),
-        FadeIn(cap_spir, shift=UP * 0.1),
+        FadeOut(struct_heat), FadeOut(cap_heat),
+        FadeIn(struct_spir), FadeIn(cap_spir, shift=UP * 0.1),
         run_time=1.7, rate_func=smooth,
     )
     scene.wait(2.3)
@@ -266,8 +436,8 @@ def _render_graphics_intro(scene: Scene, *, title_text, subtitle_text, labels):
     # ── ACT 5 ─ morph to rose
     scene.play(
         *[d.animate.move_to(p) for d, p in zip(dots, p_rose)],
-        FadeOut(cap_spir),
-        FadeIn(cap_rose, shift=UP * 0.1),
+        FadeOut(struct_spir), FadeOut(cap_spir),
+        FadeIn(struct_rose), FadeIn(cap_rose, shift=UP * 0.1),
         run_time=1.7, rate_func=smooth,
     )
     scene.wait(2.3)
@@ -275,15 +445,16 @@ def _render_graphics_intro(scene: Scene, *, title_text, subtitle_text, labels):
     # ── ACT 6 ─ morph to river
     scene.play(
         *[d.animate.move_to(p) for d, p in zip(dots, p_river)],
-        FadeOut(cap_rose),
-        FadeIn(cap_river, shift=UP * 0.1),
+        FadeOut(struct_rose), FadeOut(cap_rose),
+        FadeIn(struct_river), FadeIn(cap_river, shift=UP * 0.1),
         run_time=1.7, rate_func=smooth,
     )
     scene.wait(2.3)
 
-    # ── OUTRO ─ shift dots up + scale, drop final title underneath
+    # ── OUTRO ─ shift dots + axes up + scale, drop final title underneath
+    body_group = VGroup(dots_group, struct_river)
     scene.play(
-        dots_group.animate.shift(UP * 0.55).scale(0.85),
+        body_group.animate.shift(UP * 0.55).scale(0.85),
         FadeOut(cap_river),
         run_time=0.8,
     )
@@ -309,6 +480,7 @@ class GraphicsIntro(Scene):
             title_text=TITLE_RU,
             subtitle_text=SUBTITLE_RU,
             labels=LABELS_RU,
+            weekdays=WEEKDAYS_RU,
         )
 
 
@@ -323,4 +495,5 @@ class GraphicsIntroEN(Scene):
             title_text=TITLE_EN,
             subtitle_text=SUBTITLE_EN,
             labels=LABELS_EN,
+            weekdays=WEEKDAYS_EN,
         )
