@@ -72,17 +72,16 @@ WEEKDAY_BIAS = [-0.7, -0.3, 0.0, 0.1, 0.5, 0.9, 0.6]
 
 def _generate_year(rng):
     """Return a list of (day_of_year, rating, jitter_a, jitter_b)
-    tuples for ~310 days of the year — most days have an entry, ~15%
-    are skipped so it looks like a real diary. The rating follows a
-    seasonal sinusoid + a per-weekday bias (so weekends rate higher
-    than Mondays on average), plus Gaussian noise. jitter_a/_b are
-    stable per-entry random offsets used by the rose + scatter
-    positions so a dot doesn't jump around during transitions.
+    tuples for ALL 365 days of the year — full coverage so the spiral
+    reads as a continuous coil instead of a string with random gaps.
+    The rating follows a seasonal sinusoid + a per-weekday bias (so
+    weekends rate higher than Mondays on average), plus Gaussian
+    noise. jitter_a/_b are stable per-entry random offsets used by
+    the rose + scatter positions so a dot doesn't jump around during
+    transitions.
     """
     entries = []
     for d in range(1, 366):
-        if rng.random() < 0.12:
-            continue
         weekday = (d - 1) % 7
         seasonal = 5.5 + 1.8 * math.sin(2 * math.pi * (d - 80) / 365)
         noise = rng.normal(0, 1.0)
@@ -192,26 +191,24 @@ def _river_positions(data):
 # dots just form abstract shapes; with them the structure of each
 # chart is legible.
 
-# Day-of-year for the first day of each month, and the centre of each
-# month, in a non-leap year (Jan 1 treated as Monday for our synthetic
-# data). Centre values are used to position month labels so they sit
-# above the middle of each month's columns rather than at the start
-# (which made December's label fall short of December's last dots).
+# Day-of-year for the first day of each month, in a non-leap year
+# (Jan 1 treated as Monday for our synthetic data). Used by spiral
+# guide construction.
 MONTH_STARTS_DAY = [1, 32, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335]
-MONTH_CENTRES_DAY = [16, 46, 75, 106, 136, 167, 197, 228, 259, 289, 320, 350]
 
 
 def _build_heatmap_struct():
-    """Heatmap calendar overlay: month numbers centred above their
-    column range in the grid."""
+    """Heatmap calendar overlay: 12 month numbers evenly distributed
+    so "01" lines up with the leftmost dot column and "12" with the
+    rightmost — the labels span the full data range."""
     cell_w = 0.13
     weeks = 53
-    x0 = -weeks * cell_w / 2 + cell_w / 2
+    leftmost_x  = -weeks * cell_w / 2 + cell_w / 2          # week 0
+    rightmost_x = leftmost_x + (weeks - 1) * cell_w         # week 52
     y_label = (7 * 0.42) / 2 + 0.45
     labels = VGroup()
-    for m, day in enumerate(MONTH_CENTRES_DAY):
-        week = (day - 1) // 7
-        x = x0 + week * cell_w
+    for m in range(12):
+        x = leftmost_x + m / 11 * (rightmost_x - leftmost_x)
         t = _high_dpi(Text, f"{m+1:02d}", 11,
                       font="Helvetica", color=TEXT_DIM)
         t.move_to([x, y_label, 0])
@@ -348,7 +345,7 @@ def _build_river_struct(data):
 # ── Russian / English text packs ─────────────────────────────────
 
 TITLE_RU    = "Графики"
-SUBTITLE_RU = "Твоё настроение, нарисованное с разных ракурсов"
+SUBTITLE_RU = "Наглядная и красивая визуализация данных твоей жизни"
 LABELS_RU = {
     "heatmap": "Обзор · весь год одной картинкой",
     "spiral":  "Спираль года",
@@ -358,7 +355,7 @@ LABELS_RU = {
 WEEKDAYS_RU = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"]
 
 TITLE_EN    = "Graphics"
-SUBTITLE_EN = "Your mood, drawn from different angles"
+SUBTITLE_EN = "A vivid, beautiful way to see your life's data"
 LABELS_EN = {
     "heatmap": "Overview · the whole year at a glance",
     "spiral":  "Year as a spiral",
@@ -434,13 +431,6 @@ def _render_graphics_intro(scene: Scene, *, title_text, subtitle_text,
     for dot, pos in zip(dots, p_scatter):
         dot.move_to(pos)
 
-    # Title group for the opening + closing beats.
-    title    = _high_dpi(Text, title_text, 48, font="DejaVu Serif",
-                         color=TEXT_BRIGHT)
-    subtitle = _body_text(subtitle_text, size=22, italic=True,
-                          color=TEXT_BODY)
-    title_group = VGroup(title, subtitle).arrange(DOWN, buff=0.22)
-
     # Per-viz caption — one mobject per phase. Sits at the bottom.
     def caption(text):
         c = _body_text(text, size=20, italic=True, color=TEXT_DIM)
@@ -460,12 +450,9 @@ def _render_graphics_intro(scene: Scene, *, title_text, subtitle_text,
 
     # ═══════════════ ANIMATE ═══════════════════════════════════════
 
-    # ── ACT 1 ─ title + subtitle (no dots yet)
-    scene.play(FadeIn(title_group, shift=UP * 0.2), run_time=1.0)
-    scene.wait(1.4)
-    scene.play(FadeOut(title_group, shift=UP * 0.1), run_time=0.6)
-
-    # ── ACT 2 ─ scatter the year of dots
+    # ── ACT 1 ─ scatter the year of dots straight into the canvas
+    # (no opening title — same pacing as the other modules' promos,
+    # the title lands only at the end as the outro).
     scene.play(
         LaggedStart(*[FadeIn(d, scale=0.6) for d in dots],
                     lag_ratio=0.0025),
