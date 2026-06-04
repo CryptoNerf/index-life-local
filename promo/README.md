@@ -79,6 +79,8 @@ one without touching the others.
 | `ai_psychologist_intro.py` | `AIPsychologistIntro` | Russian | Wireframe chat shell on black; user types and sends a question; the AI shows a "thinking" status and a 4-step pipeline runs inside the chat: a pseudo-3D embedding scatter with cosine-similarity beams to the 4 nearest neighbours, a monospace list of matching summaries with sim scores, a syntax-coloured JSON psychoprofile, and the highlighted fragments converging into the AI bubble that types the final answer with the quoted bits tinted amber (~24 s) |
 | `ai_psychologist_intro.py` | `AIPsychologistIntroEN` | English | Same motion, English text |
 | `ai_psychologist_intro_xray.py` | `AIPsychXRayIntro` / `…EN` | Both | Backup take of the AI psychologist promo — earlier "three layers x-rayed around the chat" approach. Kept for reference; the current production scene above replaces it. |
+| `graphics_intro.py` | `GraphicsIntro` | Russian | A year of mood-diary entries (~300 dots, opacity coded by mood) morphs through four of the module's visualisations in turn: heatmap calendar → spiral year → weekday rose → mood river. Each dot keeps its identity through every transition — the whole point is "same data, many views" (~24 s) |
+| `graphics_intro.py` | `GraphicsIntroEN` | English | Same motion, English captions and outro |
 
 Each scene file has a `_render_*(...)` helper holding the motion logic;
 both languages call it with different text packs. Timing / colour /
