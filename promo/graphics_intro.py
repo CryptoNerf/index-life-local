@@ -121,9 +121,11 @@ def _heatmap_positions(data):
 
 
 # Spiral parameters — kept module-level so the position function and
-# the structural-overlay builder share the same geometry.
+# the structural-overlay builder share the same geometry. Inner radius
+# is generous so the 12 turns have meaningful radial spacing
+# (otherwise consecutive turns merge visually into a single swirl).
 SPIRAL_CX,  SPIRAL_CY  = 0.0, 0.0
-SPIRAL_RMIN, SPIRAL_RMAX = 0.65, 2.80
+SPIRAL_RMIN, SPIRAL_RMAX = 1.05, 3.05
 SPIRAL_TURNS = 12   # one turn per month — matches the real spiral page
 
 
@@ -229,8 +231,8 @@ def _build_spiral_struct():
         angle, r = _spiral_angle_radius(t)
         guide_pts.append(np.array([SPIRAL_CX + r * math.cos(angle),
                                    SPIRAL_CY + r * math.sin(angle), 0]))
-    guide = VMobject(stroke_color=LINE_BRIGHT, stroke_width=0.8,
-                     stroke_opacity=0.30)
+    guide = VMobject(stroke_color=LINE_BRIGHT, stroke_width=0.7,
+                     stroke_opacity=0.55)
     guide.set_points_smoothly(guide_pts)
 
     # 12 month markers at the spiral position where each month begins,
@@ -346,29 +348,36 @@ def _build_river_struct(data):
 
 TITLE_RU    = "Графики"
 SUBTITLE_RU = "Наглядная и красивая визуализация данных твоей жизни"
+# Captions describe what the chart ANSWERS, not its name — the viewer
+# reads the function of each view rather than having to learn a name.
 LABELS_RU = {
-    "heatmap": "Обзор · весь год одной картинкой",
-    "spiral":  "Спираль года",
-    "rose":    "Роза недели",
-    "river":   "Река настроения",
+    "heatmap": "Все 365 дней одной картинкой",
+    "spiral":  "Год от января к декабрю · по дню за раз",
+    "rose":    "Какой день недели у тебя обычно лучший",
+    "river":   "Как настроение менялось в течение года",
 }
+INTRO_DOT_RU   = "Точка — это твой день"
+INTRO_SCALE_RU = "Размер и яркость — оценка дня"
 WEEKDAYS_RU = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"]
 
 TITLE_EN    = "Graphics"
 SUBTITLE_EN = "A vivid, beautiful way to see your life's data"
 LABELS_EN = {
-    "heatmap": "Overview · the whole year at a glance",
-    "spiral":  "Year as a spiral",
-    "rose":    "Weekday rose",
-    "river":   "Mood river",
+    "heatmap": "All 365 days at a glance",
+    "spiral":  "January to December · day by day",
+    "rose":    "Which weekday rates best on average",
+    "river":   "How your mood drifted across the year",
 }
+INTRO_DOT_EN   = "A dot is your day"
+INTRO_SCALE_EN = "Size and brightness encode the day's rating"
 WEEKDAYS_EN = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 
 
 # ── Main scene helper ────────────────────────────────────────────
 
 def _render_graphics_intro(scene: Scene, *, title_text, subtitle_text,
-                           labels, weekdays):
+                           labels, weekdays, intro_dot_text,
+                           intro_scale_text):
     scene.camera.background_color = BG
     rng = np.random.default_rng(7)
     data = _generate_year(rng)
@@ -381,7 +390,9 @@ def _render_graphics_intro(scene: Scene, *, title_text, subtitle_text,
     def opacity_for(r):
         return 0.15 + 0.82 * (r - 1) / 9      # 0.15 .. 0.97
     def radius_for(r):
-        return 0.028 + 0.044 * (r - 1) / 9    # 0.028 .. 0.072
+        # Slightly tighter range than v1 so adjacent rings on the
+        # 12-turn spiral don't merge into a single fat swirl.
+        return 0.024 + 0.036 * (r - 1) / 9    # 0.024 .. 0.060
 
     dots = []
     for _d, r, _ja, _jb in data:
@@ -448,11 +459,77 @@ def _render_graphics_intro(scene: Scene, *, title_text, subtitle_text,
     struct_rose  = _build_rose_struct(weekdays)
     struct_river = _build_river_struct(data)
 
+    # Intro legend — teaches the viewer the encoding before any
+    # visualisation appears. One bright reference dot first ("точка —
+    # это твой день"), then it expands into a 10-dot scale showing
+    # how size + opacity map to the day's mood rating.
+    # Scale dots are rendered ~2.5× the chart-scale radii so the size
+    # difference between rating 1 and rating 10 is legible at 720p+.
+    LEGEND_DOT_SCALE = 2.5
+
+    def legend_radius_for(r):
+        return radius_for(r) * LEGEND_DOT_SCALE
+
+    legend_single = Dot(np.array([0, 0.55, 0]),
+                        radius=legend_radius_for(8),
+                        color=DOT_COLOR,
+                        fill_opacity=opacity_for(8))
+    legend_dot_caption = _body_text(intro_dot_text, size=22,
+                                    italic=False, color=TEXT_BODY)
+    legend_dot_caption.move_to([0, -0.30, 0])
+
+    scale_dots = VGroup()
+    scale_labels = VGroup()
+    scale_w = 6.5
+    scale_y = 0.55
+    for rating in range(1, 11):
+        x = -scale_w / 2 + (rating - 1) / 9 * scale_w
+        scale_dots.add(Dot(np.array([x, scale_y, 0]),
+                           radius=legend_radius_for(rating),
+                           color=DOT_COLOR,
+                           fill_opacity=opacity_for(rating)))
+        scale_labels.add(_high_dpi(Text, str(rating), 14,
+                                   font="Helvetica", color=TEXT_DIM)
+                         .move_to([x, scale_y - 0.75, 0]))
+    legend_scale_caption = _body_text(intro_scale_text, size=20,
+                                      italic=True, color=TEXT_DIM)
+    legend_scale_caption.move_to([0, scale_y - 1.20, 0])
+
     # ═══════════════ ANIMATE ═══════════════════════════════════════
 
-    # ── ACT 1 ─ scatter the year of dots straight into the canvas
-    # (no opening title — same pacing as the other modules' promos,
-    # the title lands only at the end as the outro).
+    # ── ACT 1a ─ single bright dot + "точка — это твой день"
+    scene.play(FadeIn(legend_single, scale=0.5), run_time=0.5)
+    scene.play(FadeIn(legend_dot_caption, shift=UP * 0.15), run_time=0.6)
+    scene.wait(1.4)
+
+    # ── ACT 1b ─ caption fades, that single dot slides into rating-8
+    # position of the scale, then the rest of the scale fades in
+    target_scale_dot = scale_dots[7]  # rating 8 — middle-bright
+    scene.play(
+        FadeOut(legend_dot_caption),
+        legend_single.animate.move_to(target_scale_dot.get_center()),
+        run_time=0.5,
+    )
+    scene.remove(legend_single)
+    scene.add(target_scale_dot)
+    other_scale_dots = VGroup(*[d for i, d in enumerate(scale_dots) if i != 7])
+    scene.play(
+        LaggedStart(*[FadeIn(d, scale=0.5) for d in other_scale_dots],
+                    lag_ratio=0.04),
+        LaggedStart(*[FadeIn(l, shift=UP * 0.1) for l in scale_labels],
+                    lag_ratio=0.04),
+        run_time=0.9,
+    )
+    scene.play(FadeIn(legend_scale_caption, shift=UP * 0.15), run_time=0.5)
+    scene.wait(1.6)
+
+    # ── ACT 1c ─ legend fades; the 365 dots scatter into the canvas
+    scene.play(
+        FadeOut(legend_scale_caption),
+        FadeOut(scale_labels),
+        FadeOut(scale_dots),
+        run_time=0.5,
+    )
     scene.play(
         LaggedStart(*[FadeIn(d, scale=0.6) for d in dots],
                     lag_ratio=0.0025),
@@ -536,6 +613,8 @@ class GraphicsIntro(Scene):
             subtitle_text=SUBTITLE_RU,
             labels=LABELS_RU,
             weekdays=WEEKDAYS_RU,
+            intro_dot_text=INTRO_DOT_RU,
+            intro_scale_text=INTRO_SCALE_RU,
         )
 
 
@@ -551,4 +630,6 @@ class GraphicsIntroEN(Scene):
             subtitle_text=SUBTITLE_EN,
             labels=LABELS_EN,
             weekdays=WEEKDAYS_EN,
+            intro_dot_text=INTRO_DOT_EN,
+            intro_scale_text=INTRO_SCALE_EN,
         )
