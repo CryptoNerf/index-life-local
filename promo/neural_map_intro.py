@@ -31,6 +31,20 @@ from manim import *
 import numpy as np
 
 
+# Pango / Cairo quantise text metrics at small font_size values, which
+# breaks kerning for Cyrillic and Latin alike. Workaround used across
+# the other module promos: render each Text mobject at a larger
+# internal font_size so Pango uses high-precision metrics, then scale
+# the resulting SVG down. 36 is the sweet spot for these sizes.
+HIGH_DPI_SIZE = 36
+
+
+def _high_dpi(mob_cls, s, size, **kwargs):
+    target = mob_cls(s, font_size=HIGH_DPI_SIZE, **kwargs)
+    target.scale(size / HIGH_DPI_SIZE)
+    return target
+
+
 # index.life-friendly palette ─────────────────────────────────────
 BG = "#0a0a0a"
 PALETTE = [
@@ -166,9 +180,10 @@ def _render_neural_map(scene: Scene, labels_text, title_text, subtitle_text):
     labels = []
     for n in neurons:
         # Smaller font than a typical topic-tag because the hypothesis
-        # labels are 3-6 words, not one word.
-        label = Text(n['name'], font="Times New Roman",
-                     slant=ITALIC, color="#eeeeee", font_size=20)
+        # labels are 3-6 words, not one word. DejaVu Serif via the
+        # _high_dpi wrapper for crisp Cyrillic kerning.
+        label = _high_dpi(Text, n['name'], 20, font="DejaVu Serif",
+                          slant=ITALIC, color="#eeeeee")
         # Top-row neurons get labels BELOW; bottom-row ABOVE — so
         # nothing pokes off-frame and labels never collide with the
         # outro title later.
@@ -236,10 +251,13 @@ def _render_neural_map(scene: Scene, labels_text, title_text, subtitle_text):
         *labels,
         lines_group,
     )
-    title = Text(title_text, font="Times New Roman",
+    # Title is large enough that Pango doesn't quantise it, so a plain
+    # Text() is fine. Subtitle is small and goes through the high-DPI
+    # wrapper.
+    title = Text(title_text, font="DejaVu Serif",
                  color="#ffffff", font_size=44)
-    subtitle = Text(subtitle_text, font="Times New Roman", slant=ITALIC,
-                    color="#a0a0a0", font_size=22)
+    subtitle = _high_dpi(Text, subtitle_text, 22, font="DejaVu Serif",
+                          slant=ITALIC, color="#a0a0a0")
     title_group = VGroup(title, subtitle).arrange(DOWN, buff=0.15)
     title_group.to_edge(DOWN, buff=0.55)
 
