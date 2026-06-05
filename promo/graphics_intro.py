@@ -351,10 +351,10 @@ SUBTITLE_RU = "Наглядная и красивая визуализация �
 # Captions describe what the chart ANSWERS, not its name — the viewer
 # reads the function of each view rather than having to learn a name.
 LABELS_RU = {
-    "heatmap": "Все 365 дней одной картинкой",
-    "spiral":  "Год от января к декабрю · по дню за раз",
-    "rose":    "Какой день недели у тебя обычно лучший",
-    "river":   "Как настроение менялось в течение года",
+    "heatmap": "Тепловая карта настроения года",
+    "spiral":  "Твой год, закрученный в спираль",
+    "rose":    "Статистика твоего настроения в днях недели",
+    "river":   "Трендовая линия годовой динамики настроения",
 }
 INTRO_DOT_RU   = "Точка — это твой день"
 INTRO_SCALE_RU = "Размер и яркость — оценка дня"
@@ -390,9 +390,11 @@ def _render_graphics_intro(scene: Scene, *, title_text, subtitle_text,
     def opacity_for(r):
         return 0.15 + 0.82 * (r - 1) / 9      # 0.15 .. 0.97
     def radius_for(r):
-        # Slightly tighter range than v1 so adjacent rings on the
-        # 12-turn spiral don't merge into a single fat swirl.
-        return 0.024 + 0.036 * (r - 1) / 9    # 0.024 .. 0.060
+        # Range tuned for the 12-turn spiral: ring spacing is 0.18,
+        # so a max diameter of 0.10 (= radius 0.050) leaves a clear
+        # gap between adjacent rings. Dots are still visibly bigger
+        # for high ratings than low.
+        return 0.022 + 0.028 * (r - 1) / 9    # 0.022 .. 0.050
 
     dots = []
     for _d, r, _ja, _jb in data:
