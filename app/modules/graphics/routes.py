@@ -797,18 +797,29 @@ def words():
     # Build the exclusion set of lowercase person-mention base forms.
     # Gated on assistant module so users without LLM extraction still get
     # a working Words chart (just without the name filter).
+    # Each stored mention is also re-normalised through _normalize_mention
+    # so older rows captured before the proper-noun Name-tag lemma was in
+    # place ("Димой", "Арману") collapse to their canonical form ("Дима",
+    # "Арман") and the filter doesn't miss "дима" because only "димой"
+    # was saved.
     person_forms: set[str] = set()
     lemmatise = None
     if 'assistant' in current_app.config.get('ACTIVE_MODULES', []):
         try:
             from app.models import EntryPerson
-            from app.modules.assistant.memory import _to_nominative
+            from app.modules.assistant.memory import (
+                _to_nominative, _normalize_mention,
+            )
             lemmatise = _to_nominative
             for (mention,) in (
                 db.session.query(EntryPerson.mention).distinct().all()
             ):
-                if mention:
-                    person_forms.add(mention.strip().lower())
+                if not mention:
+                    continue
+                person_forms.add(mention.strip().lower())
+                normalised = _normalize_mention(mention)
+                if normalised:
+                    person_forms.add(normalised.lower())
         except Exception:
             pass
 
@@ -929,13 +940,18 @@ def people():
         by_mention[key][tone] = by_mention[key].get(tone, 0) + 1
 
     min_count = 3
+    # Bayesian-smooth the tone toward 0 (neutral) so a name with a small
+    # all-positive sample doesn't outrank one with many positive mentions
+    # and a few negatives. With prior=5: "Марина" (9+/0-, n=9) → 0.64;
+    # "Мари" (35+/3-, n=38) → 0.74. The smoothing kicks in for small N
+    # and almost disappears as the sample grows.
+    PRIOR = 5
     scored = []
     for mention, counts in by_mention.items():
         total = counts['positive'] + counts['neutral'] + counts['negative']
         if total < min_count:
             continue
-        # Tone score in [-1, +1]: positives - negatives / total
-        tone_score = (counts['positive'] - counts['negative']) / total
+        tone_score = (counts['positive'] - counts['negative']) / (total + PRIOR)
         scored.append({
             'mention': mention,
             'count': total,

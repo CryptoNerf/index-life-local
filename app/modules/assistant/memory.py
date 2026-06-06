@@ -539,6 +539,64 @@ def _get_morph_analyzer():
     return _morph_analyzer
 
 
+def _name_lemma(word: str) -> str | None:
+    """Lemma for a Russian first/last name, in lowercase nominative
+    singular — or None when pymorphy3 can't confidently tell that this
+    word IS a name.
+
+    The `Name` tag gate is what makes this safe to call on proper nouns:
+    without it, pymorphy3 happily parses unfamiliar names as common
+    nouns ("Мари" → "марь" as if it were a verbal adverb, "Дарёна" →
+    "Дарёный" as if it were an adjective), which then collapses the
+    chart into the wrong canonical form.
+
+    Use this for the People-chart aggregation so "Дима" / "Димой" /
+    "Димы" / "Диму" all merge to "Дима", while leaving unrecognised
+    names untouched for the user to merge manually via aliases.
+    """
+    if not word or not word.strip():
+        return None
+    morph = _get_morph_analyzer()
+    if morph is None:
+        return None
+    try:
+        parses = morph.parse(word.lower())
+    except Exception:
+        return None
+    # Collect every Name-tagged parse's nominative form, then pick the
+    # LONGEST one. Pymorphy3 sometimes hallucinates a shorter masculine
+    # reading of a feminine name when the cases collide (e.g. "Марусе"
+    # → "марус" as if it were locative of a non-existent "Марус", same
+    # rank as the correct "маруся"). The longer lemma preserves more of
+    # the original word and is the right answer in those ties.
+    candidates: list[str] = []
+    for parse in parses[:5]:
+        if 'Name' not in parse.tag:
+            continue
+        try:
+            inflected = parse.inflect({'nomn'})
+            if inflected and inflected.word:
+                candidates.append(inflected.word)
+                continue
+        except Exception:
+            pass
+        if parse.normal_form:
+            candidates.append(parse.normal_form)
+    if not candidates:
+        return None
+    best = max(candidates, key=len)
+    # Feminine-ending safeguard: when the original ends in а / я (the
+    # canonical feminine markers) but the proposed lemma doesn't, that's
+    # the "Поля → Поль" failure mode — pymorphy3 only carries a
+    # masculine reading of the unfamiliar feminine name, so collapsing
+    # to it would be a misgender. Better to bail and leave the form
+    # alone for the user to alias.
+    last = word.lower()[-1]
+    if last in ('а', 'я') and best[-1] not in ('а', 'я'):
+        return None
+    return best
+
+
 def _to_nominative(word: str) -> str:
     """Inflect a Russian common noun to its nominative case while keeping
     its number (singular vs plural).
@@ -642,16 +700,33 @@ def _is_blacklisted(mention: str) -> bool:
 def _normalize_mention(raw: str) -> str:
     """Lemmatize to nominative + capitalize first letter.
 
-    "Марусе" → "маруся" → "Маруся"; "мама" → "мама" → "Мама".
-    Compound names like "Анна-Мария" survive unchanged because pymorphy3
-    leaves multi-word tokens alone, and we only touch the first letter.
+    Two lemmatisation paths:
+
+    * Proper-noun path (capitalised single token) — uses `_name_lemma`,
+      which only trusts pymorphy3's parse when it carries the `Name`
+      tag. This catches "Димой" → "Дима", "Арману" → "Арман",
+      "Марусе" → "Маруся" without mangling rare or foreign names
+      ("Мари" / "Дарёна" stay as-is for manual alias merging).
+    * Common-noun path — uses `_to_nominative` for role labels like
+      "мама", "коллегой", "родителях".
+
+    Compound names like "Анна-Мария" survive unchanged because both
+    paths leave multi-word tokens alone, and we only touch the first
+    letter.
     """
     s = raw.strip()
     if not s:
         return s
-    lemma = _to_nominative(s)
-    if lemma:
-        s = lemma
+    if s[0].isupper() and ' ' not in s and '-' not in s:
+        name_norm = _name_lemma(s)
+        if name_norm:
+            s = name_norm
+        # Otherwise leave the form alone — better an un-merged duplicate
+        # the user can alias than a wrong canonical form forced on them.
+    else:
+        lemma = _to_nominative(s)
+        if lemma:
+            s = lemma
     return s[0].upper() + s[1:]
 
 
