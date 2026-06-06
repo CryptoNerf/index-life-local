@@ -105,7 +105,7 @@ body {
 }
 
 .chat-tool-btn {
-  background: none;
+  background: var(--bg-color, #fff);
   border: 1px solid #ccc;
   padding: 4px 10px;
   font-family: var(--font-body, 'Times New Roman', Times, serif);

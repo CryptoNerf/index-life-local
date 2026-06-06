@@ -785,8 +785,48 @@ after some any all each every other another own same such any of had have has
 @bp.route('/graphics/words')
 def words():
     """Words that correlate with good or bad days.
-    For each word (≥3 occurrences), compute avg rating of days where it appears."""
+    For each word (≥3 occurrences), compute avg rating of days where it appears.
+
+    Person mentions (collected by the AI Psychologist module into the
+    `EntryPerson` table) are excluded — those have their own dedicated
+    People chart, and leaking names like "андрей" into Words muddied the
+    answer. Filter both by direct match and by lemma so declensions
+    ("Андрея", "Андрею") drop out alongside the canonical form."""
     import re
+
+    # Build the exclusion set of lowercase person-mention base forms.
+    # Gated on assistant module so users without LLM extraction still get
+    # a working Words chart (just without the name filter).
+    person_forms: set[str] = set()
+    lemmatise = None
+    if 'assistant' in current_app.config.get('ACTIVE_MODULES', []):
+        try:
+            from app.models import EntryPerson
+            from app.modules.assistant.memory import _to_nominative
+            lemmatise = _to_nominative
+            for (mention,) in (
+                db.session.query(EntryPerson.mention).distinct().all()
+            ):
+                if mention:
+                    person_forms.add(mention.strip().lower())
+        except Exception:
+            pass
+
+    # Per-word lemma cache so we don't re-run pymorphy3 on duplicates
+    # within the same request.
+    lemma_cache: dict[str, str] = {}
+
+    def _is_person(word: str) -> bool:
+        if word in person_forms:
+            return True
+        if lemmatise is None:
+            return False
+        if word not in lemma_cache:
+            try:
+                lemma_cache[word] = (lemmatise(word) or word).lower()
+            except Exception:
+                lemma_cache[word] = word
+        return lemma_cache[word] in person_forms
 
     entries = MoodEntry.query.filter(MoodEntry.note.isnot(None)).all()
     entries = [e for e in entries if e.note and e.note.strip()]
@@ -795,7 +835,7 @@ def words():
     for e in entries:
         seen = set()
         for w in re.findall(r"[A-Za-zА-Яа-яЁё]{4,}", e.note.lower()):
-            if w in _STOPWORDS or w in seen:
+            if w in _STOPWORDS or w in seen or _is_person(w):
                 continue
             seen.add(w)
             word_to_ratings.setdefault(w, []).append(e.rating)

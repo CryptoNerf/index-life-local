@@ -365,8 +365,13 @@
   // subsequent body-font changes are handled by the listener above.
 
   // ── Background type toggle (color / gradient / image) ────────
+  // Exclude the mosaic empty-mode buttons — they reuse the same visual
+  // class for the segmented-control look but have their own data-mode
+  // attribute + handler. Without this `:not(...)`, clicking a mosaic
+  // button (e.g. "gradient") fired both handlers and silently flipped
+  // the page bg-type along with the mosaic mode.
   var bgTypeBtns = Array.prototype.slice.call(
-    document.querySelectorAll('.cz-bg-type-btn')
+    document.querySelectorAll('.cz-bg-type-btn:not(.cz-mosaic-empty-btn)')
   );
   var bgShapeBtns = Array.prototype.slice.call(
     document.querySelectorAll('.cz-bg-shape-btn')
