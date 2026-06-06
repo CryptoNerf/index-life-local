@@ -1076,6 +1076,28 @@ def stream():
             ctx_pct = min(100, int(total_ctx_tokens * 100 / ctx_n_ctx))
             yield f'data: {json.dumps({"context": {"used": total_ctx_tokens, "max": ctx_n_ctx, "pct": ctx_pct, "msgs": len(messages) - 1}})}\n\n'
 
+            # Cache the system-prompt token count so /context-usage can
+            # show an honest estimate between messages. Without this it
+            # used a fixed 800-token baseline, so users who compressed
+            # the chat saw a misleading drop in the bar that bounced
+            # straight back up the moment they sent the next message
+            # (the real prompt is 2000-3000 tokens of retrieved entries
+            # + profile + timeline, not 800).
+            try:
+                from app.models import SyncMeta
+                sys_tokens_only = _count_tokens(llm, system) + 4
+                row = db.session.get(SyncMeta, 'last_system_tokens')
+                if row:
+                    row.value = str(sys_tokens_only)
+                else:
+                    db.session.add(SyncMeta(
+                        key='last_system_tokens',
+                        value=str(sys_tokens_only),
+                    ))
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+
             # Adaptive temperature based on emotional tone
             if thinking_enabled:
                 temperature = 0.4 if user_tone in ('distressed', 'sad') else 0.5
@@ -1321,14 +1343,31 @@ def clear_chat():
 
 @bp.route('/context-usage')
 def context_usage():
-    """Estimate current context window fill level from chat history."""
+    """Estimate current context window fill level from chat history.
+
+    Uses the cached system-prompt token count from the most recent
+    /stream as the baseline (saved into SyncMeta under
+    `last_system_tokens`). That number is much closer to what the next
+    message will actually consume (~2000-3000 tokens) than the static
+    800 we used before, so the bar doesn't lie to the user after they
+    compress the chat.
+    """
     n_ctx = _llm_n_ctx or _env_int('LLM_N_CTX', _DEFAULT_GPU_CTX, min_value=256)
+
+    sys_baseline = 800
+    try:
+        from app.models import SyncMeta
+        row = db.session.get(SyncMeta, 'last_system_tokens')
+        if row and row.value and row.value.isdigit():
+            sys_baseline = max(sys_baseline, int(row.value))
+    except Exception:
+        pass
+
     chat_msgs = (ChatMessage.query
                  .order_by(ChatMessage.created_at.desc())
                  .limit(20).all())
     chat_msgs.reverse()
-    # Rough estimate: system prompt ~800 tokens + chat messages
-    tokens = 800
+    tokens = sys_baseline
     for msg in chat_msgs:
         content = msg.content or ''
         tokens += max(1, len(content) // 3) + 4  # ~3 chars/token for Russian

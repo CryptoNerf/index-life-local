@@ -392,6 +392,12 @@
       dirtyKeys['bg-type'] = true;
     }
     rebuildBgImageVar();
+    // The effective background just changed, so re-run auto-invert
+    // (no-op when the toggle is off). Without this, switching
+    // color → gradient or vice-versa left the text colour stuck at
+    // the value the previous bg had picked, and the user had to
+    // toggle the auto-invert checkbox to get the right colour back.
+    applyAutoInvert();
   }
 
   // Linear vs radial gradient shape (mirrors the avatar's shape toggle).
