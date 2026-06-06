@@ -25,10 +25,36 @@
       position: sticky;
       top: 0;
       z-index: 50;
-      background: #fff;
-      padding: 14px 0 12px;
+      background: var(--bg-color, #fff);
+      padding: 14px 18px 14px;
       border-bottom: 1px solid var(--pm-border);
-      margin-bottom: 18px;
+      margin-bottom: 14px;
+    }
+
+    /* ── Live name search ───────────────────────────────────────────── */
+    .pm-search-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0 0 14px;
+    }
+    .pm-search-input {
+      flex: 1;
+      font-family: inherit;
+      font-size: 14px;
+      padding: 8px 12px;
+      border: 1px solid var(--pm-border);
+      background: var(--bg-color, #fff);
+    }
+    .pm-search-input:focus {
+      outline: none;
+      border-color: var(--pm-accent);
+    }
+    .pm-search-count {
+      font-size: 13px;
+      color: #888;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
     }
     .pm-steps {
       display: flex;
@@ -297,6 +323,15 @@
             {% endif %}
           </p>
 
+          {# Live filter: type the first few letters of a name to narrow the
+             card list. Matches against the card's canonical AND any member
+             form, so "арм" surfaces "Арман" / "Арману" / "Армана" together. #}
+          <div class="pm-search-row">
+            <input type="text" id="pm-search" class="pm-search-input"
+                   placeholder="search names…" autocomplete="off">
+            <span class="pm-search-count" id="pm-search-count"></span>
+          </div>
+
           {% for g in groups %}
             <div class="pm-group" data-group="{{ loop.index0 }}">
               <div class="pm-group-head">
@@ -383,6 +418,44 @@
       checkboxes().forEach(function (c) { c.addEventListener('change', update); });
       if (targetInput) targetInput.addEventListener('input', update);
       update();
+
+      // ── Live search: hides cards that don't match the typed prefix.
+      // Substring match (case-insensitive) so "арм" finds both "Арман"
+      // at the start and any inflected form inside the card.
+      var searchEl = document.getElementById('pm-search');
+      var searchCount = document.getElementById('pm-search-count');
+      var groups = Array.prototype.slice.call(document.querySelectorAll('.pm-group'));
+      // Pre-extract searchable text per group so each keystroke doesn't
+      // re-walk the DOM.
+      groups.forEach(function (g) {
+        var names = [];
+        var canon = g.querySelector('.pm-group-canon');
+        if (canon) names.push(canon.textContent);
+        g.querySelectorAll('.pm-name').forEach(function (el) {
+          names.push(el.textContent);
+        });
+        g.dataset.searchKey = names.join(' ').toLowerCase();
+      });
+
+      function applySearch() {
+        var q = (searchEl.value || '').trim().toLowerCase();
+        var visible = 0;
+        groups.forEach(function (g) {
+          var match = !q || g.dataset.searchKey.indexOf(q) !== -1;
+          g.style.display = match ? '' : 'none';
+          if (match) visible++;
+        });
+        if (searchCount) {
+          if (!q) {
+            searchCount.textContent = '';
+          } else {
+            searchCount.textContent = visible + ' of ' + groups.length;
+          }
+        }
+      }
+      if (searchEl) {
+        searchEl.addEventListener('input', applySearch);
+      }
 
       // Confirm before bulk-merging — irreversible-looking action even if it isn't
       var form = document.getElementById('bulk-form');
