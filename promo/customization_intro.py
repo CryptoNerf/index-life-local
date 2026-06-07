@@ -63,18 +63,6 @@ FONT_POOL_NON_DEFAULT = [
     "Courier New",
 ]
 
-# Background presets for ACT 2 — solid colours covering a range of
-# moods (warm cream, deep navy, forest, lavender, sunset coral, sage).
-BG_PRESETS = [
-    "#fff5e6",   # cream
-    "#1a1a2e",   # navy
-    "#1f2e1a",   # forest
-    "#e6e6fa",   # lavender
-    "#f5d0a0",   # warm peach
-    "#2c1a3d",   # plum
-]
-
-
 # ── High-DPI text helper (same as in the other promos) ──────────
 HIGH_DPI_SIZE = 36
 
@@ -360,7 +348,7 @@ def _render_customization(scene: Scene, *, act1_cap, act2_cap, act3_cap,
     # → Helvetica" with the wrong seed, making one letter look stuck
     # while the rest danced.
     n_cycles = 5
-    cycle_duration = 0.42
+    cycle_duration = 0.60
     letter_font_seqs: list[list[str]] = []
     for _ in letter_mobs:
         pool = list(FONT_POOL_NON_DEFAULT)
@@ -389,56 +377,46 @@ def _render_customization(scene: Scene, *, act1_cap, act2_cap, act3_cap,
     scene.play(FadeOut(VGroup(letters, cap1)), run_time=0.5)
 
     # ═════════════ ACT 2 ─ page background cycling ═════════════════
-    # Phone-shaped frame with placeholder "page" content inside.
-    panel_w, panel_h = 3.8, 5.4
-    frame = RoundedRectangle(
-        width=panel_w + 0.18, height=panel_h + 0.18,
-        corner_radius=0.32, color="#2a2a2a",
-        stroke_width=2, fill_opacity=0,
+    # Real app screenshots from promo/customization_assets/{1..12}.png,
+    # each capturing the same page with a different bg preset. We
+    # crossfade through them so the user sees the actual UI mutate
+    # rather than an abstract phone mock-up.
+    from pathlib import Path
+    assets = Path(__file__).resolve().parent / "customization_assets"
+    screenshot_paths = sorted(
+        assets.glob("*.png"),
+        key=lambda p: int(p.stem) if p.stem.isdigit() else p.stem,
     )
-    page = RoundedRectangle(
-        width=panel_w, height=panel_h, corner_radius=0.26,
-        fill_color=BG_PRESETS[0], fill_opacity=1.0,
-        stroke_width=0,
-    )
+    screenshots: list[ImageMobject] = []
+    for path in screenshot_paths:
+        img = ImageMobject(str(path))
+        img.scale_to_fit_width(9.0)     # ~63% of the 14.2-unit frame width
+        img.move_to(ORIGIN + UP * 0.30)
+        screenshots.append(img)
 
-    # Placeholder content — a header strip + 5 entry lines on the
-    # page. Lines are a neutral grey so they read against most BG
-    # presets without needing per-preset recolouring.
-    content = VGroup()
-    header_y = panel_h / 2 - 0.55
-    header_bar = Rectangle(width=panel_w - 0.7, height=0.15,
-                            fill_color="#7a7a7a", fill_opacity=0.55,
-                            stroke_width=0)
-    header_bar.move_to([0, header_y, 0])
-    content.add(header_bar)
-    for i in range(5):
-        y = header_y - 0.85 - i * 0.75
-        line = Rectangle(
-            width=(panel_w - 0.9) - 0.5 * (i % 2),
-            height=0.32,
-            fill_color="#7a7a7a", fill_opacity=0.35,
-            stroke_width=0,
-        ).move_to([(- (0.25 * (i % 2))), y, 0])
-        content.add(line)
+    # First frame fades in; subsequent frames crossfade — keep only the
+    # current screenshot fully opaque, drop the previous as we add the
+    # next, so we never carry the whole stack as visible at the same
+    # time.
+    scene.play(FadeIn(screenshots[0]), run_time=0.6)
+    scene.wait(0.45)
+    for prev, cur in zip(screenshots, screenshots[1:]):
+        cur.set_opacity(0)
+        scene.add(cur)
+        scene.play(
+            prev.animate.set_opacity(0),
+            cur.animate.set_opacity(1),
+            run_time=0.55,
+        )
+        scene.remove(prev)
+    last_screenshot = screenshots[-1]
 
-    page_group = VGroup(frame, page, content)
-
-    scene.play(FadeIn(page_group, shift=UP * 0.2), run_time=0.6)
-    scene.wait(0.2)
-
-    # Cycle the page bg through the presets (~0.55s each).
-    for preset in BG_PRESETS:
-        scene.play(page.animate.set_fill(preset, opacity=1.0),
-                   run_time=0.55)
-
-    # Caption
     cap2 = _body_text(act2_cap, size=24, italic=True, color=TEXT_DIM)
-    cap2.next_to(page_group, DOWN, buff=0.5)
+    cap2.next_to(last_screenshot, DOWN, buff=0.40)
     scene.play(FadeIn(cap2, shift=UP * 0.15), run_time=0.5)
     scene.wait(1.0)
 
-    scene.play(FadeOut(VGroup(page_group, cap2)), run_time=0.5)
+    scene.play(FadeOut(last_screenshot), FadeOut(cap2), run_time=0.5)
 
     # ═════════════ ACT 3 ─ chart pictograms colour-cycling ═════════
     # 3×3 grid covering every customisable chart in the app:
@@ -500,10 +478,19 @@ def _render_customization(scene: Scene, *, act1_cap, act2_cap, act3_cap,
         sample_letters.add(m)
     sample_letters.arrange(RIGHT, buff=0.15)
 
-    # ─ middle: shrunken page mock-up
-    mini_panel = page_group.copy()
-    mini_panel[1].set_fill(BG_PRESETS[2], opacity=1.0)   # set a colour
-    mini_panel.scale(0.50)
+    # ─ middle: shrunken real screenshot (pick a vivid one from the bg
+    # cycle so the recap actually shows the kind of customisation the
+    # promo just demonstrated).
+    if screenshot_paths:
+        recap_path = screenshot_paths[len(screenshot_paths) // 2]
+        mini_panel = ImageMobject(str(recap_path))
+        mini_panel.scale_to_fit_width(3.4)
+    else:
+        # Defensive fallback if assets dir is empty
+        mini_panel = RoundedRectangle(
+            width=3.4, height=2.1, corner_radius=0.18,
+            color="#3a3a3a", stroke_width=2, fill_opacity=0,
+        )
 
     # ─ right: charts grid, smaller
     mini_charts = VGroup(
@@ -514,8 +501,10 @@ def _render_customization(scene: Scene, *, act1_cap, act2_cap, act3_cap,
     ).arrange_in_grid(rows=2, cols=2, buff=(0.4, 0.3))
     mini_charts.scale(0.55)
 
-    outro_row = VGroup(sample_letters, mini_panel, mini_charts).arrange(
-        RIGHT, buff=1.1)
+    # Use Group (not VGroup) since ImageMobject isn't a VMobject — mixing
+    # types in a VGroup would crash at arrange time.
+    outro_row = Group(sample_letters, mini_panel, mini_charts).arrange(
+        RIGHT, buff=0.75)
     outro_row.move_to(ORIGIN + UP * 0.55)
 
     title = _high_dpi(Text, title_text, 46, font="DejaVu Serif",
