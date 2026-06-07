@@ -394,21 +394,16 @@ def _render_customization(scene: Scene, *, act1_cap, act2_cap, act3_cap,
         img.move_to(ORIGIN + UP * 0.30)
         screenshots.append(img)
 
-    # First frame fades in; subsequent frames crossfade — keep only the
-    # current screenshot fully opaque, drop the previous as we add the
-    # next, so we never carry the whole stack as visible at the same
-    # time.
+    # First frame fades in; subsequent frames crossfade. We use
+    # FadeOut + FadeIn rather than .animate.set_opacity(...) — on
+    # ImageMobject the .animate path only renders cleanly for the
+    # first couple of swaps and then stalls (images 4..12 silently
+    # never appear). FadeOut/FadeIn handle the remove + add + opacity
+    # reset internally and stay correct across all twelve transitions.
     scene.play(FadeIn(screenshots[0]), run_time=0.6)
     scene.wait(0.45)
     for prev, cur in zip(screenshots, screenshots[1:]):
-        cur.set_opacity(0)
-        scene.add(cur)
-        scene.play(
-            prev.animate.set_opacity(0),
-            cur.animate.set_opacity(1),
-            run_time=0.55,
-        )
-        scene.remove(prev)
+        scene.play(FadeOut(prev), FadeIn(cur), run_time=0.55)
     last_screenshot = screenshots[-1]
 
     cap2 = _body_text(act2_cap, size=24, italic=True, color=TEXT_DIM)
