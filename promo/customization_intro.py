@@ -173,6 +173,150 @@ def _mini_river(color, w=2.0, h=1.4):
     return VGroup(raw, line)
 
 
+def _mini_rhythm(color, w=2.0, h=1.4):
+    """7×12 weekday-month heatmap pictogram — uniform-ish grid with
+    cells varying in opacity to suggest a weekday × month pattern."""
+    cells = VGroup()
+    cols, rows = 12, 7
+    cell_w = w / cols
+    cell_h = h / rows
+    for r in range(rows):
+        for c in range(cols):
+            # Smooth gradient + slight wave so the cells differ but
+            # the overall look reads as a weekday-by-month grid.
+            op = 0.25 + 0.55 * (
+                0.5 + 0.5 * math.sin(c * 0.45 + r * 0.6)
+            )
+            sq = Square(side_length=min(cell_w, cell_h) * 0.82,
+                        color=color, fill_color=color,
+                        fill_opacity=op, stroke_width=0)
+            sq.move_to([-w/2 + (c + 0.5) * cell_w,
+                         h/2 - (r + 0.5) * cell_h, 0])
+            cells.add(sq)
+    return cells
+
+
+def _mini_ridgeline(color, w=2.2, h=1.6):
+    """Stacked density curves (joyplot) — 6 horizontal silhouettes."""
+    layers = VGroup()
+    n_layers = 6
+    rng = np.random.default_rng(19)
+    for i in range(n_layers):
+        baseline_y = h/2 - (i + 0.5) * (h / (n_layers + 0.5))
+        n_pts = 40
+        # Each ridge: sum of 2-3 gaussian bumps at random positions.
+        bumps = [(rng.uniform(0.1, 0.9), rng.uniform(0.15, 0.30))
+                  for _ in range(3)]
+        path_pts = []
+        for k in range(n_pts):
+            t = k / (n_pts - 1)
+            x = -w/2 + t * w
+            y_val = 0
+            for centre, peak in bumps:
+                sigma = 0.13
+                y_val += peak * math.exp(-((t - centre) / sigma) ** 2)
+            y_val = min(y_val, 0.32)
+            path_pts.append(np.array([x, baseline_y + y_val, 0]))
+        # Close path back to baseline so we can fill it.
+        path_pts.append(np.array([w/2, baseline_y, 0]))
+        path_pts.append(np.array([-w/2, baseline_y, 0]))
+        ridge = VMobject(stroke_color=color, stroke_width=1.0,
+                          fill_color=color, fill_opacity=0.22)
+        ridge.set_points_as_corners(path_pts)
+        layers.add(ridge)
+    return layers
+
+
+def _mini_words(color, w=2.0, h=1.5):
+    """Horizontal bars centred on a vertical midline — lifts go right,
+    drags go left, like the actual /graphics/words chart."""
+    out = VGroup()
+    # Central midline
+    out.add(Line(np.array([0, h/2, 0]), np.array([0, -h/2, 0]),
+                  stroke_color=color, stroke_width=0.8,
+                  stroke_opacity=0.45))
+    rng = np.random.default_rng(29)
+    n = 6
+    row_h = h / (n + 1)
+    for i in range(n):
+        y = h/2 - (i + 1) * row_h
+        is_right = i < 3
+        length = rng.uniform(0.35, 0.92) * (w/2)
+        bar_h = row_h * 0.55
+        op = 0.45 + rng.uniform(-0.1, 0.25)
+        rect = Rectangle(
+            width=length, height=bar_h,
+            color=color, fill_color=color, fill_opacity=op,
+            stroke_width=0,
+        )
+        if is_right:
+            rect.move_to([length / 2, y, 0])
+        else:
+            rect.move_to([-length / 2, y, 0])
+        out.add(rect)
+    return out
+
+
+def _mini_activities(color, radius=0.95):
+    """Packed circles — one large parent with kids on the left, a few
+    standalones on the right. Mirrors the /graphics/activities card."""
+    rng = np.random.default_rng(31)
+    out = VGroup()
+    parent = Circle(radius=radius * 0.62, color=color, fill_color=color,
+                     fill_opacity=0.22, stroke_color=color,
+                     stroke_opacity=0.55, stroke_width=0.7)
+    parent.shift(LEFT * radius * 0.35)
+    out.add(parent)
+    # Children inside the parent
+    for _ in range(5):
+        ang = rng.uniform(0, 2 * math.pi)
+        rr = rng.uniform(0, radius * 0.32)
+        x = parent.get_center()[0] + rr * math.cos(ang)
+        y = parent.get_center()[1] + rr * math.sin(ang)
+        sz = rng.uniform(0.06, 0.13)
+        out.add(Dot([x, y, 0], radius=sz, color=color,
+                     fill_opacity=0.30 + rng.uniform(0, 0.4)))
+    # Standalone circles on the right
+    for pos in [(radius*0.5, radius*0.35),
+                (radius*0.75, -radius*0.30),
+                (radius*0.40, -radius*0.65)]:
+        sz = rng.uniform(0.13, 0.22)
+        out.add(Circle(radius=sz, color=color, fill_color=color,
+                        fill_opacity=0.35 + rng.uniform(0, 0.3),
+                        stroke_color=color, stroke_opacity=0.5,
+                        stroke_width=0.5).shift(np.array([pos[0], pos[1], 0])))
+    return out
+
+
+def _mini_neural_map(color, w=2.1, h=1.5):
+    """Few neurons (dot + halo) connected by faint edges — mirrors the
+    deep_mind module's neural map."""
+    rng = np.random.default_rng(37)
+    out = VGroup()
+    # Random-ish but stable neuron layout
+    positions = [
+        np.array([-w/2 + 0.30, h/3, 0]),
+        np.array([w/2 - 0.30, h/3 - 0.05, 0]),
+        np.array([0.0, -h/3 + 0.10, 0]),
+        np.array([-w/4, -h/4, 0]),
+        np.array([w/3, -h/3, 0]),
+        np.array([w/8, h/8, 0]),
+    ]
+    # Edges first (so neurons sit on top)
+    edges = [(0,1), (0,2), (1,2), (2,3), (2,4), (3,4), (5,1), (5,0), (5,3)]
+    for a, b in edges:
+        out.add(Line(positions[a], positions[b],
+                      stroke_color=color, stroke_width=0.7,
+                      stroke_opacity=0.40))
+    # Neurons: halo + body
+    for pos in positions:
+        halo_r = 0.18 + rng.uniform(0, 0.04)
+        out.add(Circle(radius=halo_r, color=color, fill_color=color,
+                        fill_opacity=0.16, stroke_width=0).move_to(pos))
+        out.add(Dot(pos, radius=0.08, color=color, fill_opacity=0.95))
+    return out
+
+
 # ── Text packs ───────────────────────────────────────────────────
 INDEX_LIFE       = "index.life"
 ACT1_CAP_RU      = "Кастомизируй шрифт"
@@ -210,15 +354,23 @@ def _render_customization(scene: Scene, *, act1_cap, act2_cap, act3_cap,
     scene.wait(0.4)
 
     # Cycle each letter through several (font, colour) variants.
-    # Cascade the swaps so the letters don't all change in lockstep.
+    # Per-letter shuffled font sequences guarantee no letter ever gets
+    # the same font twice in a row — drawing fresh from rng.choice each
+    # time produced pathological runs like "x → Helvetica → Helvetica
+    # → Helvetica" with the wrong seed, making one letter look stuck
+    # while the rest danced.
     n_cycles = 5
     cycle_duration = 0.42
+    letter_font_seqs: list[list[str]] = []
+    for _ in letter_mobs:
+        pool = list(FONT_POOL_NON_DEFAULT)
+        rng.shuffle(pool)
+        letter_font_seqs.append(pool)
+
     for cycle in range(n_cycles):
         anims = []
-        for m in letter_mobs:
-            # np.random.choice returns a numpy.str_ which Pango rejects;
-            # cast back to plain str before passing through manim.
-            font = str(rng.choice(FONT_POOL_NON_DEFAULT))
+        for i, m in enumerate(letter_mobs):
+            font = letter_font_seqs[i][cycle % len(letter_font_seqs[i])]
             colour = PALETTE[int(rng.integers(1, len(PALETTE)))]
             replacement = _high_dpi(Text, m.text, 64,
                                     font=font, color=colour)
@@ -289,34 +441,44 @@ def _render_customization(scene: Scene, *, act1_cap, act2_cap, act3_cap,
     scene.play(FadeOut(VGroup(page_group, cap2)), run_time=0.5)
 
     # ═════════════ ACT 3 ─ chart pictograms colour-cycling ═════════
-    # 2×2 grid of mini chart pictograms. Each pictogram is built with
-    # an initial colour, and we'll cycle their colours independently.
-    initial_chart_colours = PALETTE[:4]
-    heat = _mini_heatmap(initial_chart_colours[0])
-    spir = _mini_spiral (initial_chart_colours[1])
-    rose = _mini_rose   (initial_chart_colours[2])
-    river= _mini_river  (initial_chart_colours[3])
+    # 3×3 grid covering every customisable chart in the app:
+    #   heatmap · spiral · rose
+    #   rhythm  · ridgeline · words
+    #   river   · activities · neural map
+    # Each pictogram is a VGroup with a single accent colour we can
+    # cycle independently.
+    chart_builders = [
+        _mini_heatmap, _mini_spiral, _mini_rose,
+        _mini_rhythm, _mini_ridgeline, _mini_words,
+        _mini_river, _mini_activities, _mini_neural_map,
+    ]
+    chart_mobs = []
+    for i, builder in enumerate(chart_builders):
+        chart_mobs.append(builder(PALETTE[i % len(PALETTE)]))
 
-    charts_grid = VGroup(heat, spir, rose, river).arrange_in_grid(
-        rows=2, cols=2, buff=(1.1, 0.7),   # (horiz, vert) buffers
+    charts_grid = VGroup(*chart_mobs).arrange_in_grid(
+        rows=3, cols=3, buff=(0.55, 0.40),
     )
-    charts_grid.move_to(ORIGIN + UP * 0.2)
+    # The neural-map / activities / ridgeline minis are taller than the
+    # heatmap; scale the whole grid to a uniform height that fits above
+    # the caption at y = -3.2.
+    charts_grid.scale_to_fit_height(4.6)
+    charts_grid.move_to(ORIGIN + UP * 0.30)
 
     scene.play(
         LaggedStart(*[FadeIn(c, scale=0.85) for c in charts_grid],
-                    lag_ratio=0.12),
-        run_time=0.9,
+                    lag_ratio=0.07),
+        run_time=1.1,
     )
     scene.wait(0.2)
 
-    # Cycle each chart's colour every ~1 s, staggered.
-    chart_mobs = [heat, spir, rose, river]
+    # Cycle each chart's colour every ~1.1 s, staggered.
     for cycle in range(4):
         anims = []
         for chart in chart_mobs:
             new_colour = PALETTE[int(rng.integers(0, len(PALETTE)))]
             anims.append(chart.animate.set_color(new_colour))
-        scene.play(LaggedStart(*anims, lag_ratio=0.15), run_time=1.1)
+        scene.play(LaggedStart(*anims, lag_ratio=0.08), run_time=1.1)
 
     cap3 = _body_text(act3_cap, size=24, italic=True, color=TEXT_DIM)
     cap3.next_to(charts_grid, DOWN, buff=0.6)
