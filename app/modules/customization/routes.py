@@ -69,6 +69,11 @@ _COLOR_KEYS = {
     'mosaic-empty-color', 'mosaic-empty-grad-from', 'mosaic-empty-grad-to',
     # Chat avatar (AI psychologist) — colour + gradient endpoints.
     'avatar-color', 'avatar-gradient-from', 'avatar-gradient-to',
+    # Computed at bg-image upload time so auto-invert can choose
+    # white/black text against a sampled image. Stored as a regular
+    # colour string so it survives DB round-trips like every other
+    # colour setting.
+    'bg-image-avg-color',
 }
 
 # Per-chart color keys are pulled in programmatically from the schema.
@@ -373,6 +378,7 @@ def api_upload_bg():
     # Try to resize via Pillow; fall back to storing as-is on import
     # error (Pillow is part of Flask deps, but be defensive).
     out_bytes = raw
+    avg_hex = ''
     try:
         from PIL import Image
         from io import BytesIO
@@ -399,8 +405,20 @@ def api_upload_bg():
                 img = bg
         img.save(buf, format=save_fmt, **kwargs)
         out_bytes = buf.getvalue()
+
+        # Sample average RGB on a 32×32 downscale — cheap, and good
+        # enough to pick black/white text via luma. Auto-invert reads
+        # this back from the saved setting on every page render, so we
+        # don't want to pay the PIL cost there.
+        sample = img.convert('RGB').resize((32, 32), Image.LANCZOS)
+        pixels = list(sample.getdata())
+        if pixels:
+            r = sum(p[0] for p in pixels) // len(pixels)
+            g = sum(p[1] for p in pixels) // len(pixels)
+            b = sum(p[2] for p in pixels) // len(pixels)
+            avg_hex = f'#{r:02x}{g:02x}{b:02x}'
     except Exception:
-        # Storage as-is is fine; we just lose auto-resize benefits.
+        # Storage as-is is fine; we just lose auto-resize + avg-color.
         pass
 
     # Random filename keeps URL guessing impractical and avoids name
@@ -415,6 +433,7 @@ def api_upload_bg():
         'filename': name,
         'url': f'/customization/uploads/{name}',
         'bytes': len(out_bytes),
+        'avg_color': avg_hex,
     })
 
 
@@ -631,9 +650,21 @@ def api_get_settings():
 
 # ── Theme import / export ────────────────────────────────────
 
-# Format version. Bumped when we introduce a backward-incompatible
-# change in the JSON shape (currently never).
-_THEME_VERSION = 1
+# Format version. v1 = settings-only; v2 = + base64 upload bundling
+# so a theme shared between users transfers bg images / fonts too,
+# not just the settings that reference them by filename.
+_THEME_VERSION = 2
+
+# Filename keys whose value lives in `uploads_dir()`. Centralised so
+# both the export bundling and the import unpacking walk the same
+# list.
+_EXPORT_UPLOAD_KEYS = (
+    'bg-image-filename',
+    'mosaic-filled-filename',
+    'mosaic-empty-filename',
+    'avatar-image-filename',
+    'custom-font-filename',
+)
 
 
 @bp.route('/customization/api/export', methods=['GET'])
@@ -641,25 +672,47 @@ def api_export():
     """Download the current theme as a JSON file.
 
     Includes:
-      version    — schema version of the export format
-      app        — fixed string for sanity-checking the source app
-      settings   — the user's overrides (NOT defaults), so the file
-                   stays small and survives default changes between
-                   app versions
-      uploads    — any referenced upload filenames so a sister tool
-                   could in future bundle the actual image bytes
-                   (currently informational only)
+      version       — schema version of the export format
+      app / kind    — fixed strings for sanity-checking the source app
+      settings      — the user's overrides (NOT defaults), so the file
+                      stays small and survives default changes
+      uploads       — { setting-key: filename } map for the referenced
+                      uploads — handy when inspecting the file by hand
+      uploads_data  — { filename: { mime, base64 } } so the receiver
+                      can reconstruct the actual image/font bytes
+                      (added in v2 — previously the bytes were not
+                      transferred so a shared theme lost its background
+                      image / mosaic image / custom font)
 
-    Returned as `application/json` with a `Content-Disposition` header
-    so the browser downloads it as a file.
+    Returned as `application/json`. The `Content-Disposition` header
+    is kept for clients that GET the URL directly; the in-app button
+    routes through the pywebview Save dialog instead.
     """
     from flask import Response
+    import base64
     overrides = _current_settings()
-    upload_keys = (
-        'bg-image-filename', 'mosaic-filled-filename',
-        'mosaic-empty-filename', 'custom-font-filename',
-    )
-    uploads = {k: overrides[k] for k in upload_keys if overrides.get(k)}
+    uploads = {
+        k: overrides[k] for k in _EXPORT_UPLOAD_KEYS if overrides.get(k)
+    }
+    # Bundle the actual bytes for each referenced upload so the theme
+    # is self-contained. Skipping a missing file silently — the import
+    # would just fall back to defaults for that key anyway, so partial
+    # bundles are still useful.
+    uploads_data: dict[str, dict[str, str]] = {}
+    for fn in uploads.values():
+        path = uploads_dir() / fn
+        try:
+            with open(path, 'rb') as fh:
+                blob = fh.read()
+        except OSError:
+            continue
+        ext = os.path.splitext(fn)[1].lower().lstrip('.')
+        mime = _MIME_BY_EXT.get(ext, 'application/octet-stream')
+        uploads_data[fn] = {
+            'mime': mime,
+            'base64': base64.b64encode(blob).decode('ascii'),
+        }
+
     payload = {
         'app': 'index.life',
         'kind': 'customization-theme',
@@ -667,6 +720,7 @@ def api_export():
         'exported_at': utcnow().isoformat() + 'Z',
         'settings': overrides,
         'uploads': uploads,
+        'uploads_data': uploads_data,
     }
     body = json.dumps(payload, ensure_ascii=False, indent=2)
     fname = f'index-life-theme-{utcnow():%Y%m%d-%H%M%S}.json'
@@ -679,6 +733,17 @@ def api_export():
     )
 
 
+# MIME hints used when bundling uploads. Browser will infer these
+# from the file extension on import; we include them as metadata so
+# the JSON is self-documenting.
+_MIME_BY_EXT = {
+    'jpg':  'image/jpeg', 'jpeg': 'image/jpeg',
+    'png':  'image/png',  'webp': 'image/webp', 'gif':  'image/gif',
+    'ttf':  'font/ttf',   'otf':  'font/otf',
+    'woff': 'font/woff',  'woff2': 'font/woff2',
+}
+
+
 @bp.route('/customization/api/import', methods=['POST'])
 def api_import():
     """Import a previously-exported theme JSON.
@@ -688,12 +753,15 @@ def api_import():
     — silently dropping anything invalid — so an attacker-supplied
     file can't smuggle XSS into a CSS variable.
 
-    Note: upload filenames inside the JSON only resolve to actual
-    images if those files already exist in the user's uploads dir.
-    Importing on a different machine will leave bg-image / mosaic /
-    custom-font filenames pointing at non-existent files; the
-    customization just falls back to defaults for those keys.
+    If the file carries `uploads_data` (v2+), each entry is base64-
+    decoded into `uploads_dir()` under its original filename, so the
+    receiver gets the actual image/font bytes — not just a dangling
+    filename reference. Filenames are validated against the same
+    regex set the upload endpoints use, so a hostile bundle can't
+    write outside uploads_dir or fake an extension we don't serve.
     """
+    import base64
+    import binascii
     data = None
     f = request.files.get('file')
     if f is not None:
@@ -722,6 +790,42 @@ def api_import():
             continue
         accepted[k] = v
 
+    # Unbundle uploads_data so referenced filenames actually resolve.
+    # Each entry is independently validated; a bad one is skipped, not
+    # fatal, so a partially-corrupt file still imports the rest.
+    uploads_data = data.get('uploads_data') or {}
+    written_uploads: list[str] = []
+    skipped_uploads: list[str] = []
+    if isinstance(uploads_data, dict):
+        for fn, entry in uploads_data.items():
+            if not isinstance(fn, str) or not isinstance(entry, dict):
+                skipped_uploads.append(str(fn))
+                continue
+            is_image = bool(_FILENAME_RE.match(fn))
+            is_font  = bool(_FONT_FILENAME_RE.match(fn))
+            if not (is_image or is_font):
+                skipped_uploads.append(fn)
+                continue
+            b64 = entry.get('base64')
+            if not isinstance(b64, str):
+                skipped_uploads.append(fn)
+                continue
+            try:
+                blob = base64.b64decode(b64, validate=True)
+            except (ValueError, binascii.Error):
+                skipped_uploads.append(fn)
+                continue
+            limit = _MAX_UPLOAD_BYTES if is_image else _MAX_FONT_BYTES
+            if len(blob) > limit:
+                skipped_uploads.append(fn)
+                continue
+            try:
+                with open(uploads_dir() / fn, 'wb') as fh:
+                    fh.write(blob)
+                written_uploads.append(fn)
+            except OSError:
+                skipped_uploads.append(fn)
+
     # Replace settings entirely — importing a theme should give you
     # exactly that theme, not a merge with whatever you had before.
     row = _load_row()
@@ -733,5 +837,7 @@ def api_import():
         'ok': True,
         'imported': list(accepted.keys()),
         'rejected': rejected,
+        'uploads_written': written_uploads,
+        'uploads_skipped': skipped_uploads,
         'settings': merge_with_defaults(accepted),
     })

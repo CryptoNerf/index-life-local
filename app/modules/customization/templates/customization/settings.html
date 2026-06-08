@@ -133,6 +133,12 @@
                  value="{{ current['bg-type'] }}">
           <input type="hidden" id="cz-bg-shape" data-key="bg-gradient-shape"
                  value="{{ current['bg-gradient-shape'] }}">
+          <!-- Avg colour of the uploaded bg image, computed server-side at
+               upload time and used by auto-invert to pick white/black text
+               against a photographic background. -->
+          <input type="hidden" id="cz-bg-image-avg-color"
+                 data-key="bg-image-avg-color"
+                 value="{{ current['bg-image-avg-color'] }}">
         </div>
       </div>
       <div class="cz-preview">
@@ -728,10 +734,8 @@
     <!-- ── Footer: save / reset / export / import ──────────────── -->
     <div class="cz-footer">
       <span class="cz-saved-msg" id="cz-saved-msg">{{ t('cz.saved') }}</span>
-      <a class="cz-btn cz-btn-link" id="cz-export-link"
-         href="/customization/api/export"
-         download
-         title="{{ t('customization.export_title') }}">{{ t('cz.export') }}</a>
+      <button class="cz-btn" type="button" id="cz-export-link"
+              title="{{ t('customization.export_title') }}">{{ t('cz.export') }}</button>
       <button class="cz-btn" type="button" id="cz-import-trigger"
               title="{{ t('customization.import_title') }}">{{ t('cz.import') }}</button>
       <input type="file" id="cz-import-input"

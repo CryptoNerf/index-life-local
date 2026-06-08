@@ -54,6 +54,13 @@ DEFAULTS = {
     'bg-image-filename': '',
     'bg-image-blur':    '0px',     # CSS blur on the bg image only
     'bg-image-opacity': '1',       # 0..1 — visual strength of the image
+    # Average colour of the uploaded bg image, computed server-side at
+    # upload time. Used by auto-invert-text to pick black/white text
+    # against an image background — without this, image bg sets just
+    # disabled auto-invert because there was no single colour to test.
+    # Empty string = no image / not computed yet (auto-invert falls back
+    # to "don't invert").
+    'bg-image-avg-color': '',
 
     # ── Typography ──────────────────────────────────────────
     # font-body-id / font-heading-id are metadata: the catalog id of

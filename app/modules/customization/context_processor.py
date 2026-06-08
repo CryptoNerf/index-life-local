@@ -240,8 +240,10 @@ def _effective_bg_rgb(settings: dict) -> tuple[int, int, int] | None:
     Priority chain:
       1. bg-type='color' → bg-color.
       2. bg-type='gradient' → midpoint between from / to.
-      3. bg-type='image' → None (can't sample a photo server-side, so
-         auto-invert stays off — manual text-color wins).
+      3. bg-type='image' → bg-image-avg-color (sampled at upload time;
+         empty when the image was uploaded by an older app version
+         that didn't sample, in which case we return None and leave
+         auto-invert disabled).
 
     Returns None when no decision can be made.
     """
@@ -252,6 +254,11 @@ def _effective_bg_rgb(settings: dict) -> tuple[int, int, int] | None:
         a = _hex_to_rgb(settings.get('bg-gradient-from', '#ffffff'))
         b = _hex_to_rgb(settings.get('bg-gradient-to',   '#dddddd'))
         return ((a[0] + b[0]) // 2, (a[1] + b[1]) // 2, (a[2] + b[2]) // 2)
+    if bg_type == 'image':
+        avg = settings.get('bg-image-avg-color') or ''
+        if avg.startswith('#') and len(avg) in (4, 7):
+            return _hex_to_rgb(avg)
+        return None
     return None
 
 

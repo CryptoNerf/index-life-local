@@ -158,11 +158,19 @@
   });
 
   function resolveFontFamily(id) {
-    if (!id || id === 'times') return null;  // null = clear var, use CSS fallback
+    // 'times' MUST return an explicit family stack, not null. If we
+    // cleared the var instead, the server-rendered `<style id="customization-vars">`
+    // block (which carries `:root { --font-body: 'Custom', sans-serif }`
+    // for a user who previously saved font-body-id='custom') would
+    // shine through and the "Times" pick would silently keep the
+    // uploaded font. Same shape applies to system stacks served from
+    // the catalog — the lookup below covers them already.
+    if (!id) return null;
     if (id === 'custom') {
       return customFontFilename ? "'Custom', sans-serif" : null;
     }
-    return FONT_FAMILY_BY_ID[id] || null;
+    return FONT_FAMILY_BY_ID[id]
+        || (id === 'times' ? "'Times New Roman', Times, serif" : null);
   }
 
   // Pull catalog so we know id → family mapping for live preview.
@@ -211,7 +219,17 @@
         Math.round((a[2] + b[2]) / 2),
       ];
     }
-    return null;  // image: can't compute without sampling
+    if (bgType === 'image') {
+      // Mirrors the server-side path in context_processor._effective_bg_rgb:
+      // read the avg colour that was sampled at upload time. Empty when
+      // the bg image was uploaded by an older app version that didn't
+      // sample — we then fall back to "no decision" so manual text-color
+      // wins.
+      var avg = (document.getElementById('cz-bg-image-avg-color') || {}).value || '';
+      if (avg && avg.charAt(0) === '#') return hexToRgb(avg);
+      return null;
+    }
+    return null;
   }
   function luma(rgb) {
     return rgb[0] * 0.299 + rgb[1] * 0.587 + rgb[2] * 0.114;
@@ -493,6 +511,14 @@
           dirtyKeys['bg-image-filename'] = true;
           if (currentFile) currentFile.textContent = data.filename.substr(0, 8) + '…';
           if (bgImageClear) bgImageClear.disabled = false;
+          // Capture the server-computed avg colour so auto-invert can
+          // decide black vs. white text against this image without
+          // needing a canvas sample on the client.
+          var avgField = document.getElementById('cz-bg-image-avg-color');
+          if (avgField && data.avg_color) {
+            avgField.value = data.avg_color;
+            dirtyKeys['bg-image-avg-color'] = true;
+          }
           // Auto-switch to image type so the upload is visible immediately
           setBgType('image');
           rebuildBgImageVar();
@@ -810,7 +836,63 @@
     });
   }
 
-  // ── Theme import (export is a plain GET via <a download>) ───
+  // ── Theme export ─────────────────────────────────────────────
+  // The <a href download> approach broke under pywebview/WKWebView:
+  // the JSON rendered inline with no way back. Mirror the markdown
+  // export pattern from account.html — fetch the JSON, then bridge
+  // to a native Save dialog when running inside pywebview, fall back
+  // to a Blob + <a download> in a regular browser.
+  var exportBtn = document.getElementById('cz-export-link');
+  if (exportBtn) {
+    exportBtn.addEventListener('click', function () {
+      exportBtn.disabled = true;
+      var origText = exportBtn.textContent;
+      exportBtn.textContent = 'Exporting…';
+      fetch('/customization/api/export')
+        .then(function (r) {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          // Pull both the parsed payload (for size sanity) and the raw
+          // text we'll actually persist — re-stringifying would lose
+          // the server's chosen key ordering / indentation.
+          return r.text();
+        })
+        .then(function (text) {
+          // Suggested filename: server-format is a timestamped name
+          // but the response is the raw JSON body, so derive one client-side.
+          var ts = new Date().toISOString()
+              .replace(/[-:T]/g, '').slice(0, 15);
+          var filename = 'index-life-theme-' + ts.slice(0, 8)
+                       + '-' + ts.slice(9, 15) + '.json';
+          if (window.pywebview && window.pywebview.api &&
+              typeof window.pywebview.api.save_text_file === 'function') {
+            return window.pywebview.api.save_text_file(text, filename)
+              .then(function (savedPath) {
+                if (!savedPath) return;  // user cancelled
+                // Nothing to show — the dialog already closed.
+              });
+          }
+          // Browser fallback: Blob + <a download>
+          var blob = new Blob([text], { type: 'application/json;charset=utf-8' });
+          var url = URL.createObjectURL(blob);
+          var a = document.createElement('a');
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(function () { URL.revokeObjectURL(url); }, 0);
+        })
+        .catch(function (err) {
+          alert('Export failed: ' + (err && err.message ? err.message : err));
+        })
+        .then(function () {
+          exportBtn.disabled = false;
+          exportBtn.textContent = origText;
+        });
+    });
+  }
+
+  // ── Theme import ─────────────────────────────────────────────
   // Importing replaces the entire theme — same effect as Reset
   // followed by Save with the new values. We hard-reload after to
   // resync controls. The server validates each key against the same
