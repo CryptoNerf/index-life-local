@@ -296,6 +296,40 @@
   var currentFontField  = document.getElementById('cz-current-font');
   var fontClearBtn      = document.getElementById('cz-font-clear');
 
+  // ── Native file-picker bridge (pywebview / WKWebView) ───────
+  // WKWebView's <input type="file" accept=...> goes through a UTType
+  // lookup whose mapping is incomplete on the macOS versions we see:
+  // .webp / .gif silently disappear from "image/*", .woff / .woff2
+  // have no UTI at all, so the dialog either narrows to "JPG only"
+  // or widens to "all files". Going through pywebview's
+  // `create_file_dialog` (Cocoa NSOpenPanel) with an explicit
+  // *.ext;*.ext pattern works around it. JS side calls the bridge,
+  // rehydrates the returned base64 into a Blob, and POSTs to the
+  // existing upload endpoints — server-side validation is the same
+  // either way.
+  function _hasNativeFilePicker() {
+    return !!(window.pywebview && window.pywebview.api &&
+              typeof window.pywebview.api.open_file_dialog === 'function');
+  }
+
+  // Resolves to { name, blob } on success, null on cancel / error
+  // (errors already alerted). Caller must already know the bridge is
+  // available — see _hasNativeFilePicker.
+  function _pickViaBridge(label, exts, maxBytes) {
+    return window.pywebview.api.open_file_dialog(label, exts, maxBytes)
+      .then(function (picked) {
+        if (!picked) return null;
+        if (picked.error) {
+          alert('Upload failed: ' + picked.error);
+          return null;
+        }
+        var bin = atob(picked.base64);
+        var arr = new Uint8Array(bin.length);
+        for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+        return { name: picked.name, blob: new Blob([arr]) };
+      });
+  }
+
   // Shared post-upload handler (called from both the browser <input>
   // path and the pywebview native-bridge path).
   function _afterFontUploadResponse(data) {
@@ -328,55 +362,33 @@
     });
   }
 
-  function _pickFontViaPywebview() {
-    // pywebview js_api is exposed at window.pywebview.api once the
-    // bridge is ready — bypass the HTML <input> entirely because
-    // WKWebView can't filter .woff/.woff2 reliably via UTI.
-    fontUploadTrigger.disabled = true;
-    fontUploadTrigger.textContent = 'Picking…';
-    window.pywebview.api.open_file_dialog(
-      'Font files', ['ttf', 'otf', 'woff', 'woff2'], 5 * 1024 * 1024
-    ).then(function (picked) {
-      if (!picked) {
-        fontUploadTrigger.disabled = false;
-        fontUploadTrigger.textContent = 'Upload…';
-        return;
-      }
-      if (picked.error) {
-        fontUploadTrigger.disabled = false;
-        fontUploadTrigger.textContent = 'Upload…';
-        alert('Upload failed: ' + picked.error);
-        return;
-      }
-      // Rehydrate base64 → Blob → FormData and POST to the same
-      // /api/upload-font endpoint, so server-side validation runs
-      // identically regardless of how the file was picked.
-      var bin = atob(picked.base64);
-      var arr = new Uint8Array(bin.length);
-      for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-      var blob = new Blob([arr]);
-      var fd = new FormData();
-      fd.append('file', blob, picked.name);
-      fontUploadTrigger.textContent = 'Uploading…';
-      fetch('/customization/api/upload-font', { method: 'POST', body: fd })
-        .then(function (r) { return r.json(); })
-        .then(_afterFontUploadResponse)
-        .catch(function (err) {
-          fontUploadTrigger.disabled = false;
-          fontUploadTrigger.textContent = 'Upload…';
-          alert('Upload failed: ' + err);
-        });
-    });
-  }
-
   if (fontUploadTrigger && fontUploadInput) {
     fontUploadTrigger.addEventListener('click', function () {
-      if (window.pywebview && window.pywebview.api &&
-          typeof window.pywebview.api.open_file_dialog === 'function') {
-        _pickFontViaPywebview();
+      if (!_hasNativeFilePicker()) {
+        fontUploadInput.click();
         return;
       }
-      fontUploadInput.click();
+      fontUploadTrigger.disabled = true;
+      fontUploadTrigger.textContent = 'Picking…';
+      _pickViaBridge('Font files', ['ttf', 'otf', 'woff', 'woff2'],
+                     5 * 1024 * 1024).then(function (picked) {
+        if (!picked) {
+          fontUploadTrigger.disabled = false;
+          fontUploadTrigger.textContent = 'Upload…';
+          return;
+        }
+        var fd = new FormData();
+        fd.append('file', picked.blob, picked.name);
+        fontUploadTrigger.textContent = 'Uploading…';
+        fetch('/customization/api/upload-font', { method: 'POST', body: fd })
+          .then(function (r) { return r.json(); })
+          .then(_afterFontUploadResponse)
+          .catch(function (err) {
+            fontUploadTrigger.disabled = false;
+            fontUploadTrigger.textContent = 'Upload…';
+            alert('Upload failed: ' + err);
+          });
+      });
     });
     fontUploadInput.addEventListener('change', function () {
       var file = fontUploadInput.files && fontUploadInput.files[0];
@@ -549,8 +561,58 @@
   var currentFile   = document.getElementById('cz-current-file');
   var bgImageClear  = document.getElementById('cz-bg-image-clear');
 
+  function _afterBgUploadResponse(data) {
+    uploadTrigger.disabled = false;
+    uploadTrigger.textContent = 'Choose…';
+    if (!data || data.error) {
+      alert('Upload failed: ' + (data && data.error ? data.error : 'unknown'));
+      return;
+    }
+    if (bgFilename) bgFilename.value = data.filename;
+    dirtyKeys['bg-image-filename'] = true;
+    if (currentFile) currentFile.textContent = data.filename.substr(0, 8) + '…';
+    if (bgImageClear) bgImageClear.disabled = false;
+    // Capture the server-computed avg colour so auto-invert can
+    // decide black vs. white text against this image without needing
+    // a canvas sample on the client.
+    var avgField = document.getElementById('cz-bg-image-avg-color');
+    if (avgField && data.avg_color) {
+      avgField.value = data.avg_color;
+      dirtyKeys['bg-image-avg-color'] = true;
+    }
+    // Auto-switch to image type so the upload is visible immediately
+    setBgType('image');
+    rebuildBgImageVar();
+  }
+
   if (uploadTrigger && uploadInput) {
-    uploadTrigger.addEventListener('click', function () { uploadInput.click(); });
+    uploadTrigger.addEventListener('click', function () {
+      if (!_hasNativeFilePicker()) {
+        uploadInput.click();
+        return;
+      }
+      uploadTrigger.disabled = true;
+      uploadTrigger.textContent = 'Picking…';
+      _pickViaBridge('Image files', ['png', 'jpg', 'jpeg', 'webp', 'gif'],
+                     10 * 1024 * 1024).then(function (picked) {
+        if (!picked) {
+          uploadTrigger.disabled = false;
+          uploadTrigger.textContent = 'Choose…';
+          return;
+        }
+        var fd = new FormData();
+        fd.append('file', picked.blob, picked.name);
+        uploadTrigger.textContent = 'Uploading…';
+        fetch('/customization/api/upload-bg', { method: 'POST', body: fd })
+          .then(function (r) { return r.json(); })
+          .then(_afterBgUploadResponse)
+          .catch(function (err) {
+            uploadTrigger.disabled = false;
+            uploadTrigger.textContent = 'Choose…';
+            alert('Upload failed: ' + err);
+          });
+      });
+    });
     uploadInput.addEventListener('change', function () {
       var file = uploadInput.files && uploadInput.files[0];
       if (!file) return;
@@ -564,29 +626,7 @@
       fd.append('file', file);
       fetch('/customization/api/upload-bg', { method: 'POST', body: fd })
         .then(function (r) { return r.json(); })
-        .then(function (data) {
-          uploadTrigger.disabled = false;
-          uploadTrigger.textContent = 'Choose…';
-          if (data.error) {
-            alert('Upload failed: ' + data.error);
-            return;
-          }
-          if (bgFilename) bgFilename.value = data.filename;
-          dirtyKeys['bg-image-filename'] = true;
-          if (currentFile) currentFile.textContent = data.filename.substr(0, 8) + '…';
-          if (bgImageClear) bgImageClear.disabled = false;
-          // Capture the server-computed avg colour so auto-invert can
-          // decide black vs. white text against this image without
-          // needing a canvas sample on the client.
-          var avgField = document.getElementById('cz-bg-image-avg-color');
-          if (avgField && data.avg_color) {
-            avgField.value = data.avg_color;
-            dirtyKeys['bg-image-avg-color'] = true;
-          }
-          // Auto-switch to image type so the upload is visible immediately
-          setBgType('image');
-          rebuildBgImageVar();
-        })
+        .then(_afterBgUploadResponse)
         .catch(function (err) {
           uploadTrigger.disabled = false;
           uploadTrigger.textContent = 'Choose…';
@@ -709,8 +749,48 @@
   var avatarCurrentFile = document.getElementById('cz-avatar-current-file');
   var avatarImageClear  = document.getElementById('cz-avatar-image-clear');
 
+  function _afterAvatarUploadResponse(data) {
+    avatarUploadTrig.disabled = false;
+    avatarUploadTrig.textContent = 'Choose…';
+    if (!data || data.error) {
+      alert('Upload failed: ' + (data && data.error ? data.error : 'unknown'));
+      return;
+    }
+    if (avatarFilename) avatarFilename.value = data.filename;
+    dirtyKeys['avatar-image-filename'] = true;
+    if (avatarCurrentFile) avatarCurrentFile.textContent = data.filename.substr(0, 8) + '…';
+    if (avatarImageClear) avatarImageClear.disabled = false;
+    setAvatarType('image');
+  }
+
   if (avatarUploadTrig && avatarUploadInput) {
-    avatarUploadTrig.addEventListener('click', function () { avatarUploadInput.click(); });
+    avatarUploadTrig.addEventListener('click', function () {
+      if (!_hasNativeFilePicker()) {
+        avatarUploadInput.click();
+        return;
+      }
+      avatarUploadTrig.disabled = true;
+      avatarUploadTrig.textContent = 'Picking…';
+      _pickViaBridge('Image files', ['png', 'jpg', 'jpeg', 'webp', 'gif'],
+                     10 * 1024 * 1024).then(function (picked) {
+        if (!picked) {
+          avatarUploadTrig.disabled = false;
+          avatarUploadTrig.textContent = 'Choose…';
+          return;
+        }
+        var fd = new FormData();
+        fd.append('file', picked.blob, picked.name);
+        avatarUploadTrig.textContent = 'Uploading…';
+        fetch('/customization/api/upload-bg', { method: 'POST', body: fd })
+          .then(function (r) { return r.json(); })
+          .then(_afterAvatarUploadResponse)
+          .catch(function (err) {
+            avatarUploadTrig.disabled = false;
+            avatarUploadTrig.textContent = 'Choose…';
+            alert('Upload failed: ' + err);
+          });
+      });
+    });
     avatarUploadInput.addEventListener('change', function () {
       var file = avatarUploadInput.files && avatarUploadInput.files[0];
       if (!file) return;
@@ -724,20 +804,7 @@
       fd.append('file', file);
       fetch('/customization/api/upload-bg', { method: 'POST', body: fd })
         .then(function (r) { return r.json(); })
-        .then(function (data) {
-          avatarUploadTrig.disabled = false;
-          avatarUploadTrig.textContent = 'Choose…';
-          if (data.error) {
-            alert('Upload failed: ' + data.error);
-            return;
-          }
-          if (avatarFilename) avatarFilename.value = data.filename;
-          dirtyKeys['avatar-image-filename'] = true;
-          if (avatarCurrentFile) avatarCurrentFile.textContent = data.filename.substr(0, 8) + '…';
-          if (avatarImageClear) avatarImageClear.disabled = false;
-          // Auto-switch to image mode so the upload is immediately visible.
-          setAvatarType('image');
-        })
+        .then(_afterAvatarUploadResponse)
         .catch(function (err) {
           avatarUploadTrig.disabled = false;
           avatarUploadTrig.textContent = 'Choose…';
@@ -1717,7 +1784,47 @@
     var hidden  = document.getElementById(hiddenId);
     if (!trigger || !input) return;
 
-    trigger.addEventListener('click', function () { input.click(); });
+    function afterResponse(data) {
+      trigger.disabled = false;
+      trigger.textContent = 'Choose…';
+      if (!data || data.error) {
+        alert('Upload failed: ' + (data && data.error ? data.error : 'unknown'));
+        return;
+      }
+      if (hidden) hidden.value = data.filename;
+      if (current) current.textContent = data.filename.substr(0, 8) + '…';
+      if (clear) clear.disabled = false;
+      dirtyKeys[dirtyKey] = true;
+      onSet(data.filename);
+    }
+
+    trigger.addEventListener('click', function () {
+      if (!_hasNativeFilePicker()) {
+        input.click();
+        return;
+      }
+      trigger.disabled = true;
+      trigger.textContent = 'Picking…';
+      _pickViaBridge('Image files', ['png', 'jpg', 'jpeg', 'webp', 'gif'],
+                     10 * 1024 * 1024).then(function (picked) {
+        if (!picked) {
+          trigger.disabled = false;
+          trigger.textContent = 'Choose…';
+          return;
+        }
+        var fd = new FormData();
+        fd.append('file', picked.blob, picked.name);
+        trigger.textContent = 'Uploading…';
+        fetch('/customization/api/upload-bg', { method: 'POST', body: fd })
+          .then(function (r) { return r.json(); })
+          .then(afterResponse)
+          .catch(function (err) {
+            trigger.disabled = false;
+            trigger.textContent = 'Choose…';
+            alert('Upload failed: ' + err);
+          });
+      });
+    });
     input.addEventListener('change', function () {
       var file = input.files && input.files[0];
       if (!file) return;
@@ -1731,15 +1838,11 @@
       fd.append('file', file);
       fetch('/customization/api/upload-bg', { method: 'POST', body: fd })
         .then(function (r) { return r.json(); })
-        .then(function (data) {
+        .then(afterResponse)
+        .catch(function (err) {
           trigger.disabled = false;
           trigger.textContent = 'Choose…';
-          if (data.error) { alert('Upload failed: ' + data.error); return; }
-          if (hidden) hidden.value = data.filename;
-          if (current) current.textContent = data.filename.substr(0, 8) + '…';
-          if (clear) clear.disabled = false;
-          dirtyKeys[dirtyKey] = true;
-          onSet(data.filename);
+          alert('Upload failed: ' + err);
         });
     });
     if (clear) {
