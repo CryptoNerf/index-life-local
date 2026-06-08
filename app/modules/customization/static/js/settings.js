@@ -296,8 +296,88 @@
   var currentFontField  = document.getElementById('cz-current-font');
   var fontClearBtn      = document.getElementById('cz-font-clear');
 
+  // Shared post-upload handler (called from both the browser <input>
+  // path and the pywebview native-bridge path).
+  function _afterFontUploadResponse(data) {
+    fontUploadTrigger.disabled = false;
+    fontUploadTrigger.textContent = 'Upload…';
+    if (!data || data.error) {
+      alert('Upload failed: ' + (data && data.error ? data.error : 'unknown'));
+      return;
+    }
+    customFontFilename = data.filename;
+    if (fontFilenameField) fontFilenameField.value = data.filename;
+    if (currentFontField) currentFontField.textContent = data.filename.substr(0, 8) + '…';
+    if (fontClearBtn) fontClearBtn.disabled = false;
+    dirtyKeys['custom-font-filename'] = true;
+
+    injectCustomFontFace(data.filename);
+
+    // If the user picked 'custom' BEFORE uploading, the selector was
+    // already at 'custom' but resolveFontFamily returned null (no
+    // filename yet) — so the CSS var was cleared instead of set, and
+    // no 'change' event fires now to reapply. Walk the font selectors
+    // and force-resolve any that are already on 'custom' so the live
+    // preview reflects the just-uploaded file.
+    selects.forEach(function (sel) {
+      if (sel.value !== 'custom') return;
+      var family = resolveFontFamily('custom');
+      if (!family) return;
+      var cssVarName = sel.getAttribute('data-key').replace('-id', '');
+      applyVar(cssVarName, family);
+    });
+  }
+
+  function _pickFontViaPywebview() {
+    // pywebview js_api is exposed at window.pywebview.api once the
+    // bridge is ready — bypass the HTML <input> entirely because
+    // WKWebView can't filter .woff/.woff2 reliably via UTI.
+    fontUploadTrigger.disabled = true;
+    fontUploadTrigger.textContent = 'Picking…';
+    window.pywebview.api.open_file_dialog(
+      'Font files', ['ttf', 'otf', 'woff', 'woff2'], 5 * 1024 * 1024
+    ).then(function (picked) {
+      if (!picked) {
+        fontUploadTrigger.disabled = false;
+        fontUploadTrigger.textContent = 'Upload…';
+        return;
+      }
+      if (picked.error) {
+        fontUploadTrigger.disabled = false;
+        fontUploadTrigger.textContent = 'Upload…';
+        alert('Upload failed: ' + picked.error);
+        return;
+      }
+      // Rehydrate base64 → Blob → FormData and POST to the same
+      // /api/upload-font endpoint, so server-side validation runs
+      // identically regardless of how the file was picked.
+      var bin = atob(picked.base64);
+      var arr = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      var blob = new Blob([arr]);
+      var fd = new FormData();
+      fd.append('file', blob, picked.name);
+      fontUploadTrigger.textContent = 'Uploading…';
+      fetch('/customization/api/upload-font', { method: 'POST', body: fd })
+        .then(function (r) { return r.json(); })
+        .then(_afterFontUploadResponse)
+        .catch(function (err) {
+          fontUploadTrigger.disabled = false;
+          fontUploadTrigger.textContent = 'Upload…';
+          alert('Upload failed: ' + err);
+        });
+    });
+  }
+
   if (fontUploadTrigger && fontUploadInput) {
-    fontUploadTrigger.addEventListener('click', function () { fontUploadInput.click(); });
+    fontUploadTrigger.addEventListener('click', function () {
+      if (window.pywebview && window.pywebview.api &&
+          typeof window.pywebview.api.open_file_dialog === 'function') {
+        _pickFontViaPywebview();
+        return;
+      }
+      fontUploadInput.click();
+    });
     fontUploadInput.addEventListener('change', function () {
       var file = fontUploadInput.files && fontUploadInput.files[0];
       if (!file) return;
@@ -311,23 +391,7 @@
       fd.append('file', file);
       fetch('/customization/api/upload-font', { method: 'POST', body: fd })
         .then(function (r) { return r.json(); })
-        .then(function (data) {
-          fontUploadTrigger.disabled = false;
-          fontUploadTrigger.textContent = 'Upload…';
-          if (data.error) {
-            alert('Upload failed: ' + data.error);
-            return;
-          }
-          customFontFilename = data.filename;
-          if (fontFilenameField) fontFilenameField.value = data.filename;
-          if (currentFontField) currentFontField.textContent = data.filename.substr(0, 8) + '…';
-          if (fontClearBtn) fontClearBtn.disabled = false;
-          dirtyKeys['custom-font-filename'] = true;
-
-          // Inject @font-face for the new file so 'Custom' works in the
-          // live preview without a page reload.
-          injectCustomFontFace(data.filename);
-        })
+        .then(_afterFontUploadResponse)
         .catch(function (err) {
           fontUploadTrigger.disabled = false;
           fontUploadTrigger.textContent = 'Upload…';

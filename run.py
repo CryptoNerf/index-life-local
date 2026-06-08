@@ -277,9 +277,19 @@ def main():
     signal.signal(signal.SIGTERM, lambda *_: os._exit(0))
 
     # JS ↔ native bridge for things the WebView can't do on its own.
-    # Right now: save-file dialog for markdown export. WKWebView ignores
-    # `Content-Disposition: attachment`, so without this bridge the
-    # exported markdown would render inline with no way to go back.
+    # save_text_file       — Save dialog for exports (markdown / theme JSON).
+    #                        WKWebView ignores Content-Disposition: attachment,
+    #                        so without this the exported file renders inline
+    #                        with no way to go back.
+    # open_file_dialog     — Open dialog with extension filtering. The HTML
+    #                        <input type="file" accept=...> filter routes
+    #                        through UTType lookup, and not every extension
+    #                        we care about (notably .woff / .woff2) has a
+    #                        registered UTI on every macOS version — when
+    #                        the lookup fails for any item, WKWebView
+    #                        silently widens the dialog to "all files".
+    #                        Going through Cocoa NSOpenPanel directly via
+    #                        pywebview gives reliable filtering.
     class JsApi:
         def save_text_file(self, content: str, suggested_name: str) -> str | None:
             """Open native Save dialog; write `content` to the chosen path.
@@ -299,6 +309,47 @@ def main():
                 return str(target)
             except Exception as exc:
                 logging.getLogger(__name__).error('save_text_file failed: %s', exc)
+                return None
+
+        def open_file_dialog(self, label: str, extensions: list[str],
+                             max_bytes: int | None = None) -> dict | None:
+            """Open native Open dialog filtered to `extensions`; return the
+            picked file as `{ name, base64 }` so the caller can upload via
+            the normal multipart POST endpoints without duplicating their
+            validation / resize / hashing logic in Python.
+
+            On cancel returns None. On size cap exceeded returns
+            `{ 'error': '...' }` so the JS side can surface it inline.
+            """
+            try:
+                # pywebview's file_types is a tuple of "Label (*.ext;*.ext)" strings.
+                ext_pattern = ';'.join('*' + e if e.startswith('.') else '*.' + e
+                                       for e in extensions)
+                type_label = f'{label} ({ext_pattern})'
+                paths = window.create_file_dialog(
+                    webview.OPEN_DIALOG,
+                    allow_multiple=False,
+                    file_types=(type_label,),
+                )
+                if not paths:
+                    return None
+                path = paths[0] if isinstance(paths, (list, tuple)) else paths
+                if max_bytes is not None:
+                    try:
+                        if os.path.getsize(path) > max_bytes:
+                            mb = max_bytes // (1024 * 1024)
+                            return {'error': f'File too large (max {mb} MB)'}
+                    except OSError:
+                        pass
+                with open(path, 'rb') as f:
+                    blob = f.read()
+                import base64
+                return {
+                    'name': os.path.basename(path),
+                    'base64': base64.b64encode(blob).decode('ascii'),
+                }
+            except Exception as exc:
+                logging.getLogger(__name__).error('open_file_dialog failed: %s', exc)
                 return None
 
     window = webview.create_window(

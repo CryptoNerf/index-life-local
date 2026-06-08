@@ -97,7 +97,7 @@
             <div class="cz-row">
               <label>{{ t('cz.lbl.image_file') }}</label>
               <button type="button" class="cz-btn-small" id="cz-upload-trigger">{{ t('cz.choose') }}</button>
-              <input type="file" id="cz-upload-input" accept=".png,.jpg,.jpeg,.webp,.gif,image/png,image/jpeg,image/webp,image/gif" style="display:none">
+              <input type="file" id="cz-upload-input" accept="image/*" style="display:none">
               <button type="button" class="cz-btn-small cz-btn-warn"
                       id="cz-bg-image-clear"
                       {% if not current['bg-image-filename'] %}disabled{% endif %}>{{ t('cz.remove') }}</button>
@@ -335,7 +335,7 @@
             <button type="button" class="cz-btn-small"
                     id="cz-mosaic-filled-trigger">{{ t('cz.choose') }}</button>
             <input type="file" id="cz-mosaic-filled-input"
-                   accept=".png,.jpg,.jpeg,.webp,.gif,image/png,image/jpeg,image/webp,image/gif"
+                   accept="image/*"
                    style="display:none">
             <button type="button" class="cz-btn-small cz-btn-warn"
                     id="cz-mosaic-filled-clear"
@@ -403,7 +403,7 @@
               <button type="button" class="cz-btn-small"
                       id="cz-mosaic-empty-trigger">{{ t('cz.choose') }}</button>
               <input type="file" id="cz-mosaic-empty-input"
-                     accept=".png,.jpg,.jpeg,.webp,.gif,image/png,image/jpeg,image/webp,image/gif"
+                     accept="image/*"
                      style="display:none">
               <button type="button" class="cz-btn-small cz-btn-warn"
                       id="cz-mosaic-empty-clear"
@@ -688,7 +688,7 @@
             <div class="cz-row">
               <label>{{ t('cz.lbl.image_file') }}</label>
               <button type="button" class="cz-btn-small" id="cz-avatar-upload-trigger">{{ t('cz.choose') }}</button>
-              <input type="file" id="cz-avatar-upload-input" accept=".png,.jpg,.jpeg,.webp,.gif,image/png,image/jpeg,image/webp,image/gif" style="display:none">
+              <input type="file" id="cz-avatar-upload-input" accept="image/*" style="display:none">
               <button type="button" class="cz-btn-small cz-btn-warn"
                       id="cz-avatar-image-clear"
                       {% if not current['avatar-image-filename'] %}disabled{% endif %}>{{ t('cz.remove') }}</button>
