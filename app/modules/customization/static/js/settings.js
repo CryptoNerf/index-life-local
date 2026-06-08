@@ -296,39 +296,11 @@
   var currentFontField  = document.getElementById('cz-current-font');
   var fontClearBtn      = document.getElementById('cz-font-clear');
 
-  // ── Native file-picker bridge (pywebview / WKWebView) ───────
-  // WKWebView's <input type="file" accept=...> goes through a UTType
-  // lookup whose mapping is incomplete on the macOS versions we see:
-  // .webp / .gif silently disappear from "image/*", .woff / .woff2
-  // have no UTI at all, so the dialog either narrows to "JPG only"
-  // or widens to "all files". Going through pywebview's
-  // `create_file_dialog` (Cocoa NSOpenPanel) with an explicit
-  // *.ext;*.ext pattern works around it. JS side calls the bridge,
-  // rehydrates the returned base64 into a Blob, and POSTs to the
-  // existing upload endpoints — server-side validation is the same
-  // either way.
-  function _hasNativeFilePicker() {
-    return !!(window.pywebview && window.pywebview.api &&
-              typeof window.pywebview.api.open_file_dialog === 'function');
-  }
-
-  // Resolves to { name, blob } on success, null on cancel / error
-  // (errors already alerted). Caller must already know the bridge is
-  // available — see _hasNativeFilePicker.
-  function _pickViaBridge(label, exts, maxBytes) {
-    return window.pywebview.api.open_file_dialog(label, exts, maxBytes)
-      .then(function (picked) {
-        if (!picked) return null;
-        if (picked.error) {
-          alert('Upload failed: ' + picked.error);
-          return null;
-        }
-        var bin = atob(picked.base64);
-        var arr = new Uint8Array(bin.length);
-        for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-        return { name: picked.name, blob: new Blob([arr]) };
-      });
-  }
+  // Native file-picker bridge helpers — see static/js/native_file_picker.js
+  // for the WKWebView/UTI background. Local aliases so the rest of this
+  // file reads cleanly.
+  var _hasNativeFilePicker = window.NFP_hasBridge;
+  var _pickViaBridge       = window.NFP_pick;
 
   // Shared post-upload handler (called from both the browser <input>
   // path and the pywebview native-bridge path).

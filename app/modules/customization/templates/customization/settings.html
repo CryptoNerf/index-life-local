@@ -754,6 +754,7 @@
     // NOT in this set, matching what the page actually renders.
     window.__CZ_SAVED_KEYS__ = {{ saved_keys|tojson }};
   </script>
+  <script src="{{ url_for('static', filename='js/native_file_picker.js') }}"></script>
   <script src="{{ url_for('customization.static', filename='js/settings.js') }}"></script>
 </body>
 </html>

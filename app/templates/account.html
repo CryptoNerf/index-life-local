@@ -159,12 +159,29 @@
         </div>
       </div>
     {% endif %}
+    <script src="{{ url_for('static', filename='js/native_file_picker.js') }}"></script>
     <script>
       var NO_FILE_LABEL = {{ t('account.no_file_selected')|tojson }};
       function updateFileName(input) {
         const fileName = input.files.length ? input.files[0].name : NO_FILE_LABEL;
         document.getElementById('file-name').textContent = fileName;
       }
+
+      // In pywebview, the <input accept="image/*"> dialog narrows to
+      // JPG-only on some macOS versions. Hijack the click and route
+      // through Cocoa NSOpenPanel via the bridge; DataTransfer puts
+      // the picked File back on the input so the form submit (with
+      // username/email/etc.) carries it as usual.
+      (function () {
+        var photoInput = document.querySelector('input[name="photo"]');
+        if (photoInput && window.NFP_interceptInput) {
+          window.NFP_interceptInput(
+            photoInput, 'Image files',
+            ['png', 'jpg', 'jpeg', 'webp', 'gif'],
+            10 * 1024 * 1024
+          );
+        }
+      })();
 
       // ── Markdown export ────────────────────────────────────────
       // Inside pywebview/WKWebView, Content-Disposition is ignored —
