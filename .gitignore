@@ -105,3 +105,5 @@ app/modules/*/models/**
 
 # Temporary downloads (wheels, etc.)
 tmp/
+
+.VSCodeCounter
