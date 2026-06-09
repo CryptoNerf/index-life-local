@@ -71,19 +71,19 @@ default) the player may not show — open the README on github.com.
 
 **AI Psychologist** — [module page »](docs/en/ai-psychologist.md)
 
-<video src="docs/videos/ai-psychologist-en.mp4" controls width="720"></video>
+https://github.com/user-attachments/assets/d59e8cf5-3868-4789-a4ad-7e4065e37b08
 
 **Neural Map** — [module page »](docs/en/neural-map.md)
 
-<video src="docs/videos/neural-map-en.mp4" controls width="720"></video>
+https://github.com/user-attachments/assets/e08ce337-d1b5-406f-9d77-a09f5d2cbdb8
 
 **Graphics** — [module page »](docs/en/graphics.md)
 
-<video src="docs/videos/graphics-en.mp4" controls width="720"></video>
+https://github.com/user-attachments/assets/903f14ce-71e8-42ad-89e2-879b0b3761b4
 
 **Customization** — [module page »](docs/en/customization.md)
 
-<video src="docs/videos/customization-en.mp4" controls width="720"></video>
+https://github.com/user-attachments/assets/6e2bdfd5-9f4f-4ebb-979b-13e5945bc781
 
 ---
 
