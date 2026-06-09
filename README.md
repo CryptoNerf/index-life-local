@@ -71,18 +71,20 @@ AI-психолог и нейронная карта подключаются п
 открой README на github.com.
 
 **AI-психолог** — [страница модуля »](docs/ru/ai-psychologist.md)
+
 https://github.com/user-attachments/assets/fa26269f-6dfb-484f-948c-b1cc8701da41
 
 **Нейронная карта** — [страница модуля »](docs/ru/neural-map.md)
+
 https://github.com/user-attachments/assets/cfb9aaa9-4a56-4efc-9fb3-337037c67f63
 
 **Графики** — [страница модуля »](docs/ru/graphics.md)
+
 https://github.com/user-attachments/assets/f6d81d81-d622-4f45-8da5-e87f1a435387
 
 **Кастомизация** — [страница модуля »](docs/ru/customization.md)
+
 https://github.com/user-attachments/assets/dfa4df49-7ae5-4fb6-b5e3-0bc771bf8827
-
-
 
 ---
 
