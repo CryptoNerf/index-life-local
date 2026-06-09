@@ -2,9 +2,9 @@
 
 [← к оглавлению](../README.md) · [English](../en/neural-map.md)
 
-**Промо-ролик** ([скачать](https://github.com/CryptoNerf/index-life-local/releases/download/v3.0.0/neural-map.mp4)):
+**Промо-ролик** ([скачать](../videos/neural-map.mp4)):
 
-<video src="https://github.com/CryptoNerf/index-life-local/releases/download/v3.0.0/neural-map.mp4" controls width="720"></video>
+<video src="../videos/neural-map.mp4" controls width="720"></video>
 
 Нейронная карта превращает твой дневник в **карту тем**: повторяющиеся сюжеты, переживания и сферы жизни группируются в «нейроны», связанные между собой. Это взгляд сверху на то, о чём ты пишешь и какие темы эмоционально весомее.
 

@@ -65,15 +65,15 @@ downloaded once); charts and customization switch on right inside the app.
 
 ### Module promo videos
 
-Short visual intros for each module. Files live in the v3.0.0 Release —
-GitHub plays them inline in each module's documentation page.
+Short visual intros for each module. Files live in [docs/videos/](docs/videos/) —
+GitHub plays them inline on each module's documentation page.
 
 | Module | Video |
 |---|---|
-| AI Psychologist | [download .mp4](https://github.com/CryptoNerf/index-life-local/releases/download/v3.0.0/ai-psychologist-en.mp4) · [module page](docs/en/ai-psychologist.md) |
-| Neural Map | [download .mp4](https://github.com/CryptoNerf/index-life-local/releases/download/v3.0.0/neural-map-en.mp4) · [module page](docs/en/neural-map.md) |
-| Graphics | [download .mp4](https://github.com/CryptoNerf/index-life-local/releases/download/v3.0.0/graphics-en.mp4) · [module page](docs/en/graphics.md) |
-| Customization | [download .mp4](https://github.com/CryptoNerf/index-life-local/releases/download/v3.0.0/customization-en.mp4) · [module page](docs/en/customization.md) |
+| AI Psychologist | [download .mp4](docs/videos/ai-psychologist-en.mp4) · [module page](docs/en/ai-psychologist.md) |
+| Neural Map | [download .mp4](docs/videos/neural-map-en.mp4) · [module page](docs/en/neural-map.md) |
+| Graphics | [download .mp4](docs/videos/graphics-en.mp4) · [module page](docs/en/graphics.md) |
+| Customization | [download .mp4](docs/videos/customization-en.mp4) · [module page](docs/en/customization.md) |
 
 ---
 

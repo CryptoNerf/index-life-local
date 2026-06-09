@@ -2,9 +2,9 @@
 
 [← к оглавлению](../README.md) · [English](../en/ai-psychologist.md)
 
-**Промо-ролик** ([скачать](https://github.com/CryptoNerf/index-life-local/releases/download/v3.0.0/ai-psychologist.mp4)):
+**Промо-ролик** ([скачать](../videos/ai-psychologist.mp4)):
 
-<video src="https://github.com/CryptoNerf/index-life-local/releases/download/v3.0.0/ai-psychologist.mp4" controls width="720"></video>
+<video src="../videos/ai-psychologist.mp4" controls width="720"></video>
 
 AI-психолог — это чат с **локальной** языковой моделью, у которой есть доступ к твоему дневнику. Он помогает разобраться в чувствах и мыслях, замечает паттерны, может сослаться на конкретные записи, периоды и людей. Всё считается **на твоём устройстве** — после скачивания модели интернет не нужен, переписка никуда не уходит.
 

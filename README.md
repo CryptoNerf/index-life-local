@@ -64,15 +64,15 @@ AI-психолог и нейронная карта подключаются п
 
 ### Промо-ролики модулей
 
-Короткие видео-интро для каждого модуля. Файлы лежат в Releases v3.0.0 —
-GitHub проиграет их инлайном прямо в README модульной документации.
+Короткие видео-интро для каждого модуля. Файлы лежат в [docs/videos/](docs/videos/) —
+GitHub проиграет их инлайном на странице модульной документации.
 
 | Модуль | Видео |
 |---|---|
-| AI-психолог | [скачать .mp4](https://github.com/CryptoNerf/index-life-local/releases/download/v3.0.0/ai-psychologist.mp4) · [страница модуля](docs/ru/ai-psychologist.md) |
-| Нейронная карта | [скачать .mp4](https://github.com/CryptoNerf/index-life-local/releases/download/v3.0.0/neural-map.mp4) · [страница модуля](docs/ru/neural-map.md) |
-| Графики | [скачать .mp4](https://github.com/CryptoNerf/index-life-local/releases/download/v3.0.0/graphics.mp4) · [страница модуля](docs/ru/graphics.md) |
-| Кастомизация | [скачать .mp4](https://github.com/CryptoNerf/index-life-local/releases/download/v3.0.0/customization.mp4) · [страница модуля](docs/ru/customization.md) |
+| AI-психолог | [скачать .mp4](docs/videos/ai-psychologist.mp4) · [страница модуля](docs/ru/ai-psychologist.md) |
+| Нейронная карта | [скачать .mp4](docs/videos/neural-map.mp4) · [страница модуля](docs/ru/neural-map.md) |
+| Графики | [скачать .mp4](docs/videos/graphics.mp4) · [страница модуля](docs/ru/graphics.md) |
+| Кастомизация | [скачать .mp4](docs/videos/customization.mp4) · [страница модуля](docs/ru/customization.md) |
 
 ---
 

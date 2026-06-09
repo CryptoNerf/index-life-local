@@ -2,9 +2,9 @@
 
 [← к оглавлению](../README.md) · [English](../en/graphics.md)
 
-**Промо-ролик** ([скачать](https://github.com/CryptoNerf/index-life-local/releases/download/v3.0.0/graphics.mp4)):
+**Промо-ролик** ([скачать](../videos/graphics.mp4)):
 
-<video src="https://github.com/CryptoNerf/index-life-local/releases/download/v3.0.0/graphics.mp4" controls width="720"></video>
+<video src="../videos/graphics.mp4" controls width="720"></video>
 
 Модуль «Графики» показывает твоё настроение под разными углами. Большинство графиков строятся прямо из оценок дня (1–10); два (**активности** и **люди**) требуют [AI-психолога](ai-psychologist.md), который извлекает из заметок активности и упоминания людей.
 
