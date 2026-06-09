@@ -2,6 +2,10 @@
 
 [← к оглавлению](../README.md) · [English](../en/customization.md)
 
+**Промо-ролик** ([скачать](https://github.com/CryptoNerf/index-life-local/releases/download/v3.0.0/customization.mp4)):
+
+<video src="https://github.com/CryptoNerf/index-life-local/releases/download/v3.0.0/customization.mp4" controls width="720"></video>
+
 Модуль «Кастомизация» меняет внешний вид приложения. Изменения применяются мгновенно ко всему интерфейсу и к мини-превью справа от каждой секции. Кнопки **«Сохранить»** и **«Сбросить»** (есть и сброс отдельной секции).
 
 Технически: настройки хранятся как JSON в `user_customization`, а приложение отдаёт их на каждой странице инлайновым `<style>`-блоком с CSS-переменными — поэтому изменения не зависят от кэша браузера и видны сразу.

@@ -2,6 +2,10 @@
 
 [← back to index](../README.md) · [Русский](../ru/ai-psychologist.md)
 
+**Promo video** ([download](https://github.com/CryptoNerf/index-life-local/releases/download/v3.0.0/ai-psychologist-en.mp4)):
+
+<video src="https://github.com/CryptoNerf/index-life-local/releases/download/v3.0.0/ai-psychologist-en.mp4" controls width="720"></video>
+
 The AI Psychologist is a chat with a **local** language model that has read access to your diary. It helps you make sense of feelings and thoughts, notices patterns, and can reference specific entries, periods, and people. Everything runs **on your device** — after the model is downloaded, no internet is needed and the conversation never leaves your machine.
 
 > This is **not a replacement for a real therapist** and not a crisis service. See [Limitations](#limitations).

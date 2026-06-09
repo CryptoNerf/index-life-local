@@ -2,6 +2,10 @@
 
 [← back to index](../README.md) · [Русский](../ru/neural-map.md)
 
+**Promo video** ([download](https://github.com/CryptoNerf/index-life-local/releases/download/v3.0.0/neural-map-en.mp4)):
+
+<video src="https://github.com/CryptoNerf/index-life-local/releases/download/v3.0.0/neural-map-en.mp4" controls width="720"></video>
+
 The Neural Map turns your diary into a **map of topics**: recurring themes, feelings, and areas of life are grouped into "neurons" linked to each other. It's a top-down view of what you write about and which themes carry more emotional weight.
 
 > The module requires the [AI Psychologist](ai-psychologist.md) to be installed: it reuses the same embeddings (memory layer 2) and the same model for topic names.

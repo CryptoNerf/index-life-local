@@ -2,6 +2,10 @@
 
 [← back to index](../README.md) · [Русский](../ru/customization.md)
 
+**Promo video** ([download](https://github.com/CryptoNerf/index-life-local/releases/download/v3.0.0/customization-en.mp4)):
+
+<video src="https://github.com/CryptoNerf/index-life-local/releases/download/v3.0.0/customization-en.mp4" controls width="720"></video>
+
 The Customization module changes the app's appearance. Changes apply instantly to the whole interface and to the mini-preview beside each section. There are **"Save"** and **"Reset"** buttons (plus per-section reset).
 
 Technically: settings are stored as JSON in `user_customization`, and the app emits them on every page as an inline `<style>` block of CSS variables — so changes don't depend on the browser cache and show up immediately.

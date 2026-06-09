@@ -2,6 +2,10 @@
 
 [← back to index](../README.md) · [Русский](../ru/graphics.md)
 
+**Promo video** ([download](https://github.com/CryptoNerf/index-life-local/releases/download/v3.0.0/graphics-en.mp4)):
+
+<video src="https://github.com/CryptoNerf/index-life-local/releases/download/v3.0.0/graphics-en.mp4" controls width="720"></video>
+
 The Graphics module shows your mood from different angles. Most charts are built straight from daily ratings (1–10); two (**activities** and **people**) require the [AI Psychologist](ai-psychologist.md), which extracts activities and people mentions from your notes.
 
 **Color convention:** almost everywhere color/intensity encodes the rating — darker usually means a lower rating (or a stronger deviation), lighter means higher. Element size usually encodes count.
