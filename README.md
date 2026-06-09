@@ -1,6 +1,4 @@
 
-
-
 ﻿# index.life — Локальное приложение для ведения учёта настроения и заметок о днях
 
 > **Русская версия** | [English version](README.en.md)
@@ -66,7 +64,6 @@ AI-психолог и нейронная карта подключаются п
 локальная модель); графики и кастомизация включаются прямо в приложении.
 
 ### Промо-ролики модулей
-https://github.com/user-attachments/assets/fa26269f-6dfb-484f-948c-b1cc8701da41
 
 Короткие видео-интро для каждого модуля. На github.com плееры
 встраиваются инлайном; в редакторах с урезанным Markdown preview
@@ -74,20 +71,18 @@ https://github.com/user-attachments/assets/fa26269f-6dfb-484f-948c-b1cc8701da41
 открой README на github.com.
 
 **AI-психолог** — [страница модуля »](docs/ru/ai-psychologist.md)
-
-<video src="docs/videos/ai-psychologist.mp4" controls width="720"></video>
+https://github.com/user-attachments/assets/fa26269f-6dfb-484f-948c-b1cc8701da41
 
 **Нейронная карта** — [страница модуля »](docs/ru/neural-map.md)
-
-<video src="docs/videos/neural-map.mp4" controls width="720"></video>
+https://github.com/user-attachments/assets/cfb9aaa9-4a56-4efc-9fb3-337037c67f63
 
 **Графики** — [страница модуля »](docs/ru/graphics.md)
-
-<video src="docs/videos/graphics.mp4" controls width="720"></video>
+https://github.com/user-attachments/assets/f6d81d81-d622-4f45-8da5-e87f1a435387
 
 **Кастомизация** — [страница модуля »](docs/ru/customization.md)
+https://github.com/user-attachments/assets/dfa4df49-7ae5-4fb6-b5e3-0bc771bf8827
 
-<video src="docs/videos/customization.mp4" controls width="720"></video>
+
 
 ---
 
