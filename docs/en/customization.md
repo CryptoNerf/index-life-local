@@ -2,8 +2,6 @@
 
 [← back to index](../README.md) · [Русский](../ru/customization.md)
 
-**Promo video** ([download](../videos/customization-en.mp4)):
-
 <video src="../videos/customization-en.mp4" controls width="720"></video>
 
 The Customization module changes the app's appearance. Changes apply instantly to the whole interface and to the mini-preview beside each section. There are **"Save"** and **"Reset"** buttons (plus per-section reset).

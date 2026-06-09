@@ -2,8 +2,6 @@
 
 [← back to index](../README.md) · [Русский](../ru/graphics.md)
 
-**Promo video** ([download](../videos/graphics-en.mp4)):
-
 <video src="../videos/graphics-en.mp4" controls width="720"></video>
 
 The Graphics module shows your mood from different angles. Most charts are built straight from daily ratings (1–10); two (**activities** and **people**) require the [AI Psychologist](ai-psychologist.md), which extracts activities and people mentions from your notes.

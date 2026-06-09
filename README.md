@@ -64,15 +64,23 @@ AI-психолог и нейронная карта подключаются п
 
 ### Промо-ролики модулей
 
-Короткие видео-интро для каждого модуля. Файлы лежат в [docs/videos/](docs/videos/) —
-GitHub проиграет их инлайном на странице модульной документации.
+Короткие видео-интро для каждого модуля.
 
-| Модуль | Видео |
-|---|---|
-| AI-психолог | [скачать .mp4](docs/videos/ai-psychologist.mp4) · [страница модуля](docs/ru/ai-psychologist.md) |
-| Нейронная карта | [скачать .mp4](docs/videos/neural-map.mp4) · [страница модуля](docs/ru/neural-map.md) |
-| Графики | [скачать .mp4](docs/videos/graphics.mp4) · [страница модуля](docs/ru/graphics.md) |
-| Кастомизация | [скачать .mp4](docs/videos/customization.mp4) · [страница модуля](docs/ru/customization.md) |
+**AI-психолог** — [страница модуля »](docs/ru/ai-psychologist.md)
+
+<video src="docs/videos/ai-psychologist.mp4" controls width="720"></video>
+
+**Нейронная карта** — [страница модуля »](docs/ru/neural-map.md)
+
+<video src="docs/videos/neural-map.mp4" controls width="720"></video>
+
+**Графики** — [страница модуля »](docs/ru/graphics.md)
+
+<video src="docs/videos/graphics.mp4" controls width="720"></video>
+
+**Кастомизация** — [страница модуля »](docs/ru/customization.md)
+
+<video src="docs/videos/customization.mp4" controls width="720"></video>
 
 ---
 

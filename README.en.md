@@ -65,15 +65,23 @@ downloaded once); charts and customization switch on right inside the app.
 
 ### Module promo videos
 
-Short visual intros for each module. Files live in [docs/videos/](docs/videos/) —
-GitHub plays them inline on each module's documentation page.
+Short visual intros for each module.
 
-| Module | Video |
-|---|---|
-| AI Psychologist | [download .mp4](docs/videos/ai-psychologist-en.mp4) · [module page](docs/en/ai-psychologist.md) |
-| Neural Map | [download .mp4](docs/videos/neural-map-en.mp4) · [module page](docs/en/neural-map.md) |
-| Graphics | [download .mp4](docs/videos/graphics-en.mp4) · [module page](docs/en/graphics.md) |
-| Customization | [download .mp4](docs/videos/customization-en.mp4) · [module page](docs/en/customization.md) |
+**AI Psychologist** — [module page »](docs/en/ai-psychologist.md)
+
+<video src="docs/videos/ai-psychologist-en.mp4" controls width="720"></video>
+
+**Neural Map** — [module page »](docs/en/neural-map.md)
+
+<video src="docs/videos/neural-map-en.mp4" controls width="720"></video>
+
+**Graphics** — [module page »](docs/en/graphics.md)
+
+<video src="docs/videos/graphics-en.mp4" controls width="720"></video>
+
+**Customization** — [module page »](docs/en/customization.md)
+
+<video src="docs/videos/customization-en.mp4" controls width="720"></video>
 
 ---
 
