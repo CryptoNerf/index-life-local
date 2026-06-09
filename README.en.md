@@ -65,7 +65,9 @@ downloaded once); charts and customization switch on right inside the app.
 
 ### Module promo videos
 
-Short visual intros for each module.
+Short visual intros for each module. github.com embeds the players
+inline; in editors with stripped-down Markdown preview (e.g. VS Code's
+default) the player may not show — open the README on github.com.
 
 **AI Psychologist** — [module page »](docs/en/ai-psychologist.md)
 
