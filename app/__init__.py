@@ -411,6 +411,43 @@ def _unfreeze_venv_packages(site_packages: Path):
             log.info('Extended %s.__path__ with venv: %s', pkg_name, venv_path_str)
 
 
+# ── Error handling ────────────────────────────────────────────
+
+def register_error_handlers(app) -> None:
+    """Log unhandled exceptions to file; show the user a plain error page.
+
+    The traceback itself must never reach the browser — it leaks file
+    paths, code and variable values. HTTP errors (404, 405, …) pass
+    through untouched: a handler registered for Exception receives them
+    too, and without the isinstance guard they would all become 500s.
+    """
+    import traceback as _tb
+    from werkzeug.exceptions import HTTPException
+
+    @app.errorhandler(Exception)
+    def handle_exception(e):
+        if isinstance(e, HTTPException):
+            return e
+        tb = _tb.format_exc()
+        # Write directly to log file — bypass all logger machinery
+        try:
+            _log_path = _get_data_dir() / 'index-life.log'
+            with open(str(_log_path), 'a') as _f:
+                from datetime import datetime as _dt
+                _f.write(f'{_dt.now()} ERROR handle_exception: {type(e).__name__}: {e}\n{tb}\n')
+        except Exception:
+            pass
+        # Also try app.logger
+        app.logger.error('handle_exception: %s\n%s', e, tb)
+        return (
+            '<div style="font-family:sans-serif;padding:40px">'
+            '<h1>Something went wrong</h1>'
+            '<p>An internal error occurred. Details were written to '
+            '<code>index-life.log</code> in the application data folder.</p>'
+            '</div>'
+        ), 500
+
+
 # ── App factory ───────────────────────────────────────────────
 
 def _get_data_dir() -> Path:
@@ -579,6 +616,12 @@ def create_app(config_class='config.Config'):
     # Initialize extensions
     db.init_app(app)
 
+    # Host / Origin validation — protects the localhost server from
+    # CSRF and DNS rebinding (see app/security.py for the threat model).
+    # Registered before any blueprint so no route can bypass it.
+    from app.security import register_security
+    register_security(app)
+
     # Register blueprints/routes
     from app import routes
     app.register_blueprint(routes.bp)
@@ -616,37 +659,10 @@ def create_app(config_class='config.Config'):
     except Exception:
         pass
 
-    # Catch and log all unhandled exceptions; show traceback in browser for debugging
-    import traceback as _tb
-    from werkzeug.exceptions import HTTPException
-
-    @app.errorhandler(Exception)
-    def handle_exception(e):
-        tb = _tb.format_exc()
-        # Write directly to log file — bypass all logger machinery
-        try:
-            _log_path = _get_data_dir() / 'index-life.log'
-            with open(str(_log_path), 'a') as _f:
-                from datetime import datetime as _dt
-                _f.write(f'{_dt.now()} ERROR handle_exception: {type(e).__name__}: {e}\n{tb}\n')
-        except Exception:
-            pass
-        # Also try app.logger
-        app.logger.error('handle_exception: %s\n%s', e, tb)
-        # Show traceback in browser (remove after debugging is done)
-        return f'<pre style="font-size:12px;padding:20px">{type(e).__name__}: {e}\n\n{tb}</pre>', 500
-
-    @app.errorhandler(500)
-    def handle_500(e):
-        tb = _tb.format_exc()
-        try:
-            _log_path = _get_data_dir() / 'index-life.log'
-            with open(str(_log_path), 'a') as _f:
-                from datetime import datetime as _dt
-                _f.write(f'{_dt.now()} ERROR 500: {e}\n{tb}\n')
-        except Exception:
-            pass
-        return f'<pre style="font-size:12px;padding:20px">500 Error: {e}\n\n{tb}</pre>', 500
+    # Catch and log all unhandled exceptions. The full traceback goes to
+    # the log file only — never to the browser, where it would leak
+    # paths, code and variable values.
+    register_error_handlers(app)
 
     # Context processor: makes module_active() and update info available in all templates
     @app.context_processor
