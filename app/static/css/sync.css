@@ -170,6 +170,7 @@ header { width: 100%; }
 }
 .flash-success { background: #d4edda; color: #155724; }
 .flash-error { background: #f8d7da; color: #721c24; }
+.flash-warning { background: #fff3cd; color: #856404; }
 
 /* ========== Conflicts ========== */
 .conflict-list { margin-top: 12px; }

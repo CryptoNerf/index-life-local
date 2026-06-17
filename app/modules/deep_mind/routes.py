@@ -205,7 +205,11 @@ def api_status():
 
 @bp.route('/api/analyze', methods=['POST'])
 def api_analyze():
-    """Trigger a new clustering + naming run in background."""
+    """Trigger a new clustering + naming run in background.
+
+    Manual (user pressed "Analyze") → force=True so it bypasses the
+    debounce that throttles the automatic post-save runs.
+    """
     from .background import analyze_async
-    analyze_async(current_app._get_current_object())
+    analyze_async(current_app._get_current_object(), force=True)
     return jsonify({'status': 'started'})

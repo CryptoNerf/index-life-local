@@ -185,8 +185,20 @@
             .then(function (r) { return r.json(); })
             .then(function (data) {
               testBtn.disabled = false;
-              result.textContent = data.ok ? ('✓ ' + I18N.ok) : ('✗ ' + (data.error || ''));
-              result.style.color = data.ok ? '#2a8f2a' : '#c0392b';
+              if (data.ok) {
+                // A successful connection can still be insecure (http) —
+                // surface the warning in amber rather than green.
+                if (data.warning) {
+                  result.textContent = '✓ ' + I18N.ok + ' — ⚠ ' + data.warning;
+                  result.style.color = '#b8860b';
+                } else {
+                  result.textContent = '✓ ' + I18N.ok;
+                  result.style.color = '#2a8f2a';
+                }
+              } else {
+                result.textContent = '✗ ' + (data.error || '');
+                result.style.color = '#c0392b';
+              }
             })
             .catch(function (err) {
               testBtn.disabled = false;

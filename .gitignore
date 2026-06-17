@@ -72,6 +72,9 @@ import_data.py
 .env
 .env.local
 
+# Per-install Flask secret key (generated at first run; never commit)
+secret_key
+
 # Claude Code settings
 .claude/
 

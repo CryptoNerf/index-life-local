@@ -129,3 +129,84 @@ def test_embedding_cache_rebuilds_after_invalidation(app):
     memory._invalidate_embedding_cache()
     _ids3, mat3 = memory._get_embedding_matrix()
     assert mat3[0][0] == pytest.approx(7.0)
+
+
+# ── Fix #6: per-install Flask secret key (no shared hardcoded default) ──────
+
+def test_secret_key_is_persistent_random_and_unique(tmp_path):
+    from app import _load_or_create_secret_key
+
+    k1 = _load_or_create_secret_key(tmp_path)
+    assert isinstance(k1, str) and len(k1) >= 32
+    assert k1 != 'dev-secret-key-change-in-production'
+
+    # Persisted to disk and stable across calls (so restarts keep the key).
+    assert (tmp_path / 'secret_key').read_text(encoding='utf-8').strip() == k1
+    assert _load_or_create_secret_key(tmp_path) == k1
+
+    # A separate install directory gets its own independent key.
+    other = tmp_path / 'other'
+    other.mkdir()
+    assert _load_or_create_secret_key(other) != k1
+
+
+# ── Fix #6: warn on plaintext (non-HTTPS) WebDAV sync ──────────────────────
+
+def test_is_webdav_insecure():
+    from app.sync import is_webdav_insecure
+
+    # Remote http → credentials + diary travel in clear text.
+    assert is_webdav_insecure('webdav', 'http://dav.example.com/diary/') is True
+    assert is_webdav_insecure('webdav', 'dav.example.com/diary/') is True  # no scheme
+
+    # https is fine.
+    assert is_webdav_insecure('webdav', 'https://dav.example.com/diary/') is False
+
+    # Loopback never leaves the machine → exempt even over http.
+    assert is_webdav_insecure('webdav', 'http://127.0.0.1:8080/dav/') is False
+    assert is_webdav_insecure('webdav', 'http://localhost/dav/') is False
+
+    # Local-folder sync and empty URLs are not a WebDAV concern.
+    assert is_webdav_insecure('local', 'http://dav.example.com/') is False
+    assert is_webdav_insecure('webdav', '') is False
+
+
+# ── Fix #4: neural-map auto-analysis is debounced (purely count-based) ──────
+
+def test_deep_mind_auto_run_is_debounced(app):
+    from datetime import date
+
+    from app import db
+    from app.models import MoodEntry
+    from app.modules.deep_mind import background as dm
+
+    def add_entries(n, start_day):
+        for i in range(n):
+            db.session.add(MoodEntry(date=date(2026, 4, start_day + i),
+                                     rating=5, note='x', deleted=False))
+        db.session.commit()
+
+    # 1. No run recorded yet → the first analysis always proceeds.
+    assert dm._should_auto_run() is True
+
+    # Record a baseline run at the current entry count.
+    add_entries(3, start_day=1)
+    dm._record_run()
+
+    # 2. Right after, with no new entries → debounced.
+    assert dm._should_auto_run() is False
+
+    # 3. Fewer than _MIN_NEW_ENTRIES new entries → still debounced.
+    add_entries(dm._MIN_NEW_ENTRIES - 1, start_day=10)
+    assert dm._should_auto_run() is False
+
+    # 4. One more crosses the threshold → run again.
+    add_entries(1, start_day=20)
+    assert dm._should_auto_run() is True
+
+    # 5. Recording the run resets the delta → debounced again.
+    dm._record_run()
+    assert dm._should_auto_run() is False
+
+    # Time never matters: there is no elapsed-time path anymore.
+    assert not hasattr(dm, '_MIN_INTERVAL_HOURS')

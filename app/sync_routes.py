@@ -9,7 +9,9 @@ from app.backup import list_backups, backup_and_rotate, restore_backup
 from app.sync import (
     get_device_id, get_sync_config, set_sync_config, is_sync_configured,
     get_last_sync, full_sync, import_now, export_now, test_connection,
+    is_webdav_insecure,
 )
+from app.i18n import t
 
 bp = Blueprint('sync', __name__)
 
@@ -47,6 +49,9 @@ def sync_settings():
     set_sync_config(mode, folder=folder, url=url, username=username, password=password)
     if is_sync_configured():
         flash('Sync settings saved', 'success')
+        # Saved over plain http — credentials + diary go in clear text.
+        if is_webdav_insecure(mode, url):
+            flash(t('sync.webdav_insecure'), 'warning')
     else:
         flash('Sync disabled', 'success')
     return redirect(url_for('sync.sync_page'))
@@ -76,9 +81,10 @@ def sync_test():
     password = request.form.get('webdav_pass', '')
     error = test_connection(mode, folder=folder, url=url,
                             username=username, password=password)
+    warning = t('sync.webdav_insecure') if is_webdav_insecure(mode, url) else None
     if error:
-        return jsonify({'ok': False, 'error': error})
-    return jsonify({'ok': True})
+        return jsonify({'ok': False, 'error': error, 'warning': warning})
+    return jsonify({'ok': True, 'warning': warning})
 
 
 @bp.route('/sync/now', methods=['POST'])

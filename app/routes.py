@@ -330,6 +330,10 @@ def edit_day(day):
 
             if 'deep_mind' in current_app.config.get('ACTIVE_MODULES', []):
                 try:
+                    # Automatic (debounced): a full re-cluster + LLM rename of
+                    # every topic is expensive, so analyze_async throttles
+                    # post-save runs. The neural map's "Analyze" button forces
+                    # an immediate rebuild.
                     from app.modules.deep_mind.background import analyze_async
                     analyze_async(current_app._get_current_object())
                 except ImportError:

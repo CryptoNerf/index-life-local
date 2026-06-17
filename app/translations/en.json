@@ -99,6 +99,7 @@
   "sync.test": "Test connection",
   "sync.testing": "Testing…",
   "sync.test_ok": "Connected",
+  "sync.webdav_insecure": "Connection is not secure (http): your password and entire diary are sent in clear text. Use an https:// URL.",
   "sync.sync_now": "Sync now",
   "sync.export": "Export",
   "sync.import": "Import",

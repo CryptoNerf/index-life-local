@@ -54,7 +54,10 @@ if getattr(sys, 'frozen', False):
 class Config:
     """Application configuration"""
 
-    # Flask
+    # Flask. This is only a placeholder: create_app() replaces it at runtime
+    # with an explicit $SECRET_KEY or a random per-install key persisted in
+    # the data dir (see app/__init__._load_or_create_secret_key), so the
+    # shared default below never signs cookies on a real install.
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-secret-key-change-in-production'
 
     # Database

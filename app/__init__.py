@@ -9,6 +9,7 @@
 Flask application factory
 """
 import logging
+import os
 import sys
 import uuid as _uuid
 
@@ -464,6 +465,43 @@ def _get_data_dir() -> Path:
     return d
 
 
+def _load_or_create_secret_key(data_dir: Path) -> str:
+    """Return a stable per-install Flask secret key.
+
+    The session/flash cookie signing key must not be the shared hardcoded
+    dev default (`config.Config.SECRET_KEY`) on a real install — that would
+    make every user's cookie forgeable with a known key. So we persist a
+    random key next to diary.db and reuse it across restarts.
+
+    Reading happens before db.init_app, so the key lives in a plain file
+    rather than the DB. On a read/write failure we fall back to an
+    ephemeral random key (still better than the shared default): the only
+    downside is that any in-flight flash message is dropped on restart.
+    """
+    import secrets
+
+    key_path = data_dir / 'secret_key'
+    try:
+        existing = key_path.read_text(encoding='utf-8').strip()
+        if existing:
+            return existing
+    except (FileNotFoundError, OSError):
+        pass
+    except Exception as exc:
+        log.warning('Could not read secret_key (%s) — regenerating', exc)
+
+    key = secrets.token_hex(32)
+    try:
+        key_path.write_text(key, encoding='utf-8')
+        try:
+            os.chmod(key_path, 0o600)  # owner-only; best-effort (no-op on Windows)
+        except OSError:
+            pass
+    except OSError as exc:
+        log.warning('Could not persist secret_key (%s) — using ephemeral key', exc)
+    return key
+
+
 def _cleanup_stale_modules_venvs(data_dir: Path) -> None:
     """Remove any modules_venv.stale-* directories left by a deferred reset.
 
@@ -542,6 +580,15 @@ def create_app(config_class='config.Config'):
     app.config['BACKUP_DIR'] = data_dir / 'backups'
     app.config['UPLOAD_FOLDER'] = data_dir / 'profile_photos'
     app.config['DATA_DIR'] = data_dir
+
+    # SECRET_KEY: an explicit env var wins; otherwise replace the shared
+    # hardcoded dev default with a random per-install key persisted in the
+    # data dir, so session/flash cookies aren't signed with a known key.
+    env_secret = os.environ.get('SECRET_KEY')
+    if env_secret:
+        app.config['SECRET_KEY'] = env_secret
+    else:
+        app.config['SECRET_KEY'] = _load_or_create_secret_key(data_dir)
 
     log.info('Data directory: %s', data_dir)
 

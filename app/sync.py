@@ -105,6 +105,28 @@ def is_sync_configured() -> bool:
     return bool(cfg['folder'])
 
 
+def is_webdav_insecure(mode: str, url: str) -> bool:
+    """True when a WebDAV target uses a non-HTTPS, non-loopback URL.
+
+    Over plain http the Basic-auth credentials AND the whole diary snapshot
+    travel in clear text on every push/pull. We surface a warning (not a
+    hard block — self-hosted servers on a trusted LAN are a legitimate, if
+    discouraged, choice). Loopback hosts are exempt: that traffic never
+    leaves the machine.
+    """
+    if mode != 'webdav' or not url:
+        return False
+    from urllib.parse import urlsplit
+    try:
+        parts = urlsplit(url if '//' in url else '//' + url)
+    except ValueError:
+        return False
+    if (parts.scheme or '').lower() == 'https':
+        return False
+    host = (parts.hostname or '').lower()
+    return host not in ('127.0.0.1', 'localhost', '::1')
+
+
 # Backward-compatible shims (older callers / templates) ─────────
 
 def get_sync_folder() -> str:
