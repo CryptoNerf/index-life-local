@@ -13,6 +13,7 @@ import logging
 
 import numpy as np
 
+from app import db
 from app.models import EntryEmbedding, MoodEntry
 
 log = logging.getLogger(__name__)
@@ -22,17 +23,26 @@ def load_embeddings():
     """Load all entry embeddings from DB.
 
     Returns ``(entry_ids, matrix)`` where *matrix* is ``(N, 384)`` float32.
-    Entries without a note are skipped.
+    Entries without a note — and soft-deleted (tombstone) entries — are
+    skipped so the neural map only clusters days the user can still see.
+
+    A single join replaces the previous per-row ``MoodEntry.query.get()``
+    (an N+1 query per embedding) and drops the deprecated 1.x Query.get API.
     """
-    rows = EntryEmbedding.query.all()
+    rows = (
+        db.session.query(
+            EntryEmbedding.entry_id, EntryEmbedding.embedding, MoodEntry.note,
+        )
+        .join(MoodEntry, MoodEntry.id == EntryEmbedding.entry_id)
+        .filter(MoodEntry.deleted == False)  # noqa: E712
+        .all()
+    )
     entry_ids = []
     vecs = []
-    for row in rows:
-        entry = MoodEntry.query.get(row.entry_id)
-        if entry and entry.note and entry.note.strip():
-            vec = np.frombuffer(row.embedding, dtype=np.float32).copy()
-            entry_ids.append(row.entry_id)
-            vecs.append(vec)
+    for entry_id, embedding, note in rows:
+        if note and note.strip():
+            entry_ids.append(entry_id)
+            vecs.append(np.frombuffer(embedding, dtype=np.float32).copy())
     if not vecs:
         return [], np.empty((0, 384), dtype=np.float32)
     return entry_ids, np.stack(vecs)

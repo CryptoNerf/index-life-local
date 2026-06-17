@@ -373,28 +373,53 @@ def update_embedding(entry: MoodEntry):
             text_hash=h,
         ))
     db.session.commit()
+    # A write happened (new row OR in-place re-embed). Bump the generation
+    # so the cached matrix below is rebuilt — a row count check alone misses
+    # in-place updates, which left semantic search on a stale vector after
+    # an entry was edited.
+    _invalidate_embedding_cache()
 
 
 _embedding_cache: tuple[list[int], np.ndarray] | None = None
 _embedding_cache_count: int = 0
+_embedding_cache_gen: int = -1
+# Bumped on every embedding write (create or in-place update). The previous
+# count-only invalidation missed edits that re-embedded an entry without
+# changing the row count, so search kept using the stale vector until an
+# add/delete changed the count.
+_embedding_gen: int = 0
+
+
+def _invalidate_embedding_cache() -> None:
+    """Mark the cached embedding matrix stale after an embedding write."""
+    global _embedding_gen
+    _embedding_gen += 1
 
 
 def _get_embedding_matrix() -> tuple[list[int], np.ndarray] | None:
-    """Load and cache the embedding matrix. Invalidates on count change."""
-    global _embedding_cache, _embedding_cache_count
+    """Load and cache the embedding matrix.
+
+    Rebuilt when either the row count changes (insert / bulk-delete) or the
+    write generation advances (in-place re-embed of an edited entry).
+    """
+    global _embedding_cache, _embedding_cache_count, _embedding_cache_gen
     current_count = EntryEmbedding.query.count()
-    if _embedding_cache is not None and _embedding_cache_count == current_count:
+    if (_embedding_cache is not None
+            and _embedding_cache_count == current_count
+            and _embedding_cache_gen == _embedding_gen):
         return _embedding_cache
     all_embs = EntryEmbedding.query.all()
     if not all_embs:
         _embedding_cache = None
         _embedding_cache_count = 0
+        _embedding_cache_gen = _embedding_gen
         return None
     entry_ids = [emb.entry_id for emb in all_embs]
     matrix = np.stack([np.frombuffer(emb.embedding, dtype=np.float32)
                        for emb in all_embs])
     _embedding_cache = (entry_ids, matrix)
     _embedding_cache_count = current_count
+    _embedding_cache_gen = _embedding_gen
     return _embedding_cache
 
 

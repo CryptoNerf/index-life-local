@@ -119,7 +119,8 @@ def api_graph():
             for me in MindClusterEntry.query.filter_by(cluster_id=c.id).all()
         ]
         entries = (MoodEntry.query
-                   .filter(MoodEntry.id.in_(member_ids))
+                   .filter(MoodEntry.id.in_(member_ids),
+                           MoodEntry.deleted == False)  # noqa: E712
                    .order_by(MoodEntry.date.desc())
                    .all())
         entries_display = entries[:20]

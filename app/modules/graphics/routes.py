@@ -23,7 +23,8 @@ from . import bp
 
 def _monthly_averages(year: int):
     entries = MoodEntry.query.filter(
-        db.extract('year', MoodEntry.date) == year
+        db.extract('year', MoodEntry.date) == year,
+        MoodEntry.deleted == False,  # noqa: E712
     ).all()
     buckets = [[] for _ in range(12)]
     for e in entries:
@@ -36,7 +37,8 @@ def _monthly_averages(year: int):
 
 def _distribution(year: int):
     entries = MoodEntry.query.filter(
-        db.extract('year', MoodEntry.date) == year
+        db.extract('year', MoodEntry.date) == year,
+        MoodEntry.deleted == False,  # noqa: E712
     ).all()
     c = Counter(e.rating for e in entries)
     return [c.get(i, 0) for i in range(1, 11)]
@@ -46,7 +48,8 @@ def _year_heatmap(year: int, cell: int = 14, gap: int = 3):
     entries = {
         e.date: e.rating
         for e in MoodEntry.query.filter(
-            db.extract('year', MoodEntry.date) == year
+            db.extract('year', MoodEntry.date) == year,
+            MoodEntry.deleted == False,  # noqa: E712
         ).all()
     }
 
@@ -96,6 +99,8 @@ def _year_heatmap(year: int, cell: int = 14, gap: int = 3):
 def _available_years(today):
     rows = db.session.query(
         db.extract('year', MoodEntry.date).label('y')
+    ).filter(
+        MoodEntry.deleted == False,  # noqa: E712
     ).distinct().order_by(db.text('y DESC')).all()
     years = [int(r.y) for r in rows]
     if today.year not in years:
@@ -176,7 +181,8 @@ def overview(year=None):
         })
 
     all_entries = MoodEntry.query.filter(
-        db.extract('year', MoodEntry.date) == year
+        db.extract('year', MoodEntry.date) == year,
+        MoodEntry.deleted == False,  # noqa: E712
     ).all()
     ratings = [e.rating for e in all_entries]
     total = len(ratings)
@@ -205,7 +211,8 @@ def overview(year=None):
 def _year_series(year: int):
     """Return sorted list of (day_of_year, rating, date) for the year."""
     entries = MoodEntry.query.filter(
-        db.extract('year', MoodEntry.date) == year
+        db.extract('year', MoodEntry.date) == year,
+        MoodEntry.deleted == False,  # noqa: E712
     ).order_by(MoodEntry.date.asc()).all()
     return [(e.date.timetuple().tm_yday, e.rating, e.date) for e in entries]
 
@@ -378,7 +385,8 @@ def rhythm(year=None):
         return redirect(url_for('graphics.rhythm', year=today.year))
 
     entries = MoodEntry.query.filter(
-        db.extract('year', MoodEntry.date) == year
+        db.extract('year', MoodEntry.date) == year,
+        MoodEntry.deleted == False,  # noqa: E712
     ).all()
 
     # Bucket: by_cell[weekday][month] = [ratings]
@@ -518,7 +526,8 @@ def rose(year=None):
         return redirect(url_for('graphics.rose', year=today.year))
 
     entries = MoodEntry.query.filter(
-        db.extract('year', MoodEntry.date) == year
+        db.extract('year', MoodEntry.date) == year,
+        MoodEntry.deleted == False,  # noqa: E712
     ).all()
 
     by_weekday = [[] for _ in range(7)]
@@ -673,7 +682,8 @@ def ridgeline(year=None):
 
     # For each month, build a 10-bin histogram of ratings
     entries = MoodEntry.query.filter(
-        db.extract('year', MoodEntry.date) == year
+        db.extract('year', MoodEntry.date) == year,
+        MoodEntry.deleted == False,  # noqa: E712
     ).all()
     by_month = [[] for _ in range(12)]
     for e in entries:
@@ -839,7 +849,10 @@ def words():
                 lemma_cache[word] = word
         return lemma_cache[word] in person_forms
 
-    entries = MoodEntry.query.filter(MoodEntry.note.isnot(None)).all()
+    entries = MoodEntry.query.filter(
+        MoodEntry.note.isnot(None),
+        MoodEntry.deleted == False,  # noqa: E712
+    ).all()
     entries = [e for e in entries if e.note and e.note.strip()]
 
     word_to_ratings = {}
@@ -899,8 +912,15 @@ def people():
 
     from app.models import EntryPerson, PersonAlias
 
+    # Join MoodEntry so mentions from soft-deleted days are excluded —
+    # matches the assistant's tool_people_overview and keeps the chart in
+    # sync with what the user can actually see in the diary.
     rows = db.session.query(
         EntryPerson.mention, EntryPerson.tone
+    ).join(
+        MoodEntry, MoodEntry.id == EntryPerson.entry_id
+    ).filter(
+        MoodEntry.deleted == False,  # noqa: E712
     ).all()
 
     # Normalize at aggregation time so existing rows merge without re-
@@ -976,7 +996,8 @@ def people():
     # Backfill progress hint: if entries with notes exist but mentions are empty,
     # extraction is likely still running.
     has_notes = db.session.query(MoodEntry).filter(
-        MoodEntry.note.isnot(None), MoodEntry.note != ''
+        MoodEntry.note.isnot(None), MoodEntry.note != '',
+        MoodEntry.deleted == False,  # noqa: E712
     ).count()
 
     return render_template('graphics/graphics_people.html',
@@ -1008,6 +1029,8 @@ def activities():
         EntryActivity.activity, MoodEntry.rating
     ).join(
         MoodEntry, MoodEntry.id == EntryActivity.entry_id
+    ).filter(
+        MoodEntry.deleted == False,  # noqa: E712
     ).all()
 
     from collections import defaultdict
@@ -1016,7 +1039,9 @@ def activities():
         by_activity[str(activity).strip().lower()].append(rating)
 
     # Baseline — user's overall average mood across all rated entries
-    baseline = db.session.query(db.func.avg(MoodEntry.rating)).scalar() or 0
+    baseline = db.session.query(db.func.avg(MoodEntry.rating)).filter(
+        MoodEntry.deleted == False,  # noqa: E712
+    ).scalar() or 0
     baseline = float(baseline)
 
     min_count = 2
@@ -1037,7 +1062,8 @@ def activities():
     items = items[:60]  # cap — past 60 circles the chart gets crowded
 
     has_notes = db.session.query(MoodEntry).filter(
-        MoodEntry.note.isnot(None), MoodEntry.note != ''
+        MoodEntry.note.isnot(None), MoodEntry.note != '',
+        MoodEntry.deleted == False,  # noqa: E712
     ).count()
 
     total_mentions = sum(i['count'] for i in items)
@@ -1090,6 +1116,8 @@ def people_manage():
     # variants ("маша"/"Маша") collapse before grouping.
     raw_rows = (
         db.session.query(EntryPerson.mention, db.func.count(EntryPerson.id))
+        .join(MoodEntry, MoodEntry.id == EntryPerson.entry_id)
+        .filter(MoodEntry.deleted == False)  # noqa: E712
         .group_by(EntryPerson.mention)
         .all()
     )
@@ -1287,6 +1315,8 @@ def activities_zoom():
         MoodEntry.rating, MoodEntry.note,
     ).join(
         MoodEntry, MoodEntry.id == EntryActivity.entry_id
+    ).filter(
+        MoodEntry.deleted == False,  # noqa: E712
     ).all()
 
     by_activity = defaultdict(list)
@@ -1302,7 +1332,9 @@ def activities_zoom():
             'value': 1,
         })
 
-    baseline_raw = db.session.query(db.func.avg(MoodEntry.rating)).scalar()
+    baseline_raw = db.session.query(db.func.avg(MoodEntry.rating)).filter(
+        MoodEntry.deleted == False,  # noqa: E712
+    ).scalar()
     baseline = float(baseline_raw) if baseline_raw is not None else 0.0
 
     activities_list = []
@@ -1323,7 +1355,8 @@ def activities_zoom():
     activities_list = activities_list[:60]
 
     has_notes = db.session.query(MoodEntry).filter(
-        MoodEntry.note.isnot(None), MoodEntry.note != ''
+        MoodEntry.note.isnot(None), MoodEntry.note != '',
+        MoodEntry.deleted == False,  # noqa: E712
     ).count()
 
     max_delta = max([abs(a['delta']) for a in activities_list] + [0.5])
@@ -1383,6 +1416,10 @@ def people_detail():
 
     rows = db.session.query(
         EntryPerson.entry_id, EntryPerson.mention, EntryPerson.tone
+    ).join(
+        MoodEntry, MoodEntry.id == EntryPerson.entry_id
+    ).filter(
+        MoodEntry.deleted == False,  # noqa: E712
     ).all()
 
     by_entry: dict[int, list[str]] = {}

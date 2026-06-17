@@ -7,6 +7,7 @@
 # origin). See LICENSE and COPYRIGHT at the root of this project.
 """AI Psychologist chat routes with streaming and multi-layer memory."""
 import json
+import logging
 import os
 import sys
 import platform
@@ -23,6 +24,8 @@ from .prompts import (
     DIARY_ACCESS_PRESENT, DIARY_ACCESS_EMPTY,
 )
 from . import bp
+
+log = logging.getLogger(__name__)
 
 # Ensure CUDA runtime DLLs are findable on Windows (not needed for Vulkan/CPU)
 if os.name == 'nt':
@@ -156,7 +159,6 @@ def _route_to_tools(llm, user_message: str,
                 out.append({'tool': tool, 'args': args})
         return out
     except Exception as exc:
-        log = logging.getLogger(__name__)
         log.warning(f'Tool router failed: {exc}')
         return []
 
@@ -207,7 +209,6 @@ def _execute_tool(tool_name: str, args: dict) -> str | None:
                 return None
             return tool_compare_periods(a, b)
     except Exception as exc:
-        log = logging.getLogger(__name__)
         log.warning(f'Tool exec failed for {tool_name}: {exc}')
     return None
 _llm_loading = False
@@ -643,9 +644,7 @@ def _get_llm():
         _llm_loading_stage = 'importing'
         _llm_loading_progress = 5
         try:
-            import logging
             import inspect
-            log = logging.getLogger(__name__)
             from llama_cpp import Llama
             import llama_cpp
 
@@ -1253,8 +1252,6 @@ def stream():
 @bp.route('/warmup', methods=['POST'])
 def warmup():
     """Warm up the LLM and embedding model in background."""
-    import logging
-    log = logging.getLogger(__name__)
 
     def _warm():
         try:
