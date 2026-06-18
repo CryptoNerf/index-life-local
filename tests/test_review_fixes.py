@@ -210,3 +210,168 @@ def test_deep_mind_auto_run_is_debounced(app):
 
     # Time never matters: there is no elapsed-time path anymore.
     assert not hasattr(dm, '_MIN_INTERVAL_HOURS')
+
+
+# ── Fix #7: a single data-dir resolver (no divergent copies) ───────────────
+
+def test_data_dir_resolvers_are_unified():
+    """Every data-dir entry point must resolve to the one place in paths.py.
+
+    Before the consolidation `app.modules._get_user_data_dir` was a second
+    copy that returned the platform app-data dir in a source checkout, while
+    config used the repo root — this asserts they can no longer diverge.
+    """
+    import config
+    import app as app_pkg
+    from app.modules import _get_user_data_dir
+    from paths import user_data_dir, BASE_DIR
+
+    canonical = user_data_dir()
+    assert config._resolve_data_dir() == canonical
+    assert config.BASE_DIR == canonical
+    assert config.DATA_DIR == canonical
+    assert _get_user_data_dir() == canonical
+    assert app_pkg._get_data_dir() == canonical
+    # Tests run non-frozen, so the canonical dir is the repo root.
+    assert canonical == BASE_DIR
+
+
+# ── #11(c): shared LLM text helpers (single impl; head/tail truncation) ─────
+
+class _CharLLM:
+    """Toy LLM whose tokenizer maps each UTF-8 byte to one token, so
+    truncation is exact and direction is observable in tests."""
+
+    def tokenize(self, b):
+        return list(b)
+
+    def detokenize(self, tokens):
+        return bytes(tokens)
+
+
+def test_strip_think_handles_open_closed_and_stray_tags():
+    from app.modules.assistant.llm_text import strip_think
+
+    assert strip_think('<think>reasoning</think>answer') == 'answer'
+    assert strip_think('before<think>x</think>after') == 'beforeafter'
+    assert strip_think('hi<think>ran out of tokens') == 'hi'   # unclosed block
+    assert strip_think('done</think>') == 'done'               # stray close tag
+    assert strip_think('') == ''
+    assert strip_think(None) == ''
+
+
+def test_truncate_to_tokens_keeps_correct_end():
+    """The whole point of centralising: head keeps the start (prompt
+    trimming), tail keeps the end (most recent summaries). These used to be
+    two separate functions that silently disagreed."""
+    from app.modules.assistant.llm_text import truncate_to_tokens, count_tokens
+
+    llm = _CharLLM()
+    text = 'abcdefgh'  # 8 ascii bytes → 8 tokens
+    assert count_tokens(llm, text) == 8
+
+    assert truncate_to_tokens(llm, text, 3, keep='head') == 'abc'
+    assert truncate_to_tokens(llm, text, 3, keep='tail') == 'fgh'
+    assert truncate_to_tokens(llm, text, 3) == 'abc'           # default = head
+    assert truncate_to_tokens(llm, text, 100) == text          # already fits
+    assert truncate_to_tokens(llm, text, 0) == ''
+
+
+def test_truncate_to_tokens_char_fallback_on_tokenizer_failure():
+    from app.modules.assistant.llm_text import truncate_to_tokens, count_tokens
+
+    class _BoomLLM:
+        def tokenize(self, b):
+            raise RuntimeError('model not loaded')
+
+    llm = _BoomLLM()
+    # count falls back to ~4 chars/token
+    assert count_tokens(llm, 'x' * 40) == 10
+    # truncate falls back to a char slice from the correct end (4 chars/token)
+    text = 'HEAD' + 'm' * 32 + 'TAIL'  # 40 chars
+    assert truncate_to_tokens(llm, text, 1, keep='head') == 'HEAD'
+    assert truncate_to_tokens(llm, text, 1, keep='tail') == 'TAIL'
+
+
+def test_llm_helpers_are_single_shared_impl():
+    """assistant.memory, assistant.routes and deep_mind.analysis must all
+    reference the one implementation, not private copies."""
+    import warnings
+    warnings.filterwarnings('ignore')
+    from app.modules.assistant import llm_text, memory, routes
+    from app.modules.deep_mind import analysis
+
+    assert memory._strip_think is llm_text.strip_think
+    assert routes._strip_think is llm_text.strip_think
+    assert analysis._strip_think is llm_text.strip_think
+    assert memory._count_tokens is llm_text.count_tokens
+    assert routes._count_tokens is llm_text.count_tokens
+
+
+# ── #11(b): shared system-stdlib finder (frozen-build path, now testable) ───
+
+def _make_venv_cfg(venv_dir, home, version):
+    venv_dir.mkdir(parents=True, exist_ok=True)
+    (venv_dir / 'pyvenv.cfg').write_text(f'home = {home}\nversion = {version}\n')
+
+
+def test_find_system_stdlib_unix_layout(tmp_path):
+    import sys
+    from paths import find_system_stdlib
+
+    major, minor = sys.version_info.major, sys.version_info.minor
+    base = tmp_path / 'pybase'
+    (base / 'bin').mkdir(parents=True)
+    stdlib = base / 'lib' / f'python{major}.{minor}'
+    stdlib.mkdir(parents=True)
+    (stdlib / 'os.py').write_text('# fake stdlib')
+
+    venv = tmp_path / 'venv'
+    _make_venv_cfg(venv, base / 'bin', f'{major}.{minor}.0')
+
+    assert find_system_stdlib(venv) == stdlib
+
+
+def test_find_system_stdlib_windows_layout(tmp_path):
+    import sys
+    from paths import find_system_stdlib
+
+    major, minor = sys.version_info.major, sys.version_info.minor
+    base = tmp_path / 'pybase'
+    (base / 'Scripts').mkdir(parents=True)
+    lib = base / 'Lib'
+    lib.mkdir(parents=True)
+    (lib / 'os.py').write_text('# fake stdlib')
+
+    venv = tmp_path / 'venv'
+    _make_venv_cfg(venv, base / 'Scripts', f'{major}.{minor}.0')
+
+    assert find_system_stdlib(venv) == lib
+
+
+def test_find_system_stdlib_rejects_version_mismatch(tmp_path):
+    from paths import find_system_stdlib
+
+    # A 2.7 venv must be refused even if a stdlib is present — cross-version
+    # stdlib breaks C-extension imports.
+    base = tmp_path / 'pybase'
+    (base / 'Lib').mkdir(parents=True)
+    (base / 'Lib' / 'os.py').write_text('x')
+    venv = tmp_path / 'venv'
+    _make_venv_cfg(venv, base, '2.7.18')
+
+    assert find_system_stdlib(venv) is None
+
+
+def test_find_system_stdlib_missing_or_unfindable(tmp_path):
+    import sys
+    from paths import find_system_stdlib
+
+    # No pyvenv.cfg at all.
+    assert find_system_stdlib(tmp_path / 'nope') is None
+
+    # cfg present + matching version but no stdlib on disk → None, no raise.
+    major, minor = sys.version_info.major, sys.version_info.minor
+    venv = tmp_path / 'venv'
+    _make_venv_cfg(venv, tmp_path / 'ghost' / 'bin', f'{major}.{minor}.0')
+    assert find_system_stdlib(venv) is None

@@ -15,25 +15,15 @@ log = logging.getLogger(__name__)
 
 
 def _get_user_data_dir() -> Path:
-    """Return user data directory. Matches the resolver in config.py.
+    """Return the user data directory — the single resolver in paths.py.
 
-    On Windows (frozen), prefer next-to-exe for portable installs; fall
-    back to %APPDATA% for legacy users whose data is already there.
+    This used to be a second copy of config.py's logic that had drifted in
+    the source (non-frozen) case (it returned the platform app-data dir
+    where config returned the repo root). It now delegates so the two can't
+    diverge again.
     """
-    if sys.platform == 'darwin':
-        return Path.home() / 'Library' / 'Application Support' / 'index.life'
-    if sys.platform == 'win32':
-        if getattr(sys, 'frozen', False):
-            exe_dir = Path(sys.executable).resolve().parent
-            appdata_dir = Path(os.environ.get('APPDATA', str(Path.home()))) / 'index.life'
-            markers = ('diary.db', 'modules_venv', 'models', 'profile_photos')
-            if any((exe_dir / m).exists() for m in markers):
-                return exe_dir
-            if any((appdata_dir / m).exists() for m in markers):
-                return appdata_dir
-            return exe_dir
-        return Path(os.environ.get('APPDATA', str(Path.home()))) / 'index.life'
-    return Path.home() / '.index-life'
+    from paths import user_data_dir
+    return user_data_dir()
 
 
 def _add_local_modules_site_packages() -> None:
@@ -69,62 +59,18 @@ def _add_local_modules_site_packages() -> None:
         except Exception as exc:
             log.warning('Failed to inspect modules venv: %s', exc)
 
-    # In frozen exe, PyInstaller bundles a stripped stdlib.  Heavy deps like
-    # torch need modules that were excluded (pickletools, importlib.resources …).
-    # Use pyvenv.cfg "home" key to find the system Python and add its stdlib.
-    _is_frozen = getattr(sys, 'frozen', False)
-    _cfg_ok = cfg.exists()
-    log.info('stdlib patch: frozen=%s cfg_exists=%s venv_dir=%s', _is_frozen, _cfg_ok, venv_dir)
-    if _is_frozen and _cfg_ok:
-        try:
-            cfg_text = cfg.read_text(encoding='utf-8', errors='ignore')
-            home_line = next(
-                (l for l in cfg_text.splitlines()
-                 if l.strip().lower().startswith('home')), ''
-            )
-            log.info('stdlib patch: home_line=%r', home_line)
-            if home_line:
-                _, home_val = home_line.split('=', 1)
-                python_home = Path(home_val.strip())
-                # pyvenv.cfg "home" points to the bin/ dir containing python exe.
-                # Stdlib locations vary by platform:
-                #   Windows:  home/../Lib/
-                #   macOS:    home/../lib/python3.X/
-                #   Linux:    home/../lib/python3.X/
-                # Also check Homebrew Frameworks path on macOS.
-                stdlib_found = False
-                search_roots = [python_home.parent, python_home]
-
-                # macOS Homebrew: Frameworks/Python.framework/Versions/3.X/lib/
-                fw = python_home.parent / 'Frameworks' / 'Python.framework'
-                if fw.is_dir():
-                    for ver_dir in sorted(fw.glob('Versions/3.*'), reverse=True):
-                        search_roots.insert(0, ver_dir)
-
-                log.info('stdlib patch: search_roots=%s', search_roots)
-
-                for root in search_roots:
-                    # Windows: root/Lib
-                    win_lib = root / 'Lib'
-                    if win_lib.is_dir() and (win_lib / 'os.py').exists():
-                        sys.path.insert(0, str(win_lib))
-                        log.info('Added system stdlib: %s', win_lib)
-                        stdlib_found = True
-                        break
-                    # Unix: root/lib/python3.X
-                    for p in sorted(root.glob('lib/python3.*'), reverse=True):
-                        if p.is_dir() and (p / 'os.py').exists():
-                            sys.path.insert(0, str(p))
-                            log.info('Added system stdlib: %s', p)
-                            stdlib_found = True
-                            break
-                    if stdlib_found:
-                        break
-
-                if not stdlib_found:
-                    log.warning('Could not find system stdlib from pyvenv.cfg home=%s', python_home)
-        except Exception as exc:
-            log.warning('Failed to add system stdlib: %s', exc)
+    # In a frozen exe PyInstaller ships a stripped stdlib; heavy module deps
+    # (torch, diskcache, …) need what it dropped. Prepend the system stdlib
+    # located from the venv's pyvenv.cfg via the shared helper. We INSERT(0)
+    # here; the app factory APPENDS instead (see app/__init__._add_system_stdlib).
+    if getattr(sys, 'frozen', False):
+        from paths import find_system_stdlib
+        stdlib = find_system_stdlib(venv_dir)
+        if stdlib is not None:
+            sys.path.insert(0, str(stdlib))
+            log.info('Added system stdlib: %s', stdlib)
+        else:
+            log.warning('Could not find system stdlib for %s', venv_dir)
 
     candidates = []
     win_site = venv_dir / 'Lib' / 'site-packages'

@@ -70,6 +70,7 @@ a = Analysis(
         ('app/static', 'app/static'),
         ('app/translations', 'app/translations'),
         ('config.py', '.'),
+        ('paths.py', '.'),
         ('MODULES.md', '.'),
         ('install_modules.bat', '.'),
         ('install_modules.sh', '.'),

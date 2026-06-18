@@ -18,6 +18,7 @@ import numpy as np
 
 from app import db
 from app.models import MoodEntry, MindCluster, MindClusterEntry
+from app.modules.assistant.llm_text import strip_think as _strip_think
 
 log = logging.getLogger(__name__)
 
@@ -39,16 +40,6 @@ def _get_llm():
     """Borrow the already-loaded LLM from the assistant module."""
     from app.modules.assistant.routes import _get_llm as assistant_get_llm
     return assistant_get_llm()
-
-
-def _strip_think(text):
-    """Strip ``<think>…</think>`` blocks from LLM output."""
-    if not text:
-        return ''
-    cleaned = re.sub(r'(?is)<think>.*?</think>', '', text)
-    cleaned = re.sub(r'(?is)<think>.*$', '', cleaned)
-    cleaned = re.sub(r'(?is)</think>', '', cleaned)
-    return cleaned.strip()
 
 
 def _parse_fields(text):

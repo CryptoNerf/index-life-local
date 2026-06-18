@@ -306,75 +306,21 @@ def _run_migrations(app):
 
 
 def _add_system_stdlib(venv_dir: Path):
-    """Add system Python stdlib to sys.path for frozen builds.
+    """Append the system Python stdlib to sys.path for frozen builds.
 
-    PyInstaller strips stdlib modules (pickletools, etc.) that heavy
-    venv packages like torch/diskcache need.  We read the venv's
-    pyvenv.cfg to locate the system Python and add its stdlib.
-
-    Caveats:
-    - Skipped if the venv's Python version differs from the bundled
-      Python (ABI mismatch: e.g. sqlite3 from 3.10 cannot load
-      _sqlite3.pyd from 3.12 → import errors).
-    - Appended (not prepended) to sys.path so bundled copies always
-      win conflicts; system stdlib only serves as fallback for
-      modules PyInstaller stripped.
+    PyInstaller strips stdlib modules (pickletools, etc.) that heavy venv
+    packages like torch/diskcache need. find_system_stdlib() locates them
+    from the venv's pyvenv.cfg (see paths.py — shared with the module
+    loader). We APPEND so bundled copies always win conflicts and the
+    system stdlib only serves as a fallback for what PyInstaller stripped.
     """
-    cfg = venv_dir / 'pyvenv.cfg'
-    if not cfg.exists():
-        log.warning('_add_system_stdlib: pyvenv.cfg not found in %s', venv_dir)
+    from paths import find_system_stdlib
+    stdlib = find_system_stdlib(venv_dir)
+    if stdlib is None:
+        log.warning('_add_system_stdlib: no system stdlib found for %s', venv_dir)
         return
-    try:
-        cfg_map = {}
-        for line in cfg.read_text(encoding='utf-8', errors='ignore').splitlines():
-            if '=' in line:
-                k, v = line.split('=', 1)
-                cfg_map[k.strip().lower()] = v.strip()
-
-        # Version compatibility — cross-version stdlib breaks C-extension imports
-        venv_version = cfg_map.get('version') or cfg_map.get('version_info') or ''
-        parts = venv_version.split('.')
-        if len(parts) >= 2:
-            try:
-                vmaj, vmin = int(parts[0]), int(parts[1])
-                if (vmaj, vmin) != (sys.version_info.major, sys.version_info.minor):
-                    log.warning(
-                        '_add_system_stdlib: skipping — venv Python %d.%d != bundled %d.%d',
-                        vmaj, vmin, sys.version_info.major, sys.version_info.minor,
-                    )
-                    return
-            except ValueError:
-                pass
-
-        home_val = cfg_map.get('home')
-        if not home_val:
-            log.warning('_add_system_stdlib: no "home" key in pyvenv.cfg')
-            return
-        python_home = Path(home_val)
-        log.info('_add_system_stdlib: python_home=%s', python_home)
-
-        search_roots = [python_home.parent, python_home]
-
-        fw = python_home.parent / 'Frameworks' / 'Python.framework'
-        if fw.is_dir():
-            for ver_dir in sorted(fw.glob('Versions/3.*'), reverse=True):
-                search_roots.insert(0, ver_dir)
-
-        for root in search_roots:
-            win_lib = root / 'Lib'
-            if win_lib.is_dir() and (win_lib / 'os.py').exists():
-                sys.path.append(str(win_lib))
-                log.info('Appended system stdlib: %s', win_lib)
-                return
-            for p in sorted(root.glob('lib/python3.*'), reverse=True):
-                if p.is_dir() and (p / 'os.py').exists():
-                    sys.path.append(str(p))
-                    log.info('Appended system stdlib: %s', p)
-                    return
-
-        log.warning('_add_system_stdlib: could not find stdlib from home=%s', python_home)
-    except Exception as exc:
-        log.warning('_add_system_stdlib failed: %s', exc)
+    sys.path.append(str(stdlib))
+    log.info('Appended system stdlib: %s', stdlib)
 
 
 def _unfreeze_venv_packages(site_packages: Path):
@@ -452,14 +398,13 @@ def register_error_handlers(app) -> None:
 # ── App factory ───────────────────────────────────────────────
 
 def _get_data_dir() -> Path:
-    """Return writable data directory — delegates to config._resolve_data_dir.
+    """Return the writable data directory (created when frozen).
 
-    Keeping this thin wrapper so callers keep a stable name, but the
-    platform-specific logic (portable-first on Windows, Application
-    Support on macOS, dotfile on Linux) lives in one place in config.py.
+    Thin wrapper over the single resolver in paths.py so callers keep a
+    stable name.
     """
-    from config import _resolve_data_dir
-    d = _resolve_data_dir()
+    from paths import user_data_dir
+    d = user_data_dir()
     if getattr(sys, 'frozen', False):
         d.mkdir(parents=True, exist_ok=True)
     return d

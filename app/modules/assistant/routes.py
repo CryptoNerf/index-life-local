@@ -23,6 +23,11 @@ from .prompts import (
     CRISIS_KEYWORDS, CRISIS_RESPONSE, SYSTEM_PROMPT,
     DIARY_ACCESS_PRESENT, DIARY_ACCESS_EMPTY,
 )
+from .llm_text import (
+    strip_think as _strip_think,
+    count_tokens as _count_tokens,
+    truncate_to_tokens as _truncate_to_tokens,  # default keep='head' — matches prior behaviour
+)
 from . import bp
 
 log = logging.getLogger(__name__)
@@ -139,7 +144,6 @@ def _route_to_tools(llm, user_message: str,
                 temperature=0.1,
             )
         text = result['choices'][0]['message']['content'].strip()
-        from .memory import _strip_think
         text = _strip_think(text)
         # Find the JSON array — model occasionally adds preamble
         start = text.find('[')
@@ -441,32 +445,6 @@ def _get_max_tokens(default_value: int | None = None) -> int | None:
     if value <= 0:
         return None
     return value
-
-
-def _count_tokens(llm, text: str) -> int:
-    try:
-        tokens = llm.tokenize(text.encode('utf-8'))
-        return len(tokens)
-    except Exception:
-        return max(1, len(text) // 4)
-
-
-def _truncate_to_tokens(llm, text: str, max_tokens: int) -> str:
-    if max_tokens <= 0:
-        return ''
-    try:
-        tokens = llm.tokenize(text.encode('utf-8'))
-        if len(tokens) <= max_tokens:
-            return text
-        truncated = llm.detokenize(tokens[:max_tokens])
-        if isinstance(truncated, bytes):
-            return truncated.decode('utf-8', errors='ignore')
-        if isinstance(truncated, str):
-            return truncated
-    except Exception:
-        pass
-    approx_chars = max(0, max_tokens * 4)
-    return text[:approx_chars]
 
 
 def _ends_with_terminal_punct(text: str) -> bool:
@@ -948,7 +926,6 @@ def stream():
             if saved or not full_response:
                 return
             try:
-                from .memory import _strip_think
                 save_text = _strip_think(full_response).strip() or full_response
                 db.session.add(ChatMessage(role='assistant', content=save_text))
                 db.session.commit()
@@ -1147,7 +1124,6 @@ def stream():
                 # If thinking mode produced only reasoning, request a final answer (non-streaming).
                 if thinking_enabled:
                     try:
-                        from .memory import _strip_think
                         answer_only = _strip_think(full_response).strip()
                     except Exception:
                         answer_only = ''

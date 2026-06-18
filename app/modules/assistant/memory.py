@@ -39,6 +39,11 @@ from .prompts import (
     PROFILE_SECTION, TIMELINE_SECTION, RELEVANT_SECTION, RECENT_SECTION,
     SYSTEM_PROMPT, DIARY_ACCESS_PRESENT, DIARY_ACCESS_EMPTY,
 )
+from .llm_text import (
+    strip_think as _strip_think,
+    count_tokens as _count_tokens,
+    truncate_to_tokens,
+)
 
 log = logging.getLogger(__name__)
 
@@ -275,18 +280,6 @@ def _text_hash(text: str) -> str:
     return hashlib.md5(text.encode('utf-8')).hexdigest()
 
 
-def _strip_think(text: str) -> str:
-    if not text:
-        return ''
-    # Remove any <think>...</think> blocks (case-insensitive).
-    cleaned = re.sub(r'(?is)<think>.*?</think>', '', text)
-    # Remove any trailing unclosed <think> block.
-    cleaned = re.sub(r'(?is)<think>.*$', '', cleaned)
-    # Remove stray closing tags.
-    cleaned = re.sub(r'(?is)</think>', '', cleaned)
-    return cleaned.strip()
-
-
 def _summary_invalid(text: str) -> bool:
     if not text:
         return True
@@ -296,32 +289,6 @@ def _summary_invalid(text: str) -> bool:
     if len(stripped) < 5:
         return True
     return False
-
-
-def _count_tokens(llm, text: str) -> int:
-    try:
-        tokens = llm.tokenize(text.encode('utf-8'))
-        return len(tokens)
-    except Exception:
-        return max(1, len(text) // 4)
-
-
-def _truncate_to_tokens(llm, text: str, max_tokens: int) -> str:
-    if max_tokens <= 0:
-        return ''
-    try:
-        tokens = llm.tokenize(text.encode('utf-8'))
-        if len(tokens) <= max_tokens:
-            return text
-        truncated = llm.detokenize(tokens[-max_tokens:])
-        if isinstance(truncated, bytes):
-            return truncated.decode('utf-8', errors='ignore')
-        if isinstance(truncated, str):
-            return truncated
-    except Exception:
-        pass
-    approx_chars = max(0, max_tokens * 4)
-    return text[-approx_chars:]
 
 
 def _get_llm_n_ctx(llm) -> int | None:
@@ -1075,12 +1042,13 @@ def update_profile(llm, force_rebuild: bool = False):
         base_prompt = PROFILE_PROMPT.format(summaries_text='')
         base_tokens = _count_tokens(llm, base_prompt)
         if summary_cap > 0:
-            summaries_text = _truncate_to_tokens(llm, summaries_text, summary_cap)
+            # keep='tail' — retain the most recent summaries when trimming.
+            summaries_text = truncate_to_tokens(llm, summaries_text, summary_cap, keep='tail')
         # Ensure we leave room for a minimum output + safety.
         available_for_prompt = max(0, int(n_ctx) - safety - min_output)
         available_for_summaries = max(0, available_for_prompt - base_tokens)
         if available_for_summaries > 0:
-            summaries_text = _truncate_to_tokens(llm, summaries_text, available_for_summaries)
+            summaries_text = truncate_to_tokens(llm, summaries_text, available_for_summaries, keep='tail')
         # Final guard: ensure full prompt fits with min output budget.
         limit = max(0, int(n_ctx) - safety - min_output)
         for _ in range(3):
@@ -1094,7 +1062,7 @@ def update_profile(llm, force_rebuild: bool = False):
                 break
             # Reduce summaries more aggressively to avoid decode failures.
             new_limit = max(0, int(summ_tokens * 0.7))
-            summaries_text = _truncate_to_tokens(llm, summaries_text, new_limit)
+            summaries_text = truncate_to_tokens(llm, summaries_text, new_limit, keep='tail')
     except Exception:
         # Fallback to rough char trimming
         if len(summaries_text) > 16000:

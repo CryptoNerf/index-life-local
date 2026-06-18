@@ -12,6 +12,11 @@ dist/
 build/
 *.egg
 
+# Test / type-check caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
 # Node / JS
 node_modules/
 
@@ -74,6 +79,17 @@ import_data.py
 
 # Per-install Flask secret key (generated at first run; never commit)
 secret_key
+
+# Module activation sentinels + their uploads. In a source checkout the
+# user data dir IS the repo root (see paths.user_data_dir), so these local
+# state files can land here — never commit them. Anchored to the repo root
+# (leading slash) so they never touch app/modules/*/models or similar.
+/customization_enabled
+/graphics_enabled
+/deep_mind_enabled
+/insights_enabled
+/customization_uploads/
+/models/
 
 # Claude Code settings
 .claude/

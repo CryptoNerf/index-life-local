@@ -10,40 +10,11 @@ Configuration for local index.life diary application
 """
 import os
 import sys
-from pathlib import Path
 
-# Base directory (where the source code / bundled code lives)
-BASE_DIR = Path(__file__).parent.absolute()
-
-
-def _resolve_data_dir() -> Path:
-    """Pick the user-data base directory.
-
-    Windows is portable-first: data lives next to the exe so users can keep
-    everything on any drive and back up the whole folder. Existing users
-    with data in %APPDATA% (legacy layout) keep using it — we detect the
-    presence of known markers (diary.db, modules_venv, models) to decide.
-
-    macOS stays in Application Support — .app bundles are code-signed and
-    we can't write inside them. Linux uses the conventional dotfile dir.
-    """
-    if not getattr(sys, 'frozen', False):
-        return BASE_DIR
-
-    if sys.platform == 'darwin':
-        return Path.home() / 'Library' / 'Application Support' / 'index.life'
-
-    if sys.platform == 'win32':
-        exe_dir = Path(sys.executable).resolve().parent
-        appdata_dir = Path(os.environ.get('APPDATA', str(Path.home()))) / 'index.life'
-        markers = ('diary.db', 'modules_venv', 'models', 'profile_photos')
-        if any((exe_dir / m).exists() for m in markers):
-            return exe_dir
-        if any((appdata_dir / m).exists() for m in markers):
-            return appdata_dir
-        return exe_dir  # fresh install — go portable
-
-    return Path.home() / '.index-life'
+# The data-dir resolver lives in one place (paths.py). config re-exports
+# BASE_DIR and _resolve_data_dir so existing `from config import ...` callers
+# — including run.py's logging setup and module_routes — keep working.
+from paths import BASE_DIR, user_data_dir as _resolve_data_dir  # noqa: F401
 
 
 DATA_DIR = _resolve_data_dir()
