@@ -101,19 +101,31 @@ def _find_venv_python() -> Path:
     return python
 
 
+class _EmbedWorkerDead(RuntimeError):
+    """The embed child process has exited or its pipe broke — distinct from a
+    per-request model error (which leaves the worker healthy). Only this
+    triggers a respawn + one retry."""
+
+
 class _SubprocessEmbedder:
     """Runs sentence-transformers in a child process (venv Python).
 
-    Communication: one JSON line per request on stdin, one JSON line
-    response on stdout.  The child stays alive for the app lifetime.
+    Communication: one JSON line per request on stdin, one JSON line response
+    on stdout. If the child dies mid-session it is respawned once on the next
+    encode, so a single crash no longer wedges all embedding/search/reindex
+    until the whole app is restarted.
     """
 
     def __init__(self):
-        venv_python = _find_venv_python()
+        self._venv_python = _find_venv_python()
         self._lock = threading.Lock()
         # Keep a rolling tail of the child's stderr for diagnostics.
         self._stderr_tail: 'collections.deque[str]' = collections.deque(maxlen=80)
+        self._proc = None
+        self._spawn()
 
+    def _spawn(self) -> None:
+        """Start (or restart) the child process and wait for its READY line."""
         # Quiet the child so it writes little to stderr (the drain thread
         # below already prevents a full-pipe deadlock, but less noise is
         # cheaper and keeps logs readable).
@@ -131,8 +143,8 @@ class _SubprocessEmbedder:
         env['PYTHONIOENCODING'] = 'utf-8'
         env['PYTHONUTF8'] = '1'
 
-        self._proc = subprocess.Popen(
-            [str(venv_python), '-c', _EMBED_WORKER_CODE],
+        proc = subprocess.Popen(
+            [str(self._venv_python), '-c', _EMBED_WORKER_CODE],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -142,49 +154,82 @@ class _SubprocessEmbedder:
             bufsize=1,
             env=env,
         )
+        self._proc = proc
 
         # CRITICAL: continuously drain the child's stderr. sentence-transformers
         # / torch are chatty on stderr; if we never read it, the OS pipe buffer
         # (~64 KB) fills and the child blocks on its next stderr write — which
         # deadlocks every subsequent encode (parent waits forever on stdout).
-        self._stderr_thread = threading.Thread(
-            target=self._drain_stderr, daemon=True)
-        self._stderr_thread.start()
+        # Bind the thread to THIS proc so a respawn's drain thread doesn't fight
+        # the previous one over self._proc.
+        threading.Thread(
+            target=self._drain_stderr, args=(proc,), daemon=True).start()
 
         # Wait for model to load (may take 10-30s first time — downloads ~90 MB)
-        ready = self._proc.stdout.readline().strip()
+        ready = proc.stdout.readline().strip()
         if ready != 'READY':
-            # Child likely exited; let the drain thread flush its stderr.
-            self._stderr_thread.join(timeout=1.0)
             err = ''.join(self._stderr_tail)[-4000:]
             raise RuntimeError(f'Embed worker failed: {err}')
-        log.info('Subprocess embedder started (pid=%d)', self._proc.pid)
+        log.info('Subprocess embedder started (pid=%d)', proc.pid)
 
-    def _drain_stderr(self):
-        """Read the child's stderr forever so its pipe never fills up."""
+    def _drain_stderr(self, proc) -> None:
+        """Read `proc`'s stderr forever so its pipe never fills up."""
         try:
-            for line in self._proc.stderr:
+            for line in proc.stderr:
                 self._stderr_tail.append(line)
         except Exception:
             pass
 
+    def _alive(self) -> bool:
+        return self._proc is not None and self._proc.poll() is None
+
     def encode(self, text: str, normalize_embeddings: bool = True) -> np.ndarray:
-        """Send text, get back float32 numpy vector."""
+        """Send text, get back a float32 numpy vector.
+
+        Respawns the worker once if it has died, then retries — so a single
+        crash doesn't make every later encode fail until an app restart.
+        """
         with self._lock:
-            req = json.dumps({'text': text}) + '\n'
-            self._proc.stdin.write(req)
+            try:
+                return self._encode_once(text)
+            except _EmbedWorkerDead as exc:
+                log.warning('Embed worker died (%s) — respawning and retrying once', exc)
+                self._restart()
+                return self._encode_once(text)  # one retry; propagate if it dies again
+
+    def _encode_once(self, text: str) -> np.ndarray:
+        if not self._alive():
+            raise _EmbedWorkerDead('process not running')
+        try:
+            self._proc.stdin.write(json.dumps({'text': text}) + '\n')
             self._proc.stdin.flush()
-            resp_line = self._proc.stdout.readline()
-            if not resp_line:
-                raise RuntimeError('Embed worker died unexpectedly')
+        except (BrokenPipeError, OSError, ValueError) as exc:
+            raise _EmbedWorkerDead(f'write failed: {exc}')
+        resp_line = self._proc.stdout.readline()
+        if not resp_line:
+            raise _EmbedWorkerDead('no response (process exited)')
+        try:
             resp = json.loads(resp_line)
-        if not resp['ok']:
-            raise RuntimeError(resp['error'])
+        except (json.JSONDecodeError, ValueError) as exc:
+            raise _EmbedWorkerDead(f'unparseable response: {exc}')
+        if not resp.get('ok'):
+            # Per-request model error — the worker is still alive, so don't
+            # respawn; surface the error to the caller.
+            raise RuntimeError(resp.get('error', 'embed failed'))
         return np.frombuffer(base64.b64decode(resp['data']),
                              dtype=np.float32).copy()
 
+    def _restart(self) -> None:
+        old = self._proc
+        try:
+            if old is not None and old.poll() is None:
+                old.terminate()
+        except Exception:
+            pass
+        self._spawn()
+
     def close(self):
-        if self._proc.poll() is None:
+        if self._proc is not None and self._proc.poll() is None:
             self._proc.terminate()
 
 

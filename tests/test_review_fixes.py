@@ -10,7 +10,12 @@ Covers three independent fixes:
     neural-map clustering source.
   * #3 — the cached embedding matrix must be rebuilt after an in-place
     re-embed of an edited entry, not only when the row count changes.
+
+Later turns added regressions for further review fixes (paths consolidation,
+llm_text helpers, debounce, secret key, tools split, log rotation, embed
+worker respawn). One file keeps them discoverable together.
 """
+import json
 from datetime import date
 
 import numpy as np
@@ -445,3 +450,90 @@ def test_log_handler_is_bounded_and_utf8(tmp_path):
         assert (handler.encoding or '').lower() in ('utf-8', 'utf8')
     finally:
         handler.close()
+
+
+# ── #3: the embed subprocess respawns once if it dies mid-session ──────────
+
+class _FakeStream:
+    def __init__(self, lines=None):
+        self._lines = list(lines or [])
+
+    def write(self, _s):
+        pass
+
+    def flush(self):
+        pass
+
+    def readline(self):
+        return self._lines.pop(0) if self._lines else ''
+
+
+class _FakeProc:
+    def __init__(self, responses, alive=True):
+        self.stdin = _FakeStream()
+        self.stdout = _FakeStream(responses)
+        self.stderr = iter(())
+        self._alive = alive
+        self.pid = 4242
+
+    def poll(self):
+        return None if self._alive else 0
+
+    def terminate(self):
+        self._alive = False
+
+
+def _bare_embedder(proc):
+    """An embedder instance with internals set but no real subprocess."""
+    import collections
+    import threading
+    from app.modules.assistant import memory
+
+    emb = object.__new__(memory._SubprocessEmbedder)
+    emb._lock = threading.Lock()
+    emb._stderr_tail = collections.deque(maxlen=80)
+    emb._venv_python = 'python3'
+    emb._proc = proc
+    return emb
+
+
+def _ok_response(vec):
+    import base64
+    return json.dumps({
+        'ok': True,
+        'data': base64.b64encode(vec.tobytes()).decode('ascii'),
+    }) + '\n'
+
+
+def test_embed_worker_respawns_once_on_death():
+    import numpy as np
+
+    vec = np.ones(384, dtype=np.float32)
+    dead = _FakeProc(responses=[''], alive=False)          # readline '' = exited
+    fresh = _FakeProc(responses=[_ok_response(vec)], alive=True)
+
+    emb = _bare_embedder(dead)
+    spawned = {'n': 0}
+
+    def fake_spawn():
+        spawned['n'] += 1
+        emb._proc = fresh
+
+    emb._spawn = fake_spawn
+
+    out = emb.encode('hello')
+    assert spawned['n'] == 1                # respawned exactly once
+    assert np.allclose(out, vec)            # the retry produced the vector
+
+
+def test_embed_worker_does_not_respawn_on_model_error():
+    import pytest
+
+    proc = _FakeProc(responses=[json.dumps({'ok': False, 'error': 'boom'}) + '\n'])
+    emb = _bare_embedder(proc)
+    spawned = {'n': 0}
+    emb._spawn = lambda: spawned.__setitem__('n', spawned['n'] + 1)
+
+    with pytest.raises(RuntimeError):
+        emb.encode('hi')
+    assert spawned['n'] == 0                # model error must NOT respawn a live worker
