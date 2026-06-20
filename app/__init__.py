@@ -50,7 +50,7 @@ def _set_sqlite_pragmas(dbapi_connection, connection_record):
         cursor.close()
 
 # ── Schema version — bump when adding new migrations ──
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 
 def _get_schema_version(conn) -> int:
@@ -268,6 +268,38 @@ def _migrate_v7(conn, inspector):
         ))
 
 
+def _migrate_v8(conn, inspector):
+    """Create daily_signals — generic per-day external metrics (weather now;
+    steps/sleep/music later) correlated against mood.
+
+    One row per (date, source, metric), enforced by a unique index so a
+    re-fetch upserts in place and the rows merge cleanly across devices.
+    """
+    if not _table_exists(inspector, 'daily_signals'):
+        conn.execute(text('''
+            CREATE TABLE daily_signals (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                date DATE NOT NULL,
+                source VARCHAR(30) NOT NULL,
+                metric VARCHAR(40) NOT NULL,
+                value_num FLOAT,
+                value_text VARCHAR(120),
+                created_at DATETIME,
+                updated_at DATETIME
+            )
+        '''))
+        conn.execute(text(
+            'CREATE UNIQUE INDEX uq_daily_signal '
+            'ON daily_signals(date, source, metric)'
+        ))
+        conn.execute(text(
+            'CREATE INDEX idx_daily_signals_date ON daily_signals(date)'
+        ))
+        conn.execute(text(
+            'CREATE INDEX idx_daily_signals_source ON daily_signals(source)'
+        ))
+
+
 MIGRATIONS = {
     1: _migrate_v1,
     2: _migrate_v2,
@@ -276,6 +308,7 @@ MIGRATIONS = {
     5: _migrate_v5,
     6: _migrate_v6,
     7: _migrate_v7,
+    8: _migrate_v8,
 }
 
 

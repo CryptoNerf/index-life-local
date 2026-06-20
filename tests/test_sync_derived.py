@@ -13,7 +13,7 @@ from datetime import datetime, date as date_type
 from app import db
 from app.models import (
     MoodEntry, EntrySummary, PeriodSummary, UserPsychProfile,
-    EntryPerson, EntryActivity, PersonAlias, SyncMeta,
+    EntryPerson, EntryActivity, PersonAlias, SyncMeta, DailySignal,
 )
 from app import sync
 
@@ -236,7 +236,7 @@ def test_build_snapshot_includes_uuid_keyed_derived(app):
 
     snap = sync.build_snapshot()
 
-    assert snap['snapshot_version'] == 3
+    assert snap['snapshot_version'] == 4
     assert snap['entry_summaries'][0]['entry_uuid'] == 'UA'
     assert snap['entry_people'][0]['entry_uuid'] == 'UA'
     assert snap['entry_activities'][0]['entry_uuid'] == 'UA'
@@ -258,3 +258,42 @@ def test_v2_snapshot_without_derived_keys_is_tolerated(app):
     stats = sync.apply_snapshot(v2)
     assert stats['inserted'] == 1
     assert stats['summaries_inserted'] == 0
+    assert stats['signals_inserted'] == 0
+
+
+# ── daily_signals (weather…): additive, then last-write-wins ──
+
+def test_daily_signals_imported_additively(app):
+    _set_device()
+    snap = {**_snap(), 'daily_signals': [
+        {'date': '2026-06-15', 'source': 'weather', 'metric': 'temp_c',
+         'value_num': 18.0, 'value_text': None, 'updated_at': NEW.isoformat()},
+        {'date': '2026-06-15', 'source': 'weather', 'metric': 'condition',
+         'value_num': None, 'value_text': 'Rain', 'updated_at': NEW.isoformat()},
+    ]}
+    stats = sync.apply_snapshot(snap)
+    assert stats['signals_inserted'] == 2
+    assert DailySignal.query.filter_by(
+        date=date_type.fromisoformat('2026-06-15')).count() == 2
+
+
+def test_daily_signal_last_write_wins(app):
+    _set_device()
+    d = date_type.fromisoformat('2026-06-15')
+    db.session.add(DailySignal(date=d, source='weather', metric='temp_c',
+                               value_num=10.0, updated_at=OLD))
+    db.session.commit()
+
+    # Newer peer value -> adopted.
+    sync.apply_snapshot({**_snap(), 'daily_signals': [
+        {'date': '2026-06-15', 'source': 'weather', 'metric': 'temp_c',
+         'value_num': 25.0, 'value_text': None, 'updated_at': NEW.isoformat()}]})
+    assert DailySignal.query.filter_by(
+        date=d, source='weather', metric='temp_c').first().value_num == 25.0
+
+    # Older peer value -> kept.
+    sync.apply_snapshot({**_snap(device_id='peer2'), 'daily_signals': [
+        {'date': '2026-06-15', 'source': 'weather', 'metric': 'temp_c',
+         'value_num': 99.0, 'value_text': None, 'updated_at': OLD.isoformat()}]})
+    assert DailySignal.query.filter_by(
+        date=d, source='weather', metric='temp_c').first().value_num == 25.0

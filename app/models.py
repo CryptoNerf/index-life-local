@@ -281,3 +281,36 @@ class UserCustomization(db.Model):
     settings_json = db.Column(db.Text, nullable=False, default='{}')
     updated_at = db.Column(db.DateTime, default=utcnow,
                            onupdate=utcnow)
+
+
+# ── External daily signals (weather, health, music…) ─────────
+
+class DailySignal(db.Model):
+    """One external metric for one calendar day, e.g. ('weather','temp_c').
+
+    A deliberately generic shape so any integration (weather now; steps,
+    sleep, music later) writes into the same table and the same mood-
+    correlation engine reads it — adding a source is a new provider, not a
+    schema change. Exactly one row per (date, source, metric); store the
+    number in `value_num`, the label in `value_text` (e.g. condition='Rain').
+
+    Keyed device-independently by (date, source, metric), so it syncs the
+    same additive/last-write-wins way as the rest of the diary.
+    """
+    __tablename__ = 'daily_signals'
+
+    id = db.Column(db.Integer, primary_key=True)
+    date = db.Column(db.Date, nullable=False, index=True)
+    source = db.Column(db.String(30), nullable=False, index=True)   # 'weather'
+    metric = db.Column(db.String(40), nullable=False)               # 'temp_c'
+    value_num = db.Column(db.Float, nullable=True)
+    value_text = db.Column(db.String(120), nullable=True)
+    created_at = db.Column(db.DateTime, default=utcnow)
+    updated_at = db.Column(db.DateTime, default=utcnow, onupdate=utcnow)
+
+    __table_args__ = (
+        db.UniqueConstraint('date', 'source', 'metric', name='uq_daily_signal'),
+    )
+
+    def __repr__(self):
+        return f'<DailySignal {self.date} {self.source}.{self.metric}>'

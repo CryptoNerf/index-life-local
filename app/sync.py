@@ -49,7 +49,7 @@ from app import db
 from app.models import (
     MoodEntry, UserProfile, ChatMessage, SyncMeta, SyncConflict,
     EntrySummary, PeriodSummary, UserPsychProfile, EntryPerson,
-    EntryActivity, PersonAlias,
+    EntryActivity, PersonAlias, DailySignal,
 )
 from app.sync_backends import make_backend
 
@@ -58,10 +58,11 @@ log = logging.getLogger(__name__)
 _sync_lock = threading.Lock()
 _sync_timer: threading.Timer | None = None
 
-# v3 adds derived AI data (summaries, profile, people/activities, aliases),
-# keyed by entry UUID so it survives differing local ids. The apply side
-# reads every section with .get(..., default) so v2 and v3 peers interop.
-SNAPSHOT_VERSION = 3
+# v3 added derived AI data (summaries, profile, people/activities, aliases),
+# keyed by entry UUID. v4 adds external daily_signals (weather…), keyed by
+# (date, source, metric). The apply side reads every section with
+# .get(..., default), so older and newer peers interoperate freely.
+SNAPSHOT_VERSION = 4
 
 
 # ── SyncMeta key/value helpers ────────────────────────────────
@@ -279,6 +280,19 @@ def build_snapshot() -> dict:
         'updated_at': pp.updated_at.isoformat() if pp.updated_at else None,
     } if pp and pp.profile_json and pp.profile_json != '{}' else None)
 
+    # ── External daily signals (weather…), keyed by (date, source, metric) ──
+    snapshot['daily_signals'] = [
+        {
+            'date': s.date.isoformat(),
+            'source': s.source,
+            'metric': s.metric,
+            'value_num': s.value_num,
+            'value_text': s.value_text,
+            'updated_at': s.updated_at.isoformat() if s.updated_at else None,
+        }
+        for s in DailySignal.query.all()
+    ]
+
     return snapshot
 
 
@@ -322,7 +336,8 @@ def apply_snapshot(snapshot: dict) -> dict:
              'chat_inserted': 0, 'skipped_invalid': 0, 'skipped': False,
              'summaries_inserted': 0, 'people_inserted': 0,
              'activities_inserted': 0, 'period_summaries_inserted': 0,
-             'aliases_inserted': 0, 'profile_imported': False}
+             'aliases_inserted': 0, 'profile_imported': False,
+             'signals_inserted': 0, 'signals_updated': 0}
 
     if not isinstance(snapshot, dict):
         stats['skipped'] = True
@@ -557,6 +572,36 @@ def _merge_derived(snapshot: dict, stats: dict) -> None:
             local_pp.entries_analyzed = remote_analyzed
             local_pp.updated_at = _parse_dt(pp.get('updated_at')) or utcnow()
             stats['profile_imported'] = True
+
+    # daily_signals — keyed by (date, source, metric); insert, else
+    # last-write-wins by updated_at (a re-fetch can correct a value).
+    for sg in snapshot.get('daily_signals', []):
+        if not isinstance(sg, dict):
+            continue
+        try:
+            sig_date = date_type.fromisoformat(sg.get('date'))
+        except (ValueError, TypeError):
+            continue
+        source = sg.get('source')
+        metric = sg.get('metric')
+        if not source or not metric:
+            continue
+        remote_updated = _parse_dt(sg.get('updated_at'))
+        local_sig = DailySignal.query.filter_by(
+            date=sig_date, source=source, metric=metric).first()
+        if local_sig is None:
+            db.session.add(DailySignal(
+                date=sig_date, source=source, metric=metric,
+                value_num=sg.get('value_num'), value_text=sg.get('value_text'),
+                updated_at=remote_updated or utcnow(),
+            ))
+            stats['signals_inserted'] += 1
+        elif remote_updated and (not local_sig.updated_at
+                                 or remote_updated > local_sig.updated_at):
+            local_sig.value_num = sg.get('value_num')
+            local_sig.value_text = sg.get('value_text')
+            local_sig.updated_at = remote_updated
+            stats['signals_updated'] += 1
 
 
 def _record_conflict(entry_date, local_entry, remote_data, remote_device, winner):
