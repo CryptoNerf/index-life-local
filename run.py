@@ -49,20 +49,46 @@ BANNER = """
 """
 
 
+# Keep the log bounded: it lives in the data dir and is copied into every
+# backup, so an unrotated file would bloat both over months of use.
+_LOG_MAX_BYTES = 5 * 1024 * 1024
+_LOG_BACKUP_COUNT = 3
+
+
+def _make_rotating_handler(log_file: str):
+    """Build the rotating file handler used for the frozen-app log.
+
+    encoding=utf-8 is required: the app logs Russian text and a GUI process
+    launched from Finder/Explorer can have a non-UTF-8 locale, which would
+    otherwise raise on the first write.
+    """
+    from logging.handlers import RotatingFileHandler
+    handler = RotatingFileHandler(
+        log_file, maxBytes=_LOG_MAX_BYTES, backupCount=_LOG_BACKUP_COUNT,
+        encoding='utf-8',
+    )
+    handler.setFormatter(logging.Formatter(
+        '%(asctime)s %(name)s %(levelname)s: %(message)s'))
+    return handler
+
+
 def setup_logging():
     """Configure logging."""
     if getattr(sys, 'frozen', False):
+        from logging.handlers import RotatingFileHandler
         # Use the same resolver as the rest of the app so logs end up next
         # to diary.db (portable on Windows, Application Support on macOS).
         from config import _resolve_data_dir
         log_dir = str(_resolve_data_dir())
         os.makedirs(log_dir, exist_ok=True)
         log_file = os.path.join(log_dir, 'index-life.log')
-        logging.basicConfig(
-            filename=log_file,
-            level=logging.INFO,
-            format='%(asctime)s %(name)s %(levelname)s: %(message)s',
-        )
+
+        root = logging.getLogger()
+        root.setLevel(logging.INFO)
+        # Guard so a second setup_logging() call can't stack handlers.
+        if not any(isinstance(h, RotatingFileHandler) for h in root.handlers):
+            root.addHandler(_make_rotating_handler(log_file))
+
         logging.info('=== index.life starting (frozen) ===')
         logging.info('sys.executable: %s', sys.executable)
         logging.info('sys.frozen: %s', getattr(sys, 'frozen', False))

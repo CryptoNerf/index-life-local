@@ -642,14 +642,14 @@ def create_app(config_class='config.Config'):
             # contention at startup.
             backfill_assistant_data_async(app)
         except Exception:
-            pass
+            log.warning('Assistant warmup/backfill failed to start', exc_info=True)
 
     # Check for updates (non-blocking)
     try:
         from app.updater import check_for_update
         check_for_update(app)
     except Exception:
-        pass
+        log.warning('Update check failed to start', exc_info=True)
 
     # Catch and log all unhandled exceptions. The full traceback goes to
     # the log file only — never to the browser, where it would leak

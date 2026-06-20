@@ -13,6 +13,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from datetime import datetime, date
 from app.timeutil import utcnow
 import calendar
+import logging
 from werkzeug.utils import secure_filename
 from pathlib import Path
 import os
@@ -20,6 +21,8 @@ import re
 
 from app import db
 from app.models import MoodEntry, UserProfile, SyncMeta
+
+log = logging.getLogger(__name__)
 
 bp = Blueprint('main', __name__)
 
@@ -219,7 +222,8 @@ def delete_day(day):
                 if is_sync_configured():
                     export_now(current_app._get_current_object())
             except Exception:
-                pass
+                log.warning('Immediate sync push failed; periodic sync will retry',
+                            exc_info=True)
 
             return redirect(url_for('main.mood_grid', year=entry_year))
         except Exception as e:
@@ -345,7 +349,8 @@ def edit_day(day):
                 if is_sync_configured():
                     export_now(current_app._get_current_object())
             except Exception:
-                pass
+                log.warning('Immediate sync push failed; periodic sync will retry',
+                            exc_info=True)
 
             return redirect(url_for('main.mood_grid', year=day_date.year))
 

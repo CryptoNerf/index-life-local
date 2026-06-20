@@ -170,7 +170,7 @@ def _route_to_tools(llm, user_message: str,
 def _execute_tool(tool_name: str, args: dict) -> str | None:
     """Run a tool and return its formatted result, or None on failure."""
     try:
-        from .memory import (
+        from .tools import (
             tool_topic_search, tool_person_history, tool_period_entries,
             tool_mood_trend, tool_compare_periods,
             tool_activity_impact, tool_people_overview, tool_best_worst_days,
@@ -931,7 +931,13 @@ def stream():
                 db.session.commit()
                 saved = True
             except Exception:
-                pass
+                # Don't lose the reply silently — log it, and roll back so the
+                # session is clean for the teardown that follows.
+                log.warning('Failed to persist assistant reply', exc_info=True)
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
 
         try:
             if enable_thinking is None:
@@ -959,7 +965,8 @@ def stream():
                 if prior:
                     prior_user_msg = prior.content
             except Exception:
-                pass
+                # Non-fatal: the router just loses multi-turn context.
+                log.warning('Could not load prior user message', exc_info=True)
             # prior_user_msg is a plain string — release connection before
             # the router LLM call so it doesn't block other writers.
             db.session.remove()
@@ -1155,7 +1162,9 @@ def stream():
                                 full_response += final_text
                                 yield f'data: {json.dumps({"token": final_text})}\n\n'
                         except Exception:
-                            pass
+                            # Degraded, not fatal: the user keeps the thinking
+                            # output, just without a re-asked final answer.
+                            log.debug('Final-answer pass failed', exc_info=True)
 
                 auto_continue = _env_bool('LLM_AUTO_CONTINUE', False)
                 max_cont = _env_int('LLM_MAX_CONTINUATIONS', 2, min_value=0)

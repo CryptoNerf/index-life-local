@@ -375,3 +375,73 @@ def test_find_system_stdlib_missing_or_unfindable(tmp_path):
     venv = tmp_path / 'venv'
     _make_venv_cfg(venv, tmp_path / 'ghost' / 'bin', f'{major}.{minor}.0')
     assert find_system_stdlib(venv) is None
+
+
+# ── #10: AI-psychologist tools split out of memory.py into tools.py ─────────
+
+def test_tools_run_without_a_model(app):
+    """The extracted tools are pure DB -> string lookups, so they run with no
+    LLM loaded — which is exactly why moving them out of routes/memory is
+    valuable: they became unit-testable. Also a smoke test that the split
+    didn't break the imports the streaming path relies on."""
+    from datetime import date, timedelta
+
+    from app import db
+    from app.models import MoodEntry
+    from app.modules.assistant import tools
+
+    today = date.today()
+    for i, rating in enumerate([8, 4, 9, 6, 7]):
+        db.session.add(MoodEntry(date=today - timedelta(days=i), rating=rating,
+                                 note=f'day {i}', deleted=False))
+    db.session.commit()
+
+    assert 'Всего записей: 5' in tools.tool_diary_stats()
+    assert 'Тренд настроения' in tools.tool_mood_trend(window_days=30)
+
+    bw = tools.tool_best_worst_days(top_n=2)
+    assert 'Лучшие дни' in bw and 'Худшие дни' in bw
+
+    # A soft-deleted day must not leak into a tool's stats.
+    db.session.add(MoodEntry(date=today - timedelta(days=10), rating=1,
+                             note='deleted', deleted=True))
+    db.session.commit()
+    assert 'Всего записей: 5' in tools.tool_diary_stats()
+
+    # Empty-diary path returns a graceful message, not a crash.
+    MoodEntry.query.delete()
+    db.session.commit()
+    assert tools.tool_diary_stats() == 'В дневнике пока нет записей.'
+
+
+def test_execute_tool_dispatch_still_wired(app):
+    """routes._execute_tool now imports from .tools — verify the dispatch
+    path resolves and returns a real tool result."""
+    from datetime import date
+    from app import db
+    from app.models import MoodEntry
+    from app.modules.assistant.routes import _execute_tool
+
+    db.session.add(MoodEntry(date=date.today(), rating=7, note='hi', deleted=False))
+    db.session.commit()
+
+    out = _execute_tool('diary_stats', {})
+    assert out and 'Статистика дневника' in out
+
+
+# ── #2: the frozen-app log is rotated, not unbounded ───────────────────────
+
+def test_log_handler_is_bounded_and_utf8(tmp_path):
+    import logging.handlers
+    from run import _make_rotating_handler, _LOG_MAX_BYTES, _LOG_BACKUP_COUNT
+
+    handler = _make_rotating_handler(str(tmp_path / 'index-life.log'))
+    try:
+        # A RotatingFileHandler (not basicConfig's unbounded FileHandler).
+        assert isinstance(handler, logging.handlers.RotatingFileHandler)
+        assert handler.maxBytes == _LOG_MAX_BYTES > 0
+        assert handler.backupCount == _LOG_BACKUP_COUNT >= 1
+        # utf-8 so Russian log lines don't crash on a non-UTF-8 GUI locale.
+        assert (handler.encoding or '').lower() in ('utf-8', 'utf8')
+    finally:
+        handler.close()
