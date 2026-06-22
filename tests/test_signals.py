@@ -66,6 +66,41 @@ def test_record_weather_upserts_and_is_idempotent(app, monkeypatch):
     assert DailySignal.query.filter_by(date=date(2026, 6, 15), source='weather').count() == 3
 
 
+def test_backfill_weather_covers_full_range_contiguously(monkeypatch):
+    from datetime import timedelta
+    calls = []
+
+    def fake_record(lat, lon, start, end):
+        calls.append((start, end))
+        return 1
+
+    monkeypatch.setattr(signals, 'record_weather', fake_record)
+
+    today = date.today()
+    start = today - timedelta(days=400)          # spans archive + forecast windows
+    signals.backfill_weather(10.0, 20.0, start, today)
+
+    segs = sorted(calls)
+    assert segs, 'backfill made no fetches'
+    # Together the segments must cover exactly [start, today], with no gaps or
+    # overlaps (each segment begins the day after the previous one ends).
+    assert segs[0][0] == start
+    assert segs[-1][1] == today
+    for prev, nxt in zip(segs, segs[1:]):
+        assert nxt[0] == prev[1] + timedelta(days=1)
+
+
+def test_backfill_weather_single_recent_call(monkeypatch):
+    from datetime import timedelta
+    calls = []
+    monkeypatch.setattr(signals, 'record_weather',
+                        lambda lat, lon, s, e: calls.append((s, e)) or 1)
+    today = date.today()
+    # A short recent range stays one forecast-window call (no archive chunk).
+    signals.backfill_weather(10.0, 20.0, today - timedelta(days=20), today)
+    assert calls == [(today - timedelta(days=20), today)]
+
+
 # ── Correlation ───────────────────────────────────────────────
 
 def _add(day, rating, deleted=False):
@@ -129,6 +164,20 @@ def test_geocode_city_none_when_no_results(monkeypatch):
     assert signals.geocode_city('') is None
 
 
+def test_geocode_picks_most_populous(monkeypatch):
+    # A tiny village and the real city share a name → the city (higher
+    # population) must win, not whichever the API returns first.
+    monkeypatch.setattr(signals, '_http_get_json', lambda url: {'results': [
+        {'latitude': 55.70, 'longitude': 74.14, 'name': 'Saratovo',
+         'country': 'Russia', 'population': 6117},
+        {'latitude': 51.54, 'longitude': 45.99, 'name': 'Saratov',
+         'admin1': 'Saratov Oblast', 'country': 'Russia', 'population': 844858},
+    ]})
+    loc = signals.geocode_city('Saratov', lang='ru')
+    assert loc['lat'] == 51.54
+    assert loc['label'].startswith('Saratov')
+
+
 # ── Config ────────────────────────────────────────────────────
 
 def test_weather_config_roundtrip(app):
@@ -144,3 +193,87 @@ def test_weather_config_roundtrip(app):
     signals.set_weather_config(False)
     assert signals.is_weather_enabled() is False
     assert signals.get_weather_location()['lat'] == 52.52
+
+
+def test_condition_label():
+    assert signals.condition_label('Rain', 'ru') == 'Дождь'
+    assert signals.condition_label('Rain', 'en') == 'Rain'
+    assert signals.condition_label('Clear', 'ru') == 'Ясно'
+    assert signals.condition_label('Unknown', 'ru') == 'Unknown'  # passthrough
+
+
+# ── AI tool (lives in assistant.tools, reads the signals layer) ──────────────
+
+def _seed_weather(app):
+    rows = [(date(2026, 3, 1), 8, 18.0, 'Clear'), (date(2026, 3, 2), 9, 20.0, 'Clear'),
+            (date(2026, 3, 3), 4, 3.0, 'Rain'), (date(2026, 3, 4), 5, 5.0, 'Rain')]
+    for d, rating, temp, cond in rows:
+        db.session.add(MoodEntry(date=d, rating=rating, note='x', deleted=False))
+        signals.upsert_signal(d, 'weather', 'temp_c', value_num=temp)
+        signals.upsert_signal(d, 'weather', 'condition', value_text=cond)
+    db.session.commit()
+
+
+def test_tool_weather_impact_without_data(app):
+    from app.modules.assistant.tools import tool_weather_impact
+    out = tool_weather_impact()
+    assert 'Погодных данных пока нет' in out
+
+
+def test_tool_weather_impact_with_data(app):
+    from app.modules.assistant.tools import tool_weather_impact
+    _seed_weather(app)
+    out = tool_weather_impact()
+    assert 'Температура' in out
+    # localized condition labels, warm/clear ranked above cold/rain
+    assert 'Ясно' in out and 'Дождь' in out
+
+
+# ── Weather line chart (graphics route) ──────────────────────────────────────
+
+def test_nice_step():
+    from app.modules.graphics.routes import _nice_step
+    assert _nice_step(0.18) == 0.2
+    assert _nice_step(0.3) == 0.5
+    assert _nice_step(0.9) == 1
+    assert _nice_step(0) == 0.1
+
+
+def test_weather_mood_by_temp():
+    from app.modules.graphics.routes import _weather_mood_by_temp
+    # mood rises with temperature across a clear spread
+    pts = [[float(t), max(1, min(10, 4 + t // 5))] for t in range(-6, 24)]
+    c = _weather_mood_by_temp({'points': pts, 'overall_avg': 6})
+    assert c is not None
+    # connected polyline + a marker per binned point
+    assert c['line_d'].startswith('M') and ' L' in c['line_d']
+    assert len(c['points']) >= 3 and 0 < len(c['xticks']) <= len(c['points'])
+    assert all('x' in p and 'y' in p and 'temp' in p and 'mood' in p for p in c['points'])
+    # points sit inside the plot box; temps are sorted left→right
+    assert all(c['pad_l'] - 1 <= p['x'] <= c['right_x'] + 1 for p in c['points'])
+    assert [p['temp'] for p in c['points']] == sorted(p['temp'] for p in c['points'])
+    # round y tick labels + happy/sad face anchors at top/bottom of the axis
+    assert len(c['yticks']) >= 2
+    assert c['face_top_y'] < c['face_bot_y']
+
+
+def test_weather_mood_by_temp_insufficient():
+    from app.modules.graphics.routes import _weather_mood_by_temp
+    assert _weather_mood_by_temp({'points': [[5.0, 6], [5.0, 7]]}) is None    # too few
+    assert _weather_mood_by_temp({'points': [[5.0, 6] for _ in range(20)]}) is None  # no spread
+
+
+def test_weather_stat_tiles(app):
+    from app.modules.graphics.routes import _weather_stat_tiles
+    temp = {'kind': 'numeric', 'high_avg': 7.5, 'low_avg': 4.5, 'pearson': 0.6,
+            'overall_avg': 6, 'points': [], 'count': 50}
+    precip = {'kind': 'numeric', 'points': [[0.0, 7], [0.0, 8], [5.0, 4], [3.0, 5]]}
+    cond = {'kind': 'categorical', 'groups': [{'label': 'Clear', 'avg': 8, 'count': 5},
+                                              {'label': 'Rain', 'avg': 4, 'count': 3}]}
+    tiles = _weather_stat_tiles(temp, precip, cond)
+    values = [tl['value'] for tl in tiles]
+    assert '+3.0' in values                       # warm − cold = 7.5 − 4.5
+    assert not any(v.startswith('+0.6') for v in values)   # no Pearson jargon tile
+    # best-weather tile shows the happiest condition (localized), not a number
+    assert tiles[-1]['value'] in ('Ясно', 'Clear')
+    assert '8' in tiles[-1]['sub']                 # its average mood

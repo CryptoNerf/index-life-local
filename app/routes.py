@@ -10,7 +10,7 @@ Routes for local diary application
 Single-user version (no authentication)
 """
 from flask import Blueprint, render_template, request, redirect, url_for, flash, make_response, send_from_directory, current_app
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from app.timeutil import utcnow
 import calendar
 import logging
@@ -343,6 +343,19 @@ def edit_day(day):
                 except ImportError:
                     pass
 
+            # Record that day's weather (best-effort, only if the user opted
+            # in). One Open-Meteo call covers the entry day + the prior week,
+            # so gaps from days the app wasn't opened heal themselves.
+            try:
+                from app import signals
+                if signals.is_weather_enabled():
+                    from datetime import timedelta as _td
+                    signals.record_weather_async(
+                        current_app._get_current_object(),
+                        day_date - _td(days=6), day_date)
+            except Exception:
+                log.warning('Weather trigger failed', exc_info=True)
+
             # Push our snapshot to shared storage (if configured)
             try:
                 from app.sync import is_sync_configured, export_now
@@ -438,11 +451,82 @@ def account():
             db.session.rollback()
             flash(f'Error updating profile: {e}', 'error')
 
+    from app import signals
     return render_template('account.html',
                          profile=profile,
                          archive_years=archive_years,
                          year_stats=year_stats,
+                         weather_enabled=signals.is_weather_enabled(),
+                         weather_location=signals.get_weather_location(),
                          current_year=date.today().year)
+
+
+def _safe_next(default_endpoint='main.account'):
+    """Resolve the post-action redirect target.
+
+    Honours a `next` form field but only when it's a same-app relative path
+    (starts with a single '/'), so the weather form on the chart page can
+    return there without opening a redirect to an external site.
+    """
+    nxt = (request.form.get('next') or '').strip()
+    if nxt.startswith('/') and not nxt.startswith('//'):
+        return nxt
+    return url_for(default_endpoint)
+
+
+@bp.route('/account/weather', methods=['POST'])
+def set_weather():
+    """Enable/disable the weather integration and set its location.
+
+    Server-side flow (no JS): the user types a city, we geocode it via
+    Open-Meteo, store lat/lon, and kick off a one-month backfill so the
+    mood↔weather link has data right away. Can be submitted from the account
+    page or from the weather chart page (via a `next` field).
+    """
+    from app import signals
+    from app.i18n import t, get_current_lang
+
+    back = _safe_next()
+
+    if request.form.get('action') == 'disable':
+        signals.set_weather_config(False)
+        flash(t('weather.disabled'), 'success')
+        return redirect(back)
+
+    city = (request.form.get('city') or '').strip()
+    if not city:
+        flash(t('weather.need_city'), 'error')
+        return redirect(back)
+
+    # Geocode in the user's UI language so Cyrillic city names resolve.
+    loc = signals.geocode_city(city, lang=get_current_lang())
+    if not loc:
+        flash(t('weather.not_found', city=city), 'error')
+        return redirect(back)
+
+    signals.set_weather_config(True, lat=loc['lat'], lon=loc['lon'],
+                               label=loc['label'])
+    # Backfill weather across the whole journaled history so the correlation
+    # covers every existing day, not just dates after enabling.
+    signals.backfill_all_weather_async(current_app._get_current_object())
+    flash(t('weather.enabled', location=loc['label']), 'success')
+    return redirect(back)
+
+
+@bp.route('/account/weather/backfill', methods=['POST'])
+def weather_backfill():
+    """Re-fetch weather for the full diary history (for users who enabled
+    weather before this existed, or to fill gaps). Background + non-blocking."""
+    from app import signals
+    from app.i18n import t
+
+    back = _safe_next()
+    if not (signals.is_weather_enabled() and signals.get_weather_location()):
+        flash(t('weather.need_enable_first'), 'error')
+        return redirect(back)
+    signals.backfill_all_weather_async(current_app._get_current_object())
+    flash(t('weather.backfill_started'), 'success')
+    return redirect(back)
 
 
 @bp.route('/account/language', methods=['POST'])

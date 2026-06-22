@@ -15,7 +15,7 @@ from collections import Counter
 from flask import render_template, redirect, url_for, current_app, jsonify, request
 
 from app import db
-from app.models import MoodEntry
+from app.models import MoodEntry, DailySignal
 from . import bp
 
 
@@ -119,6 +119,140 @@ def graphics_page():
     return render_template('graphics/graphics_landing.html',
         preview_heat=preview,
         current_year=today.year,
+    )
+
+
+def _nice_step(x):
+    """A 'nice' axis step (1/2/5 × 10ⁿ) just above x — for clean round tick
+    labels like 0.2, 0.5, 1."""
+    if x <= 0:
+        return 0.1
+    mag = 10 ** math.floor(math.log10(x))
+    for m in (1, 2, 5):
+        if x <= m * mag:
+            return m * mag
+    return 10 * mag
+
+
+def _weather_mood_by_temp(temp):
+    """Clean 'average mood by temperature' line chart — the matplotlib look:
+    a grid, a connected line through circular markers, round tick labels, and
+    happy/sad face anchors on the mood axis. Temperatures are binned so the
+    line stays readable. Returns pixel geometry, or None when there's too
+    little data."""
+    pts = temp.get('points') or []
+    if len(pts) < 4:
+        return None
+    temps = [p[0] for p in pts]
+    tmin, tmax = min(temps), max(temps)
+    if tmax - tmin < 1.0:
+        return None
+
+    bin_w = max(1.0, round((tmax - tmin) / 18))   # aim for ≲20 readable points
+    buckets: dict = {}
+    for t, r in pts:
+        buckets.setdefault(round((t - tmin) / bin_w), []).append(r)
+    bins = sorted(({'temp': tmin + k * bin_w, 'mood': sum(v) / len(v), 'count': len(v)}
+                   for k, v in buckets.items()), key=lambda b: b['temp'])
+    if len(bins) < 3:
+        return None
+
+    moods = [b['mood'] for b in bins]
+    step = _nice_step(max(0.5, max(moods) - min(moods)) / 8)
+    ylo = math.floor(min(moods) / step) * step
+    yhi = math.ceil(max(moods) / step) * step
+    if yhi - ylo < step:
+        yhi = ylo + step
+    yvals, v = [], ylo
+    while v <= yhi + 1e-9:
+        yvals.append(round(v, 4))
+        v += step
+
+    w, h = 900, 600
+    pad_l, pad_r, pad_t, pad_b = 92, 28, 58, 66
+    plot_w, plot_h = w - pad_l - pad_r, h - pad_t - pad_b
+
+    def x_of(t):
+        return pad_l + (t - tmin) / (tmax - tmin) * plot_w
+
+    def y_of(m):
+        return pad_t + (yhi - m) / (yhi - ylo) * plot_h
+
+    points = [{'x': round(x_of(b['temp']), 1), 'y': round(y_of(b['mood']), 1),
+               'temp': round(b['temp']), 'mood': round(b['mood'], 2), 'count': b['count']}
+              for b in bins]
+    line_d = 'M' + ' L'.join('%.1f,%.1f' % (p['x'], p['y']) for p in points)
+
+    n = len(points)
+    every = 1 if n <= 14 else (2 if n <= 26 else 3)
+    xticks = [{'x': p['x'], 'label': p['temp']} for i, p in enumerate(points) if i % every == 0]
+    yticks = [{'y': round(y_of(val), 1), 'label': ('%g' % round(val, 2))} for val in yvals]
+
+    return {
+        'w': w, 'h': h, 'pad_l': pad_l, 'pad_r': pad_r, 'pad_t': pad_t, 'pad_b': pad_b,
+        'plot_w': plot_w, 'plot_h': plot_h,
+        'baseline_y': pad_t + plot_h, 'right_x': pad_l + plot_w,
+        'points': points, 'line_d': line_d, 'xticks': xticks, 'yticks': yticks,
+        'face_x': round(pad_l / 2), 'face_top_y': pad_t + 2,
+        'face_bot_y': pad_t + plot_h - 2,
+    }
+
+
+def _weather_stat_tiles(temp, precip, cond):
+    """Three plain-language stat cards for the chart sidebar: how much better
+    warm days are than cold ones, dry days than rainy ones, and the user's
+    single best weather. Deliberately skips the Pearson coefficient — the
+    warm-minus-cold gap says the same thing in plain mood points."""
+    from app.i18n import t, get_current_lang
+    from app import signals
+    tiles = []
+    if temp.get('kind') == 'numeric' and temp.get('high_avg') is not None \
+            and temp.get('low_avg') is not None:
+        warm, cold = temp['high_avg'], temp['low_avg']
+        tiles.append({'value': '%+.1f' % round(warm - cold, 1),
+                      'label': t('weather.tile_warmcold'),
+                      'sub': t('weather.tile_warmcold_sub', warm=warm, cold=cold)})
+    if precip.get('kind') == 'numeric' and precip.get('points'):
+        wet = [m for p, m in precip['points'] if p > 1.0]
+        dry = [m for p, m in precip['points'] if p <= 1.0]
+        if wet and dry:
+            wa, da = round(sum(wet) / len(wet), 1), round(sum(dry) / len(dry), 1)
+            tiles.append({'value': '%+.1f' % round(da - wa, 1),
+                          'label': t('weather.tile_wetdry'),
+                          'sub': t('weather.tile_wetdry_sub', dry=da, wet=wa)})
+    groups = cond.get('groups') or []   # sorted happiest → saddest upstream
+    if groups:
+        best = groups[0]
+        tiles.append({'value': signals.condition_label(best['label'], get_current_lang()),
+                      'label': t('weather.tile_best'),
+                      'sub': t('weather.tile_best_sub', mood=best['avg'])})
+    return tiles or None
+
+
+@bp.route('/graphics/weather')
+def weather():
+    """Mood × weather page: a clean 'average mood by temperature' line chart
+    (grid + connected markers + happy/sad face anchors) with a few headline
+    correlation tiles underneath."""
+    from app import signals
+
+    temp = signals.correlate_signal_with_mood('weather', 'temp_c')
+    cond = signals.correlate_signal_with_mood('weather', 'condition')
+    precip = signals.correlate_signal_with_mood('weather', 'precip_mm')
+    has_data = temp.get('kind') != 'empty' or cond.get('kind') != 'empty'
+    overall = temp.get('overall_avg')
+    if overall is None:
+        overall = cond.get('overall_avg')
+
+    line_chart = _weather_mood_by_temp(temp) if temp.get('kind') == 'numeric' else None
+    stats = _weather_stat_tiles(temp, precip, cond)
+
+    return render_template('graphics/graphics_weather.html',
+        has_data=has_data, line_chart=line_chart, stats=stats,
+        overall=round(overall, 1) if overall is not None else None,
+        weather_configured=bool(signals.is_weather_enabled()
+                                and signals.get_weather_location()),
+        current_year=date.today().year,
     )
 
 

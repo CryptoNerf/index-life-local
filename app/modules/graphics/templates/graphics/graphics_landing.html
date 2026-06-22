@@ -180,6 +180,31 @@
         <p class="viz-card-desc">{{ t('graphics.card.words.desc') }}</p>
       </a>
 
+      {# ── Weather ── #}
+      <a href="{{ url_for('graphics.weather') }}" class="viz-card viz-card-weather">
+        <div class="viz-preview">
+          <svg viewBox="0 0 120 120" preserveAspectRatio="xMidYMid meet">
+            <circle cx="44" cy="48" r="15" fill="currentColor" fill-opacity="0.85"/>
+            {% set rays = [
+              [62,48, 70,48], [54,38, 60,32], [44,30, 44,22], [34,38, 28,32],
+              [26,48, 18,48], [34,58, 28,64], [44,66, 44,74], [54,58, 60,64]
+            ] %}
+            {% for r in rays %}
+              <line x1="{{ r[0] }}" y1="{{ r[1] }}" x2="{{ r[2] }}" y2="{{ r[3] }}"
+                    style="stroke: currentColor" stroke-width="2" stroke-opacity="0.55"/>
+            {% endfor %}
+            <path d="M58,86 Q58,74 70,74 Q72,64 84,66 Q96,66 96,78 Q104,78 104,88 Q104,98 92,98 L66,98 Q58,98 58,86 Z"
+                  fill="currentColor" fill-opacity="0.30"/>
+            {% for x in [72, 82, 92] %}
+              <line x1="{{ x }}" y1="102" x2="{{ x - 3 }}" y2="110"
+                    style="stroke: currentColor" stroke-width="2" stroke-opacity="0.5"/>
+            {% endfor %}
+          </svg>
+        </div>
+        <p class="viz-card-title">{{ t('weather.chart_title') }}</p>
+        <p class="viz-card-desc">{{ t('weather.chart_card_desc') }}</p>
+      </a>
+
       {# ── Activities (drill-down circle packing — was "activities zoom").
            The flat "activities" bubble card was merged into this one. #}
       {% set az_ready = module_active('assistant') %}

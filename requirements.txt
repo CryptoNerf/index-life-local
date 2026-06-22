@@ -2,3 +2,7 @@ Flask==3.0.0
 Flask-SQLAlchemy==3.1.1
 python-dateutil==2.8.2
 pywebview>=4.4.1
+# CA bundle for HTTPS (weather / geocoding via Open-Meteo). Without it the
+# stdlib SSL context has no trusted roots in a frozen build and every HTTPS
+# request fails with CERTIFICATE_VERIFY_FAILED.
+certifi>=2024.2.2

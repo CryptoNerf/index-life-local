@@ -526,3 +526,36 @@ def tool_on_this_day() -> str:
         suffix = f'{years_ago} г. назад' if years_ago > 0 else 'в этом году'
         lines.append(_format_entry_line(e, extra=suffix, max_note=200))
     return '\n'.join(lines)
+
+
+def tool_weather_impact() -> str:
+    """How the weather correlates with mood — temperature and condition.
+
+    Reads the daily_signals collected by the weather integration; grounds
+    answers like "влияет ли на меня погода?" / "в дождь мне хуже?".
+    """
+    from app import signals
+
+    temp = signals.correlate_signal_with_mood('weather', 'temp_c')
+    cond = signals.correlate_signal_with_mood('weather', 'condition')
+
+    if temp.get('kind') == 'empty' and cond.get('kind') == 'empty':
+        return ('Погодных данных пока нет. Включи погоду в настройках аккаунта — '
+                'после новых записей появится связь настроения с погодой.')
+
+    lines = ['Связь настроения с погодой:']
+    if temp.get('kind') == 'numeric' and temp.get('low_avg') is not None:
+        r = temp.get('pearson')
+        r_txt = f'{r:+.2f}' if isinstance(r, (int, float)) else 'н/д'
+        lines.append(
+            f'- Температура: в тёплые дни среднее {temp["high_avg"]}/10, '
+            f'в прохладные {temp["low_avg"]}/10 '
+            f'(корреляция {r_txt}, по {temp["count"]} дням).'
+        )
+    if cond.get('kind') == 'categorical' and cond.get('groups'):
+        parts = [
+            f'{signals.condition_label(g["label"])}: {g["avg"]}/10 (×{g["count"]})'
+            for g in cond['groups']
+        ]
+        lines.append('- По типу погоды: ' + '; '.join(parts))
+    return '\n'.join(lines)

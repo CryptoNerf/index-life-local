@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="{{ current_lang }}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ t('weather.chart_title') }}</title>
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/calendar.css') }}">
+  <link rel="stylesheet" href="{{ url_for('graphics.static', filename='css/graphics.css') }}">
+  <style>
+    /* A clean "average mood by temperature" line chart: grid, a connected line
+       through circular markers, and happy/sad face anchors on the mood axis.
+       Monochrome — the line/markers/faces use --chart-color / --text-color and
+       the grid uses --chart-grid-color, so colour only comes from the theme. */
+    /* chart on the left, stat sidebar on the right — no scrolling for the
+       numbers; stacks on narrow screens */
+    /* width:100% (not margin:auto) so the flex row fills .graphics-main —
+       an auto margin here would disable stretch and shrink the chart column */
+    .wx-layout { display: flex; gap: 30px; align-items: stretch;
+                 width: 100%; box-sizing: border-box; }
+    .wx-chart-col { flex: 1 1 auto; min-width: 0; }
+    .wx-side { flex: 0 0 244px; display: flex; flex-direction: column; gap: 16px; }
+    .wx-side .wx-stat { flex: 1 1 0; }   /* cards share the chart's full height */
+    @media (max-width: 880px) {
+      .wx-layout { flex-direction: column; }
+      .wx-side { flex-basis: auto; width: 100%; flex-direction: row; flex-wrap: wrap; }
+      .wx-side .wx-stat { flex: 1 1 180px; }
+      .wx-chart-title { margin-right: 0; }
+      .wx-chart-col { margin-bottom: 48px; }   /* room for the overflowing axis labels */
+    }
+    /* title lives above the row but is offset by the sidebar (244 + 30 gap) so
+       it stays centred over the chart, not over the whole page */
+    .wx-chart-title { text-align: center; font-family: var(--font-body, serif); font-weight: normal;
+                      font-size: 22px; color: var(--text-color, #000); margin: 0 274px 14px 0; }
+
+    /* viewBox is cropped to the plot box, so the svg's box height == the chart
+       frame; the top padding, axis labels and title render outside it (overflow
+       visible) and the stat sidebar can match the frame exactly */
+    .wx-line-svg { width: 100%; height: auto; display: block; overflow: visible; }
+    .wx-grid   { stroke: var(--chart-grid-color, #dcdcdc); stroke-width: 1; }
+    .wx-spine  { fill: none; stroke: var(--chart-grid-color, #c4c4c4); stroke-width: 1.4; }
+    .wx-pline  { fill: none; stroke: var(--chart-color, var(--text-color, #1a1a1a)); stroke-width: 2.4;
+                 stroke-linejoin: round; stroke-linecap: round; }
+    .wx-pdot   { fill: var(--chart-color, var(--text-color, #1a1a1a)); }
+    .wx-tick   { fill: var(--text-muted, #666); font-size: 15px; font-family: var(--font-body, serif); }
+    .wx-axlabel { fill: var(--text-color, #333); font-size: 17px; font-family: var(--font-body, serif); }
+
+    .wx-stat { text-align: center; padding: 18px 14px; box-sizing: border-box;
+               display: flex; flex-direction: column; justify-content: center;
+               border: 1px solid color-mix(in srgb, var(--text-color, #000) 12%, transparent); }
+    .wx-stat b { display: block; font-family: var(--font-body, serif); font-size: 30px; line-height: 1.1;
+                 color: var(--text-color, #000); font-variant-numeric: tabular-nums; }
+    .wx-stat .wx-stat-l { display: block; font-family: var(--font-body, serif); font-size: 14px;
+                          color: var(--text-color, #333); margin-top: 8px; }
+    .wx-stat .wx-stat-s { display: block; font-family: var(--font-body, serif); font-size: 12px;
+                          color: var(--text-muted, #999); margin-top: 4px; }
+
+    .wx-empty { color: var(--text-muted, #999); font-style: italic; text-align: center; padding: 48px 0;
+                font-family: var(--font-body, serif); }
+    .wx-backfill-btn { background: transparent; color: var(--text-muted, #888);
+      border: 1px solid color-mix(in srgb, var(--text-color, #000) 25%, transparent);
+      border-radius: 4px; padding: 7px 16px; font-size: 14px; cursor: pointer; }
+  </style>
+  {{ customization_css }}
+</head>
+<body>
+  {# Line-art mood face (exactly: outline circle, two round eyes, smile/frown
+     mouth). Mouth curve = mood (+ smile / − frown). Inherits colour. #}
+  {% macro mood_face(mouth, size) %}
+    {% set m = [[mouth, -11]|max, 11]|min %}
+    <svg width="{{ size }}" height="{{ size }}" viewBox="0 0 80 80" aria-hidden="true">
+      <circle cx="40" cy="40" r="33" fill="none" stroke="currentColor" stroke-width="3"/>
+      <circle cx="30" cy="34" r="3.4" fill="currentColor"/>
+      <circle cx="50" cy="34" r="3.4" fill="currentColor"/>
+      <path d="M27,52 Q40,{{ 52 + m }} 53,52" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/>
+    </svg>
+  {% endmacro %}
+
+  <header class="main-header">
+    <nav class="top-menu">
+      <a href="{{ url_for('main.mood_grid') }}" class="menu-link">{{ t('nav.mood_grid') }}</a>
+      <a href="{{ url_for('main.life_calendar') }}" class="menu-link">{{ t('nav.life_calendar') }}</a>
+      <a href="{{ url_for('graphics.graphics_page') }}" class="menu-link active-link">{{ t('nav.graphics') }}</a>
+      {% if module_active('assistant') %}<a href="{{ url_for('assistant.chat') }}" class="menu-link">{{ t('nav.assistant') }}</a>{% endif %}
+      {% if module_active('deep_mind') %}<a href="{{ url_for('deep_mind.neural_map') }}" class="menu-link">{{ t('nav.deep_mind') }}</a>{% endif %}
+      <a href="{{ url_for('main.account') }}" class="menu-link">{{ t('nav.account') }}</a>
+      <a href="{{ url_for('sync.sync_page') }}" class="menu-link">{{ t('nav.sync') }}</a>
+      {% if module_active('customization') %}<a href="{{ url_for('customization.settings') }}" class="menu-link">{{ t('nav.customize') }}</a>{% endif %}
+      <a href="{{ url_for('modules.modules_page') }}" class="menu-link">{{ t('nav.modules') }}</a>
+    </nav>
+  </header>
+
+  <main class="graphics-main">
+    <div class="detail-header">
+      <a href="{{ url_for('graphics.graphics_page') }}" class="back-link">{{ t('graphics.back') }}</a>
+      <p class="graphics-title">{{ t('weather.chart_title') }}</p>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div style="max-width:560px;margin:0 auto 24px;">
+          {% for category, message in messages %}
+            <div style="padding:10px 14px;border-radius:4px;font-size:14px;text-align:center;
+                        background: {% if category == 'error' %}#f8d7da{% else %}#d4edda{% endif %};
+                        color: {% if category == 'error' %}#721c24{% else %}#155724{% endif %};">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    {% if not line_chart %}
+      <div class="wx-empty">
+        {% if not weather_configured %}
+          <p style="margin:0 0 18px;">{{ t('weather.chart_setup_prompt') }}</p>
+          <form method="post" action="{{ url_for('main.set_weather') }}"
+                style="display:flex;gap:12px;align-items:stretch;justify-content:center;flex-wrap:wrap;font-style:normal;">
+            <input type="hidden" name="next" value="{{ url_for('graphics.weather') }}">
+            <input type="text" name="city" placeholder="{{ t('weather.city_placeholder') }}" autocomplete="off"
+                   style="flex:0 1 280px;min-width:0;padding:8px 14px;font-size:16px;border:1px solid #ccc;border-radius:4px;box-sizing:border-box;">
+            <button type="submit" style="background:var(--chart-color,#000);color:#fff;border:none;border-radius:4px;padding:8px 20px;font-size:16px;cursor:pointer;">{{ t('weather.enable') }}</button>
+          </form>
+        {% else %}
+          {{ t('weather.empty') }}
+        {% endif %}
+      </div>
+    {% else %}
+      {% set c = line_chart %}
+      <p class="wx-chart-title">{{ t('weather.line_title') }}</p>
+      <div class="wx-layout">
+       <div class="wx-chart-col">
+        <svg class="wx-line-svg" viewBox="0 {{ c.pad_t }} {{ c.w }} {{ c.plot_h }}" preserveAspectRatio="xMidYMid meet" role="img"
+             aria-label="{{ t('weather.line_title') }}">
+          <!-- grid -->
+          {% for yt in c.yticks %}
+            <line class="wx-grid" x1="{{ c.pad_l }}" y1="{{ yt.y }}" x2="{{ c.right_x }}" y2="{{ yt.y }}"/>
+          {% endfor %}
+          {% for xt in c.xticks %}
+            <line class="wx-grid" x1="{{ xt.x }}" y1="{{ c.pad_t }}" x2="{{ xt.x }}" y2="{{ c.baseline_y }}"/>
+          {% endfor %}
+          <!-- plot border (spines) -->
+          <rect class="wx-spine" x="{{ c.pad_l }}" y="{{ c.pad_t }}" width="{{ c.plot_w }}" height="{{ c.plot_h }}"/>
+          <!-- tick labels -->
+          {% for yt in c.yticks %}
+            <text class="wx-tick" x="{{ c.pad_l - 12 }}" y="{{ yt.y + 5 }}" text-anchor="end">{{ yt.label }}</text>
+          {% endfor %}
+          {% for xt in c.xticks %}
+            <text class="wx-tick" x="{{ xt.x }}" y="{{ c.baseline_y + 24 }}" text-anchor="middle">{{ xt.label }}</text>
+          {% endfor %}
+          <!-- the line + circular markers -->
+          <path class="wx-pline" d="{{ c.line_d }}"/>
+          {% for p in c.points %}
+            <circle class="wx-pdot" cx="{{ p.x }}" cy="{{ p.y }}" r="4.5"><title>{{ p.temp }}°C · {{ p.mood }}/10</title></circle>
+          {% endfor %}
+          <!-- x-axis label -->
+          <text class="wx-axlabel" x="{{ c.pad_l + c.plot_w / 2 }}" y="{{ c.h - 12 }}" text-anchor="middle">{{ t('weather.axis_temp') }}</text>
+          <!-- mood faces on the mood axis: happy at the top, sad at the bottom -->
+          <g style="color: var(--text-color, #1a1a1a);">
+            <g transform="translate({{ c.face_x - 18 }}, {{ c.face_top_y }})">{{ mood_face(9, 36) }}</g>
+            <g transform="translate({{ c.face_x - 18 }}, {{ c.face_bot_y - 36 }})">{{ mood_face(-9, 36) }}</g>
+          </g>
+        </svg>
+       </div>
+
+       {% if stats %}
+       <aside class="wx-side">
+         {% for s in stats %}
+           <div class="wx-stat">
+             <b>{{ s.value }}</b>
+             <span class="wx-stat-l">{{ s.label }}</span>
+             {% if s.sub %}<span class="wx-stat-s">{{ s.sub }}</span>{% endif %}
+           </div>
+         {% endfor %}
+       </aside>
+       {% endif %}
+      </div>
+    {% endif %}
+
+    {% if weather_configured %}
+      <div style="text-align:center;margin-top:100px;">
+        <form method="post" action="{{ url_for('main.weather_backfill') }}" style="display:inline;">
+          <input type="hidden" name="next" value="{{ url_for('graphics.weather') }}">
+          <button type="submit" class="wx-backfill-btn">{{ t('weather.backfill_button') }}</button>
+        </form>
+        <div style="font-size:12px;color:var(--text-muted,#999);margin-top:8px;">{{ t('weather.backfill_hint') }}</div>
+      </div>
+    {% endif %}
+  </main>
+</body>
+</html>

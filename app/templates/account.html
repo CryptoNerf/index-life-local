@@ -118,6 +118,42 @@
       </form>
     </div>
 
+    <!-- Weather Section -->
+    <div style="margin-top: 40px; padding-top: 24px; border-top: 1px solid #e0e0e0;">
+      <h2 style="margin-bottom: 8px;">{{ t('weather.heading') }}</h2>
+      <div style="margin-bottom: 16px; color: #666; font-size: 15px;">
+        {{ t('weather.desc') }}
+      </div>
+      {% if weather_enabled and weather_location %}
+        <div style="margin-bottom: 14px; font-size: 15px;">
+          {{ t('weather.current', location=weather_location.label) }}
+        </div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">
+          <form method="post" action="{{ url_for('main.weather_backfill') }}" style="display:inline;">
+            <button class="account-btn" type="submit">{{ t('weather.backfill_button') }}</button>
+          </form>
+          <form method="post" action="{{ url_for('main.set_weather') }}" style="display:inline;">
+            <input type="hidden" name="action" value="disable">
+            <button type="submit"
+                    style="background:transparent;color:var(--text-muted,#888);border:1px solid #ccc;
+                           border-radius:4px;padding:8px 18px;font-size:16px;cursor:pointer;">{{ t('weather.disable') }}</button>
+          </form>
+        </div>
+      {% else %}
+        <form method="post" action="{{ url_for('main.set_weather') }}"
+              style="display:flex;gap:12px;align-items:stretch;flex-wrap:wrap;">
+          <input type="text" name="city" placeholder="{{ t('weather.city_placeholder') }}"
+                 autocomplete="off"
+                 style="flex:1 1 260px;min-width:0;max-width:320px;padding:8px 14px;font-size:16px;
+                        border:1px solid #ccc;border-radius:4px;box-sizing:border-box;">
+          <button class="account-btn" type="submit" style="border-radius:4px;">{{ t('weather.enable') }}</button>
+        </form>
+      {% endif %}
+      <div style="margin-top: 10px; font-size: 13px; color: #888;">
+        {{ t('weather.privacy') }}
+      </div>
+    </div>
+
     <!-- Export Section -->
     <div style="margin-top: 40px; padding-top: 24px; border-top: 1px solid #e0e0e0;">
       <h2 style="margin-bottom: 20px;">{{ t('account.export_heading') }}</h2>

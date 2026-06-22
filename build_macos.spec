@@ -65,6 +65,9 @@ a = Analysis(
         'flask',
         'flask_sqlalchemy',
         'sqlalchemy.sql.default_comparator',
+        # CA bundle for HTTPS weather/geocoding (PyInstaller's certifi hook
+        # also pulls in cacert.pem); without it SSL verification fails.
+        'certifi',
         # stdlib C extensions needed by venv ML packages (torch, sklearn, etc.)
         'cmath',
         'ctypes',

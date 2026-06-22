@@ -20,6 +20,7 @@ stub in tests and easy to audit.
 """
 import json
 import logging
+import threading
 from datetime import date as date_type, timedelta
 from urllib.parse import quote
 
@@ -28,6 +29,23 @@ from app.models import MoodEntry, DailySignal, SyncMeta
 from app.timeutil import utcnow
 
 log = logging.getLogger(__name__)
+
+# Coarse condition labels (the stored value_text is the English key, which is
+# stable across UI languages; this maps it for display).
+_CONDITION_LABELS = {
+    'Clear':        {'ru': 'Ясно',     'en': 'Clear'},
+    'Clouds':       {'ru': 'Облачно',  'en': 'Cloudy'},
+    'Fog':          {'ru': 'Туман',    'en': 'Fog'},
+    'Rain':         {'ru': 'Дождь',    'en': 'Rain'},
+    'Snow':         {'ru': 'Снег',     'en': 'Snow'},
+    'Thunderstorm': {'ru': 'Гроза',    'en': 'Thunderstorm'},
+    'Other':        {'ru': 'Прочее',   'en': 'Other'},
+}
+
+
+def condition_label(key: str, lang: str = 'ru') -> str:
+    """Localised label for a stored weather condition key (e.g. 'Rain')."""
+    return _CONDITION_LABELS.get(key, {}).get(lang, key)
 
 _HTTP_TIMEOUT = 15
 
@@ -38,11 +56,34 @@ _FORECAST_PAST_DAYS = 90
 
 # ── HTTP (single audited entry point) ─────────────────────────
 
+_ssl_ctx = None
+
+
+def _get_ssl_context():
+    """SSL context that can verify certificates even in a frozen build.
+
+    PyInstaller bundles often ship without a usable CA store, so plain
+    `urlopen` fails with CERTIFICATE_VERIFY_FAILED and weather silently never
+    works. Prefer certifi's bundle (present in the bundled/venv deps); fall
+    back to the platform default if certifi can't be imported.
+    """
+    global _ssl_ctx
+    if _ssl_ctx is None:
+        import ssl
+        try:
+            import certifi
+            _ssl_ctx = ssl.create_default_context(cafile=certifi.where())
+        except Exception:
+            _ssl_ctx = ssl.create_default_context()
+    return _ssl_ctx
+
+
 def _http_get_json(url: str) -> dict | None:
     """GET a URL and parse JSON. Returns None on any failure (never raises)."""
     import urllib.request
     try:
-        with urllib.request.urlopen(url, timeout=_HTTP_TIMEOUT) as resp:
+        with urllib.request.urlopen(url, timeout=_HTTP_TIMEOUT,
+                                    context=_get_ssl_context()) as resp:
             return json.loads(resp.read().decode('utf-8'))
     except Exception as exc:
         log.warning('signals: HTTP GET failed (%s): %s', url.split('?', 1)[0], exc)
@@ -134,24 +175,132 @@ def record_weather(lat: float, lon: float, start: date_type,
     return written
 
 
-def geocode_city(name: str) -> dict | None:
-    """Resolve a city name to {lat, lon, label} via Open-Meteo geocoding."""
+def record_weather_async(app, start: date_type, end: date_type) -> None:
+    """Best-effort background weather fetch for [start, end].
+
+    No-op when weather is disabled or unconfigured; never blocks or raises in
+    the caller. Used by the entry-save trigger and the initial backfill.
+    """
+    def _run():
+        with app.app_context():
+            try:
+                if not is_weather_enabled():
+                    return
+                loc = get_weather_location()
+                if not loc:
+                    return
+                n = record_weather(loc['lat'], loc['lon'], start, end)
+                if n:
+                    log.info('Weather: recorded %d signal rows for %s..%s',
+                             n, start, end)
+            except Exception:
+                log.warning('Weather fetch failed', exc_info=True)
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+
+    threading.Thread(target=_run, daemon=True).start()
+
+
+def backfill_weather(lat: float, lon: float, start: date_type,
+                     end: date_type) -> int:
+    """Record weather across the whole [start, end] span.
+
+    Recent days go through the forecast endpoint (the archive lags ~5 days),
+    older days through the historical archive, chunked to keep each request
+    bounded. Idempotent — upserts in place. Returns the number of rows.
+    """
+    if start > end:
+        return 0
+    total = 0
+    forecast_cut = date_type.today() - timedelta(days=_FORECAST_PAST_DAYS)
+
+    # Recent window via the forecast endpoint (covers right up to today).
+    recent_start = max(start, forecast_cut)
+    if recent_start <= end:
+        total += record_weather(lat, lon, recent_start, end)
+
+    # Older history via the archive endpoint, chunked by ~one year.
+    older_end = min(end, forecast_cut - timedelta(days=1))
+    cur = start
+    while cur <= older_end:
+        chunk_end = min(older_end, cur + timedelta(days=365))
+        total += record_weather(lat, lon, cur, chunk_end)
+        cur = chunk_end + timedelta(days=1)
+    return total
+
+
+def backfill_all_weather_async(app) -> None:
+    """Background: backfill weather for the full span of journaled days.
+
+    No-op when weather is off/unconfigured or the diary is empty. Lets a user
+    with months of history fill in the whole mood↔weather correlation, not
+    just the days since they enabled weather.
+    """
+    def _run():
+        with app.app_context():
+            try:
+                if not is_weather_enabled():
+                    return
+                loc = get_weather_location()
+                if not loc:
+                    return
+                first = (db.session.query(db.func.min(MoodEntry.date))
+                         .filter(MoodEntry.deleted == False)  # noqa: E712
+                         .scalar())
+                if first is None:
+                    return
+                today = date_type.today()
+                n = backfill_weather(loc['lat'], loc['lon'], first, today)
+                log.info('Weather backfill: %d rows over %s..%s', n, first, today)
+            except Exception:
+                log.warning('Weather backfill failed', exc_info=True)
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+
+    threading.Thread(target=_run, daemon=True).start()
+
+
+def _geocode_search(name: str, lang: str) -> list:
+    url = (f'https://geocoding-api.open-meteo.com/v1/search?name={quote(name)}'
+           f'&count=10&language={lang}&format=json')
+    data = _http_get_json(url)
+    return (data or {}).get('results') or []
+
+
+def geocode_city(name: str, lang: str = 'en') -> dict | None:
+    """Resolve a city name to {lat, lon, label} via Open-Meteo geocoding.
+
+    Two things that the naive `count=1&language=en` version got wrong:
+
+    * A Cyrillic query like "Москва" only matches with language=ru, so we
+      search in the user's UI language first and fall back to English (and
+      ru), which makes both "Саратов" and "Saratov" resolve.
+    * Among matches we pick the most populous place, so "Саратов" lands on
+      the city (pop ~845k) rather than a tiny same-named village.
+    """
     name = (name or '').strip()
     if not name:
         return None
-    url = (f'https://geocoding-api.open-meteo.com/v1/search?name={quote(name)}'
-           f'&count=1&language=en&format=json')
-    data = _http_get_json(url)
-    results = (data or {}).get('results') or []
-    if not results:
-        return None
-    r0 = results[0]
-    lat, lon = r0.get('latitude'), r0.get('longitude')
-    if lat is None or lon is None:
-        return None
-    label = ', '.join(p for p in (r0.get('name'), r0.get('admin1'),
-                                  r0.get('country')) if p)
-    return {'lat': float(lat), 'lon': float(lon), 'label': label}
+    tried: list[str] = []
+    for lg in (lang, 'en', 'ru'):
+        if lg in tried:
+            continue
+        tried.append(lg)
+        results = _geocode_search(name, lg)
+        if not results:
+            continue
+        best = max(results, key=lambda r: r.get('population') or 0)
+        lat, lon = best.get('latitude'), best.get('longitude')
+        if lat is None or lon is None:
+            continue
+        label = ', '.join(p for p in (best.get('name'), best.get('admin1'),
+                                      best.get('country')) if p)
+        return {'lat': float(lat), 'lon': float(lon), 'label': label}
+    return None
 
 
 # ── Signal upsert ─────────────────────────────────────────────

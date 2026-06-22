@@ -66,7 +66,7 @@ _VALID_TOOLS = (
     'person_history', 'period_entries', 'search_topic',
     'mood_trend', 'compare_periods',
     'activity_impact', 'people_overview', 'best_worst_days',
-    'diary_stats', 'on_this_day',
+    'diary_stats', 'on_this_day', 'weather_impact',
 )
 
 _ROUTER_PROMPT = """Ты — маршрутизатор для AI-психолога. Реши, какие данные из дневника нужно подтянуть, чтобы ответить на текущее сообщение пользователя.
@@ -87,6 +87,7 @@ _ROUTER_PROMPT = """Ты — маршрутизатор для AI-психоло
 - best_worst_days — лучшие и худшие дни по оценке. Для "когда мне было лучше/хуже всего?", "мой лучший день".
 - diary_stats — общая статистика: сколько записей, как давно ведётся дневник, серии подряд. Для "сколько я веду дневник?", "какая у меня статистика", "сколько я уже записал".
 - on_this_day — записи за сегодняшнюю дату в прошлые годы. Для "что было год назад?", "что у меня было в этот день раньше?".
+- weather_impact — связь настроения с погодой (температура, тип погоды). Для "влияет ли на меня погода?", "в дождь мне хуже?", "зависит ли настроение от погоды?".
 - none — данных из дневника не нужно. Для приветствий, благодарностей, мета-вопросов.
 
 Можно выбрать от ОДНОГО до ТРЁХ инструментов, если вопрос составной (например, и про человека, и про период). Не больше трёх.
@@ -100,6 +101,7 @@ _ROUTER_PROMPT = """Ты — маршрутизатор для AI-психоло
 - "Когда мне было хуже всего?" → [{{"tool": "best_worst_days", "args": {{"top_n": 5}}}}]
 - "Сколько я уже веду дневник?" → [{{"tool": "diary_stats", "args": {{}}}}]
 - "Что у меня было в этот день год назад?" → [{{"tool": "on_this_day", "args": {{}}}}]
+- "Влияет ли на меня погода?" → [{{"tool": "weather_impact", "args": {{}}}}]
 - "Привет" → []
 - "Этот месяц лучше прошлого?" → [{{"tool": "compare_periods", "args": {{"period_a": "2025-02", "period_b": "2025-03"}}}}]
 - "Что у меня с работой?" → [{{"tool": "search_topic", "args": {{"query": "работа"}}}}]"""
@@ -174,10 +176,12 @@ def _execute_tool(tool_name: str, args: dict) -> str | None:
             tool_topic_search, tool_person_history, tool_period_entries,
             tool_mood_trend, tool_compare_periods,
             tool_activity_impact, tool_people_overview, tool_best_worst_days,
-            tool_diary_stats, tool_on_this_day,
+            tool_diary_stats, tool_on_this_day, tool_weather_impact,
         )
         if tool_name == 'activity_impact':
             return tool_activity_impact()
+        if tool_name == 'weather_impact':
+            return tool_weather_impact()
         if tool_name == 'people_overview':
             return tool_people_overview()
         if tool_name == 'best_worst_days':
