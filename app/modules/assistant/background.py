@@ -3,6 +3,7 @@ Background processing for new diary entries.
 Runs embedding, summarization, and profile updates in a separate thread.
 """
 import logging
+import os
 import threading
 import time
 
@@ -10,6 +11,28 @@ from app import db
 from app.models import MoodEntry, EntrySummary, EntryPerson, EntryActivity
 
 log = logging.getLogger(__name__)
+
+
+def _env_float(name: str, default: float) -> float:
+    try:
+        v = float(os.environ.get(name, ''))
+        return v if v >= 0 else default
+    except (TypeError, ValueError):
+        return default
+
+
+# Background extraction is deliberately gentle so a fresh launch — or a DB with
+# many unprocessed entries — never pegs the CPU and freezes the laptop:
+#   • it waits a few seconds after launch so the window/UI come up first;
+#   • it pauses between entries, giving the OS/UI headroom between LLM calls.
+# The chat LLM keeps all of its threads, so this throttling does NOT slow the
+# AI psychologist — only the off-screen backfill. Both knobs are env-tunable.
+def _backfill_start_delay() -> float:
+    return _env_float('ASSISTANT_BACKFILL_DELAY', 8.0)
+
+
+def _extract_yield() -> float:
+    return _env_float('ASSISTANT_EXTRACT_YIELD', 0.3)
 
 _lock = threading.Lock()
 _reindex_state_lock = threading.Lock()
@@ -188,10 +211,12 @@ def _run_extraction(app, entry_ids: list, extract_fn, label: str, status: dict |
             if processed % 10 == 0:
                 log.info(f'{label}: {processed}/{total}')
 
-            # Cooperative yield — let process_entry_async cut in.
+            # Cooperative yield — let process_entry_async cut in, and give the
+            # OS/UI headroom between heavy LLM calls so the machine stays
+            # responsive during a large startup backfill (ASSISTANT_EXTRACT_YIELD).
             _lock.release()
             lock_held = False
-            time.sleep(0.05)
+            time.sleep(_extract_yield())
             if not _lock.acquire(timeout=300):
                 log.warning(f'{label}: could not reacquire lock, pausing')
                 return
@@ -299,6 +324,11 @@ def backfill_assistant_data_async(app) -> bool:
 
 
 def _backfill_sequential(app):
+    # Hold off until the window/UI are up, so launch never feels like a freeze
+    # even when this has lots of entries to process (ASSISTANT_BACKFILL_DELAY).
+    delay = _backfill_start_delay()
+    if delay > 0:
+        time.sleep(delay)
     try:
         _backfill_people(app)
     except Exception as e:

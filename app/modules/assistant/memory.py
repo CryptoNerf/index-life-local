@@ -47,6 +47,23 @@ from .llm_text import (
 
 log = logging.getLogger(__name__)
 
+
+def _embed_thread_count() -> int:
+    """How many CPU threads the embedding model may use. Capped well below the
+    core count so embedding never grabs every core — which (alongside the LLM,
+    or during a startup backfill) is the classic cause of the laptop freezing.
+    The chat LLM is unaffected (it uses llama-cpp's own threads), so this does
+    not slow the AI psychologist. Override with EMBED_N_THREADS."""
+    try:
+        override = int((os.environ.get('EMBED_N_THREADS') or '').strip())
+        if override >= 1:
+            return override
+    except (TypeError, ValueError):
+        pass
+    cpu = os.cpu_count() or 4
+    return max(2, cpu // 2)
+
+
 # ── Embedding via subprocess ─────────────────────────────────────
 # In frozen (PyInstaller) builds, sentence_transformers cannot be
 # imported because transformers' _LazyModule conflicts with the
@@ -142,6 +159,14 @@ class _SubprocessEmbedder:
         # module installer already does this; see app/module_routes.py.
         env['PYTHONIOENCODING'] = 'utf-8'
         env['PYTHONUTF8'] = '1'
+        # Cap the child's CPU threads (OMP/MKL/OpenBLAS read these at torch
+        # init) so embedding never saturates every core and freezes the
+        # machine. Override with EMBED_N_THREADS.
+        _n = str(_embed_thread_count())
+        env['OMP_NUM_THREADS'] = _n
+        env['MKL_NUM_THREADS'] = _n
+        env['OPENBLAS_NUM_THREADS'] = _n
+        env.setdefault('NUMEXPR_NUM_THREADS', _n)
 
         proc = subprocess.Popen(
             [str(self._venv_python), '-c', _EMBED_WORKER_CODE],
@@ -254,6 +279,14 @@ def _get_embed_model():
             _embed_model = _SubprocessEmbedder()
         else:
             from sentence_transformers import SentenceTransformer
+            # Cap torch's CPU threads (dev runs the embedder in-process, next to
+            # the LLM) so embedding never grabs every core. Only the embedding
+            # model uses torch here, so the chat LLM is unaffected.
+            try:
+                import torch
+                torch.set_num_threads(_embed_thread_count())
+            except Exception:
+                pass
             name = 'intfloat/multilingual-e5-small'
             try:
                 # Prefer the local cache → loads offline, no network HEAD
