@@ -49,8 +49,8 @@ test('normalizeMarkdown keeps blank lines inside code fences', () => {
   assert.ok(output.includes('line1\n\nline2'));
 });
 
-test('normalizeMarkdown removes empty lines outside code fences by default', () => {
+test('normalizeMarkdown collapses runs of blank lines to a single one (paragraph break preserved)', () => {
   const input = 'line1\n\n\nline2';
-  const expected = 'line1\nline2';
+  const expected = 'line1\n\nline2';   // one blank line kept = a paragraph break
   assert.equal(normalizeMarkdown(input), expected);
 });

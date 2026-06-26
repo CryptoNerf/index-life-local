@@ -117,6 +117,7 @@ check_database.py
 create_2025_database.py
 TIPTAP_MIGRATION.md
 NATIVE_MARKDOWN_MIGRATION.md
+ROADMAP.md
 
 # Module model files (large AI models)
 app/modules/*/models/**
