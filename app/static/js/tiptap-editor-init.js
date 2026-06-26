@@ -43,8 +43,10 @@ function initTiptapEditor(options) {
       attributes: {
         class: 'tiptap-editor-content',
       },
-      // Стандартное поведение Tiptap: Enter = новый параграф.
-      // Визуально как обычный перенос строки — за счёт margin: 0 на параграфах в CSS.
+      // Стандартное поведение Tiptap: Enter = новый параграф (виден как разрыв
+      // с отступом — см. margin на .ProseMirror p в tiptap-custom.css, как в
+      // отображении заметки). Цитата оборачивает параграф целиком, поэтому
+      // видимый разрыв делает поведение цитаты предсказуемым.
       // Shift+Enter = hard break (<br>) внутри параграфа.
     },
 

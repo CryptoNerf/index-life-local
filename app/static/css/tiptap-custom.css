@@ -41,8 +41,12 @@
 
 /* ========== Typography Styles ========== */
 
+/* Visible paragraph spacing — matches how the saved note renders
+   (.preview-block p / .wysiwyg-editor p use 8px), so the editor is honest
+   WYSIWYG: pressing Enter shows a real gap, which makes block-level quoting
+   (a whole paragraph) predictable instead of an invisible structure. */
 .ProseMirror p {
-  margin: 0;
+  margin: 8px 0;
 }
 
 .ProseMirror h1 {
