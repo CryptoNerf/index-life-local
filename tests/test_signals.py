@@ -240,10 +240,10 @@ def test_nice_step():
 
 
 def test_weather_mood_by_temp():
-    from app.modules.graphics.routes import _weather_mood_by_temp
-    # mood rises with temperature across a clear spread
+    from app.modules.graphics.routes import _mood_by_numeric
+    # mood rises with the signal value across a clear spread
     pts = [[float(t), max(1, min(10, 4 + t // 5))] for t in range(-6, 24)]
-    c = _weather_mood_by_temp({'points': pts, 'overall_avg': 6})
+    c = _mood_by_numeric({'points': pts, 'overall_avg': 6})
     assert c is not None
     # connected polyline + a marker per binned point
     assert c['line_d'].startswith('M') and ' L' in c['line_d']
@@ -258,9 +258,10 @@ def test_weather_mood_by_temp():
 
 
 def test_weather_mood_by_temp_insufficient():
-    from app.modules.graphics.routes import _weather_mood_by_temp
-    assert _weather_mood_by_temp({'points': [[5.0, 6], [5.0, 7]]}) is None    # too few
-    assert _weather_mood_by_temp({'points': [[5.0, 6] for _ in range(20)]}) is None  # no spread
+    from app.modules.graphics.routes import _mood_by_numeric
+    assert _mood_by_numeric({'points': [[5.0, 6], [5.0, 7]]}) is None    # too few
+    assert _mood_by_numeric({'points': [[5.0, 6] for _ in range(20)]}) is None  # no spread
+    assert _mood_by_numeric(None) is None    # tolerates missing correlation
 
 
 def test_weather_stat_tiles(app):
@@ -272,8 +273,8 @@ def test_weather_stat_tiles(app):
                                               {'label': 'Rain', 'avg': 4, 'count': 3}]}
     tiles = _weather_stat_tiles(temp, precip, cond)
     values = [tl['value'] for tl in tiles]
-    assert '+3.0' in values                       # warm − cold = 7.5 − 4.5
+    assert '+3.0' in values                         # warm − cold = 7.5 − 4.5
     assert not any(v.startswith('+0.6') for v in values)   # no Pearson jargon tile
     # best-weather tile shows the happiest condition (localized), not a number
     assert tiles[-1]['value'] in ('Ясно', 'Clear')
-    assert '8' in tiles[-1]['sub']                 # its average mood
+    assert '8' in tiles[-1]['sub']                  # its average mood

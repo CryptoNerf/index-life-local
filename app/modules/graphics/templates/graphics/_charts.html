@@ -1,0 +1,44 @@
+{# Shared monochrome chart macros — imported by the weather page and the
+   generic insights page so one chart serves every numeric signal. #}
+
+{# Line-art mood face: outline circle, two round eyes, smile/frown mouth.
+   Mouth curve = mood (+ smile / − frown). Inherits colour from currentColor. #}
+{% macro mood_face(mouth, size) %}
+  {% set m = [[mouth, -11]|max, 11]|min %}
+  <svg width="{{ size }}" height="{{ size }}" viewBox="0 0 80 80" aria-hidden="true">
+    <circle cx="40" cy="40" r="33" fill="none" stroke="currentColor" stroke-width="3"/>
+    <circle cx="30" cy="34" r="3.4" fill="currentColor"/>
+    <circle cx="50" cy="34" r="3.4" fill="currentColor"/>
+    <path d="M27,52 Q40,{{ 52 + m }} 53,52" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/>
+  </svg>
+{% endmacro %}
+
+{# "Average mood by <signal>" line chart. `c` = geometry from _mood_by_numeric;
+   `x_label` = x-axis caption; `unit` = appended to the marker tooltip value. #}
+{% macro line_chart(c, x_label, unit='') %}
+  <svg class="wx-line-svg" viewBox="0 {{ c.pad_t }} {{ c.w }} {{ c.plot_h }}" preserveAspectRatio="xMidYMid meet" role="img"
+       aria-label="{{ x_label }}">
+    {% for yt in c.yticks %}
+      <line class="wx-grid" x1="{{ c.pad_l }}" y1="{{ yt.y }}" x2="{{ c.right_x }}" y2="{{ yt.y }}"/>
+    {% endfor %}
+    {% for xt in c.xticks %}
+      <line class="wx-grid" x1="{{ xt.x }}" y1="{{ c.pad_t }}" x2="{{ xt.x }}" y2="{{ c.baseline_y }}"/>
+    {% endfor %}
+    <rect class="wx-spine" x="{{ c.pad_l }}" y="{{ c.pad_t }}" width="{{ c.plot_w }}" height="{{ c.plot_h }}"/>
+    {% for yt in c.yticks %}
+      <text class="wx-tick" x="{{ c.pad_l - 12 }}" y="{{ yt.y + 5 }}" text-anchor="end">{{ yt.label }}</text>
+    {% endfor %}
+    {% for xt in c.xticks %}
+      <text class="wx-tick" x="{{ xt.x }}" y="{{ c.baseline_y + 24 }}" text-anchor="middle">{{ xt.label }}</text>
+    {% endfor %}
+    <path class="wx-pline" d="{{ c.line_d }}"/>
+    {% for p in c.points %}
+      <circle class="wx-pdot" cx="{{ p.x }}" cy="{{ p.y }}" r="4.5"><title>{{ p.temp }}{{ unit }} · {{ p.mood }}/10</title></circle>
+    {% endfor %}
+    <text class="wx-axlabel" x="{{ c.pad_l + c.plot_w / 2 }}" y="{{ c.h - 12 }}" text-anchor="middle">{{ x_label }}</text>
+    <g style="color: var(--text-color, #1a1a1a);">
+      <g transform="translate({{ c.face_x - 18 }}, {{ c.face_top_y }})">{{ mood_face(9, 36) }}</g>
+      <g transform="translate({{ c.face_x - 18 }}, {{ c.face_bot_y - 36 }})">{{ mood_face(-9, 36) }}</g>
+    </g>
+  </svg>
+{% endmacro %}

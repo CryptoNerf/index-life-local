@@ -134,13 +134,15 @@ def _nice_step(x):
     return 10 * mag
 
 
-def _weather_mood_by_temp(temp):
-    """Clean 'average mood by temperature' line chart — the matplotlib look:
-    a grid, a connected line through circular markers, round tick labels, and
-    happy/sad face anchors on the mood axis. Temperatures are binned so the
-    line stays readable. Returns pixel geometry, or None when there's too
-    little data."""
-    pts = temp.get('points') or []
+def _mood_by_numeric(corr):
+    """Clean 'average mood by <numeric signal>' line chart — the matplotlib
+    look: a grid, a connected line through circular markers, round tick labels,
+    and happy/sad face anchors on the mood axis. The signal's values are binned
+    so the line stays readable. Source-agnostic: given any numeric correlation
+    result (weather temperature, step count, …) it returns the pixel geometry,
+    or None when there's too little data."""
+    corr = corr or {}
+    pts = corr.get('points') or []
     if len(pts) < 4:
         return None
     temps = [p[0] for p in pts]
@@ -232,8 +234,8 @@ def _weather_stat_tiles(temp, precip, cond):
 @bp.route('/graphics/weather')
 def weather():
     """Mood × weather page: a clean 'average mood by temperature' line chart
-    (grid + connected markers + happy/sad face anchors) with a few headline
-    correlation tiles underneath."""
+    (grid + connected markers + happy/sad face anchors) with three headline
+    tiles (warm vs cold, dry vs rainy, best weather) in the sidebar."""
     from app import signals
 
     temp = signals.correlate_signal_with_mood('weather', 'temp_c')
@@ -244,7 +246,7 @@ def weather():
     if overall is None:
         overall = cond.get('overall_avg')
 
-    line_chart = _weather_mood_by_temp(temp) if temp.get('kind') == 'numeric' else None
+    line_chart = _mood_by_numeric(temp) if temp.get('kind') == 'numeric' else None
     stats = _weather_stat_tiles(temp, precip, cond)
 
     return render_template('graphics/graphics_weather.html',
