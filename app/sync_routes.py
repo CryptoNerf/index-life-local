@@ -9,8 +9,9 @@ from app.backup import list_backups, backup_and_rotate, restore_backup
 from app.sync import (
     get_device_id, get_sync_config, set_sync_config, is_sync_configured,
     get_last_sync, full_sync, import_now, export_now, test_connection,
-    is_webdav_insecure,
+    is_webdav_insecure, _current_backend,
 )
+from app import sync_vault
 from app.i18n import t
 
 bp = Blueprint('sync', __name__)
@@ -19,22 +20,36 @@ bp = Blueprint('sync', __name__)
 @bp.route('/sync', methods=['GET'])
 def sync_page():
     """Sync & backup settings page."""
+    return _render_sync()
+
+
+def _render_sync(**extra):
+    """Render the sync page. `extra` overrides context — used to surface a
+    freshly-generated recovery key directly (never through a cookie)."""
     cfg = get_sync_config()
     backup_dir = current_app.config.get('BACKUP_DIR', '')
     backups = list_backups(backup_dir) if backup_dir else []
     conflicts = SyncConflict.query.order_by(SyncConflict.resolved_at.desc()).limit(20).all()
+    configured = is_sync_configured()
+    backend = _current_backend() if configured else None
 
-    return render_template('sync.html',
-                           device_id=get_device_id(),
-                           sync_mode=cfg['mode'],
-                           sync_folder=cfg['folder'],
-                           webdav_url=cfg['url'],
-                           webdav_user=cfg['username'],
-                           webdav_pass=cfg['password'],
-                           last_sync=get_last_sync(),
-                           backups=backups,
-                           conflicts=conflicts,
-                           current_year=date.today().year)
+    ctx = dict(
+        device_id=get_device_id(),
+        sync_mode=cfg['mode'],
+        sync_folder=cfg['folder'],
+        webdav_url=cfg['url'],
+        webdav_user=cfg['username'],
+        webdav_pass=cfg['password'],
+        last_sync=get_last_sync(),
+        backups=backups,
+        conflicts=conflicts,
+        current_year=date.today().year,
+        sync_configured=configured,
+        encryption=sync_vault.status(backend),
+        new_recovery_key=None,
+    )
+    ctx.update(extra)
+    return render_template('sync.html', **ctx)
 
 
 @bp.route('/sync/settings', methods=['POST'])
@@ -68,6 +83,79 @@ def sync_disconnect():
     """
     set_sync_config('local', folder='', url='', username='', password='')
     flash('Sync disconnected — your data stays on this device', 'success')
+    return redirect(url_for('sync.sync_page'))
+
+
+# ── Encrypted sync (opt-in) ───────────────────────────────────
+
+@bp.route('/sync/encryption/enable', methods=['POST'])
+def encryption_enable():
+    """Create a new vault and turn encryption on for this device."""
+    if not is_sync_configured():
+        flash(t('sync.enc_need_sync'), 'error')
+        return redirect(url_for('sync.sync_page'))
+    pw = request.form.get('passphrase', '')
+    confirm = request.form.get('passphrase_confirm', '')
+    if len(pw) < 8:
+        flash(t('sync.enc_passphrase_short'), 'error')
+        return redirect(url_for('sync.sync_page'))
+    if pw != confirm:
+        flash(t('sync.enc_passphrase_mismatch'), 'error')
+        return redirect(url_for('sync.sync_page'))
+
+    backend = _current_backend()
+    try:
+        recovery = sync_vault.enable_encryption(backend, pw)
+    except FileExistsError:
+        # A vault already exists in this folder — join it, don't clobber it.
+        flash(t('sync.enc_exists_flash'), 'error')
+        return redirect(url_for('sync.sync_page'))
+    except Exception as e:
+        flash(f'{e}', 'error')
+        return redirect(url_for('sync.sync_page'))
+
+    # Replace any plaintext snapshot already in the folder with a sealed one.
+    try:
+        export_now(current_app._get_current_object())
+    except Exception as e:
+        current_app.logger.warning('post-enable push failed: %s', e)
+
+    flash(t('sync.enc_enabled_flash'), 'success')
+    # Render directly (no redirect) so the one-time recovery key is shown but
+    # never travels through a cookie/session.
+    return _render_sync(new_recovery_key=recovery)
+
+
+@bp.route('/sync/encryption/unlock', methods=['POST'])
+def encryption_unlock():
+    """Unlock the folder's existing vault with passphrase or recovery key."""
+    if not is_sync_configured():
+        flash(t('sync.enc_need_sync'), 'error')
+        return redirect(url_for('sync.sync_page'))
+    backend = _current_backend()
+    recovery = request.form.get('recovery_key', '').strip()
+    pw = request.form.get('passphrase', '')
+    try:
+        if recovery:
+            sync_vault.unlock_with_recovery(backend, recovery)
+        else:
+            sync_vault.unlock_with_passphrase(backend, pw)
+    except ValueError:
+        flash(t('sync.enc_no_vault'), 'error')
+        return redirect(url_for('sync.sync_page'))
+    except Exception:
+        # Wrong passphrase / recovery key (CryptoError) — don't echo details.
+        flash(t('sync.enc_wrong'), 'error')
+        return redirect(url_for('sync.sync_page'))
+    flash(t('sync.enc_unlocked_flash'), 'success')
+    return redirect(url_for('sync.sync_page'))
+
+
+@bp.route('/sync/encryption/lock', methods=['POST'])
+def encryption_lock():
+    """Forget the cached key on this device (stays enabled; sync pauses)."""
+    sync_vault.lock()
+    flash(t('sync.enc_locked_flash'), 'success')
     return redirect(url_for('sync.sync_page'))
 
 

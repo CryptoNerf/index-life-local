@@ -108,6 +108,62 @@
       {% endif %}
     </section>
 
+    <!-- Encryption Section -->
+    <section class="sync-section">
+      <h2>{{ t('sync.enc_heading') }}</h2>
+
+      {% if not sync_configured %}
+        <p class="sync-hint">{{ t('sync.enc_need_sync') }}</p>
+
+      {% elif new_recovery_key %}
+        <div class="enc-recovery">
+          <div class="enc-recovery-title">🔑 {{ t('sync.enc_recovery_title') }}</div>
+          <code class="enc-recovery-key">{{ new_recovery_key }}</code>
+          <p class="sync-hint">{{ t('sync.enc_recovery_hint') }}</p>
+          <a href="{{ url_for('sync.sync_page') }}" class="sync-btn sync-btn-primary">{{ t('sync.enc_recovery_done') }}</a>
+        </div>
+
+      {% elif encryption.unlocked %}
+        <div class="enc-status enc-on">🔒 {{ t('sync.enc_on') }}</div>
+        <p class="sync-hint">{{ t('sync.enc_on_hint') }}</p>
+        <form method="post" action="{{ url_for('sync.encryption_lock') }}"
+              onsubmit="return confirm({{ t('sync.enc_lock_confirm')|tojson }})">
+          <button class="sync-btn">{{ t('sync.enc_lock') }}</button>
+        </form>
+
+      {% elif encryption.enabled or encryption.vault_in_folder %}
+        <!-- Encrypted vault exists (this device locked, or a peer set it up) -->
+        <div class="enc-status enc-locked">🔒 {{ t('sync.enc_locked') }}</div>
+        <p class="sync-hint">
+          {{ t('sync.enc_locked_hint') if encryption.enabled else t('sync.enc_join_hint') }}
+        </p>
+        <form method="post" action="{{ url_for('sync.encryption_unlock') }}" class="enc-form">
+          <input type="password" name="passphrase" class="sync-input"
+                 placeholder="{{ t('sync.enc_passphrase') }}" autocomplete="current-password" autofocus>
+          <button class="sync-btn sync-btn-primary">{{ t('sync.enc_unlock') }}</button>
+        </form>
+        <details class="enc-recovery-toggle">
+          <summary>{{ t('sync.enc_use_recovery') }}</summary>
+          <form method="post" action="{{ url_for('sync.encryption_unlock') }}" class="enc-form">
+            <input type="text" name="recovery_key" class="sync-input"
+                   placeholder="{{ t('sync.enc_recovery_key') }}" autocomplete="off">
+            <button class="sync-btn">{{ t('sync.enc_unlock') }}</button>
+          </form>
+        </details>
+
+      {% else %}
+        <!-- No vault yet: enable a brand-new one -->
+        <p class="sync-hint">{{ t('sync.enc_intro') }}</p>
+        <form method="post" action="{{ url_for('sync.encryption_enable') }}" class="enc-form">
+          <input type="password" name="passphrase" class="sync-input"
+                 placeholder="{{ t('sync.enc_passphrase') }}" autocomplete="new-password">
+          <input type="password" name="passphrase_confirm" class="sync-input"
+                 placeholder="{{ t('sync.enc_passphrase_confirm') }}" autocomplete="new-password">
+          <button class="sync-btn sync-btn-primary">{{ t('sync.enc_enable') }}</button>
+        </form>
+      {% endif %}
+    </section>
+
     <!-- Conflicts -->
     {% if conflicts %}
     <section class="sync-section">

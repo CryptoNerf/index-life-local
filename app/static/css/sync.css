@@ -246,3 +246,58 @@ header { width: 100%; }
     padding: 0 15px;
   }
 }
+
+/* ========== Encrypted sync ========== */
+
+.enc-status {
+  display: inline-block;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.enc-status.enc-on { color: #1e7d34; }       /* fixed greens/ambers so they */
+.enc-status.enc-locked { color: #b8860b; }   /* read under auto-invert too  */
+
+.enc-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+}
+.enc-form .sync-input { flex: 1 1 220px; max-width: 360px; }
+
+.enc-recovery-toggle {
+  margin-top: 10px;
+}
+.enc-recovery-toggle > summary {
+  cursor: pointer;
+  color: var(--text-muted, #888);
+  font-size: 14px;
+}
+
+/* One-time recovery-key reveal — deliberately loud so it isn't missed. */
+.enc-recovery {
+  border: 2px solid #b8860b;
+  background: #fffaf0;
+  color: #1a1a1a;            /* fixed light surface — stay readable inverted */
+  border-radius: 8px;
+  padding: 16px;
+  margin-top: 8px;
+}
+.enc-recovery-title {
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+.enc-recovery-key {
+  display: block;
+  font-family: 'Courier New', monospace;
+  font-size: 18px;
+  letter-spacing: 1px;
+  word-break: break-all;
+  background: #fff;
+  border: 1px solid #e0c98a;
+  border-radius: 4px;
+  padding: 12px;
+  margin-bottom: 10px;
+  user-select: all;          /* one tap/click selects the whole key */
+}
