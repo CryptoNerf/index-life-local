@@ -16,7 +16,8 @@
 | §1 Crypto envelope + vault | **Implemented + golden vectors** (`app/sync_crypto.py`) |
 | §2 Canonical JSON | Implemented (subset; float rule open — see §2) |
 | §3 Metric registry | `metric-registry.json` (documents the live `daily_signals` sources) |
-| §4 Snapshot shape + merge rules | Documented from the running code; formal schema + merge fixtures TODO |
+| §4 Snapshot shape | **JSON Schema + conformance test** (`snapshot.schema.json`) |
+| §4 Merge rules | Documented from the running code; shared golden merge fixtures deferred to the PWA-merge stage |
 | Wiring crypto into the live sync path | **Not yet** — crypto ships standalone first (zero regression) |
 
 ---
@@ -29,7 +30,7 @@ cloud folder or WebDAV — `app/sync_backends.py`). A device only ever
 locally. So the store needs zero logic and can hold only ciphertext:
 encryption is a seal around blob I/O, and the merge code is unchanged.
 
-```
+```text
 on sync, each device:
   1. backend.list_files()                      → peer blobs + vault.json
   2. unwrap Vault Key once (cached in OS secure storage)
@@ -136,19 +137,43 @@ same-day aggregation — no hard-coded per-metric logic.
 
 ---
 
-## 4. Snapshot & merge (from the running code — formal fixtures TODO)
+## 4. Snapshot & merge
 
-Current `app/sync.py`: `SNAPSHOT_VERSION = 4`; additive union + last-write-
-wins on `updated_at` + tombstones; a device writes only its own
-`device_<id>.json`. `daily_signals` are keyed by `(date, source, metric)`.
-The formal `snapshot.schema.json` + commutative/idempotent merge fixtures
-are the next spec increment (needed before the PWA implements merge).
+`app/sync.py`: `SNAPSHOT_VERSION = 4`; a device writes only its own
+`device_<id>.json`; merge is additive union + last-write-wins on
+`updated_at` + tombstones.
+
+**Shape — `snapshot.schema.json`** (JSON Schema 2020-12) describes the
+exact v4 snapshot. It is kept honest by `tests/test_sync_spec.py`, which
+validates a real `build_snapshot()` against it (so the schema cannot drift
+from the code), plus the all-branches example `fixtures/snapshot.sample.json`.
+Forward-compatible: unknown future fields are allowed and ignored.
+
+**Merge identities & rules** (what a second implementation must replicate):
+
+| section | identity | rule |
+|---|---|---|
+| `mood_entries` | **date** (one/day) | LWW on `updated_at`; `deleted:true` = tombstone (kept, keeps propagating); a peer merely lacking an entry is NOT a delete; diverging live-vs-live overwrite is logged |
+| `daily_signals` | `(date, source, metric)` | insert, else LWW on `updated_at` |
+| `chat_messages` | `uuid` | append-only, de-duped; dropped if older than local `chat_cleared_at` |
+| `user_profile` | singleton | LWW on `updated_at` |
+| `entry_summaries`/`entry_people`/`entry_activities` | entry `uuid` | strictly additive (fill gaps; never overwrite local) |
+| `period_summaries` | `period_key` | additive |
+| `person_aliases` | `alias` | additive |
+| `psych_profile` | singleton | adopt peer's only if it analysed MORE entries |
+
+These rules are exhaustively covered today by `tests/test_sync_merge.py` +
+`tests/test_sync_derived.py`. The remaining spec item is **shared** golden
+merge fixtures (`fixtures/merge/{a,b,expected}.json`) that BOTH the Python
+and PWA suites load — authored alongside the PWA's merge implementation
+(its first consumer), so the fixtures are validated against two stacks from
+the start rather than locking one stack's behaviour speculatively.
 
 ---
 
 ## Fixtures
 
-```
+```text
 fixtures/crypto/
   argon2id.json   {passphrase, salt, ops, mem} → key            (live params)
   aead.json       {key, nonce, plaintext, aad} → ciphertext

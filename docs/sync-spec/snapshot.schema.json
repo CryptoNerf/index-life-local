@@ -1,0 +1,170 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://index.life/sync-spec/snapshot.schema.json",
+  "title": "index.life sync snapshot (SNAPSHOT_VERSION 4)",
+  "description": "The full state one device publishes for peers to merge. Matches app/sync.py build_snapshot()/apply_snapshot(). Forward-compatible: unknown future fields are allowed (additionalProperties defaults to true) and ignored by current clients; field names are never repurposed, only added. Datetimes are ISO-8601, naive = UTC (e.g. '2026-06-20T21:03:00'); dates are 'YYYY-MM-DD'.",
+  "type": "object",
+  "required": ["snapshot_version", "device_id", "mood_entries"],
+  "properties": {
+    "snapshot_version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Wire version. This schema describes 4. A peer with a higher version should prompt 'update the app' rather than risk a lossy merge."
+    },
+    "device_id": {
+      "type": "string",
+      "description": "Opaque id of the writing device. A device never merges a snapshot whose device_id equals its own."
+    },
+    "generated_at": {
+      "type": "string",
+      "description": "When this snapshot was built (ISO-8601)."
+    },
+
+    "mood_entries": {
+      "type": "array",
+      "description": "Identity = date (one entry per calendar day). A deleted=true row is a tombstone, kept so the deletion keeps propagating. LWW on updated_at.",
+      "items": {
+        "type": "object",
+        "required": ["date", "deleted"],
+        "properties": {
+          "uuid": { "type": "string" },
+          "date": { "type": "string", "description": "YYYY-MM-DD — the merge identity." },
+          "rating": { "type": ["integer", "null"], "minimum": 1, "maximum": 10 },
+          "note": { "type": ["string", "null"] },
+          "created_at": { "type": ["string", "null"] },
+          "updated_at": { "type": ["string", "null"], "description": "LWW clock." },
+          "device_id": { "type": ["string", "null"] },
+          "deleted": { "type": "boolean" }
+        }
+      }
+    },
+
+    "chat_messages": {
+      "type": "array",
+      "description": "Append-only, de-duplicated by uuid. Messages older than a local chat_cleared_at are dropped on merge.",
+      "items": {
+        "type": "object",
+        "required": ["uuid", "role", "content"],
+        "properties": {
+          "uuid": { "type": "string" },
+          "role": { "type": "string" },
+          "content": { "type": "string" },
+          "created_at": { "type": ["string", "null"] },
+          "device_id": { "type": ["string", "null"] }
+        }
+      }
+    },
+
+    "user_profile": {
+      "type": ["object", "null"],
+      "description": "Singleton, last-write-wins on updated_at.",
+      "properties": {
+        "username": { "type": "string" },
+        "email": { "type": "string" },
+        "birthdate": { "type": ["string", "null"] },
+        "updated_at": { "type": ["string", "null"] }
+      }
+    },
+
+    "entry_summaries": {
+      "type": "array",
+      "description": "Derived (desktop-produced). Keyed by entry_uuid; strictly additive on merge (fills gaps, never overwrites local).",
+      "items": {
+        "type": "object",
+        "required": ["entry_uuid"],
+        "properties": {
+          "entry_uuid": { "type": "string" },
+          "summary": { "type": ["string", "null"] },
+          "themes": { "type": ["string", "null"] },
+          "created_at": { "type": ["string", "null"] }
+        }
+      }
+    },
+
+    "entry_people": {
+      "type": "array",
+      "description": "Derived per-entry SET. Imported only for entries the local DB has none for.",
+      "items": {
+        "type": "object",
+        "required": ["entry_uuid", "mention"],
+        "properties": {
+          "entry_uuid": { "type": "string" },
+          "mention": { "type": "string" },
+          "tone": { "type": ["string", "null"], "enum": ["positive", "neutral", "negative", null] }
+        }
+      }
+    },
+
+    "entry_activities": {
+      "type": "array",
+      "description": "Derived per-entry SET. Imported only for entries the local DB has none for.",
+      "items": {
+        "type": "object",
+        "required": ["entry_uuid", "activity"],
+        "properties": {
+          "entry_uuid": { "type": "string" },
+          "activity": { "type": "string" }
+        }
+      }
+    },
+
+    "period_summaries": {
+      "type": "array",
+      "description": "Derived. Keyed by period_key (device-independent); additive.",
+      "items": {
+        "type": "object",
+        "required": ["period_key"],
+        "properties": {
+          "period_type": { "type": ["string", "null"] },
+          "period_key": { "type": "string" },
+          "summary": { "type": ["string", "null"] },
+          "avg_rating": { "type": ["number", "null"] },
+          "entry_count": { "type": ["integer", "null"] },
+          "created_at": { "type": ["string", "null"] }
+        }
+      }
+    },
+
+    "person_aliases": {
+      "type": "array",
+      "description": "User merges of person names. Keyed by alias (unique); additive.",
+      "items": {
+        "type": "object",
+        "required": ["alias", "canonical"],
+        "properties": {
+          "alias": { "type": "string" },
+          "canonical": { "type": "string" },
+          "created_at": { "type": ["string", "null"] }
+        }
+      }
+    },
+
+    "psych_profile": {
+      "type": ["object", "null"],
+      "description": "Derived singleton. On merge, the peer's is adopted only if it analysed MORE entries (regenerable summary; more entries = strictly more complete).",
+      "properties": {
+        "profile_json": { "type": "string" },
+        "version": { "type": ["integer", "null"] },
+        "entries_analyzed": { "type": ["integer", "null"] },
+        "updated_at": { "type": ["string", "null"] }
+      }
+    },
+
+    "daily_signals": {
+      "type": "array",
+      "description": "External signals (weather now; health/music later). Identity = (date, source, metric). Insert, else last-write-wins on updated_at.",
+      "items": {
+        "type": "object",
+        "required": ["date", "source", "metric"],
+        "properties": {
+          "date": { "type": "string" },
+          "source": { "type": "string" },
+          "metric": { "type": "string" },
+          "value_num": { "type": ["number", "null"] },
+          "value_text": { "type": ["string", "null"] },
+          "updated_at": { "type": ["string", "null"] }
+        }
+      }
+    }
+  }
+}

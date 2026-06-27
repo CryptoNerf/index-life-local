@@ -2,3 +2,6 @@
 #   pip install -r requirements-dev.txt
 #   pytest
 pytest>=8.0
+# Validates real snapshots against docs/sync-spec/snapshot.schema.json
+# (tests/test_sync_spec.py). Test-only — the shipped app never imports it.
+jsonschema>=4.0

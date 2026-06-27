@@ -1,0 +1,101 @@
+{
+  "snapshot_version": 4,
+  "device_id": "device-sample-0001",
+  "generated_at": "2026-06-27T00:00:00",
+  "mood_entries": [
+    {
+      "uuid": "11111111-1111-1111-1111-111111111111",
+      "date": "2026-06-20",
+      "rating": 7,
+      "note": "a good day",
+      "created_at": "2026-06-20T21:00:00",
+      "updated_at": "2026-06-20T21:03:00",
+      "device_id": "device-sample-0001",
+      "deleted": false
+    },
+    {
+      "uuid": "22222222-2222-2222-2222-222222222222",
+      "date": "2026-06-19",
+      "rating": 1,
+      "note": null,
+      "created_at": "2026-06-19T20:00:00",
+      "updated_at": "2026-06-21T08:00:00",
+      "device_id": "device-sample-0001",
+      "deleted": true
+    }
+  ],
+  "chat_messages": [
+    {
+      "uuid": "c1111111-1111-1111-1111-111111111111",
+      "role": "user",
+      "content": "how was my week?",
+      "created_at": "2026-06-21T09:00:00",
+      "device_id": "device-sample-0001"
+    }
+  ],
+  "user_profile": {
+    "username": "Em",
+    "email": "",
+    "birthdate": "1990-01-01",
+    "updated_at": "2026-06-01T00:00:00"
+  },
+  "entry_summaries": [
+    {
+      "entry_uuid": "11111111-1111-1111-1111-111111111111",
+      "summary": "Felt calm and productive.",
+      "themes": "work, calm",
+      "created_at": "2026-06-20T22:00:00"
+    }
+  ],
+  "entry_people": [
+    { "entry_uuid": "11111111-1111-1111-1111-111111111111", "mention": "Anna", "tone": "positive" }
+  ],
+  "entry_activities": [
+    { "entry_uuid": "11111111-1111-1111-1111-111111111111", "activity": "running" }
+  ],
+  "period_summaries": [
+    {
+      "period_type": "month",
+      "period_key": "2026-06",
+      "summary": "A steady month.",
+      "avg_rating": 6.5,
+      "entry_count": 12,
+      "created_at": "2026-06-30T00:00:00"
+    }
+  ],
+  "person_aliases": [
+    { "alias": "Ann", "canonical": "Anna", "created_at": "2026-06-21T00:00:00" }
+  ],
+  "psych_profile": {
+    "profile_json": "{\"tone\":\"reflective\"}",
+    "version": 2,
+    "entries_analyzed": 42,
+    "updated_at": "2026-06-26T12:00:00"
+  },
+  "daily_signals": [
+    {
+      "date": "2026-06-20",
+      "source": "weather",
+      "metric": "temp_c",
+      "value_num": 21.4,
+      "value_text": null,
+      "updated_at": "2026-06-21T02:00:00"
+    },
+    {
+      "date": "2026-06-20",
+      "source": "weather",
+      "metric": "condition",
+      "value_num": null,
+      "value_text": "Clear",
+      "updated_at": "2026-06-21T02:00:00"
+    },
+    {
+      "date": "2026-06-20",
+      "source": "health",
+      "metric": "steps",
+      "value_num": 8432,
+      "value_text": null,
+      "updated_at": "2026-06-21T02:00:00"
+    }
+  ]
+}
