@@ -4,6 +4,7 @@
   const tabs = [
     { id: 'capture', label: 'День', ico: '✎' },
     { id: 'feed', label: 'Дни', ico: '☰' },
+    { id: 'chart', label: 'График', ico: '∿' },
     { id: 'settings', label: 'Ещё', ico: '•••' }
   ];
 </script>

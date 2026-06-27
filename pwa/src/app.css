@@ -22,12 +22,14 @@
 html, body {
   margin: 0;
   padding: 0;
+  width: 100%;
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-ui);
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior-y: none;
+  overflow-x: hidden;          /* kill any hairline horizontal scroll */
 }
 
 #app {
@@ -77,12 +79,12 @@ button {
 .cubes {
   display: flex;
   gap: 6px;
-  justify-content: space-between;
   margin: 22px 0;
 }
 .cube {
-  flex: 1;
-  height: 46px;
+  flex: 1 1 0;
+  min-width: 0;            /* let flex shrink so 10 cubes always fit the row */
+  aspect-ratio: 1 / 1;     /* always square, whatever the screen width */
   border: 2px solid var(--ink);
   background: transparent;
   border-radius: 6px;
@@ -186,6 +188,102 @@ button {
   line-height: 1.5;
   margin: 6px 2px 16px;
 }
+
+/* ── Shared screen title ───────────────────────────────────── */
+
+.screen-title {
+  font-family: var(--font-serif);
+  font-weight: normal;
+  font-size: 26px;
+  text-align: center;
+  margin: 22px 0 6px;
+}
+
+/* ── Chart (mood over time) ────────────────────────────────── */
+
+.mood-chart {
+  display: block;
+  width: 100%;
+  margin: 14px 0 4px;
+  color: var(--ink);
+}
+.ch-line {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.ch-dot { fill: var(--ink); }
+.ch-axis { stroke: #d8d8d8; stroke-width: 1; }
+.ch-grid { stroke: #ededed; stroke-width: 1; stroke-dasharray: 3 3; }
+.ch-lbl { fill: var(--text-muted); font-size: 10px; font-family: var(--font-ui); }
+.ch-stat {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 14px;
+  margin-top: 8px;
+}
+
+.chart-card {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  padding: 14px 14px 10px;
+  margin-bottom: 16px;
+}
+.chart-title {
+  font-family: var(--font-serif);
+  font-size: 18px;
+  margin-bottom: 4px;
+}
+
+.bar-chart { display: block; width: 100%; color: var(--ink); }
+.bar { fill: var(--ink); }
+.bar-empty { fill: #d8d8d8; }
+
+/* river overlay on the trend chart */
+.ch-line-faint { stroke: #c9c9c9; stroke-width: 1.2; }
+.ch-trend { fill: none; stroke: var(--ink); stroke-width: 2.4; stroke-linejoin: round; stroke-linecap: round; }
+
+/* square / polar charts share these */
+.heatmap, .rose, .ridgeline, .spiral {
+  display: block;
+  width: 100%;
+  color: var(--ink);
+}
+.rose, .spiral { max-width: 300px; margin: 0 auto; }
+
+.empty-sm {
+  color: var(--text-muted);
+  font-family: var(--font-serif);
+  font-size: 15px;
+  text-align: center;
+  padding: 18px 8px;
+  line-height: 1.5;
+}
+
+/* words: two columns of word → avg */
+.words-cols { display: flex; gap: 14px; }
+.words-col { flex: 1 1 0; min-width: 0; }
+.words-head {
+  font-family: var(--font-serif);
+  font-size: 14px;
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--line);
+}
+.words-head.good { color: #1e7d34; }
+.words-head.bad { color: #b03a3a; }
+.word-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 15px;
+}
+.word-row .word { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.word-row .word-avg { color: var(--text-muted); flex: none; }
 
 /* ── Bottom nav ────────────────────────────────────────────── */
 

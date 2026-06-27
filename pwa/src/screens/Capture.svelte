@@ -2,6 +2,7 @@
   import RatingCubes from '../components/RatingCubes.svelte';
   import MoodFace from '../components/MoodFace.svelte';
   import { getEntry, putEntry } from '../lib/db.js';
+  import { loadDraft, saveDraft, clearDraft } from '../lib/drafts.js';
   import { todayISO, prettyDate, isToday } from '../lib/mood.js';
 
   let { date = todayISO() } = $props();
@@ -10,18 +11,32 @@
   let note = $state('');
   let saved = $state(false);
 
-  // Reload whenever the target day changes (e.g. opened from the feed).
+  // Load whenever the target day changes. An unsaved draft (from a previous
+  // visit where the user typed but didn't save) takes priority over the saved
+  // entry, so nothing is ever lost on tab switch / app restart.
   $effect(() => {
     const d = date;
     getEntry(d).then((e) => {
-      rating = e?.rating ?? 0;
-      note = e?.note ?? '';
+      const draft = loadDraft(d);
+      rating = draft?.rating ?? e?.rating ?? 0;
+      note = draft?.note ?? e?.note ?? '';
     });
   });
+
+  // Persist every edit immediately so leaving this screen never drops text.
+  function touch() {
+    saveDraft(date, { rating, note });
+  }
+
+  function setRating(v) {
+    rating = v;
+    touch();
+  }
 
   async function save() {
     if (!rating) return;
     await putEntry({ date, rating, note });
+    clearDraft(date);
     saved = true;
     setTimeout(() => (saved = false), 1500);
   }
@@ -34,9 +49,10 @@
     <MoodFace {rating} size={92} />
   </header>
 
-  <RatingCubes value={rating} onchange={(v) => (rating = v)} />
+  <RatingCubes value={rating} onchange={setRating} />
 
-  <textarea class="note" bind:value={note} placeholder="Как прошёл день?"></textarea>
+  <textarea class="note" bind:value={note} oninput={touch}
+            placeholder="Как прошёл день?"></textarea>
 
   <button class="save-btn" class:is-saved={saved} disabled={!rating} onclick={save}>
     {saved ? 'Сохранено ✓' : 'Сохранить'}

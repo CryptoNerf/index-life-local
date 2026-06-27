@@ -26,3 +26,11 @@ export function prettyDate(iso) {
 export function isToday(iso) {
   return iso === todayISO();
 }
+
+const MONTHS_RU_SHORT = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн',
+  'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+
+export function shortDate(iso) {
+  const [, m, d] = iso.split('-').map(Number);
+  return `${d} ${MONTHS_RU_SHORT[m - 1]}`;
+}

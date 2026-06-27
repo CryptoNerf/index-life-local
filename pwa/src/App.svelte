@@ -1,6 +1,7 @@
 <script>
   import Capture from './screens/Capture.svelte';
   import Feed from './screens/Feed.svelte';
+  import Chart from './screens/Chart.svelte';
   import Settings from './screens/Settings.svelte';
   import BottomNav from './components/BottomNav.svelte';
   import { todayISO } from './lib/mood.js';
@@ -25,6 +26,8 @@
     <Capture date={editDate} />
   {:else if screen === 'feed'}
     <Feed onopen={openDay} />
+  {:else if screen === 'chart'}
+    <Chart />
   {:else}
     <Settings />
   {/if}
