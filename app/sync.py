@@ -52,6 +52,7 @@ from app.models import (
     EntryActivity, PersonAlias, DailySignal,
 )
 from app.sync_backends import make_backend
+from app import sync_crypto, sync_vault
 
 log = logging.getLogger(__name__)
 
@@ -631,19 +632,42 @@ def pull_peers(backend) -> dict:
     total = {'files': 0, 'inserted': 0, 'updated': 0, 'conflicts': 0,
              'chat_inserted': 0, 'skipped_invalid': 0, 'errors': 0}
 
+    vk = sync_vault.get_vault_key()
     for name in backend.list_files():
+        if name == sync_vault.VAULT_FILENAME:   # wrapped-key file, not a snapshot
+            continue
         text = backend.read(name)
         if text is None:
             continue
         try:
-            snapshot = json.loads(text)
+            obj = json.loads(text)
         except (json.JSONDecodeError, ValueError) as exc:
             log.warning('Sync: skipping unreadable %s: %s', name, exc)
             total['errors'] += 1
             continue
-        # Skip our own snapshot by content (robust across naming changes).
-        if snapshot.get('device_id') == own_device:
-            continue
+
+        # Dual-read for migration: a blob is either an encrypted envelope or
+        # a legacy plaintext snapshot. Decrypt the former, read the latter
+        # as-is, so a mixed fleet (some devices migrated, some not) still
+        # converges.
+        if sync_vault.is_envelope(obj):
+            if obj.get('device') == own_device:     # our own encrypted blob
+                continue
+            if vk is None:                           # locked: can't read peers
+                log.warning('Sync: %s is encrypted but no vault key — skipping', name)
+                total['errors'] += 1
+                continue
+            try:
+                snapshot = sync_crypto.open_envelope(text, vk)
+            except Exception as exc:
+                log.error('Sync: cannot decrypt %s: %s', name, exc)
+                total['errors'] += 1
+                continue
+        else:
+            snapshot = obj
+            # Skip our own snapshot by content (robust across naming changes).
+            if snapshot.get('device_id') == own_device:
+                continue
         try:
             s = apply_snapshot(snapshot)
         except Exception as exc:
@@ -660,9 +684,26 @@ def pull_peers(backend) -> dict:
 
 
 def push_snapshot(backend) -> bool:
-    """Write our full snapshot to the backend, atomically."""
+    """Write our full snapshot to the backend, atomically.
+
+    With encrypted sync on, the snapshot is sealed into an envelope so the
+    cloud only ever sees ciphertext. If encryption is on but the vault is
+    locked (no key), we **refuse to push** rather than leak plaintext.
+    """
     snapshot = build_snapshot()
-    text = json.dumps(snapshot, ensure_ascii=False, indent=2)
+    if sync_vault.is_encryption_enabled():
+        vk = sync_vault.get_vault_key()
+        if vk is None:
+            log.error('Sync: encryption is on but the vault is locked — '
+                      'refusing to push plaintext')
+            return False
+        text = sync_crypto.seal_envelope(
+            snapshot, vk,
+            device=snapshot['device_id'],
+            snapshot_version=snapshot['snapshot_version'],
+            written_at=snapshot['generated_at'])
+    else:
+        text = json.dumps(snapshot, ensure_ascii=False, indent=2)
     try:
         backend.write_atomic(_own_snapshot_filename(), text)
         return True
