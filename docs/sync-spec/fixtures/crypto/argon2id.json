@@ -1,0 +1,9 @@
+{
+  "alg": "argon2id",
+  "passphrase_utf8": "index.life test vector ☂",
+  "salt_hex": "000102030405060708090a0b0c0d0e0f",
+  "opslimit": 3,
+  "memlimit": 67108864,
+  "out_len": 32,
+  "key_hex": "862058ab5eaec31da1cce11068fce504e6c761da635b4d7d02e2a16f9f448dd4"
+}

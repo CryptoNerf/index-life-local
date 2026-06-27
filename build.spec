@@ -39,6 +39,13 @@ if sys.platform == 'win32':
             pass
 
 
+# ── PyNaCl / libsodium (E2EE cloud sync) ──────────────────────────────
+# PyNaCl ships libsodium as a compiled cffi extension (nacl._sodium) that
+# PyInstaller's static analysis can miss; collect the whole package so the
+# encrypted-sync crypto (app/sync_crypto.py) works in the frozen build.
+_nacl_datas, _nacl_binaries, _nacl_hidden = collect_all('nacl')
+
+
 def module_datas():
     datas = []
     modules_root = root_dir / 'app' / 'modules'
@@ -64,7 +71,7 @@ def module_datas():
 a = Analysis(
     ['run.py'],
     pathex=[str(root_dir)],
-    binaries=_wv_binaries,
+    binaries=_wv_binaries + _nacl_binaries,
     datas=[
         ('app/templates', 'app/templates'),
         ('app/static', 'app/static'),
@@ -75,7 +82,7 @@ a = Analysis(
         ('install_modules.bat', '.'),
         ('install_modules.sh', '.'),
         ('tools/install_modules.py', 'tools'),
-    ] + module_datas() + _wv_datas,
+    ] + module_datas() + _wv_datas + _nacl_datas,
     hiddenimports=[
         'flask',
         'flask_sqlalchemy',
@@ -89,7 +96,7 @@ a = Analysis(
         'ipaddress',
         'importlib.resources',
         'importlib.metadata',
-    ] + collect_submodules('app.modules') + _wv_hidden,
+    ] + collect_submodules('app.modules') + _wv_hidden + _nacl_hidden,
     hookspath=[_wv_hook],
     hooksconfig={},
     runtime_hooks=[],

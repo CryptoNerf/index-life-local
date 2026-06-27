@@ -1,0 +1,27 @@
+{
+  "_comment": "Source of truth for daily_signals (source, metric) metadata. Documents the rows already carried in snapshots so any client renders/correlates them with no per-metric code. 'aggregation' = how same-day values combine; 'higher_is' is an optional UI hint; 'label_key' is advisory (i18n key). weather.* is live; health.steps is the device-mode stub the phone will populate.",
+  "weather": {
+    "temp_c": {
+      "kind": "numeric", "unit": "°C",
+      "label_key": "signals.weather.temp_c",
+      "aggregation": "mean"
+    },
+    "precip_mm": {
+      "kind": "numeric", "unit": "mm",
+      "label_key": "signals.weather.precip_mm",
+      "aggregation": "sum"
+    },
+    "condition": {
+      "kind": "categorical", "unit": null,
+      "label_key": "signals.weather.condition",
+      "aggregation": "last"
+    }
+  },
+  "health": {
+    "steps": {
+      "kind": "numeric", "unit": "steps",
+      "label_key": "signals.health.steps",
+      "aggregation": "sum", "higher_is": "better"
+    }
+  }
+}

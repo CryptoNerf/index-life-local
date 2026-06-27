@@ -10,7 +10,12 @@ import sys
 import os
 import re
 from pathlib import Path
-from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.utils.hooks import collect_submodules, collect_all
+
+# PyNaCl ships libsodium as a compiled cffi extension (nacl._sodium) that
+# PyInstaller can miss; collect the whole package so encrypted-sync crypto
+# (app/sync_crypto.py) works in the frozen build.
+_nacl_datas, _nacl_binaries, _nacl_hidden = collect_all('nacl')
 
 # Get the root directory
 root_dir = Path(SPECPATH)
@@ -48,7 +53,7 @@ def module_datas():
 a = Analysis(
     ['run.py'],
     pathex=[str(root_dir)],
-    binaries=[],
+    binaries=_nacl_binaries,
     datas=[
         ('app/templates', 'app/templates'),
         ('app/static', 'app/static'),
@@ -60,7 +65,7 @@ a = Analysis(
         ('Install Modules.command', '.'),
         ('tools/install_modules.py', 'tools'),
         ('app/static/images/icon.icns', 'Resources'),  # Explicitly copy icon to Resources folder
-    ] + module_datas(),
+    ] + module_datas() + _nacl_datas,
     hiddenimports=[
         'flask',
         'flask_sqlalchemy',
@@ -91,7 +96,8 @@ a = Analysis(
         'proxy_tools',
     ] + collect_submodules('app.modules')
       + collect_submodules('jinja2')
-      + collect_submodules('webview'),
+      + collect_submodules('webview')
+      + _nacl_hidden,
     hookspath=[str(Path(__import__('webview').__file__).parent / '__pyinstaller')],
     hooksconfig={},
     runtime_hooks=[],

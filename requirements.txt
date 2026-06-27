@@ -6,3 +6,8 @@ pywebview>=4.4.1
 # stdlib SSL context has no trusted roots in a frozen build and every HTTPS
 # request fails with CERTIFICATE_VERIFY_FAILED.
 certifi>=2024.2.2
+# libsodium primitives for end-to-end-encrypted cloud sync (app/sync_crypto.py):
+# XChaCha20-Poly1305 AEAD + Argon2id KDF. The wheel bundles libsodium, so the
+# offline-friendly install needs no system library. Same primitives the future
+# PWA (libsodium.js) and Flutter (sodium) clients use → byte-exact interop.
+PyNaCl>=1.5.0

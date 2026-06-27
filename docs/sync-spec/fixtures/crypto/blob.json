@@ -1,0 +1,43 @@
+{
+  "vk_hex": "4242424242424242424242424242424242424242424242424242424242424242",
+  "nonce_hex": "111111111111111111111111111111111111111111111111",
+  "snapshot": {
+    "snapshot_version": 4,
+    "device": "device-fixed-0001",
+    "written_at": "2026-06-27T00:00:00Z",
+    "entities": {
+      "mood_entries": [
+        {
+          "uuid": "b1",
+          "date": "2026-06-20",
+          "rating": 7,
+          "note": "день \"в кавычках\" и юникод ✓",
+          "updated_at": "2026-06-20T21:03:00Z",
+          "deleted": false
+        }
+      ],
+      "daily_signals": [
+        {
+          "date": "2026-06-20",
+          "source": "health",
+          "metric": "steps",
+          "value_num": 8432,
+          "value_text": null,
+          "updated_at": "2026-06-21T02:00:00Z"
+        }
+      ]
+    },
+    "tombstones": []
+  },
+  "canonical_plaintext_utf8": "{\"device\":\"device-fixed-0001\",\"entities\":{\"daily_signals\":[{\"date\":\"2026-06-20\",\"metric\":\"steps\",\"source\":\"health\",\"updated_at\":\"2026-06-21T02:00:00Z\",\"value_num\":8432,\"value_text\":null}],\"mood_entries\":[{\"date\":\"2026-06-20\",\"deleted\":false,\"note\":\"день \\\"в кавычках\\\" и юникод ✓\",\"rating\":7,\"updated_at\":\"2026-06-20T21:03:00Z\",\"uuid\":\"b1\"}]},\"snapshot_version\":4,\"tombstones\":[],\"written_at\":\"2026-06-27T00:00:00Z\"}",
+  "canonical_plaintext_hex": "7b22646576696365223a226465766963652d66697865642d30303031222c22656e746974696573223a7b226461696c795f7369676e616c73223a5b7b2264617465223a22323032362d30362d3230222c226d6574726963223a227374657073222c22736f75726365223a226865616c7468222c22757064617465645f6174223a22323032362d30362d32315430323a30303a30305a222c2276616c75655f6e756d223a383433322c2276616c75655f74657874223a6e756c6c7d5d2c226d6f6f645f656e7472696573223a5b7b2264617465223a22323032362d30362d3230222c2264656c65746564223a66616c73652c226e6f7465223a22d0b4d0b5d0bdd18c205c22d0b220d0bad0b0d0b2d18bd187d0bad0b0d1855c2220d0b820d18ed0bdd0b8d0bad0bed0b420e29c93222c22726174696e67223a372c22757064617465645f6174223a22323032362d30362d32305432313a30333a30305a222c2275756964223a226231227d5d7d2c22736e617073686f745f76657273696f6e223a342c22746f6d6273746f6e6573223a5b5d2c227772697474656e5f6174223a22323032362d30362d32375430303a30303a30305a227d",
+  "header": {
+    "env": 1,
+    "alg": "xchacha20poly1305",
+    "device": "device-fixed-0001",
+    "snapshot_version": 4,
+    "written_at": "2026-06-27T00:00:00Z"
+  },
+  "ciphertext_hex": "8778c608fc32f9ce1ee1718d6774bb596b7da1ba2878ef66a59fe5066320148768b74fd2b04a3d42f5d60ae74d8f0b4c9fbf3e6e45dd48492e9e65ec92798dca947acd4e17651a72bb3c823b6aecb31d8ac8a14f8e6ba3a139b72db88ee08b1d5ddd1e24ffcb7b7eab0edb89fc22d2a94c5bdf82c1c56c897266b6c1391a2b8a79e108914e6d5604edd89b5f82e521a7c331952157ce9274fb3356c1f94ef959eee354a728d80eaeecf1d6e18ca443c8ba3183803a8d0e2059c766c2be480b00322397edb38d3610b85a6019d662f9f816736200813f5f24685655dc5599b8d5ff6862701c6d6d13276ca2529432c5128a3345da9ca8bce998e33dce0c5bed02e5fe5fb79d05060f3d648b7718024472d8995501a35a89b9482398c8c4154772ddff89558a3d737380a1a056d4b19aa806183d6fa8fbd6c8e50530c031c4db2decbaa4d25e2930f02053da93628112bcd0ea688a6647ed08a1a7ff7b628d12667362ee22e74c31c1137e1741702185c687ff85454afc0a1394e80588a8f60fe3c7b84fbab92af72285ce1df2474205dedf70258e23f6ce9662902373f0103c6b742ab3422e23528ac527aa8ba4e46eff17f3dc7401bc5ba9e28330557289ce20129169089df3",
+  "envelope_text": "{\"env\":1,\"alg\":\"xchacha20poly1305\",\"device\":\"device-fixed-0001\",\"snapshot_version\":4,\"written_at\":\"2026-06-27T00:00:00Z\",\"nonce\":\"ERERERERERERERERERERERERERERERER\",\"ct\":\"h3jGCPwy+c4e4XGNZ3S7WWt9obooeO9mpZ/lBmMgFIdot0/SsEo9QvXWCudNjwtMn78+bkXdSEkunmXsknmNypR6zU4XZRpyuzyCO2rssx2KyKFPjmujoTm3LbiO4IsdXd0eJP/Le36rDtuJ/CLSqUxb34LBxWyJcma2wTkaK4p54QiRTm1WBO3Ym1+C5SGnwzGVIVfOknT7M1bB+U75We7jVKco2A6u7PHW4YykQ8i6MYOAOo0OIFnHZsK+SAsAMiOX7bONNhC4WmAZ1mL5+BZzYgCBP18kaFZV3FWZuNX/aGJwHG1tEydsolKUMsUSijNF2pyovOmY4z3ODFvtAuX+X7edBQYPPWSLdxgCRHLYmVUBo1qJuUgjmMjEFUdy3f+JVYo9c3OAoaBW1LGaqAYYPW+o+9bI5QUwwDHE2y3suqTSXikw8CBT2pNigRK80OpoimZH7Qihp/97Yo0SZnNi7iLnTDHBE34XQXAhhcaH/4VFSvwKE5ToBYio9g/jx7hPurkq9yKFzh3yR0IF3t9wJY4j9s6WYpAjc/AQPGt0KrNCLiNSisUnqouk5G7/F/PcdAG8W6nigzBVconOIBKRaQid8w==\"}"
+}

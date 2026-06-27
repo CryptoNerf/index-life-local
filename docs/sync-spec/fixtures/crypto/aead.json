@@ -1,0 +1,8 @@
+{
+  "alg": "xchacha20poly1305",
+  "key_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+  "nonce_hex": "6465666768696a6b6c6d6e6f707172737475767778797a7b",
+  "aad_utf8": "index.life-aad",
+  "plaintext_utf8": "{\"hello\":\"мир\"}",
+  "ciphertext_hex": "075191d59342e6a0bd124d8376d76c4979c601f81dda6e528353a5be1ee6fe47672e"
+}
