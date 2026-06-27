@@ -1,10 +1,7 @@
 <script>
   import MoodChart from '../components/MoodChart.svelte';
   import BarChart from '../components/BarChart.svelte';
-  import Heatmap from '../components/Heatmap.svelte';
   import Rose from '../components/Rose.svelte';
-  import Ridgeline from '../components/Ridgeline.svelte';
-  import Spiral from '../components/Spiral.svelte';
   import Words from '../components/Words.svelte';
   import { allEntries } from '../lib/db.js';
   import { distribution, monthlyAverages } from '../lib/stats.js';
@@ -46,23 +43,8 @@
     </div>
 
     <div class="chart-card">
-      <div class="chart-title">Ритм — дни недели × месяцы</div>
-      <Heatmap {entries} />
-    </div>
-
-    <div class="chart-card">
       <div class="chart-title">Роза по дням недели</div>
       <Rose {entries} />
-    </div>
-
-    <div class="chart-card">
-      <div class="chart-title">Хребты по месяцам</div>
-      <Ridgeline {entries} />
-    </div>
-
-    <div class="chart-card">
-      <div class="chart-title">Спираль года</div>
-      <Spiral {entries} />
     </div>
 
     <div class="chart-card">

@@ -1,19 +1,50 @@
 <script>
   import { exportMarkdown } from '../lib/markdown.js';
   import { requestPersist, isPersisted } from '../lib/db.js';
+  import { loadAppearance, saveAppearance, applyAppearance } from '../lib/theme.js';
 
   let persisted = $state(null);
+  let look = $state(loadAppearance());
 
   $effect(() => {
     isPersisted().then((v) => (persisted = v));
   });
 
+  function update(patch) {
+    look = { ...look, ...patch };
+    saveAppearance(look);
+    applyAppearance(look);
+  }
+
   async function protect() {
     persisted = await requestPersist();
   }
+
+  const THEMES = [['system', 'Системная'], ['light', 'Светлая'], ['dark', 'Тёмная']];
+  const FONTS = [['serif', 'Засечки'], ['sans', 'Без засечек']];
 </script>
 
 <section class="screen settings">
+  <h2>Оформление</h2>
+
+  <div class="opt-label">Тема</div>
+  <div class="seg">
+    {#each THEMES as [val, label]}
+      <button class="seg-btn" class:on={look.theme === val} onclick={() => update({ theme: val })}>
+        {label}
+      </button>
+    {/each}
+  </div>
+
+  <div class="opt-label">Шрифт заметок</div>
+  <div class="seg">
+    {#each FONTS as [val, label]}
+      <button class="seg-btn" class:on={look.font === val} onclick={() => update({ font: val })}>
+        {label}
+      </button>
+    {/each}
+  </div>
+
   <h2>Данные</h2>
   <button class="row-btn" onclick={exportMarkdown}>⬇️ Экспортировать в Markdown</button>
   <p class="hint">
