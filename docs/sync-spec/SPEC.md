@@ -17,7 +17,7 @@
 | §2 Canonical JSON | Implemented (subset; float rule open — see §2) |
 | §3 Metric registry | `metric-registry.json` (documents the live `daily_signals` sources) |
 | §4 Snapshot shape | **JSON Schema + conformance test** (`snapshot.schema.json`) |
-| §4 Merge rules | Documented from the running code; shared golden merge fixtures deferred to the PWA-merge stage |
+| §4 Merge rules | Documented + **shared golden merge fixtures** validated on both stacks (`fixtures/merge/`) |
 | Wiring crypto into the live sync path | **Not yet** — crypto ships standalone first (zero regression) |
 
 ---
@@ -162,12 +162,17 @@ Forward-compatible: unknown future fields are allowed and ignored.
 | `person_aliases` | `alias` | additive |
 | `psych_profile` | singleton | adopt peer's only if it analysed MORE entries |
 
-These rules are exhaustively covered today by `tests/test_sync_merge.py` +
-`tests/test_sync_derived.py`. The remaining spec item is **shared** golden
-merge fixtures (`fixtures/merge/{a,b,expected}.json`) that BOTH the Python
-and PWA suites load — authored alongside the PWA's merge implementation
-(its first consumer), so the fixtures are validated against two stacks from
-the start rather than locking one stack's behaviour speculatively.
+These rules are covered by `tests/test_sync_merge.py` + `test_sync_derived.py`,
+and pinned cross-stack by **shared golden merge fixtures**
+`fixtures/merge/{a,b,expected}.json`: merging `a` (base) then `b` (incoming
+peer) must yield `expected`. Both stacks load the same files —
+`tests/test_merge_fixtures.py` (desktop: `apply_snapshot` a, then b →
+`build_snapshot`) and `pwa/test/merge_fixtures.test.js` (PWA:
+`mergeMoodEntries(a, b)`) — so the phone and the desktop are proven to
+converge to the identical state. The merge is directional on `uuid`: on a
+conflict the first-seen side's `uuid` is kept while the newer side's content
+wins; identity is the **date**, so this is benign. Float canonicalization
+(§2) remains the one open cross-stack item.
 
 ---
 

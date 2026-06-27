@@ -1,0 +1,10 @@
+{
+  "snapshot_version": 4,
+  "device_id": "dev-b",
+  "mood_entries": [
+    {"uuid": "b19", "date": "2026-06-19", "rating": 3, "note": "b19", "created_at": "2025-01-01T00:00:00", "updated_at": "2025-03-01T00:00:00", "device_id": "dev-b", "deleted": false},
+    {"uuid": "b20", "date": "2026-06-20", "rating": 2, "note": "b20", "created_at": "2025-01-01T00:00:00", "updated_at": "2025-01-01T00:00:00", "device_id": "dev-b", "deleted": false},
+    {"uuid": "b21", "date": "2026-06-21", "rating": 1, "note": null, "created_at": "2025-01-01T00:00:00", "updated_at": "2025-03-01T00:00:00", "device_id": "dev-b", "deleted": true},
+    {"uuid": "b22", "date": "2026-06-22", "rating": 9, "note": "b22", "created_at": "2025-01-01T00:00:00", "updated_at": "2025-03-01T00:00:00", "device_id": "dev-b", "deleted": false}
+  ]
+}

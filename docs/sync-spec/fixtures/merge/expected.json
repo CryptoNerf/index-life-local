@@ -1,0 +1,10 @@
+{
+  "_comment": "Result of merging a (base/local) then b (incoming peer). Identity = date. LWW on updated_at; on a conflict the uuid of the first-seen (a) is kept while the newer side's content wins; a newer tombstone deletes but keeps the existing rating/note. Both the Python desktop (apply_snapshot a, then b) and the JS PWA (mergeMoodEntries(a, b)) must reproduce this exactly. mood_entries sorted by date.",
+  "mood_entries": [
+    {"uuid": "a18", "date": "2026-06-18", "rating": 5, "note": "a18", "created_at": "2025-01-01T00:00:00", "updated_at": "2025-01-01T00:00:00", "device_id": "dev-a", "deleted": false},
+    {"uuid": "a19", "date": "2026-06-19", "rating": 3, "note": "b19", "created_at": "2025-01-01T00:00:00", "updated_at": "2025-03-01T00:00:00", "device_id": "dev-b", "deleted": false},
+    {"uuid": "a20", "date": "2026-06-20", "rating": 8, "note": "a20", "created_at": "2025-01-01T00:00:00", "updated_at": "2025-03-01T00:00:00", "device_id": "dev-a", "deleted": false},
+    {"uuid": "a21", "date": "2026-06-21", "rating": 6, "note": "a21", "created_at": "2025-01-01T00:00:00", "updated_at": "2025-03-01T00:00:00", "device_id": "dev-b", "deleted": true},
+    {"uuid": "b22", "date": "2026-06-22", "rating": 9, "note": "b22", "created_at": "2025-01-01T00:00:00", "updated_at": "2025-03-01T00:00:00", "device_id": "dev-b", "deleted": false}
+  ]
+}
