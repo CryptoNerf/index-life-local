@@ -64,6 +64,14 @@ export async function putEntry({ date, rating, note }) {
   return rec;
 }
 
+// Persist a batch of entries (the result of a sync merge) in one transaction.
+// Each record is keyed by date, so this upserts the merged state as-is.
+export async function putEntries(entries) {
+  if (!entries.length) return;
+  const s = await store('readwrite');
+  await Promise.all(entries.map((e) => asPromise(s.put(e))));
+}
+
 // Ask the browser to keep our data from being evicted under storage pressure.
 // Returns true if storage is now persistent. Part of the "never silently lose
 // data" guarantee for phone-only users (alongside cloud sync + markdown export).
