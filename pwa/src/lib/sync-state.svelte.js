@@ -17,7 +17,8 @@ export function getProvider() {
 }
 
 export function setProvider(name) {
-  localStorage.setItem(PROVIDER_KEY, name);
+  if (name) localStorage.setItem(PROVIDER_KEY, name);
+  else localStorage.removeItem(PROVIDER_KEY);
   transport = null; // rebuild for the new provider
 }
 

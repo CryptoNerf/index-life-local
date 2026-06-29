@@ -96,6 +96,16 @@
     vault.lock();
     refresh();
   }
+
+  // Forget the key AND the chosen provider → back to the cloud-choice screen,
+  // so the user can connect a different cloud (and unlock/create its vault).
+  function switchCloud() {
+    vault.lock();
+    setProvider(null);
+    provider = null;
+    connected = false;
+    st = { enabled: vault.isEncryptionEnabled(), unlocked: false, vaultInFolder: false };
+  }
 </script>
 
 <div class="cloud">
@@ -122,6 +132,7 @@
       {:else}Последняя синхронизация: {timeAgo(syncState.lastSyncedAt)}{/if}
     </p>
     <button class="link-btn" onclick={lock}>Заблокировать на этом устройстве</button>
+    <button class="link-btn" onclick={switchCloud}>Сменить облако</button>
 
   {:else if !provider}
     <div class="cloud-status">Куда синхронизировать?</div>
