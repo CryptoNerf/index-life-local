@@ -38,7 +38,7 @@
   {/if}
 
   {#if screen === 'capture'}
-    <Capture date={editDate} />
+    <Capture bind:date={editDate} />
   {:else if screen === 'feed'}
     <Feed onopen={openDay} />
   {:else if screen === 'chart'}

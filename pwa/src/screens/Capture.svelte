@@ -5,13 +5,21 @@
   import { saveEntry } from '../lib/store.svelte.js';
   import { scheduleSync } from '../lib/sync-state.svelte.js';
   import { loadDraft, saveDraft, clearDraft } from '../lib/drafts.js';
-  import { todayISO, prettyDate, isToday } from '../lib/mood.js';
+  import { todayISO, prettyDate, isToday, addDays } from '../lib/mood.js';
 
-  let { date = todayISO() } = $props();
+  // Bindable so date navigation here propagates to the app (and "День" in the
+  // nav resets it to today). Any past day can be opened to backfill it.
+  let { date = $bindable(todayISO()) } = $props();
 
   let rating = $state(0);
   let note = $state('');
   let saved = $state(false);
+
+  const TODAY = todayISO();
+  function step(n) {
+    const next = addDays(date, n);
+    date = next > TODAY ? TODAY : next; // never log a future day
+  }
 
   // Load whenever the target day changes. An unsaved draft (from a previous
   // visit where the user typed but didn't save) takes priority over the saved
@@ -47,7 +55,15 @@
 
 <section class="screen capture">
   <header class="cap-head">
-    <div class="cap-date">{prettyDate(date)}</div>
+    <div class="cap-nav">
+      <button class="cap-arrow" onclick={() => step(-1)} aria-label="Предыдущий день">‹</button>
+      <label class="cap-date">
+        {prettyDate(date)}<span class="cap-date-caret">▾</span>
+        <input type="date" class="cap-date-input" bind:value={date} max={TODAY} />
+      </label>
+      <button class="cap-arrow" onclick={() => step(1)} disabled={date >= TODAY}
+              aria-label="Следующий день">›</button>
+    </div>
     {#if isToday(date)}<div class="cap-today">сегодня</div>{/if}
     <MoodFace {rating} size={92} />
   </header>
