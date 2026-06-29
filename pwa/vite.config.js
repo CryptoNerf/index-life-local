@@ -7,6 +7,10 @@ import { VitePWA } from 'vite-plugin-pwa';
 // and isn't needed now that we're not targeting a GitHub Pages subpath.
 export default defineConfig({
   base: '/',
+  // Allow cloudflared tunnel hostnames so the dev/preview server doesn't reject
+  // requests whose Host is *.trycloudflare.com (used to test on a real phone).
+  server: { allowedHosts: ['.trycloudflare.com'] },
+  preview: { allowedHosts: ['.trycloudflare.com'] },
   plugins: [
     svelte(),
     VitePWA({
