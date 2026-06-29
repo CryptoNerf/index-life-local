@@ -1,0 +1,55 @@
+// Sync controller — one reactive place for sync status, used by the manual
+// button, the auto-sync-on-open and the debounced auto-sync-after-save. Owns a
+// singleton Google Drive transport (drive.js caches the token/folder at module
+// level, so all callers share one authenticated session).
+
+import { syncWith } from './app-sync.js';
+import { refreshEntries } from './store.svelte.js';
+import { GoogleDriveTransport } from './drive.js';
+import { isUnlocked } from './vault.js';
+
+const LAST_KEY = 'indexlife:last-sync';
+
+export const syncState = $state({
+  status: 'idle',                                       // idle | syncing | ok | error
+  lastSyncedAt: Number(localStorage.getItem(LAST_KEY)) || 0,
+  error: ''
+});
+
+let transport = null;
+export function getTransport() {
+  return (transport ||= new GoogleDriveTransport());
+}
+
+// Run one sync cycle, tracking status. `silent` suppresses error surfacing
+// (for background syncs). Returns true on success.
+export async function runSync({ silent = false } = {}) {
+  if (!isUnlocked()) {
+    if (!silent) syncState.error = 'Сначала включите шифрование';
+    return false;
+  }
+  if (syncState.status === 'syncing') return false; // dedupe concurrent runs
+  syncState.status = 'syncing';
+  syncState.error = '';
+  try {
+    await syncWith(getTransport());
+    await refreshEntries();
+    syncState.lastSyncedAt = Date.now();
+    localStorage.setItem(LAST_KEY, String(syncState.lastSyncedAt));
+    syncState.status = 'ok';
+    return true;
+  } catch (e) {
+    syncState.status = 'error';
+    if (!silent) syncState.error = e?.message || 'Ошибка синхронизации';
+    return false;
+  }
+}
+
+// Debounced background sync — called after each save so new entries reach the
+// cloud promptly without a sync per keystroke.
+let debounce = null;
+export function scheduleSync(delay = 2500) {
+  if (!isUnlocked()) return;
+  clearTimeout(debounce);
+  debounce = setTimeout(() => runSync({ silent: true }), delay);
+}

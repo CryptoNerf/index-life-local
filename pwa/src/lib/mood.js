@@ -34,3 +34,14 @@ export function shortDate(iso) {
   const [, m, d] = iso.split('-').map(Number);
   return `${d} ${MONTHS_RU_SHORT[m - 1]}`;
 }
+
+export function timeAgo(ts) {
+  if (!ts) return 'ещё не было';
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 60) return 'только что';
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m} мин назад`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} ч назад`;
+  return `${Math.floor(h / 24)} дн назад`;
+}

@@ -1,20 +1,19 @@
 <script>
   import MoodFace from '../components/MoodFace.svelte';
-  import { allEntries } from '../lib/db.js';
+  import { moodStore, refreshEntries } from '../lib/store.svelte.js';
   import { prettyDate } from '../lib/mood.js';
 
   let { onopen } = $props();
-  let entries = $state([]);
 
-  // Runs on mount; the parent re-mounts this screen on each visit, so the
-  // list is always fresh after a save.
   $effect(() => {
-    allEntries().then((list) => {
-      entries = list
-        .filter((e) => !e.deleted)
-        .sort((a, b) => b.date.localeCompare(a.date));
-    });
+    if (!moodStore.loaded) refreshEntries();
   });
+
+  const entries = $derived(
+    moodStore.entries
+      .filter((e) => !e.deleted)
+      .sort((a, b) => b.date.localeCompare(a.date))
+  );
 </script>
 
 <section class="screen feed">

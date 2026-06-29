@@ -1,7 +1,9 @@
 <script>
   import RatingCubes from '../components/RatingCubes.svelte';
   import MoodFace from '../components/MoodFace.svelte';
-  import { getEntry, putEntry } from '../lib/db.js';
+  import { getEntry } from '../lib/db.js';
+  import { saveEntry } from '../lib/store.svelte.js';
+  import { scheduleSync } from '../lib/sync-state.svelte.js';
   import { loadDraft, saveDraft, clearDraft } from '../lib/drafts.js';
   import { todayISO, prettyDate, isToday } from '../lib/mood.js';
 
@@ -35,8 +37,9 @@
 
   async function save() {
     if (!rating) return;
-    await putEntry({ date, rating, note });
+    await saveEntry({ date, rating, note });
     clearDraft(date);
+    scheduleSync(); // push to the cloud shortly after (debounced)
     saved = true;
     setTimeout(() => (saved = false), 1500);
   }

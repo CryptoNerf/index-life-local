@@ -3,18 +3,18 @@
   import BarChart from '../components/BarChart.svelte';
   import Rose from '../components/Rose.svelte';
   import Words from '../components/Words.svelte';
-  import { allEntries } from '../lib/db.js';
+  import { moodStore, refreshEntries } from '../lib/store.svelte.js';
   import { distribution, monthlyAverages } from '../lib/stats.js';
 
-  let entries = $state([]);
-
   $effect(() => {
-    allEntries().then((list) => {
-      entries = list
-        .filter((e) => !e.deleted && e.rating >= 1)
-        .sort((a, b) => a.date.localeCompare(b.date));
-    });
+    if (!moodStore.loaded) refreshEntries();
   });
+
+  const entries = $derived(
+    moodStore.entries
+      .filter((e) => !e.deleted && e.rating >= 1)
+      .sort((a, b) => a.date.localeCompare(b.date))
+  );
 
   const dist = $derived(distribution(entries));
   const monthly = $derived(monthlyAverages(entries));

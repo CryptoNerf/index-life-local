@@ -340,6 +340,74 @@ button {
 .seg-btn + .seg-btn { border-left: 1px solid var(--line); }
 .seg-btn.on { background: var(--ink); color: var(--bg); font-weight: 600; }
 
+/* ── Cloud sync (Settings) ─────────────────────────────────── */
+
+.cloud { margin-bottom: 4px; }
+.cloud-status {
+  font-family: var(--font-serif);
+  font-size: 17px;
+  margin: 4px 0 10px;
+}
+.field {
+  width: 100%;
+  padding: 13px 14px;
+  margin-bottom: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 16px; /* >=16px so iOS doesn't zoom on focus */
+  outline: none;
+}
+.field:focus { border-color: var(--ink); }
+.link-btn {
+  display: block;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 14px;
+  padding: 10px 2px 2px;
+}
+.cloud-error { color: #b03a3a; font-size: 14px; margin-top: 10px; }
+
+/* One-time recovery-key reveal — deliberately loud, fixed light surface. */
+.enc-recovery {
+  border: 2px solid #b8860b;
+  background: #fffaf0;
+  color: #1a1a1a;
+  border-radius: 10px;
+  padding: 14px;
+  margin: 4px 0 8px;
+}
+.enc-recovery-title { font-weight: 700; margin-bottom: 8px; color: #1a1a1a; }
+.enc-recovery-hint { font-size: 13px; line-height: 1.5; color: #6b5a2a; margin: 0 0 12px; }
+/* explicit colours — the recovery box is a fixed light surface, so the button
+   can't rely on theme vars (it went dark-on-dark in dark mode) */
+.enc-done-btn {
+  width: 100%;
+  padding: 14px;
+  font-size: 16px;
+  font-weight: 600;
+  background: #1a1a1a;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+}
+.enc-recovery-key {
+  display: block;
+  font-family: 'Courier New', monospace;
+  font-size: 16px;
+  letter-spacing: 1px;
+  word-break: break-all;
+  background: #fff;
+  border: 1px solid #e0c98a;
+  border-radius: 6px;
+  padding: 10px;
+  margin-bottom: 10px;
+  user-select: all;
+  color: #1a1a1a;
+}
+
 /* ── Bottom nav ────────────────────────────────────────────── */
 
 .bottom-nav {

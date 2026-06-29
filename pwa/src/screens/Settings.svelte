@@ -1,4 +1,5 @@
 <script>
+  import CloudSync from '../components/CloudSync.svelte';
   import { exportMarkdown } from '../lib/markdown.js';
   import { requestPersist, isPersisted } from '../lib/db.js';
   import { loadAppearance, saveAppearance, applyAppearance } from '../lib/theme.js';
@@ -25,6 +26,9 @@
 </script>
 
 <section class="screen settings">
+  <h2>Синхронизация</h2>
+  <CloudSync />
+
   <h2>Оформление</h2>
 
   <div class="opt-label">Тема</div>

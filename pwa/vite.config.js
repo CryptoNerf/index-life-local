@@ -2,12 +2,11 @@ import { defineConfig } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { VitePWA } from 'vite-plugin-pwa';
 
-// base: './' keeps asset URLs relative so the build works under any GitHub
-// Pages path (user page, project page or a custom domain) without rebuilding.
-// For a project page (username.github.io/<repo>/) set base to '/<repo>/' if the
-// service-worker scope needs an absolute path.
+// base '/' — the app is served from the root of its own domain (the chosen
+// static-CDN host). A relative base ('./') breaks the dev server (404 at /),
+// and isn't needed now that we're not targeting a GitHub Pages subpath.
 export default defineConfig({
-  base: './',
+  base: '/',
   plugins: [
     svelte(),
     VitePWA({
