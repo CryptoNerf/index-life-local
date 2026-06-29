@@ -370,6 +370,54 @@ button {
 }
 .cloud-error { color: #b03a3a; font-size: 14px; margin-top: 10px; }
 
+/* ── Durability (Settings checklist + at-risk banner) ──────── */
+
+.durability { display: flex; flex-direction: column; gap: 14px; }
+.dur-row { display: flex; gap: 12px; align-items: flex-start; }
+.dur-ico {
+  flex: none;
+  width: 20px;
+  text-align: center;
+  font-size: 17px;
+  color: var(--text-muted);
+}
+.dur-row.ok .dur-ico { color: #1e7d34; }
+.dur-title { font-size: 15px; font-weight: 600; }
+.dur-sub { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
+.dur-sub .link-btn { display: inline; padding: 0; color: var(--brand, #1e7d34); text-decoration: underline; }
+
+.dur-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #fff3cd;
+  color: #6b5a2a;
+  border: 1px solid #e0c98a;
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.dur-banner-actions { margin-left: auto; flex: none; display: flex; align-items: center; gap: 4px; }
+.dur-banner-btn {
+  background: #1a1a1a;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.dur-banner-x {
+  background: none;
+  border: none;
+  color: #6b5a2a;
+  font-size: 22px;
+  line-height: 1;
+  padding: 0 4px;
+}
+
 /* One-time recovery-key reveal — deliberately loud, fixed light surface. */
 .enc-recovery {
   border: 2px solid #b8860b;

@@ -5,6 +5,7 @@
   import Chart from './screens/Chart.svelte';
   import Settings from './screens/Settings.svelte';
   import BottomNav from './components/BottomNav.svelte';
+  import DurabilityBanner from './components/DurabilityBanner.svelte';
   import { todayISO } from './lib/mood.js';
   import { refreshEntries } from './lib/store.svelte.js';
   import { runSync } from './lib/sync-state.svelte.js';
@@ -32,6 +33,10 @@
 </script>
 
 <div class="app">
+  {#if screen !== 'settings'}
+    <DurabilityBanner onfix={() => navigate('settings')} />
+  {/if}
+
   {#if screen === 'capture'}
     <Capture date={editDate} />
   {:else if screen === 'feed'}
