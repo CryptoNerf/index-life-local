@@ -5,3 +5,6 @@ pytest>=8.0
 # Validates real snapshots against docs/sync-spec/snapshot.schema.json
 # (tests/test_sync_spec.py). Test-only — the shipped app never imports it.
 jsonschema>=4.0
+# Used by tests/test_review_fixes.py (a numeric helper). Ships in the optional
+# modules_venv at runtime, not in the core app — declared here for the suite.
+numpy

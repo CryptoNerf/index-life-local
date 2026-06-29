@@ -2,6 +2,12 @@
 """
 PyInstaller specification file for index.life macOS .app bundle
 Build command (on Mac): pyinstaller build_macos.spec
+
+IMPORTANT: build with Python 3.12. The in-app module installer and the
+modules_venv that holds the AI deps (torch, llama-cpp, sentence-transformers)
+target 3.12; building with a different minor version makes those compiled
+extensions fail to import, so the AI psychologist / deep_mind modules silently
+"disappear" from the app.
 """
 
 block_cipher = None
