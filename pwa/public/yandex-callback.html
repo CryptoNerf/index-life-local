@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>index.life — вход через Яндекс</title>
+  </head>
+  <body>
+    <p style="font-family: -apple-system, sans-serif; padding: 24px; color: #555">
+      Готово, можно вернуться в приложение.
+    </p>
+    <script>
+      // Yandex implicit OAuth returns the token in the URL fragment. Hand it to
+      // the app window that opened this popup, then close.
+      (function () {
+        var params = new URLSearchParams(location.hash.replace(/^#/, ''));
+        var msg = params.get('error')
+          ? { source: 'yandex-oauth', error: params.get('error_description') || params.get('error') }
+          : {
+              source: 'yandex-oauth',
+              access_token: params.get('access_token'),
+              expires_in: params.get('expires_in')
+            };
+        if (window.opener) {
+          window.opener.postMessage(msg, location.origin);
+          window.close();
+        }
+      })();
+    </script>
+  </body>
+</html>

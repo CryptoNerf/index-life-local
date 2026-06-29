@@ -1,8 +1,10 @@
 <script>
+  import { onMount } from 'svelte';
   import * as vault from '../lib/vault.js';
-  import { getTransport, runSync, syncState } from '../lib/sync-state.svelte.js';
+  import { getProvider, setProvider, getTransport, runSync, syncState } from '../lib/sync-state.svelte.js';
   import { timeAgo } from '../lib/mood.js';
 
+  let provider = $state(getProvider()); // 'yandex' | 'google' | null
   let connected = $state(false);
   let busy = $state(false);
   let error = $state('');
@@ -14,10 +16,23 @@
   let recoveryInput = $state('');
   let useRecovery = $state(false);
 
-  const transport = getTransport();
+  const providerName = $derived(
+    provider === 'yandex' ? 'Яндекс.Диск' : provider === 'google' ? 'Google Drive' : 'облако'
+  );
+
+  // Rediscover persistent state on (re)mount so a tab switch doesn't forget
+  // we're connected / set up.
+  onMount(() => {
+    provider = getProvider();
+    st = { enabled: vault.isEncryptionEnabled(), unlocked: vault.isUnlocked(), vaultInFolder: false };
+    if (provider) {
+      connected = getTransport().isConnected();
+      if (connected) refresh();
+    }
+  });
 
   async function refresh() {
-    st = await vault.status(transport);
+    st = await vault.status(getTransport());
   }
 
   async function run(fn) {
@@ -32,8 +47,14 @@
     }
   }
 
+  function chooseProvider(name) {
+    setProvider(name);
+    provider = name;
+    connected = getTransport().isConnected();
+  }
+
   const connect = () => run(async () => {
-    await transport.connect();
+    await getTransport().connect();
     connected = true;
     await refresh();
   });
@@ -41,7 +62,7 @@
   const enable = () => run(async () => {
     if (pass.length < 8) throw new Error('Пароль-фраза минимум 8 символов');
     if (pass !== pass2) throw new Error('Пароль-фразы не совпадают');
-    const r = await vault.enableEncryption(transport, pass);
+    const r = await vault.enableEncryption(getTransport(), pass);
     recoveryShown = r.recoveryKey;
     pass = '';
     pass2 = '';
@@ -49,14 +70,27 @@
   });
 
   const unlock = () => run(async () => {
-    if (useRecovery) await vault.unlockWithRecovery(transport, recoveryInput);
-    else await vault.unlockWithPassphrase(transport, pass);
+    if (useRecovery) await vault.unlockWithRecovery(getTransport(), recoveryInput);
+    else await vault.unlockWithPassphrase(getTransport(), pass);
     pass = '';
     recoveryInput = '';
     await refresh();
   });
 
-  const doSync = () => runSync();
+  async function doSync() {
+    error = '';
+    const t = getTransport();
+    if (!t.isConnected()) {
+      try {
+        await t.connect();
+        connected = true;
+      } catch (e) {
+        error = e?.message || 'Не удалось подключить облако';
+        return;
+      }
+    }
+    await runSync();
+  }
 
   function lock() {
     vault.lock();
@@ -65,16 +99,7 @@
 </script>
 
 <div class="cloud">
-  {#if !connected}
-    <button class="row-btn" onclick={connect} disabled={busy}>
-      ☁️ {busy ? 'Подключение…' : 'Подключить Google Drive'}
-    </button>
-    <p class="hint">
-      Данные шифруются на телефоне и едут в ваш Google Drive. Облако видит только
-      нечитаемый шифротекст — ключ остаётся на устройстве.
-    </p>
-
-  {:else if recoveryShown}
+  {#if recoveryShown}
     <div class="enc-recovery">
       <div class="enc-recovery-title">🔑 Запасной ключ восстановления</div>
       <code class="enc-recovery-key">{recoveryShown}</code>
@@ -88,7 +113,7 @@
     </div>
 
   {:else if st.unlocked}
-    <div class="cloud-status">🔒 Зашифровано · Google Drive подключён</div>
+    <div class="cloud-status">🔒 Зашифровано · {providerName}</div>
     <button class="save-btn" onclick={doSync} disabled={syncState.status === 'syncing'}>
       {syncState.status === 'syncing' ? 'Синхронизация…' : 'Синхронизировать'}
     </button>
@@ -97,6 +122,25 @@
       {:else}Последняя синхронизация: {timeAgo(syncState.lastSyncedAt)}{/if}
     </p>
     <button class="link-btn" onclick={lock}>Заблокировать на этом устройстве</button>
+
+  {:else if !provider}
+    <div class="cloud-status">Куда синхронизировать?</div>
+    <button class="row-btn" onclick={() => chooseProvider('yandex')}>🟡 Яндекс.Диск</button>
+    <button class="row-btn" onclick={() => chooseProvider('google')}>☁️ Google Drive</button>
+    <p class="hint">
+      В России — <b>Яндекс.Диск</b> (работает без VPN). Google Drive — если он у вас
+      открывается. Данные в любом случае шифруются на телефоне, облако видит только
+      шифротекст.
+    </p>
+
+  {:else if !connected}
+    <button class="row-btn" onclick={connect} disabled={busy}>
+      ☁️ {busy ? 'Подключение…' : `Подключить ${providerName}`}
+    </button>
+    <p class="hint">Ключ шифрования остаётся на устройстве — облако его не видит.</p>
+    <button class="link-btn" onclick={() => { provider = null; connected = false; }}>
+      Выбрать другое облако
+    </button>
 
   {:else if st.vaultInFolder}
     <div class="cloud-status">🔒 Папка зашифрована — разблокируйте</div>

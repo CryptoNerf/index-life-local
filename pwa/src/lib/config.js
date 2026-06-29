@@ -9,3 +9,8 @@ export const GOOGLE_CLIENT_ID =
 // Visible Drive folder the app creates and syncs through. Kept visible (not
 // appDataFolder) so a desktop client mirroring the same Drive can share it.
 export const DRIVE_FOLDER_NAME = 'index.life';
+
+// Yandex OAuth app id (public). Implicit token flow in the browser; the app
+// gets its own folder on Yandex.Disk via the cloud_api:disk.app_folder scope.
+// Reachable in Russia without a VPN (unlike Google/Cloudflare).
+export const YANDEX_CLIENT_ID = 'ace6472cc41f4101a181d5a94128f9b4';

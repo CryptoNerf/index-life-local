@@ -6,9 +6,20 @@
 import { syncWith } from './app-sync.js';
 import { refreshEntries } from './store.svelte.js';
 import { GoogleDriveTransport } from './drive.js';
+import { YandexDiskTransport } from './yandex.js';
 import { isUnlocked } from './vault.js';
 
 const LAST_KEY = 'indexlife:last-sync';
+const PROVIDER_KEY = 'indexlife:cloud-provider'; // 'yandex' | 'google'
+
+export function getProvider() {
+  return localStorage.getItem(PROVIDER_KEY);
+}
+
+export function setProvider(name) {
+  localStorage.setItem(PROVIDER_KEY, name);
+  transport = null; // rebuild for the new provider
+}
 
 export const syncState = $state({
   status: 'idle',                                       // idle | syncing | ok | error
@@ -18,7 +29,12 @@ export const syncState = $state({
 
 let transport = null;
 export function getTransport() {
-  return (transport ||= new GoogleDriveTransport());
+  if (!transport) {
+    transport = getProvider() === 'yandex'
+      ? new YandexDiskTransport()
+      : new GoogleDriveTransport();
+  }
+  return transport;
 }
 
 // Run one sync cycle, tracking status. `silent` suppresses error surfacing
