@@ -73,6 +73,11 @@ a = Analysis(
         # CA bundle for HTTPS weather/geocoding (PyInstaller's certifi hook
         # also pulls in cacert.pem); without it SSL verification fails.
         'certifi',
+        # PyNaCl/libsodium loads cffi's compiled backend dynamically, so
+        # PyInstaller's analysis misses it; without these the frozen app crashes
+        # at startup with "No module named '_cffi_backend'".
+        'cffi',
+        '_cffi_backend',
         # stdlib C extensions needed by venv ML packages (torch, sklearn, etc.)
         'cmath',
         'ctypes',
