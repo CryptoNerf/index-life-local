@@ -1,0 +1,129 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Test / type-check caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node / JS
+node_modules/
+
+# Database
+diary.db
+*.db
+*.sqlite
+*.sqlite3
+# SQLite WAL-mode auxiliary files (created at runtime; never commit user data)
+*.db-shm
+*.db-wal
+*.db-journal
+
+# Local automated backups created by app/backup.py
+backups/
+
+# PyInstaller build artifacts
+*.spec.lock
+build/
+dist/
+
+# Executable folder (will be distributed via GitHub Releases)
+index-life_exe/
+*.zip
+
+# User uploads
+app/static/profile_photos/*
+!app/static/profile_photos/.gitkeep
+profile_photos/
+
+# Manim render output (promo/*.py → media/videos/<scene>/...).
+# Source scenes are tracked; rendered MP4s are heavy and rebuildable.
+media/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Export/Import files
+diary_export.json
+*.json.bak
+
+# Migration scripts (from Django version)
+convert_django_dump.py
+import_data.py
+
+# Logs
+*.log
+
+# Environment variables
+.env
+.env.local
+
+# Per-install Flask secret key (generated at first run; never commit)
+secret_key
+
+# Module activation sentinels + their uploads. In a source checkout the
+# user data dir IS the repo root (see paths.user_data_dir), so these local
+# state files can land here — never commit them. Anchored to the repo root
+# (leading slash) so they never touch app/modules/*/models or similar.
+/customization_enabled
+/graphics_enabled
+/deep_mind_enabled
+/insights_enabled
+/customization_uploads/
+/models/
+
+# Claude Code settings
+.claude/
+
+# Local module environment (for optional modules)
+modules_venv/
+
+# Developer documentation (not needed for end users)
+CHANGELOG.md
+GITHUB_SETUP.md
+RELEASE_INSTRUCTIONS.md
+CODE_SIGNING_GUIDE.md
+BUILDING_FOR_MACOS.md
+GITHUB_ACTIONS_GUIDE.md
+RELEASE_TEMPLATE.md
+RELEASE_TEMPLATE_RU.md
+
+# Icon generation scripts (developer tools)
+create_icons.py
+create_icns.py
+icon.iconset/
+HOW_TO_CREATE_RELEASE.md
+QUICK_RELEASE_GUIDE.txt
+check_database.py
+create_2025_database.py
+TIPTAP_MIGRATION.md
+NATIVE_MARKDOWN_MIGRATION.md
+ROADMAP.md
+
+# Module model files (large AI models)
+app/modules/*/models/**
+!app/modules/*/models/README.md
+
+# Temporary downloads (wheels, etc.)
+tmp/
+
+.VSCodeCounter

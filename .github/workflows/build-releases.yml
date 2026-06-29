@@ -1,0 +1,390 @@
+name: Build Multi-Platform Releases
+
+on:
+  release:
+    types: [created]
+  workflow_dispatch:  # Позволяет запускать вручную
+
+permissions:
+  contents: write  # Required for uploading release assets
+
+jobs:
+  build-windows:
+    name: Build Windows .exe
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          # pywebview's Windows (WebView2/EdgeChromium) backend needs pythonnet.
+          # Install it explicitly so PyInstaller bundles it and the native
+          # window works instead of falling back to a browser.
+          pip install pythonnet
+          pip install pyinstaller
+
+      - name: Build Windows executable
+        run: |
+          python -m PyInstaller build.spec --clean
+
+      - name: Copy install_modules.bat to distribution root
+        run: |
+          # PyInstaller 6+ puts data files in _internal/; copy bat to top level for user access
+          if (Test-Path "dist\index-life\_internal\install_modules.bat") {
+            Copy-Item "dist\index-life\_internal\install_modules.bat" "dist\index-life\install_modules.bat"
+          } elseif (Test-Path "install_modules.bat") {
+            Copy-Item "install_modules.bat" "dist\index-life\install_modules.bat"
+          }
+
+      - name: Create zip archive
+        # Only needed as a Release asset (GitHub Releases serve a single
+        # file, so the app folder must be zipped). The Actions artifact
+        # below intentionally does NOT use this zip — see its comment.
+        if: github.event_name == 'release'
+        run: |
+          Compress-Archive -Path dist\index-life\* -DestinationPath windows-build.zip
+
+      - name: Upload Windows artifact
+        # upload-artifact ALWAYS wraps the uploaded path in its own zip.
+        # If we handed it our pre-made windows-build.zip the user
+        # would get a zip-inside-a-zip (two unzips). Pointing it at the
+        # unpacked folder makes the single artifact zip contain the app
+        # directly — one unzip.
+        uses: actions/upload-artifact@v6
+        with:
+          name: windows-build
+          path: dist/index-life/*
+
+      - name: Upload to Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: windows-build.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-macos:
+    name: Build macOS .app
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          pip3 install -r requirements.txt
+          pip3 install pyinstaller
+
+      - name: Build macOS .app bundle
+        run: |
+          python3 -m PyInstaller build_macos.spec --clean
+
+      - name: Prepare DMG contents
+        run: |
+          # Remove PyInstaller intermediate folder (only keep .app)
+          rm -rf dist/index-life/
+
+      - name: Install create-dmg
+        run: brew install create-dmg
+
+      - name: Create DMG image
+        run: |
+          create-dmg \
+            --volname "index.life" \
+            --window-pos 200 120 \
+            --window-size 500 340 \
+            --icon-size 120 \
+            --icon "index.life.app" 130 150 \
+            --hide-extension "index.life.app" \
+            --app-drop-link 370 150 \
+            --no-internet-enable \
+            "index-life_macos.dmg" \
+            "dist/"
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: macos-build
+          path: index-life_macos.dmg
+
+      - name: Upload to Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: index-life_macos.dmg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-linux:
+    name: Build Linux AppImage
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libfuse2 file
+
+      - name: Install Python dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          pip3 install -r requirements.txt
+          pip3 install pyinstaller
+
+      - name: Build Linux executable
+        run: |
+          python3 -m PyInstaller build.spec --clean
+
+      - name: Download appimagetool
+        run: |
+          wget https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool-x86_64.AppImage
+
+      - name: Create AppImage structure
+        run: |
+          # Создаём структуру AppDir
+          mkdir -p index-life.AppDir/usr/bin
+          cp -r dist/index-life/* index-life.AppDir/usr/bin/
+
+          # Копируем иконку
+          cp app/static/images/icon.png index-life.AppDir/index-life.png
+          cp app/static/images/icon.png index-life.AppDir/.DirIcon
+
+          # Создаём .desktop файл
+          cat > index-life.AppDir/index-life.desktop << 'EOF'
+          [Desktop Entry]
+          Name=index.life
+          Exec=index-life
+          Icon=index-life
+          Type=Application
+          Categories=Utility;
+          Comment=Private mood tracking diary
+          Terminal=false
+          EOF
+
+          # Создаём AppRun скрипт
+          cat > index-life.AppDir/AppRun << 'EOF'
+          #!/bin/bash
+          SELF=$(readlink -f "$0")
+          HERE=${SELF%/*}
+          export PATH="${HERE}/usr/bin/:${PATH}"
+          export LD_LIBRARY_PATH="${HERE}/usr/lib:${LD_LIBRARY_PATH}"
+          cd "${HERE}/usr/bin"
+          exec "${HERE}/usr/bin/index-life" "$@"
+          EOF
+          chmod +x index-life.AppDir/AppRun
+
+          # Проверяем структуру
+          ls -la index-life.AppDir/
+          ls -la index-life.AppDir/usr/bin/
+
+      - name: Build AppImage
+        run: |
+          # Запускаем с verbose выводом
+          ARCH=x86_64 ./appimagetool-x86_64.AppImage --appimage-extract-and-run --verbose index-life.AppDir index-life_linux_x86_64.AppImage || {
+            echo "AppImage build failed, trying without FUSE..."
+            ./appimagetool-x86_64.AppImage --appimage-extract
+            ./squashfs-root/AppRun index-life.AppDir index-life_linux_x86_64.AppImage
+          }
+
+      - name: Verify and prepare AppImage
+        run: |
+          if [ -f index-life_linux_x86_64.AppImage ]; then
+            chmod +x index-life_linux_x86_64.AppImage
+            ls -lh index-life_linux_x86_64.AppImage
+            echo "AppImage created successfully!"
+          else
+            echo "AppImage file not found!"
+            exit 1
+          fi
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: linux-build
+          path: index-life_linux_x86_64.AppImage
+
+      - name: Upload to Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: index-life_linux_x86_64.AppImage
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-vulkan-wheel-windows:
+    name: Build Vulkan wheel (Windows)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Vulkan SDK
+        run: |
+          $url = "https://sdk.lunarg.com/sdk/download/latest/windows/vulkan_sdk.exe"
+          Write-Host "Downloading latest Vulkan SDK..."
+          Invoke-WebRequest -Uri $url -OutFile vulkan_sdk.exe
+          Write-Host "Installing Vulkan SDK..."
+          Start-Process -FilePath .\vulkan_sdk.exe -ArgumentList "--accept-licenses --default-answer --confirm-command install" -Wait
+          # Find installed SDK version
+          $sdkRoot = "C:\VulkanSDK"
+          $sdkVer = (Get-ChildItem $sdkRoot -Directory | Sort-Object Name -Descending | Select-Object -First 1).Name
+          $sdkPath = "$sdkRoot\$sdkVer"
+          Write-Host "Vulkan SDK installed: $sdkPath"
+          echo "VULKAN_SDK=$sdkPath" >> $env:GITHUB_ENV
+          echo "$sdkPath\Bin" >> $env:GITHUB_PATH
+
+      - name: Build llama-cpp-python wheel with Vulkan
+        run: |
+          python -m pip install --upgrade pip setuptools wheel cmake ninja scikit-build-core[pyproject]
+          $env:CMAKE_ARGS = "-DGGML_VULKAN=ON -DLLAMA_CURL=OFF"
+          $env:FORCE_CMAKE = "1"
+          pip wheel llama-cpp-python==0.3.20 --no-cache-dir -w wheelhouse/
+
+      - name: Keep only llama-cpp-python wheel
+        run: |
+          # Remove dependency wheels, keep only llama_cpp_python
+          Get-ChildItem wheelhouse/ -Exclude "llama_cpp_python*" | Remove-Item -Force
+          Get-ChildItem wheelhouse/
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: vulkan-wheel-windows
+          path: wheelhouse/*.whl
+
+      - name: Upload to Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: wheelhouse/*.whl
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-vulkan-wheel-linux:
+    name: Build Vulkan wheel (Linux)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Vulkan development dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential libvulkan-dev glslc glslang-tools
+
+      - name: Build llama-cpp-python wheel with Vulkan
+        env:
+          CMAKE_ARGS: "-DGGML_VULKAN=ON -DLLAMA_CURL=OFF"
+          FORCE_CMAKE: "1"
+        run: |
+          python3 -m pip install --upgrade pip setuptools wheel cmake ninja scikit-build-core[pyproject]
+          pip wheel llama-cpp-python==0.3.20 --no-cache-dir -w wheelhouse/
+
+      - name: Keep only llama-cpp-python wheel
+        run: |
+          # Remove dependency wheels, keep only llama_cpp_python
+          find wheelhouse/ -type f ! -name 'llama_cpp_python*' -delete
+          ls -lh wheelhouse/
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: vulkan-wheel-linux
+          path: wheelhouse/*.whl
+
+      - name: Upload to Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: wheelhouse/*.whl
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  create-release-notes:
+    name: Update Release Notes
+    runs-on: ubuntu-latest
+    needs: [build-windows, build-macos, build-linux, build-vulkan-wheel-windows, build-vulkan-wheel-linux]
+    if: github.event_name == 'release'
+
+    steps:
+      - name: Update Release Description
+        uses: softprops/action-gh-release@v2
+        with:
+          append_body: true
+          body: |
+
+            ---
+
+            **index.life** — локальный дневник настроения. Помогает лучше помнить и осознавать себя и своё время. Всё работает локально и офлайн.
+
+            ## Установка
+
+            ### Windows
+            1. Скачайте `windows-build.zip` и распакуйте в любую папку
+            2. Запустите `index-life.exe`
+               *(SmartScreen покажет «Неизвестный издатель» → нажмите «Подробнее» → «Выполнить в любом случае». Так бывает с бесплатными приложениями без платной подписи — запускать безопасно.)*
+
+            ### macOS
+            1. Скачайте `index-life_macos.dmg`, откройте и перетащите **index.life** в Applications
+            2. Запустите index.life → в появившемся окне нажмите **Done** (не «Переместить в корзину»)
+            3. **Системные настройки → Конфиденциальность и безопасность** → пролистайте вниз → **Open Anyway** → подтвердите **Открыть**
+               *(разовый шаг для неподписанного приложения; дальше открывается обычным двойным кликом)*
+
+            ### Linux
+            ```bash
+            chmod +x index-life_linux_x86_64.AppImage
+            ./index-life_linux_x86_64.AppImage
+            ```
+
+            После запуска index.life откроется в отдельном окне.
+
+            ## Опциональные модули
+            Откройте в приложении страницу **Модули** и нажмите **Установить** у нужного:
+            - **AI-психолог** — чат с локальной моделью, у которой есть доступ к дневнику (~5 ГБ)
+            - **Нейронная карта** — визуальная карта тем из твоих записей
+            - **Графики** и **Кастомизация** — включаются мгновенно, без скачивания
+
+            Полная документация: https://github.com/CryptoNerf/index-life-local/blob/HEAD/docs/README.md
+
+            ---
+
+            *Собрано автоматически через GitHub Actions · лицензия AGPL-3.0*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
