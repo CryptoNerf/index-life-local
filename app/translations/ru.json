@@ -485,6 +485,7 @@
   "assistant.rebuild_confirm": "Пересобрать психологический профиль?",
   "assistant.rebuilding": "Пересборка профиля...",
   "assistant.loading_model": "Загрузка модели...",
+  "assistant.warming_model": "Готовлю ИИ-модель… ({pct}%)",
   "assistant.importing_libs": "Импорт библиотек...",
   "assistant.detecting_hw": "Определение оборудования...",
   "assistant.loading_gpu": "Загрузка на GPU ({pct}%)",

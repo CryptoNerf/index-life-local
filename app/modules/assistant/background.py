@@ -329,6 +329,14 @@ def _backfill_sequential(app):
     delay = _backfill_start_delay()
     if delay > 0:
         time.sleep(delay)
+    # Never let an automatic backfill be what loads the multi-GB LLM — loading
+    # it onto the Metal GPU stalls the whole machine for a few seconds. If the
+    # model isn't resident yet, defer: opening the assistant loads it and the
+    # post-warmup catch-up re-triggers this once it's hot.
+    from .routes import llm_is_loaded
+    if not llm_is_loaded():
+        log.info('backfill: LLM not loaded — deferring until the assistant is opened')
+        return
     try:
         _backfill_people(app)
     except Exception as e:
@@ -432,6 +440,15 @@ def _process_entry(app, entry_id: int):
 
         # 2–6: Each step re-fetches the entry in a fresh context so no DB
         # connection is held while the LLM generates completions.
+
+        # These steps need the LLM. Don't load it from here — saving an entry
+        # must not stall the whole machine. Run them only if the model is
+        # already resident; otherwise they're picked up by the post-warmup
+        # catch-up (sync + backfill) once the user opens the assistant.
+        from .routes import llm_is_loaded
+        if not llm_is_loaded():
+            log.info('entry %d: embedding done, LLM steps deferred (model not loaded)', entry_id)
+            return
 
         # 2. Summary
         with app.app_context():
@@ -770,17 +787,22 @@ def _sync_missing(app):
         _set_sync_status(phase='processing', total=total,
                          message=f'Обработка {total} записей')
 
-        # Load LLM once before the per-entry loop. _get_llm() is cached;
-        # this is only slow on the very first call after startup.
+        # Don't let a background sync be what loads the multi-GB LLM — that
+        # stalls the whole machine for a few seconds. Use it only if it's
+        # already resident (the user opened the assistant). Embeddings are cheap
+        # and always run; summaries wait for a hot model and get picked up by
+        # the post-warmup catch-up.
+        llm = None
         with app.app_context():
-            from .routes import _get_llm
-            try:
-                llm = _get_llm()
-            except Exception as e:
-                log.error(f'sync: cannot load LLM: {e}')
-                _set_sync_status(running=False, phase='error',
-                                 message=f'LLM не загрузилась: {e}')
-                return
+            from .routes import llm_is_loaded, _get_llm
+            if llm_is_loaded():
+                try:
+                    llm = _get_llm()
+                except Exception as e:
+                    log.warning(f'sync: LLM present but failed to fetch: {e}')
+                    llm = None
+        if llm is None:
+            log.info('sync: LLM not loaded — embeddings only, summaries deferred')
 
         # Phase 2: process each entry in its own context so the DB
         # connection is freed between entries. Cooperative yield between
@@ -805,7 +827,7 @@ def _sync_missing(app):
                         errors.append(f'embed #{entry_id}: {str(e)[:140]}')
                         log.warning(f'sync: embedding failed for {entry_id}: {e}')
 
-                if needs_summary:
+                if needs_summary and llm is not None:
                     # Re-fetch in case update_embedding removed the session.
                     if entry not in db.session:
                         entry = db.session.get(MoodEntry, entry_id)
@@ -895,12 +917,18 @@ def _warmup(app):
     try:
         with app.app_context():
             from .routes import _get_llm, _env_bool
-            if not _env_bool('LLM_WARMUP_ON_LOAD', True):
-                return
-            try:
-                _get_llm()
-            except Exception as e:
-                log.warning(f'LLM warmup failed: {e}', exc_info=True)
+            # The LLM is a multi-GB GGUF loaded fully onto the Metal GPU. Eagerly
+            # warming it on every launch spikes unified memory and briefly freezes
+            # the whole machine on 16 GB Macs. Default OFF: it now loads lazily when
+            # the user opens the assistant chat (chat.js pings /assistant/warmup
+            # then, with a progress bar). Opt back in with LLM_WARMUP_ON_LOAD=1.
+            if _env_bool('LLM_WARMUP_ON_LOAD', False):
+                try:
+                    _get_llm()
+                except Exception as e:
+                    log.warning(f'LLM warmup failed: {e}', exc_info=True)
+            # The embedding model is small and CPU-only (used by background entry
+            # processing), so warming it on load is cheap and won't stall the system.
             try:
                 from .memory import _get_embed_model
                 _get_embed_model()

@@ -168,11 +168,17 @@
   var llmReady = false;
   loadStatus();
   warmupModel();
+  // The load starts a beat after warmupModel() fires; re-poll a few times so
+  // the "preparing/loading model (%)" progress reliably shows up (loadStatus
+  // then keeps polling itself while llm_loading is true).
+  setTimeout(loadStatus, 800);
+  setTimeout(loadStatus, 2500);
 
   function formatLoadingStage(stage, progress) {
     var I18N = window.CHAT_I18N || {};
     function tpl(s, pct) { return (s || '').replace('{pct}', pct); }
     if (!stage) return I18N.loadingModel || 'loading model...';
+    if (stage === 'warming') return tpl(I18N.warmingModel, progress) || ('preparing AI model (' + progress + '%)');
     if (stage === 'importing') return I18N.importingLibs || 'importing libraries...';
     if (stage === 'detecting') return I18N.detectingHw || 'detecting hardware...';
     if (stage.startsWith('gpu:')) return tpl(I18N.loadingGpu, progress) || ('loading on GPU (' + progress + '%)');

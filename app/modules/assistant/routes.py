@@ -220,8 +220,16 @@ def _execute_tool(tool_name: str, args: dict) -> str | None:
         log.warning(f'Tool exec failed for {tool_name}: {exc}')
     return None
 _llm_loading = False
-_llm_loading_stage = ''  # e.g. 'importing', 'gpu:35/8192', 'cpu:8192'
+_llm_loading_stage = ''  # e.g. 'warming', 'gpu:35/8192', 'cpu:8192'
 _llm_loading_progress = 0  # 0-100
+
+# Gradual pre-warm of the model file into the OS page cache. Loading a 5+ GB
+# GGUF in one burst spikes memory pressure on a 16 GB Mac and macOS's memory
+# compressor freezes the whole machine for several seconds. Reading it slowly
+# first lets the compressor keep pace; the (mmap'd) model load then reads from
+# a warm cache with no spike. See _prewarm_model_file.
+_prewarm_lock = threading.Lock()
+_prewarm_state = {'progress': 0, 'done': False, 'running': False}
 
 # Default configs; can be overridden via env:
 #   LLM_N_CTX, LLM_CPU_N_CTX, LLM_N_GPU_LAYERS
@@ -613,6 +621,113 @@ def _trim_messages_to_fit(llm, messages: list[dict]) -> list[dict]:
     return [system] + trimmed_tail
 
 
+def llm_is_loaded() -> bool:
+    """True if the chat LLM is already resident in memory.
+
+    Lets background tasks (entry processing, sync, backfill) piggyback on a
+    model the user loaded by opening the assistant, instead of triggering the
+    multi-GB Metal load themselves — which briefly freezes the whole machine on
+    16 GB Macs. When it isn't loaded, those tasks do only their cheap work and
+    defer the LLM steps; opening the chat loads it and runs a catch-up.
+    """
+    return _llm is not None
+
+
+def _find_model_path() -> str | None:
+    """Locate the GGUF model file (user data dir first, then bundled)."""
+    _search_dirs = [Path(__file__).parent / 'models']
+    if getattr(sys, 'frozen', False):
+        if sys.platform == 'darwin':
+            _search_dirs.insert(
+                0,
+                Path.home() / 'Library' / 'Application Support' / 'index.life'
+                / 'models' / 'assistant',
+            )
+        elif sys.platform == 'win32':
+            exe_dir = Path(sys.executable).resolve().parent
+            appdata = Path(os.environ.get('APPDATA', str(Path.home()))) / 'index.life'
+            _search_dirs.insert(0, appdata / 'models' / 'assistant')
+            _search_dirs.insert(0, exe_dir / 'models' / 'assistant')
+        else:
+            _search_dirs.insert(0, Path.home() / '.index-life' / 'models' / 'assistant')
+    for model_dir in _search_dirs:
+        if model_dir.exists():
+            gguf_files = list(model_dir.glob('*.gguf'))
+            if gguf_files:
+                return str(gguf_files[0])
+    return None
+
+
+def _prewarm_model_file(model_path: str | None = None) -> None:
+    """Read the GGUF into the OS page cache in throttled chunks.
+
+    A cold load pulls 5+ GB into RAM in one burst; on a 16 GB Mac that spikes
+    memory pressure and macOS's compressor freezes the whole system for a few
+    seconds. Reading it slowly lets the compressor keep pace, and the model's
+    own (mmap'd) load then hits a warm cache with no spike — full GPU speed,
+    no freeze. Idempotent: the lock serialises callers so nobody proceeds to a
+    cold GPU load, and only the first run does the reading.
+    """
+    global _prewarm_state
+    if not _env_bool('LLM_PREWARM', True):
+        return
+    if _prewarm_state['done']:
+        return
+    import time
+    with _prewarm_lock:
+        if _prewarm_state['done']:
+            return
+        path = model_path or _find_model_path()
+        if not path:
+            return
+        try:
+            total = os.path.getsize(path)
+        except OSError:
+            return
+        chunk = _env_int('LLM_PREWARM_CHUNK_MB', 48, min_value=1) * 1024 * 1024
+        sleep_s = _env_int('LLM_PREWARM_SLEEP_MS', 400, min_value=0) / 1000.0
+        _prewarm_state['running'] = True
+        _prewarm_state['progress'] = 0
+        read = 0
+        try:
+            with open(path, 'rb') as f:
+                while True:
+                    b = f.read(chunk)
+                    if not b:
+                        break
+                    read += len(b)
+                    if total:
+                        _prewarm_state['progress'] = min(100, int(read * 100 / total))
+                    if sleep_s > 0:
+                        time.sleep(sleep_s)
+            _prewarm_state['progress'] = 100
+            _prewarm_state['done'] = True
+            log.info('Model file pre-warmed into cache (%.2f GB)', read / 1e9)
+        except Exception as e:
+            log.warning('Model pre-warm failed: %s', e)
+        finally:
+            _prewarm_state['running'] = False
+
+
+def prewarm_model_async(delay_s: float = 0.0) -> None:
+    """Kick off the gradual pre-warm in a background thread (startup head-start).
+
+    `delay_s` lets startup settle first, so the (throttled, reclaimable) file
+    read never competes with launch. By the time the user opens the assistant
+    the cache is usually warm, so the model loads instantly with no freeze.
+    """
+    if not _env_bool('LLM_PREWARM', True):
+        return
+
+    def _run():
+        if delay_s > 0:
+            import time
+            time.sleep(delay_s)
+        _prewarm_model_file()
+
+    threading.Thread(target=_run, daemon=True).start()
+
+
 def _get_llm():
     """Lazy-load the GGUF model on first request. Tries GPU, falls back to CPU."""
     global _llm, _llm_n_ctx, _llm_loading, _llm_loading_stage, _llm_loading_progress
@@ -668,36 +783,19 @@ def _get_llm():
             if profile_name:
                 log.info(f'LLM hardware profile applied: {profile_name}')
 
-            # Search for model in user data dir first, then bundled location.
-            # On Windows we check both next-to-exe (portable) and %APPDATA%
-            # (legacy) so existing users don't have to re-download the model.
-            gguf_files = []
-            _search_dirs = [Path(__file__).parent / 'models']
-            if getattr(sys, 'frozen', False):
-                if sys.platform == 'darwin':
-                    _search_dirs.insert(
-                        0,
-                        Path.home() / 'Library' / 'Application Support' / 'index.life'
-                        / 'models' / 'assistant',
-                    )
-                elif sys.platform == 'win32':
-                    exe_dir = Path(sys.executable).resolve().parent
-                    appdata = Path(os.environ.get('APPDATA', str(Path.home()))) / 'index.life'
-                    _search_dirs.insert(0, appdata / 'models' / 'assistant')
-                    _search_dirs.insert(0, exe_dir / 'models' / 'assistant')
-                else:
-                    _search_dirs.insert(0, Path.home() / '.index-life' / 'models' / 'assistant')
-            for model_dir in _search_dirs:
-                if model_dir.exists():
-                    gguf_files = list(model_dir.glob('*.gguf'))
-                    if gguf_files:
-                        break
-            if not gguf_files:
+            # Locate the model, then warm it into the OS page cache gradually
+            # before loading. A cold load reads 5+ GB in one burst and freezes
+            # the whole machine (memory-pressure stall); pre-warming spreads
+            # that read so the GPU load is spike-free. See _prewarm_model_file.
+            model_path = _find_model_path()
+            if not model_path:
                 raise FileNotFoundError(
-                    f'No .gguf model file found. Searched: {[str(d) for d in _search_dirs]}. '
+                    'No .gguf model file found. '
                     'Install the assistant module from the Modules page.'
                 )
-            model_path = str(gguf_files[0])
+            _llm_loading_stage = 'warming'
+            _prewarm_model_file(model_path)
+            _llm_loading_progress = max(_llm_loading_progress, 12)
 
             def filter_kwargs(kwargs: dict) -> dict:
                 try:
@@ -1240,21 +1338,33 @@ def stream():
 
 @bp.route('/warmup', methods=['POST'])
 def warmup():
-    """Warm up the LLM and embedding model in background."""
+    """Load the LLM + embedding model when the user opens the assistant.
+
+    This is the one place we DO load the multi-GB model — the user asked for the
+    AI by opening the chat, so the (progress-barred) load is expected here.
+    Background tasks never load it themselves to avoid a system-wide stall on
+    launch; once it's hot we kick off a catch-up so any entries that piled up
+    while it was unloaded get their summaries / people / activities.
+    """
+    app_obj = current_app._get_current_object()
 
     def _warm():
         try:
             _get_llm()
         except Exception as e:
             log.warning(f'LLM warmup failed: {e}')
+            return
         try:
             from .memory import _get_embed_model
             _get_embed_model()
         except Exception as e:
             log.warning(f'Embedding warmup failed: {e}')
-
-    if not _env_bool('LLM_WARMUP_ON_LOAD', True):
-        return jsonify({'status': 'disabled'})
+        try:
+            from .background import backfill_assistant_data_async, sync_missing_async
+            sync_missing_async(app_obj)
+            backfill_assistant_data_async(app_obj)
+        except Exception as e:
+            log.warning(f'Post-warmup catch-up failed to start: {e}')
 
     threading.Thread(target=_warm, daemon=True).start()
     return jsonify({'status': 'warming'})
@@ -1376,6 +1486,14 @@ def status():
     # Chat message count for context indicator
     chat_count = ChatMessage.query.count()
 
+    # While gradually warming the model file into cache, surface that live
+    # progress (0-100 → 12-80% of the overall load) so the bar keeps moving
+    # instead of sitting frozen for ~45s.
+    _stage = _llm_loading_stage if _llm_loading else ''
+    _progress = _llm_loading_progress if _llm_loading else 0
+    if _llm_loading and _stage == 'warming':
+        _progress = 12 + int(_prewarm_state.get('progress', 0) * 0.68)
+
     return jsonify({
         'total_entries': total_entries,
         'embedded': embedded,
@@ -1383,8 +1501,8 @@ def status():
         'profile_version': profile.version if profile else 0,
         'profile_entries_analyzed': profile.entries_analyzed if profile else 0,
         'llm_loading': _llm_loading,
-        'llm_loading_stage': _llm_loading_stage if _llm_loading else '',
-        'llm_loading_progress': _llm_loading_progress if _llm_loading else 0,
+        'llm_loading_stage': _stage,
+        'llm_loading_progress': _progress,
         'llm_ready': _llm is not None,
         'reindex': reindex_status,
         'sync': sync_status,

@@ -485,6 +485,7 @@
   "assistant.rebuild_confirm": "Rebuild the psychological profile?",
   "assistant.rebuilding": "Rebuilding profile...",
   "assistant.loading_model": "Loading model...",
+  "assistant.warming_model": "Preparing AI model… ({pct}%)",
   "assistant.importing_libs": "Importing libraries...",
   "assistant.detecting_hw": "Detecting hardware...",
   "assistant.loading_gpu": "Loading on GPU ({pct}%)",

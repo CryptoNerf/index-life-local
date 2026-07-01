@@ -338,6 +338,40 @@ def _run_migrations(app):
             conn.commit()
 
 
+def _modules_venv_python_compatible(venv_dir: Path) -> bool:
+    """True if the modules_venv was built for this interpreter's Python minor.
+
+    A modules_venv carries compiled C extensions (numpy, torch, llama_cpp)
+    built for one specific Python minor version. If it drifts out of sync
+    (e.g. the dev venv gets rebuilt on 3.12 while modules_venv stays on 3.14),
+    adding its site-packages to sys.path shadows the app's own packages with
+    ABI-incompatible ones and imports crash with "incompatible .so" errors.
+    Mirror the guard in app/modules/__init__.py: skip a mismatched venv so the
+    modules just read as "needs reinstall" instead of poisoning every import.
+    """
+    cfg = venv_dir / 'pyvenv.cfg'
+    if not cfg.exists():
+        return True  # no version marker — assume compatible, don't block
+    try:
+        for line in cfg.read_text(encoding='utf-8', errors='ignore').splitlines():
+            if not line.strip().lower().startswith('version'):
+                continue
+            parts = line.split('=', 1)[1].strip().split('.')
+            if len(parts) >= 2 and (int(parts[0]), int(parts[1])) != (
+                sys.version_info.major, sys.version_info.minor
+            ):
+                log.warning(
+                    'modules_venv Python %s.%s != app Python %d.%d — not adding '
+                    'to sys.path (modules need reinstall).',
+                    parts[0], parts[1], sys.version_info.major, sys.version_info.minor,
+                )
+                return False
+            break
+    except Exception as exc:
+        log.warning('Failed to inspect modules_venv pyvenv.cfg: %s', exc)
+    return True
+
+
 def _add_system_stdlib(venv_dir: Path):
     """Append the system Python stdlib to sys.path for frozen builds.
 
@@ -579,7 +613,7 @@ def create_app(config_class='config.Config'):
     # Add modules_venv site-packages to sys.path so we can import
     # dependencies installed by the in-app module installer.
     modules_venv = data_dir / 'modules_venv'
-    if modules_venv.is_dir():
+    if modules_venv.is_dir() and _modules_venv_python_compatible(modules_venv):
         import site as _site
         if sys.platform == 'win32':
             sp = modules_venv / 'Lib' / 'site-packages'
@@ -676,6 +710,15 @@ def create_app(config_class='config.Config'):
             backfill_assistant_data_async(app)
         except Exception:
             log.warning('Assistant warmup/backfill failed to start', exc_info=True)
+        # Head start: gradually warm the 5+ GB model file into the OS cache a
+        # few seconds after launch (throttled, low-impact, reclaimable) so it's
+        # ready when the user opens the assistant — the actual model then loads
+        # from a warm cache with NO memory-pressure freeze. See _prewarm_model_file.
+        try:
+            from app.modules.assistant.routes import prewarm_model_async
+            prewarm_model_async(delay_s=15.0)
+        except Exception:
+            log.warning('Assistant model pre-warm failed to start', exc_info=True)
 
     # Check for updates (non-blocking)
     try:
