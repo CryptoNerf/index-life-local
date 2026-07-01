@@ -128,15 +128,15 @@
         <div style="margin-bottom: 14px; font-size: 15px;">
           {{ t('weather.current', location=weather_location.label) }}
         </div>
-        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;justify-content:center;">
           <form method="post" action="{{ url_for('main.weather_backfill') }}" style="display:inline;">
             <button class="account-btn" type="submit">{{ t('weather.backfill_button') }}</button>
           </form>
           <form method="post" action="{{ url_for('main.set_weather') }}" style="display:inline;">
             <input type="hidden" name="action" value="disable">
             <button type="submit"
-                    style="background:transparent;color:var(--text-muted,#888);border:1px solid #ccc;
-                           border-radius:4px;padding:8px 18px;font-size:16px;cursor:pointer;">{{ t('weather.disable') }}</button>
+                    style="background:transparent;color:var(--text-muted,#888);border:none;
+                           box-shadow:inset 0 0 0 1px #ccc;border-radius:4px;padding:8px 20px;font-size:16px;cursor:pointer;">{{ t('weather.disable') }}</button>
           </form>
         </div>
       {% else %}
