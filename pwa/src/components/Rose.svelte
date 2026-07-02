@@ -40,19 +40,24 @@
       const md = Math.max(...dens, 0);
       const norm = dens.map((v) => (md > 0 ? v / md : 0));
       const a0 = firstAlpha + i * (sector + gap);
+      const mid = a0 + sector / 2;
+      const maxHalf = (sector / 2) * 0.9;
 
+      // Symmetric petal centred on the sector midline: radius = rating level
+      // (base = 1 … tip = 10), angular half-width = that rating's density, so
+      // the petal bulges where ratings cluster — straight, not skewed.
       const pts = [];
       for (let k = 0; k < SAMPLES; k++) {
-        const alpha = a0 + (k / (SAMPLES - 1)) * sector;
-        const r = innerR + norm[k] * (outerR - innerR);
+        const r = innerR + (k / (SAMPLES - 1)) * (outerR - innerR);
+        const alpha = mid + norm[k] * maxHalf;
         pts.push(`${(cx + r * Math.cos(alpha)).toFixed(1)},${(cy + r * Math.sin(alpha)).toFixed(1)}`);
       }
       for (let k = SAMPLES - 1; k >= 0; k--) {
-        const alpha = a0 + (k / (SAMPLES - 1)) * sector;
-        pts.push(`${(cx + innerR * Math.cos(alpha)).toFixed(1)},${(cy + innerR * Math.sin(alpha)).toFixed(1)}`);
+        const r = innerR + (k / (SAMPLES - 1)) * (outerR - innerR);
+        const alpha = mid - norm[k] * maxHalf;
+        pts.push(`${(cx + r * Math.cos(alpha)).toFixed(1)},${(cy + r * Math.sin(alpha)).toFixed(1)}`);
       }
 
-      const mid = a0 + sector / 2;
       const lr = outerR + 16;
       const avg = avgs[i];
       let op = 0.06;

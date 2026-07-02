@@ -23,6 +23,19 @@ from PyInstaller.utils.hooks import collect_submodules, collect_all
 # (app/sync_crypto.py) works in the frozen build.
 _nacl_datas, _nacl_binaries, _nacl_hidden = collect_all('nacl')
 
+# pymorphy3 (+ its offline RU dictionary and dawg2 backend) powers the AI-free
+# "My people" graph. The dictionary is data files PyInstaller misses without
+# collect_all, so the frozen app would raise at first use.
+_pm_datas, _pm_binaries, _pm_hidden = [], [], []
+for _pm_pkg in ('pymorphy3', 'pymorphy3_dicts_ru', 'dawg_python'):
+    try:
+        _d, _b, _h = collect_all(_pm_pkg)
+        _pm_datas += _d
+        _pm_binaries += _b
+        _pm_hidden += _h
+    except Exception:
+        pass
+
 # Get the root directory
 root_dir = Path(SPECPATH)
 
@@ -59,7 +72,7 @@ def module_datas():
 a = Analysis(
     ['run.py'],
     pathex=[str(root_dir)],
-    binaries=_nacl_binaries,
+    binaries=_nacl_binaries + _pm_binaries,
     datas=[
         ('app/templates', 'app/templates'),
         ('app/static', 'app/static'),
@@ -71,11 +84,15 @@ a = Analysis(
         ('Install Modules.command', '.'),
         ('tools/install_modules.py', 'tools'),
         ('app/static/images/icon.icns', 'Resources'),  # Explicitly copy icon to Resources folder
-    ] + module_datas() + _nacl_datas,
+    ] + module_datas() + _nacl_datas + _pm_datas,
     hiddenimports=[
         'flask',
         'flask_sqlalchemy',
         'sqlalchemy.sql.default_comparator',
+        # Lazily imported inside route functions, so PyInstaller's static
+        # analysis misses it — without this the "My people" graph 500s with
+        # "No module named 'app.people_match'".
+        'app.people_match',
         # CA bundle for HTTPS weather/geocoding (PyInstaller's certifi hook
         # also pulls in cacert.pem); without it SSL verification fails.
         'certifi',
@@ -108,7 +125,8 @@ a = Analysis(
     ] + collect_submodules('app.modules')
       + collect_submodules('jinja2')
       + collect_submodules('webview')
-      + _nacl_hidden,
+      + _nacl_hidden
+      + _pm_hidden,
     hookspath=[str(Path(__import__('webview').__file__).parent / '__pyinstaller')],
     hooksconfig={},
     runtime_hooks=[],

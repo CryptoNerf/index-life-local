@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="{{ current_lang }}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ t('graphics.my_people.title') }}</title>
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/calendar.css') }}">
+  <link rel="stylesheet" href="{{ url_for('graphics.static', filename='css/graphics.css') }}">
+  {{ customization_css }}
+  <style>
+    .mp-add { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; align-items:center;
+              margin: 8px auto 14px; max-width: 620px; }
+    .mp-add input[type=text] { flex:1 1 220px; min-width:0; padding:10px 14px; font-size:16px;
+              border:1px solid #ccc; border-radius:6px; box-sizing:border-box; }
+    .mp-toggle { background:#fff; color:#000; border:1px solid #ccc; padding:9px 16px; font-size:15px;
+              border-radius:6px; cursor:pointer; white-space:nowrap; }
+    .mp-toggle.chosen { border-color:#000; font-weight:600; }
+    .mp-submit { background:#000; color:#fff; border:none; padding:10px 22px; font-size:15px;
+              border-radius:6px; cursor:pointer; }
+    /* Avatar picker — hidden until the user opens it */
+    .mp-picker { max-width:680px; margin:0 auto 26px; border:1px solid #e6e6e6; border-radius:10px;
+              padding:16px; background:#fafafa; }
+    .mp-picker .up { text-align:center; font-size:13px; color:#666; margin-bottom:14px; }
+    .mp-sil-grid { display:flex; flex-wrap:wrap; gap:12px; justify-content:center; }
+    .mp-sil-opt { cursor:pointer; }
+    .mp-sil-opt input { display:none; }
+    .mp-sil-opt img { width:64px; height:98px; object-fit:contain; border:2px solid transparent;
+              border-radius:8px; padding:5px; background:#fff; }
+    .mp-sil-opt input:checked + img { border-color:#000; background:#eee; }
+    /* The "crowd": each silhouette is sized by its own shape (height set inline
+       per person = min(340, 280/aspect)) so tall ones fill the height and
+       wide/sitting ones get width instead of shrinking; all share a baseline. */
+    .mp-crowd { display:flex; flex-wrap:wrap; gap:0 10px; justify-content:center; align-items:flex-end; }
+    .mp-card { min-width:110px; max-width:320px; padding:0 4px; text-decoration:none; color:inherit;
+               text-align:center; transition:transform .15s; }
+    .mp-card:hover { transform:translateY(-5px); }
+    .mp-fig { display:flex; align-items:flex-end; justify-content:center; margin-bottom:8px; }
+    .mp-fig img { width:auto; object-fit:contain; filter: drop-shadow(0 4px 6px rgba(0,0,0,.15)); }
+    .mp-fig .ph { height:320px; width:auto; color:#111; }
+    .mp-name { font-weight:600; font-size:16px; word-break:break-word; }
+    .mp-count { color:#888; font-size:13px; margin-top:2px; }
+    .mp-empty { text-align:center; color:#888; margin-top:28px; }
+  </style>
+</head>
+<body>
+  <header class="main-header">
+    <nav class="top-menu">
+      <a href="{{ url_for('main.mood_grid') }}" class="menu-link">{{ t('nav.mood_grid') }}</a>
+      <a href="{{ url_for('main.life_calendar') }}" class="menu-link">{{ t('nav.life_calendar') }}</a>
+      <a href="{{ url_for('graphics.graphics_page') }}" class="menu-link active-link">{{ t('nav.graphics') }}</a>
+      {% if module_active('assistant') %}
+        <a href="{{ url_for('assistant.chat') }}" class="menu-link">{{ t('nav.assistant') }}</a>
+      {% endif %}
+      {% if module_active('deep_mind') %}
+        <a href="{{ url_for('deep_mind.neural_map') }}" class="menu-link">{{ t('nav.deep_mind') }}</a>
+      {% endif %}
+      <a href="{{ url_for('main.account') }}" class="menu-link">{{ t('nav.account') }}</a>
+      <a href="{{ url_for('sync.sync_page') }}" class="menu-link">{{ t('nav.sync') }}</a>
+      {% if module_active('customization') %}<a href="{{ url_for('customization.settings') }}" class="menu-link">{{ t('nav.customize') }}</a>{% endif %}
+      <a href="{{ url_for('modules.modules_page') }}" class="menu-link">{{ t('nav.modules') }}</a>
+    </nav>
+  </header>
+
+  <main class="graphics-main">
+    <div class="detail-header">
+      <a href="{{ url_for('graphics.graphics_page') }}" class="back-link">{{ t('graphics.back') }}</a>
+      <p class="graphics-title">{{ t('graphics.my_people.title') }}</p>
+      <p class="graphics-summary">{{ t('graphics.my_people.subtitle') }}</p>
+    </div>
+
+    <form method="post" action="{{ url_for('graphics.my_people_add') }}"
+          enctype="multipart/form-data">
+      <div class="mp-add">
+        <input type="text" name="name" id="mp-name" list="mp-suggest"
+               placeholder="{{ t('graphics.my_people.name_placeholder') }}" required>
+        <datalist id="mp-suggest"></datalist>
+        <button type="button" class="mp-toggle" id="mp-avatar-toggle" onclick="mpTogglePicker()">
+          {{ t('graphics.my_people.choose_avatar') }}
+        </button>
+        <button type="submit" class="mp-submit">{{ t('graphics.my_people.add') }}</button>
+      </div>
+      <div class="mp-picker" id="mp-picker" style="display:none;">
+        <div class="up">
+          {{ t('graphics.my_people.upload_own') }}
+          <input type="file" name="photo" accept="image/*" onchange="mpChosen()">
+        </div>
+        {% if silhouettes %}
+        <div class="mp-sil-grid">
+          {% for s in silhouettes %}
+            <label class="mp-sil-opt">
+              <input type="radio" name="silhouette" value="{{ s.name }}" onchange="mpChosen()">
+              <img src="{{ url_for('graphics.static', filename='silhouettes/' + s.name) }}" alt="">
+            </label>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    </form>
+    <script>
+      function mpTogglePicker() {
+        var p = document.getElementById('mp-picker');
+        p.style.display = (p.style.display === 'none') ? 'block' : 'none';
+      }
+      function mpChosen() {
+        var t = document.getElementById('mp-avatar-toggle');
+        t.classList.add('chosen');
+        t.textContent = {{ t('graphics.my_people.avatar_chosen')|tojson }};
+      }
+      (function () {
+        var input = document.getElementById('mp-name');
+        var dl = document.getElementById('mp-suggest');
+        var loaded = false;
+        function load() {
+          if (loaded) return; loaded = true;
+          fetch('{{ url_for("graphics.my_people_suggest") }}')
+            .then(function (r) { return r.json(); })
+            .then(function (names) {
+              names.forEach(function (n) {
+                var o = document.createElement('option'); o.value = n; dl.appendChild(o);
+              });
+            }).catch(function () {});
+        }
+        input.addEventListener('focus', load);
+        input.addEventListener('input', load);
+      })();
+    </script>
+
+    {% if items %}
+      <div class="mp-crowd">
+        {% for it in items %}
+          <a class="mp-card" href="{{ url_for('graphics.my_people_detail', person_id=it.p.id) }}">
+            <div class="mp-fig">
+              {% if it.p.photo_filename %}
+                <img style="max-height:340px;max-width:280px;"
+                     src="{{ url_for('graphics.my_people_photo', filename=it.p.photo_filename) }}" alt="">
+              {% elif it.p.silhouette %}
+                {% set asp = sil_aspect.get(it.p.silhouette, 1) or 1 %}
+                <img style="height: {{ [340, (280 / asp)]|min|round|int }}px;"
+                     src="{{ url_for('graphics.static', filename='silhouettes/' + it.p.silhouette) }}" alt="">
+              {% else %}
+                <svg class="ph" viewBox="0 0 40 100" fill="currentColor" aria-hidden="true">
+                  <circle cx="20" cy="14" r="10"/><rect x="8" y="28" width="24" height="72" rx="12"/>
+                </svg>
+              {% endif %}
+            </div>
+            <div class="mp-name">{{ it.p.name }}</div>
+            <div class="mp-count">{{ t('graphics.my_people.count', n=it.count) }}</div>
+          </a>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="mp-empty">{{ t('graphics.my_people.empty') }}</p>
+    {% endif %}
+  </main>
+</body>
+</html>

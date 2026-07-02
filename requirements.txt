@@ -11,3 +11,8 @@ certifi>=2024.2.2
 # offline-friendly install needs no system library. Same primitives the future
 # PWA (libsodium.js) and Flutter (sodium) clients use → byte-exact interop.
 PyNaCl>=1.5.0
+# Russian morphology for the (AI-free) "My people" graph: matches a name across
+# all its declined forms (Аня/Ане/Аню/Аней…) by lemma. Pure-Python + a bundled
+# offline dictionary, so it works without the assistant module or any network.
+pymorphy3>=2.0.2
+pymorphy3-dicts-ru>=2.4.0

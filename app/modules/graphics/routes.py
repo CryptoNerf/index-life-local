@@ -9,6 +9,9 @@
 Insights — landing with visualization cards + detail pages.
 """
 import math
+import os
+import re
+import json
 from datetime import date, timedelta
 from collections import Counter
 
@@ -718,27 +721,31 @@ def rose(year=None):
 
         alpha_start = first_alpha + i * (sector_width + gap_rad)
 
-        # Outer density curve: angle sweeps across the sector, radius = inner + norm*(outer-inner)
+        mid_alpha = alpha_start + sector_width / 2
+        max_half = (sector_width / 2) * 0.9
+
+        # Symmetric petal centred on the sector midline: radius = rating level
+        # (base = 1 … tip = 10), angular half-width = that rating's density, so
+        # the petal bulges where ratings cluster — straight, not skewed.
         outer_pts = []
         for k, v in enumerate(norm):
-            alpha = alpha_start + (k / (samples - 1)) * sector_width
-            r = inner_r + v * (outer_r - inner_r)
+            r = inner_r + (k / (samples - 1)) * (outer_r - inner_r)
+            alpha = mid_alpha + v * max_half
             outer_pts.append((
                 round(cx + r * math.cos(alpha), 2),
                 round(cy + r * math.sin(alpha), 2),
             ))
 
-        # Inner arc (reverse angular direction) to close the shape
         inner_pts = []
         for k in range(samples - 1, -1, -1):
-            alpha = alpha_start + (k / (samples - 1)) * sector_width
+            r = inner_r + (k / (samples - 1)) * (outer_r - inner_r)
+            alpha = mid_alpha - norm[k] * max_half
             inner_pts.append((
-                round(cx + inner_r * math.cos(alpha), 2),
-                round(cy + inner_r * math.sin(alpha), 2),
+                round(cx + r * math.cos(alpha), 2),
+                round(cy + r * math.sin(alpha), 2),
             ))
 
         # Label position — slightly outside outer_r at sector midpoint
-        mid_alpha = alpha_start + sector_width / 2
         label_r = outer_r + 24
         lx = cx + label_r * math.cos(mid_alpha)
         ly = cy + label_r * math.sin(mid_alpha)
@@ -770,18 +777,19 @@ def rose(year=None):
         {'r': outer_r},
     ]
 
-    # Rating scale tick on the Monday sector (small "1" and "10" markers at petal edges)
-    mon_start = first_alpha
-    mon_end = first_alpha + sector_width
+    # Rating scale marker: radius now maps to rating (1 at the base near the
+    # centre, 10 at the tip). Put the two ticks along the left edge of the
+    # Monday sector so they don't collide with the "пн" label at the midline.
+    mon_edge = first_alpha
     scale_ticks = [
         {
-            'x': cx + (outer_r + 10) * math.cos(mon_start),
-            'y': cy + (outer_r + 10) * math.sin(mon_start),
+            'x': cx + (inner_r - 2) * math.cos(mon_edge),
+            'y': cy + (inner_r - 2) * math.sin(mon_edge),
             'label': '1',
         },
         {
-            'x': cx + (outer_r + 10) * math.cos(mon_end),
-            'y': cy + (outer_r + 10) * math.sin(mon_end),
+            'x': cx + (outer_r + 8) * math.cos(mon_edge),
+            'y': cy + (outer_r + 8) * math.sin(mon_edge),
             'label': '10',
         },
     ]
@@ -1653,4 +1661,217 @@ def activities_reextract():
 def activities_reextract_status():
     from app.modules.assistant.background import get_activities_extract_status
     return jsonify(get_activities_extract_status())
+
+
+@bp.route('/graphics/people/update', methods=['POST'])
+def people_update():
+    """Incremental "update AI data" for the People chart: extract names for
+    entries missing them only (preserves existing data). Shares the extract
+    status with re-extract, so /graphics/people/reextract/status tracks both."""
+    err = _require_assistant()
+    if err:
+        return err
+    from app.modules.assistant.background import backfill_people_async
+    started = backfill_people_async(current_app._get_current_object())
+    return jsonify({'started': started})
+
+
+@bp.route('/graphics/activities/update', methods=['POST'])
+def activities_update():
+    """Incremental "update AI data" for the Activities chart (missing entries only)."""
+    err = _require_assistant()
+    if err:
+        return err
+    from app.modules.assistant.background import backfill_activities_async
+    started = backfill_activities_async(current_app._get_current_object())
+    return jsonify({'started': started})
+
+
+# ── "My people" — AI-free browse-entries-by-person ───────────────────
+# No AI, no tone. The user adds a name; pymorphy3 matches every declined form
+# across their notes; each person is a face in the "crowd", click → entries.
+
+def _people_photo_dir():
+    from pathlib import Path
+    d = Path(current_app.config['UPLOAD_FOLDER']) / 'people'
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _entries_with_notes():
+    return (MoodEntry.query
+            .filter(MoodEntry.deleted == False,           # noqa: E712
+                    MoodEntry.note.isnot(None), MoodEntry.note != '')
+            .order_by(MoodEntry.date.desc(), MoodEntry.id.desc())
+            .all())
+
+
+def _silhouette_files():
+    from pathlib import Path
+    d = Path(__file__).parent / 'static' / 'silhouettes'
+    if not d.is_dir():
+        return []
+    exts = ('.png', '.svg', '.webp', '.jpg', '.jpeg', '.gif')
+    return sorted((f for f in d.iterdir() if f.suffix.lower() in exts),
+                  key=lambda p: p.name)
+
+
+def _svg_aspect(path):
+    """width/height of an SVG from its viewBox (or width/height attrs). Used to
+    size each silhouette by its own shape: tall ones fill the height, wide/square
+    ones (sitting, dancing) get more width instead of shrinking. 1.0 on failure."""
+    try:
+        head = path.read_text(encoding='utf-8', errors='ignore')[:2000]
+        m = re.search(r'viewBox\s*=\s*"\s*[\d.eE+-]+\s+[\d.eE+-]+\s+'
+                      r'([\d.eE+-]+)\s+([\d.eE+-]+)', head)
+        if m:
+            w, h = float(m.group(1)), float(m.group(2))
+        else:
+            mw = re.search(r'\bwidth\s*=\s*"([\d.]+)', head)
+            mh = re.search(r'\bheight\s*=\s*"([\d.]+)', head)
+            w = float(mw.group(1)) if mw else 1.0
+            h = float(mh.group(1)) if mh else 1.0
+        return round(w / h, 3) if h else 1.0
+    except Exception:
+        return 1.0
+
+
+def _silhouettes():
+    """[{name, aspect}] for the picker; aspect lets templates size each one."""
+    out = []
+    for f in _silhouette_files():
+        aspect = _svg_aspect(f) if f.suffix.lower() == '.svg' else 1.0
+        out.append({'name': f.name, 'aspect': aspect})
+    return out
+
+
+def _silhouette_names():
+    return [f.name for f in _silhouette_files()]
+
+
+def _drop_photo(person):
+    if person.photo_filename:
+        try:
+            (_people_photo_dir() / person.photo_filename).unlink(missing_ok=True)
+        except Exception:
+            pass
+        person.photo_filename = None
+
+
+def _apply_avatar(person):
+    """Set the person's avatar from the form: an uploaded photo wins; otherwise a
+    picked silhouette from the library; otherwise leave the current one."""
+    from werkzeug.utils import secure_filename
+    file = request.files.get('photo')
+    if file and file.filename:
+        ext = os.path.splitext(secure_filename(file.filename))[1].lower()
+        if ext in ('.jpg', '.jpeg', '.png', '.gif', '.webp'):
+            fname = f'person_{person.id}{ext}'
+            if person.photo_filename and person.photo_filename != fname:
+                _drop_photo(person)
+            file.save(str(_people_photo_dir() / fname))
+            person.photo_filename = fname
+            person.silhouette = None
+            return
+    sil = (request.form.get('silhouette') or '').strip()
+    if sil == '__none__':
+        person.silhouette = None
+    elif sil and sil in _silhouette_names():
+        person.silhouette = sil
+        _drop_photo(person)
+
+
+def _parse_terms(field):
+    """Split a comma/newline list into a JSON array (or None if empty)."""
+    parts = [p.strip() for p in re.split(r'[,\n]', request.form.get(field, '')) if p.strip()]
+    return json.dumps(parts, ensure_ascii=False) if parts else None
+
+
+@bp.route('/graphics/my-people')
+def my_people():
+    from app.models import UserPerson
+    from app.people_match import mention_count
+    people = UserPerson.query.all()
+    entries = _entries_with_notes()
+    items = [{'p': p, 'count': mention_count(p, entries)} for p in people]
+    items.sort(key=lambda x: (-x['count'], x['p'].name.lower()))
+    sils = _silhouettes()
+    return render_template('graphics/graphics_my_people.html',
+                           items=items, silhouettes=sils,
+                           sil_aspect={s['name']: s['aspect'] for s in sils})
+
+
+@bp.route('/graphics/my-people/add', methods=['POST'])
+def my_people_add():
+    from app.models import UserPerson
+    name = (request.form.get('name') or '').strip()
+    if not name:
+        return redirect(url_for('graphics.my_people'))
+    person = UserPerson(name=name)
+    db.session.add(person)
+    db.session.flush()  # assign id for the photo filename
+    _apply_avatar(person)
+    db.session.commit()
+    return redirect(url_for('graphics.my_people_detail', person_id=person.id))
+
+
+@bp.route('/graphics/my-people/<int:person_id>')
+def my_people_detail(person_id):
+    from app.models import UserPerson
+    from app.people_match import matching_entry_ids, name_forms
+    person = db.session.get(UserPerson, person_id)
+    if person is None:
+        return redirect(url_for('graphics.my_people'))
+    entries = _entries_with_notes()
+    ids = set(matching_entry_ids(person, entries))
+    matched = [e for e in entries if e.id in ids]
+    return render_template('graphics/graphics_my_people_detail.html',
+        person=person, entries=matched,
+        aliases=json.loads(person.aliases) if person.aliases else [],
+        excluded=json.loads(person.excluded) if person.excluded else [],
+        forms=name_forms(person.name), silhouettes=_silhouettes())
+
+
+@bp.route('/graphics/my-people/<int:person_id>/edit', methods=['POST'])
+def my_people_edit(person_id):
+    from app.models import UserPerson
+    person = db.session.get(UserPerson, person_id)
+    if person is None:
+        return redirect(url_for('graphics.my_people'))
+    name = (request.form.get('name') or '').strip()
+    if name:
+        person.name = name
+    person.aliases = _parse_terms('aliases')
+    person.excluded = _parse_terms('excluded')
+    _apply_avatar(person)
+    db.session.commit()
+    return redirect(url_for('graphics.my_people_detail', person_id=person.id))
+
+
+@bp.route('/graphics/my-people/<int:person_id>/delete', methods=['POST'])
+def my_people_delete(person_id):
+    from app.models import UserPerson
+    person = db.session.get(UserPerson, person_id)
+    if person is not None:
+        if person.photo_filename:
+            try:
+                (_people_photo_dir() / person.photo_filename).unlink(missing_ok=True)
+            except Exception:
+                pass
+        db.session.delete(person)
+        db.session.commit()
+    return redirect(url_for('graphics.my_people'))
+
+
+@bp.route('/graphics/my-people/photo/<path:filename>')
+def my_people_photo(filename):
+    from flask import send_from_directory
+    return send_from_directory(str(_people_photo_dir()), filename)
+
+
+@bp.route('/graphics/my-people/suggest')
+def my_people_suggest():
+    """Candidate names found in the notes, for the "add person" autocomplete."""
+    from app.people_match import suggest_names
+    return jsonify(suggest_names(_entries_with_notes()))
 

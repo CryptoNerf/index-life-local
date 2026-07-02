@@ -62,6 +62,22 @@
         <p class="viz-card-desc">{{ t('graphics.card.overview.desc') }}</p>
       </a>
 
+      {# ── My people (AI-free: browse entries by person) ── #}
+      <a href="{{ url_for('graphics.my_people') }}" class="viz-card">
+        <div class="viz-preview" style="align-items:flex-end;">
+          <div style="display:flex; align-items:flex-end; justify-content:center; gap:3px; height:90%;">
+            {% for s in ['1Silhouette_Female.svg', 'Man_standing_silhouette.svg',
+                         'Girl_silhouette_hand_up.svg', 'Female_shadow 1.svg',
+                         '3Silhouette_Female.svg'] %}
+              <img src="{{ url_for('graphics.static', filename='silhouettes/' + s) }}"
+                   alt="" style="height:100%; width:auto;">
+            {% endfor %}
+          </div>
+        </div>
+        <p class="viz-card-title">{{ t('graphics.card.my_people.title') }}</p>
+        <p class="viz-card-desc">{{ t('graphics.card.my_people.desc') }}</p>
+      </a>
+
       {# ── Coming soon cards ── #}
       <a href="{{ url_for('graphics.spiral') }}" class="viz-card viz-card-spiral">
         <div class="viz-preview">

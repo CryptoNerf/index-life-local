@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="{{ current_lang }}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ person.name }}</title>
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/calendar.css') }}">
+  <link rel="stylesheet" href="{{ url_for('graphics.static', filename='css/graphics.css') }}">
+  {{ customization_css }}
+  <style>
+    /* Two columns: silhouette on the left, entries on the right. The figure
+       scrolls together with the entries (no sticky). */
+    .mpd-layout { display:flex; gap:40px; align-items:flex-start; max-width:1000px;
+                  margin:22px auto 0; text-align:left; }
+    .mpd-figure { flex:none; width:220px; text-align:center; }
+    .mpd-figure img { width:100%; height:auto; max-height:470px; object-fit:contain;
+                  filter: drop-shadow(0 4px 8px rgba(0,0,0,.18)); }
+    .mpd-figure .ph { width:72%; height:auto; color:#111; }
+    .mpd-figname { font-weight:600; font-size:20px; margin-top:12px; word-break:break-word; }
+    .mpd-figcount { color:#888; font-size:14px; margin-top:2px; }
+    .mpd-entries-col { flex:1; min-width:0; }
+    @media (max-width:760px) {
+      .mpd-layout { flex-direction:column; align-items:center; gap:18px; }
+      .mpd-figure { position:static; width:170px; }
+      .mpd-entries-col { width:100%; }
+    }
+    .mpd-sil-grid { display:flex; flex-wrap:wrap; gap:10px; margin-top:6px; }
+    .mpd-sil-opt { cursor:pointer; }
+    .mpd-sil-opt input { display:none; }
+    .mpd-sil-opt img { width:48px; height:64px; object-fit:contain; border:2px solid transparent;
+              border-radius:8px; padding:4px; background:#f3f3f3; }
+    .mpd-sil-opt input:checked + img { border-color:#000; }
+    .mpd-sil-opt.none span { display:flex; width:48px; height:64px; align-items:center;
+              justify-content:center; border:2px solid transparent; border-radius:8px;
+              background:#f3f3f3; color:#999; font-size:12px; text-align:center; }
+    .mpd-sil-opt input:checked + span { border-color:#000; }
+    .mpd-entries { max-width:720px; margin:24px auto 0; }
+    /* Solid app-surface fill so entries stay readable over a custom background. */
+    .mpd-entry { background: var(--bg-color, #fff); color: var(--text-color, #000);
+                 border:1px solid var(--chart-grid-color, #e5e5e5); border-radius:8px;
+                 padding:12px 16px; margin-bottom:12px; text-align:left; }
+    .mpd-entry .d { font-size:13px; color:#888; margin-bottom:4px; }
+    .mpd-entry .n { white-space:pre-wrap; line-height:1.5; }
+    .mpd-settings { max-width:720px; margin:26px auto 0; text-align:left;
+                    border-top:1px solid #eee; padding-top:20px; }
+    .mpd-settings summary { cursor:pointer; font-weight:600; }
+    .mpd-settings label { display:block; font-size:13px; color:#666; margin:14px 0 4px; }
+    .mpd-settings input[type=text], .mpd-settings textarea {
+        width:100%; padding:8px 12px; font-size:15px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box; }
+    .mpd-forms { font-size:13px; color:#888; margin-top:12px; line-height:1.5; }
+    .mpd-btn { background:#000; color:#fff; border:none; padding:9px 20px; font-size:15px; border-radius:6px; cursor:pointer; }
+    .mpd-del { background:transparent; color:#b00; border:1px solid #ddd; padding:8px 16px; border-radius:6px; cursor:pointer; }
+    .mpd-empty { text-align:center; color:#888; margin-top:20px; }
+  </style>
+</head>
+<body>
+  <header class="main-header">
+    <nav class="top-menu">
+      <a href="{{ url_for('main.mood_grid') }}" class="menu-link">{{ t('nav.mood_grid') }}</a>
+      <a href="{{ url_for('main.life_calendar') }}" class="menu-link">{{ t('nav.life_calendar') }}</a>
+      <a href="{{ url_for('graphics.graphics_page') }}" class="menu-link active-link">{{ t('nav.graphics') }}</a>
+      {% if module_active('assistant') %}
+        <a href="{{ url_for('assistant.chat') }}" class="menu-link">{{ t('nav.assistant') }}</a>
+      {% endif %}
+      {% if module_active('deep_mind') %}
+        <a href="{{ url_for('deep_mind.neural_map') }}" class="menu-link">{{ t('nav.deep_mind') }}</a>
+      {% endif %}
+      <a href="{{ url_for('main.account') }}" class="menu-link">{{ t('nav.account') }}</a>
+      <a href="{{ url_for('sync.sync_page') }}" class="menu-link">{{ t('nav.sync') }}</a>
+      {% if module_active('customization') %}<a href="{{ url_for('customization.settings') }}" class="menu-link">{{ t('nav.customize') }}</a>{% endif %}
+      <a href="{{ url_for('modules.modules_page') }}" class="menu-link">{{ t('nav.modules') }}</a>
+    </nav>
+  </header>
+
+  <main class="graphics-main">
+    <div class="detail-header">
+      <a href="{{ url_for('graphics.my_people') }}" class="back-link">{{ t('graphics.back') }}</a>
+      <p class="graphics-title">{{ person.name }}</p>
+    </div>
+
+    <div class="mpd-layout">
+      <div class="mpd-figure">
+        {% if person.photo_filename %}
+          <img src="{{ url_for('graphics.my_people_photo', filename=person.photo_filename) }}" alt="">
+        {% elif person.silhouette %}
+          <img src="{{ url_for('graphics.static', filename='silhouettes/' + person.silhouette) }}" alt="">
+        {% else %}
+          <svg class="ph" viewBox="0 0 40 100" fill="currentColor" aria-hidden="true">
+            <circle cx="20" cy="14" r="10"/><rect x="8" y="28" width="24" height="72" rx="12"/>
+          </svg>
+        {% endif %}
+        <div class="mpd-figname">{{ person.name }}</div>
+        <div class="mpd-figcount">{{ t('graphics.my_people.count', n=entries|length) }}</div>
+      </div>
+
+      <div class="mpd-entries-col">
+        {% if entries %}
+          {% for e in entries %}
+            <div class="mpd-entry">
+              <div class="d">{{ e.date.strftime('%d.%m.%Y') }}</div>
+              <div class="n">{{ e.note }}</div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <p class="mpd-empty">{{ t('graphics.my_people.no_entries') }}</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="mpd-settings">
+      <details>
+        <summary>{{ t('graphics.my_people.edit') }}</summary>
+        <form method="post" action="{{ url_for('graphics.my_people_edit', person_id=person.id) }}"
+              enctype="multipart/form-data">
+          <label>{{ t('graphics.my_people.name') }}</label>
+          <input type="text" name="name" value="{{ person.name }}">
+          <label>{{ t('graphics.my_people.aliases_label') }}</label>
+          <input type="text" name="aliases" value="{{ aliases|join(', ') }}">
+          <label>{{ t('graphics.my_people.excluded_label') }}</label>
+          <input type="text" name="excluded" value="{{ excluded|join(', ') }}">
+          <label>{{ t('graphics.my_people.photo') }}</label>
+          <input type="file" name="photo" accept="image/*">
+          {% if silhouettes %}
+          <label>{{ t('graphics.my_people.pick_silhouette') }}</label>
+          <div class="mpd-sil-grid">
+            <label class="mpd-sil-opt none">
+              <input type="radio" name="silhouette" value="__none__"
+                     {% if not person.silhouette %}checked{% endif %}>
+              <span>{{ t('graphics.my_people.no_silhouette') }}</span>
+            </label>
+            {% for s in silhouettes %}
+              <label class="mpd-sil-opt">
+                <input type="radio" name="silhouette" value="{{ s.name }}"
+                       {% if person.silhouette == s.name %}checked{% endif %}>
+                <img src="{{ url_for('graphics.static', filename='silhouettes/' + s.name) }}" alt="">
+              </label>
+            {% endfor %}
+          </div>
+          {% endif %}
+          <div class="mpd-forms">
+            {{ t('graphics.my_people.forms_label') }} {{ forms|join(', ') }}
+          </div>
+          <div style="margin-top:16px; display:flex; gap:10px; flex-wrap:wrap;">
+            <button type="submit" class="mpd-btn">{{ t('graphics.my_people.save') }}</button>
+          </div>
+        </form>
+        <form method="post" action="{{ url_for('graphics.my_people_delete', person_id=person.id) }}"
+              style="margin-top:12px;"
+              onsubmit="return confirm({{ t('graphics.my_people.delete_confirm')|tojson }});">
+          <button type="submit" class="mpd-del">{{ t('graphics.my_people.delete') }}</button>
+        </form>
+      </details>
+    </div>
+  </main>
+</body>
+</html>

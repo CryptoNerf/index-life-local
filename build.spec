@@ -45,6 +45,17 @@ if sys.platform == 'win32':
 # encrypted-sync crypto (app/sync_crypto.py) works in the frozen build.
 _nacl_datas, _nacl_binaries, _nacl_hidden = collect_all('nacl')
 
+# pymorphy3 (+ offline RU dictionary + dawg2) for the AI-free "My people" graph.
+_pm_datas, _pm_binaries, _pm_hidden = [], [], []
+for _pm_pkg in ('pymorphy3', 'pymorphy3_dicts_ru', 'dawg_python'):
+    try:
+        _d, _b, _h = collect_all(_pm_pkg)
+        _pm_datas += _d
+        _pm_binaries += _b
+        _pm_hidden += _h
+    except Exception:
+        pass
+
 
 def module_datas():
     datas = []
@@ -71,7 +82,7 @@ def module_datas():
 a = Analysis(
     ['run.py'],
     pathex=[str(root_dir)],
-    binaries=_wv_binaries + _nacl_binaries,
+    binaries=_wv_binaries + _nacl_binaries + _pm_binaries,
     datas=[
         ('app/templates', 'app/templates'),
         ('app/static', 'app/static'),
@@ -82,11 +93,15 @@ a = Analysis(
         ('install_modules.bat', '.'),
         ('install_modules.sh', '.'),
         ('tools/install_modules.py', 'tools'),
-    ] + module_datas() + _wv_datas + _nacl_datas,
+    ] + module_datas() + _wv_datas + _nacl_datas + _pm_datas,
     hiddenimports=[
         'flask',
         'flask_sqlalchemy',
         'sqlalchemy.sql.default_comparator',
+        # Lazily imported inside route functions, so PyInstaller's static
+        # analysis misses it — without this the "My people" graph 500s with
+        # "No module named 'app.people_match'".
+        'app.people_match',
         # CA bundle for HTTPS weather/geocoding (PyInstaller's certifi hook
         # also pulls in cacert.pem); without it SSL verification fails.
         'certifi',
@@ -101,7 +116,7 @@ a = Analysis(
         'ipaddress',
         'importlib.resources',
         'importlib.metadata',
-    ] + collect_submodules('app.modules') + _wv_hidden + _nacl_hidden,
+    ] + collect_submodules('app.modules') + _wv_hidden + _nacl_hidden + _pm_hidden,
     hookspath=[_wv_hook],
     hooksconfig={},
     runtime_hooks=[],
