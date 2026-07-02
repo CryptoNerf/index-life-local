@@ -61,6 +61,11 @@ class UserProfile(db.Model):
     # ISO 639-1 two-letter code. Drives the i18n context processor.
     # Migration v7 backfills 'ru' for existing rows.
     language = db.Column(db.String(2), nullable=False, default='ru')
+    # How the assistant generates LLM-derived data (summaries, people,
+    # activities, profile): 'auto' processes new entries in the background;
+    # 'manual' does it only when the user presses "update" in a chart/chat.
+    # Cheap embeddings run regardless. Migration v9 backfills 'auto'.
+    ai_index_mode = db.Column(db.String(10), nullable=False, default='auto')
     created_at = db.Column(db.DateTime, default=utcnow)
     updated_at = db.Column(db.DateTime, default=utcnow, onupdate=utcnow)
 
@@ -314,3 +319,31 @@ class DailySignal(db.Model):
 
     def __repr__(self):
         return f'<DailySignal {self.date} {self.source}.{self.metric}>'
+
+
+class UserPerson(db.Model):
+    """A person the user tracks in the AI-free "My people" graph.
+
+    No AI at all: mentions are found by matching the name (plus any manual
+    aliases) across every Russian declined form via pymorphy3 lemmas, minus
+    manual exclusions. No tone/rating — the day's mood is not attributed to the
+    person. Optional photo shows them as a face in the "crowd" of your people.
+    """
+    __tablename__ = 'user_people'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    photo_filename = db.Column(db.String(255), nullable=True)
+    # Avatar when no photo is uploaded: a filename from the bundled silhouette
+    # asset library (app/modules/graphics/static/silhouettes). Priority for the
+    # face in the "crowd": uploaded photo → silhouette → first letter.
+    silhouette = db.Column(db.String(120), nullable=True)
+    # JSON lists (nullable → treat as []): extra match terms (nicknames, other
+    # spellings) and lemmas/words to never count as a mention (false positives).
+    aliases = db.Column(db.Text, nullable=True)
+    excluded = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=utcnow)
+    updated_at = db.Column(db.DateTime, default=utcnow, onupdate=utcnow)
+
+    def __repr__(self):
+        return f'<UserPerson {self.name}>'

@@ -50,7 +50,7 @@ def _set_sqlite_pragmas(dbapi_connection, connection_record):
         cursor.close()
 
 # ── Schema version — bump when adding new migrations ──
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 11
 
 
 def _get_schema_version(conn) -> int:
@@ -300,6 +300,43 @@ def _migrate_v8(conn, inspector):
         ))
 
 
+def _migrate_v9(conn, inspector):
+    """Add ai_index_mode to user_profile (auto vs manual AI data processing).
+
+    Default 'auto' keeps the prior behaviour (the app processes summaries /
+    people / activities in the background) so existing users see no change.
+    """
+    if not _table_has_column(inspector, 'user_profile', 'ai_index_mode'):
+        conn.execute(text(
+            "ALTER TABLE user_profile ADD COLUMN ai_index_mode "
+            "VARCHAR(10) NOT NULL DEFAULT 'auto'"
+        ))
+
+
+def _migrate_v10(conn, inspector):
+    """Create user_people — names the user tracks in the AI-free "My people"
+    graph (name + optional photo + manual alias/exclusion lists)."""
+    if not _table_exists(inspector, 'user_people'):
+        conn.execute(text('''
+            CREATE TABLE user_people (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name VARCHAR(100) NOT NULL,
+                photo_filename VARCHAR(255),
+                aliases TEXT,
+                excluded TEXT,
+                created_at DATETIME,
+                updated_at DATETIME
+            )
+        '''))
+
+
+def _migrate_v11(conn, inspector):
+    """Add user_people.silhouette — the picked silhouette-asset filename used as
+    the avatar when no photo is uploaded."""
+    if not _table_has_column(inspector, 'user_people', 'silhouette'):
+        conn.execute(text('ALTER TABLE user_people ADD COLUMN silhouette VARCHAR(120)'))
+
+
 MIGRATIONS = {
     1: _migrate_v1,
     2: _migrate_v2,
@@ -309,6 +346,9 @@ MIGRATIONS = {
     6: _migrate_v6,
     7: _migrate_v7,
     8: _migrate_v8,
+    9: _migrate_v9,
+    10: _migrate_v10,
+    11: _migrate_v11,
 }
 
 
@@ -701,12 +741,16 @@ def create_app(config_class='config.Config'):
     if 'assistant' in app.config.get('ACTIVE_MODULES', []):
         try:
             from app.modules.assistant.background import (
-                warmup_async, backfill_assistant_data_async,
+                warmup_async, backfill_assistant_data_async, sync_missing_async,
             )
             warmup_async(app)
-            # One-time backfills for insights charts. People + activities
-            # run sequentially in a single thread to avoid doubling lock
-            # contention at startup.
+            # Proactive processing of any pending entries. Both are mode-aware:
+            # in 'auto' they load the model (pre-warmed, no freeze) and generate
+            # summaries / people / activities; in 'manual' they only refresh the
+            # cheap CPU embeddings and defer LLM work to the update button. Both
+            # no-op quickly when nothing is pending. They serialise on the
+            # shared lock, so running them together is safe.
+            sync_missing_async(app)
             backfill_assistant_data_async(app)
         except Exception:
             log.warning('Assistant warmup/backfill failed to start', exc_info=True)
