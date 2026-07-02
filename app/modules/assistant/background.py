@@ -34,6 +34,55 @@ def _backfill_start_delay() -> float:
 def _extract_yield() -> float:
     return _env_float('ASSISTANT_EXTRACT_YIELD', 0.3)
 
+
+def _ai_index_mode(app) -> str:
+    """'auto' (process LLM data in the background) or 'manual' (only when the
+    user presses the "update" button). Reads UserProfile; defaults to 'auto'.
+    """
+    from flask import has_app_context
+
+    def _read():
+        from app.models import UserProfile
+        p = UserProfile.query.first()
+        return (getattr(p, 'ai_index_mode', None) or 'auto') if p else 'auto'
+
+    try:
+        if has_app_context():
+            return _read()
+        with app.app_context():
+            return _read()
+    except Exception:
+        return 'auto'
+
+
+def _acquire_llm_for_bg(app, force: bool = False):
+    """LLM for a background task, honoring the AI-index mode.
+
+    force (user pressed "update") or 'auto' mode → load it (pre-warmed, so no
+    system freeze). 'manual' mode → return None so the caller skips LLM work;
+    the update button (force=True) is then the only way it runs.
+    """
+    if not force and _ai_index_mode(app) != 'auto':
+        return None
+    from .routes import _get_llm
+    return _get_llm()
+
+
+def _wait_if_chat_active(max_wait: float = 120.0) -> None:
+    """Pause background LLM work while the user is actively chatting, so a live
+    conversation never has to wait on background summarization. Caps the wait so
+    a stuck flag can't starve background work forever.
+    """
+    try:
+        from .routes import is_chat_active
+    except Exception:
+        return
+    waited = 0.0
+    while is_chat_active() and waited < max_wait:
+        time.sleep(0.5)
+        waited += 0.5
+
+
 _lock = threading.Lock()
 _reindex_state_lock = threading.Lock()
 _reindex_in_progress = False
@@ -188,6 +237,7 @@ def _run_extraction(app, entry_ids: list, extract_fn, label: str, status: dict |
         total = len(entry_ids)
         processed = 0
         for entry_id in entry_ids:
+            _wait_if_chat_active()  # yield to a live conversation
             # Fresh context per entry: DB connection released after each
             # commit, no stale transaction held during LLM inference.
             with app.app_context():
@@ -299,43 +349,53 @@ def _reextract_activities(app):
 
 
 def backfill_activities_async(app) -> bool:
-    """One-time backfill of EntryActivity rows for entries missing them.
-
-    Mirrors backfill_people_async — triggered at startup when assistant
-    is active, gated by sync_meta flag so it only runs once per install.
+    """User-triggered incremental update of EntryActivity rows (the Activities
+    chart's "update AI data" button). Only processes entries missing rows, so it
+    preserves existing data. Tracks progress in _activities_extract_status so the
+    page can poll and reload when done. Returns False if already running.
     """
-    thread = threading.Thread(target=_backfill_activities, args=(app,), daemon=True)
-    thread.start()
+    if _activities_extract_status['running']:
+        return False
+
+    def _run():
+        _activities_extract_status.update({
+            'running': True, 'processed': 0, 'total': 0, 'started_at': time.time(),
+        })
+        try:
+            _backfill_activities(app, status=_activities_extract_status)
+        finally:
+            _activities_extract_status['running'] = False
+
+    threading.Thread(target=_run, daemon=True).start()
     return True
 
 
-def backfill_assistant_data_async(app) -> bool:
+def backfill_assistant_data_async(app, force: bool = False) -> bool:
     """Run people + activities backfills sequentially in a SINGLE thread.
 
     Running them in parallel doubles startup contention on `_lock` and the
     LLM inference lock — every cooperative yield in `_run_extraction`
     bounces the lock between two backfills and any new-entry processing.
     Sequencing them serialises the work and lets new-entry processing
-    cut in cleanly between cycles.
+    cut in cleanly between cycles. `force=True` (user's update button) runs
+    regardless of the auto/manual mode.
     """
-    thread = threading.Thread(target=_backfill_sequential, args=(app,), daemon=True)
+    thread = threading.Thread(target=_backfill_sequential, args=(app, force), daemon=True)
     thread.start()
     return True
 
 
-def _backfill_sequential(app):
+def _backfill_sequential(app, force=False):
     # Hold off until the window/UI are up, so launch never feels like a freeze
     # even when this has lots of entries to process (ASSISTANT_BACKFILL_DELAY).
     delay = _backfill_start_delay()
     if delay > 0:
         time.sleep(delay)
-    # Never let an automatic backfill be what loads the multi-GB LLM — loading
-    # it onto the Metal GPU stalls the whole machine for a few seconds. If the
-    # model isn't resident yet, defer: opening the assistant loads it and the
-    # post-warmup catch-up re-triggers this once it's hot.
-    from .routes import llm_is_loaded
-    if not llm_is_loaded():
-        log.info('backfill: LLM not loaded — deferring until the assistant is opened')
+    # 'manual' mode: don't process in the background — wait for the user's
+    # "update AI data" button (force=True). 'auto' mode: proceed; the LLM here
+    # loads pre-warmed (gradual cache warm inside _get_llm), so no system freeze.
+    if not force and _ai_index_mode(app) != 'auto':
+        log.info('backfill: manual mode — deferring to the "update AI data" button')
         return
     try:
         _backfill_people(app)
@@ -347,13 +407,13 @@ def _backfill_sequential(app):
         log.warning(f'Activities backfill crashed: {e}')
 
 
-def _backfill_activities(app):
+def _backfill_activities(app, status=None):
     """Run activity extraction on entries that have no EntryActivity rows yet.
 
-    Checks pending entries on every startup — no persistent "done" flag. This
-    keeps the backfill correct under DB swaps (importing an older DB with more
-    entries reprocesses anything that's missing rows). The scan is a cheap
-    set-difference on ids.
+    Incremental (only entries missing rows), so it preserves existing data —
+    unlike re-extract, which wipes and rebuilds. Checks pending entries on every
+    startup — no persistent "done" flag — which keeps it correct under DB swaps.
+    Pass `status` (the extract-status dict) to surface progress to the UI.
     """
     with app.app_context():
         entries = MoodEntry.query.order_by(MoodEntry.date).all()
@@ -365,30 +425,43 @@ def _backfill_activities(app):
     if not pending_ids:
         return
 
+    if status is not None:
+        status['total'] = len(pending_ids)
     log.info(f'Activities backfill: {len(pending_ids)} entries pending')
     from .memory import extract_activities
-    _run_extraction(app, pending_ids, extract_activities, 'Activities backfill')
+    _run_extraction(app, pending_ids, extract_activities, 'Activities backfill', status=status)
 
 
 def backfill_people_async(app) -> bool:
-    """One-time backfill of EntryPerson rows for entries missing them.
-
-    Triggered at startup when assistant is active. Skips silently if the
-    backfill-complete flag is set in sync_meta. Processing happens in a
-    thread so app startup isn't blocked.
+    """User-triggered incremental update of EntryPerson rows (the People chart's
+    "update AI data" button). Only processes entries missing rows, so it
+    preserves existing data (and any manual edits) — unlike re-extract, which
+    wipes and rebuilds. Tracks progress in _people_extract_status so the page
+    can poll and reload when done. Returns False if already running.
     """
-    thread = threading.Thread(target=_backfill_people, args=(app,), daemon=True)
-    thread.start()
+    if _people_extract_status['running']:
+        return False
+
+    def _run():
+        _people_extract_status.update({
+            'running': True, 'processed': 0, 'total': 0, 'started_at': time.time(),
+        })
+        try:
+            _backfill_people(app, status=_people_extract_status)
+        finally:
+            _people_extract_status['running'] = False
+
+    threading.Thread(target=_run, daemon=True).start()
     return True
 
 
-def _backfill_people(app):
+def _backfill_people(app, status=None):
     """Run people extraction on entries that have no EntryPerson rows yet.
 
-    Checks pending entries on every startup — no persistent "done" flag. This
-    keeps the backfill correct under DB swaps (importing an older DB with more
-    entries reprocesses anything that's missing rows). The scan is a cheap
-    set-difference on ids.
+    Incremental (only entries missing rows), so it preserves existing data —
+    unlike re-extract, which wipes and rebuilds. Checks pending entries on every
+    startup — no persistent "done" flag — which keeps it correct under DB swaps.
+    Pass `status` (the extract-status dict) to surface progress to the UI.
     """
     with app.app_context():
         entries = MoodEntry.query.order_by(MoodEntry.date).all()
@@ -400,9 +473,11 @@ def _backfill_people(app):
     if not pending_ids:
         return
 
+    if status is not None:
+        status['total'] = len(pending_ids)
     log.info(f'People backfill: {len(pending_ids)} entries pending')
     from .memory import extract_people_mentions
-    _run_extraction(app, pending_ids, extract_people_mentions, 'People backfill')
+    _run_extraction(app, pending_ids, extract_people_mentions, 'People backfill', status=status)
 
 
 def _process_entry(app, entry_id: int):
@@ -441,14 +516,14 @@ def _process_entry(app, entry_id: int):
         # 2–6: Each step re-fetches the entry in a fresh context so no DB
         # connection is held while the LLM generates completions.
 
-        # These steps need the LLM. Don't load it from here — saving an entry
-        # must not stall the whole machine. Run them only if the model is
-        # already resident; otherwise they're picked up by the post-warmup
-        # catch-up (sync + backfill) once the user opens the assistant.
-        from .routes import llm_is_loaded
-        if not llm_is_loaded():
-            log.info('entry %d: embedding done, LLM steps deferred (model not loaded)', entry_id)
+        # These steps need the LLM. In 'auto' mode load it (pre-warmed, so no
+        # system freeze) and process now; in 'manual' mode skip — the user's
+        # "update AI data" button (force) is the only trigger there. Embeddings
+        # above already ran regardless.
+        if _acquire_llm_for_bg(app) is None:
+            log.info('entry %d: embedding done, LLM steps deferred (manual mode)', entry_id)
             return
+        _wait_if_chat_active()  # don't compete with a live conversation
 
         # 2. Summary
         with app.app_context():
@@ -706,11 +781,15 @@ def _reindex_all(app):
             _reindex_status['updated_at'] = time.time()
 
 
-def sync_missing_async(app) -> bool:
-    """Spawn a background thread to process only entries missing embeddings/summaries."""
+def sync_missing_async(app, force: bool = False) -> bool:
+    """Spawn a background thread to process entries missing embeddings/summaries.
+
+    `force=True` (user's update button) processes summaries regardless of the
+    auto/manual mode; otherwise summaries only run in 'auto' mode.
+    """
     if _lock.locked():
         return False
-    thread = threading.Thread(target=_sync_missing, args=(app,), daemon=True)
+    thread = threading.Thread(target=_sync_missing, args=(app, force), daemon=True)
     thread.start()
     return True
 
@@ -721,7 +800,7 @@ def rebuild_profile_async(app):
     thread.start()
 
 
-def _sync_missing(app):
+def _sync_missing(app, force=False):
     """Process only entries missing embeddings or summaries.
 
     Each entry runs in its own app_context so the DB connection is fully
@@ -787,27 +866,24 @@ def _sync_missing(app):
         _set_sync_status(phase='processing', total=total,
                          message=f'Обработка {total} записей')
 
-        # Don't let a background sync be what loads the multi-GB LLM — that
-        # stalls the whole machine for a few seconds. Use it only if it's
-        # already resident (the user opened the assistant). Embeddings are cheap
-        # and always run; summaries wait for a hot model and get picked up by
-        # the post-warmup catch-up.
-        llm = None
-        with app.app_context():
-            from .routes import llm_is_loaded, _get_llm
-            if llm_is_loaded():
-                try:
-                    llm = _get_llm()
-                except Exception as e:
-                    log.warning(f'sync: LLM present but failed to fetch: {e}')
-                    llm = None
+        # Load the LLM only if allowed: 'auto' mode or the user's update button
+        # (force). It loads pre-warmed (gradual cache warm), so no system freeze.
+        # In 'manual' mode we do embeddings only and defer summaries to the
+        # update button. Embeddings are cheap and always run.
+        try:
+            llm = _acquire_llm_for_bg(app, force)
+        except Exception as e:
+            log.warning(f'sync: LLM fetch failed: {e}')
+            llm = None
         if llm is None:
-            log.info('sync: LLM not loaded — embeddings only, summaries deferred')
+            log.info('sync: skipping summaries (manual mode) — embeddings only')
 
         # Phase 2: process each entry in its own context so the DB
         # connection is freed between entries. Cooperative yield between
         # entries lets new-entry processing cut in.
         for i, (entry_id, needs_embed, needs_summary) in enumerate(missing):
+            if needs_summary and llm is not None:
+                _wait_if_chat_active()  # yield to a live conversation
             with app.app_context():
                 entry = db.session.get(MoodEntry, entry_id)
                 if entry is None:

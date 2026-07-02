@@ -15,6 +15,7 @@ import shutil
 import subprocess
 import ctypes
 import threading
+import time
 from pathlib import Path
 from flask import render_template, request, Response, stream_with_context, jsonify, current_app
 from app import db
@@ -53,6 +54,21 @@ _llm = None
 _llm_n_ctx = None
 _llm_lock = threading.Lock()
 _llm_inference_lock = threading.Lock()  # Protects all create_chat_completion calls
+
+# Marks the assistant chat as "actively in use" so background LLM work
+# (summaries / people / activities) pauses during a live conversation and never
+# makes a chat message wait. Updated on every streamed token; self-expires.
+_chat_last_activity = 0.0
+
+
+def note_chat_activity() -> None:
+    global _chat_last_activity
+    _chat_last_activity = time.time()
+
+
+def is_chat_active(window: float = 5.0) -> bool:
+    """True if the user produced/received a chat token within `window` seconds."""
+    return (time.time() - _chat_last_activity) < window
 
 
 # ── Tool routing for the AI psychologist chat ─────────────────────────
@@ -1207,6 +1223,7 @@ def stream():
             # Acquire inference lock to prevent concurrent LLM access
             # (llama-cpp-python is not thread-safe)
             _llm_inference_lock.acquire()
+            note_chat_activity()
             try:
                 response = llm.create_chat_completion(**chat_kwargs)
 
@@ -1215,6 +1232,7 @@ def stream():
                 # thinking is enabled to wrap reasoning for the UI.
                 think_prefix_sent = False
                 for chunk in response:
+                    note_chat_activity()
                     delta = chunk['choices'][0].get('delta', {})
                     token = delta.get('content', '')
                     if token:
@@ -1340,14 +1358,11 @@ def stream():
 def warmup():
     """Load the LLM + embedding model when the user opens the assistant.
 
-    This is the one place we DO load the multi-GB model — the user asked for the
-    AI by opening the chat, so the (progress-barred) load is expected here.
-    Background tasks never load it themselves to avoid a system-wide stall on
-    launch; once it's hot we kick off a catch-up so any entries that piled up
-    while it was unloaded get their summaries / people / activities.
+    Opening the chat loads the model ONLY for the conversation — we deliberately
+    do NOT kick off summary/people/activity processing here, so background work
+    never competes with the live chat. That processing runs in the background
+    ('auto' mode) or on the user's "update AI data" button ('manual' mode).
     """
-    app_obj = current_app._get_current_object()
-
     def _warm():
         try:
             _get_llm()
@@ -1359,12 +1374,6 @@ def warmup():
             _get_embed_model()
         except Exception as e:
             log.warning(f'Embedding warmup failed: {e}')
-        try:
-            from .background import backfill_assistant_data_async, sync_missing_async
-            sync_missing_async(app_obj)
-            backfill_assistant_data_async(app_obj)
-        except Exception as e:
-            log.warning(f'Post-warmup catch-up failed to start: {e}')
 
     threading.Thread(target=_warm, daemon=True).start()
     return jsonify({'status': 'warming'})
@@ -1382,12 +1391,48 @@ def reindex():
 
 @bp.route('/sync', methods=['POST'])
 def sync():
-    """Process only entries missing embeddings or summaries."""
+    """Process only entries missing embeddings or summaries (user-forced)."""
     from .background import sync_missing_async
-    started = sync_missing_async(current_app._get_current_object())
+    started = sync_missing_async(current_app._get_current_object(), force=True)
     if started:
         return jsonify({'status': 'started', 'message': 'Sync started'})
     return jsonify({'status': 'busy', 'message': 'Background processing busy'})
+
+
+@bp.route('/process-pending', methods=['POST'])
+def process_pending():
+    """"Update AI data" button: force-generate summaries + people + activities
+    for any pending entries, regardless of the auto/manual mode."""
+    app_obj = current_app._get_current_object()
+    from .background import sync_missing_async, backfill_assistant_data_async
+    started = sync_missing_async(app_obj, force=True)
+    backfill_assistant_data_async(app_obj, force=True)
+    if started:
+        return jsonify({'status': 'started', 'message': 'Processing started'})
+    return jsonify({'status': 'busy', 'message': 'Background processing busy'})
+
+
+@bp.route('/set-index-mode', methods=['POST'])
+def set_index_mode():
+    """Switch auto/manual AI data processing. Switching to 'auto' kicks off a
+    catch-up so entries that piled up during 'manual' get processed."""
+    from flask import redirect
+    from app.models import UserProfile
+    mode = request.form.get('mode', 'auto')
+    if mode not in ('auto', 'manual'):
+        mode = 'auto'
+    profile = UserProfile.query.first()
+    if profile is None:
+        profile = UserProfile()
+        db.session.add(profile)
+    profile.ai_index_mode = mode
+    db.session.commit()
+    if mode == 'auto':
+        app_obj = current_app._get_current_object()
+        from .background import sync_missing_async, backfill_assistant_data_async
+        sync_missing_async(app_obj)
+        backfill_assistant_data_async(app_obj)
+    return redirect(request.referrer or '/account')
 
 
 @bp.route('/reset-profile', methods=['POST'])
@@ -1483,6 +1528,13 @@ def status():
     reindex_status = get_reindex_status()
     sync_status = get_sync_status()
 
+    from app.models import UserProfile
+    _profile_row = UserProfile.query.first()
+    ai_index_mode = getattr(_profile_row, 'ai_index_mode', 'auto') if _profile_row else 'auto'
+    # Entries still awaiting an LLM summary — the clearest "pending" indicator
+    # for the "update AI data" button (every entry should get exactly one).
+    pending = max(0, total_entries - summarized)
+
     # Chat message count for context indicator
     chat_count = ChatMessage.query.count()
 
@@ -1507,5 +1559,7 @@ def status():
         'reindex': reindex_status,
         'sync': sync_status,
         'chat_messages': chat_count,
+        'ai_index_mode': ai_index_mode,
+        'pending': pending,
         'n_ctx': _llm_n_ctx or _env_int('LLM_N_CTX', _DEFAULT_GPU_CTX, min_value=256),
     })

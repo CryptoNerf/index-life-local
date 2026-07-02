@@ -127,7 +127,8 @@
 
   document.getElementById('btn-sync').addEventListener('click', function () {
     var I18N = window.CHAT_I18N || {};
-    fetch('/assistant/sync', { method: 'POST' })
+    // "Update AI data": force summaries + people + activities for pending entries.
+    fetch('/assistant/process-pending', { method: 'POST' })
       .then(function (r) { return r.json(); })
       .then(function (data) {
         if (data.status === 'started') {
