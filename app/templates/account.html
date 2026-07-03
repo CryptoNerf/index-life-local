@@ -120,29 +120,30 @@
 
     <!-- AI data processing Section -->
     {% if module_active('assistant') %}
-    <div style="margin-top: 40px; padding-top: 24px; border-top: 1px solid #e0e0e0; text-align:center;">
-      <h2 style="margin-bottom: 8px;">{{ t('account.ai_index_heading') }}</h2>
-      <div style="margin-bottom: 16px; color: #666; font-size: 15px;">
-        {{ t('account.ai_index_desc') }}
-      </div>
-      <form method="post" action="{{ url_for('assistant.set_index_mode') }}"
-            style="display:flex; flex-direction:column; align-items:center;">
-        <div style="max-width:480px; text-align:left; margin-bottom:18px;">
-          <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:14px;">
-            <input type="radio" name="mode" value="auto" style="margin-top:4px;flex:none;"
-                   {% if profile.ai_index_mode != 'manual' %}checked{% endif %}>
-            <span><b>{{ t('account.ai_index_auto') }}</b><br>
-              <span style="color:#888;font-size:14px;">{{ t('account.ai_index_auto_desc') }}</span></span>
-          </label>
-          <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">
-            <input type="radio" name="mode" value="manual" style="margin-top:4px;flex:none;"
-                   {% if profile.ai_index_mode == 'manual' %}checked{% endif %}>
-            <span><b>{{ t('account.ai_index_manual') }}</b><br>
-              <span style="color:#888;font-size:14px;">{{ t('account.ai_index_manual_desc') }}</span></span>
-          </label>
+    <div style="margin-top: 40px; padding-top: 24px; border-top: 1px solid #e0e0e0;">
+      <div style="max-width: 520px; margin: 0 auto; text-align: center;">
+        <h2 style="margin-bottom: 8px;">{{ t('account.ai_index_heading') }}</h2>
+        <div style="margin-bottom: 18px; color: #666; font-size: 15px;">
+          {{ t('account.ai_index_desc') }}
         </div>
-        <button class="account-btn" type="submit">{{ t('account.ai_index_save') }}</button>
-      </form>
+        <form method="post" action="{{ url_for('assistant.set_index_mode') }}">
+          <div style="text-align: left; margin-bottom: 18px;">
+            <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:14px;">
+              <input type="radio" name="mode" value="auto" style="margin-top:4px;flex:none;"
+                     {% if profile.ai_index_mode != 'manual' %}checked{% endif %}>
+              <span><b>{{ t('account.ai_index_auto') }}</b><br>
+                <span style="color:#888;font-size:14px;">{{ t('account.ai_index_auto_desc') }}</span></span>
+            </label>
+            <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">
+              <input type="radio" name="mode" value="manual" style="margin-top:4px;flex:none;"
+                     {% if profile.ai_index_mode == 'manual' %}checked{% endif %}>
+              <span><b>{{ t('account.ai_index_manual') }}</b><br>
+                <span style="color:#888;font-size:14px;">{{ t('account.ai_index_manual_desc') }}</span></span>
+            </label>
+          </div>
+          <button class="account-btn" type="submit">{{ t('account.ai_index_save') }}</button>
+        </form>
+      </div>
     </div>
     {% endif %}
 

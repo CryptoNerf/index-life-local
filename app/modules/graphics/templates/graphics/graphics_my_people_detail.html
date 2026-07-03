@@ -9,11 +9,13 @@
   <link rel="stylesheet" href="{{ url_for('graphics.static', filename='css/graphics.css') }}">
   {{ customization_css }}
   <style>
-    /* Two columns: silhouette on the left, entries on the right. The figure
-       scrolls together with the entries (no sticky). */
+    /* Two columns: silhouette on the left, entries on the right. The figure is
+       sticky so it stays beside the notes while you scroll the long list, and
+       only scrolls away once the entries column ends. */
     .mpd-layout { display:flex; gap:40px; align-items:flex-start; max-width:1000px;
                   margin:22px auto 0; text-align:left; }
-    .mpd-figure { flex:none; width:220px; text-align:center; }
+    .mpd-figure { flex:none; width:220px; text-align:center;
+                  position:sticky; top:20px; align-self:flex-start; }
     .mpd-figure img { width:100%; height:auto; max-height:470px; object-fit:contain;
                   filter: drop-shadow(0 4px 8px rgba(0,0,0,.18)); }
     .mpd-figure .ph { width:72%; height:auto; color:#111; }
