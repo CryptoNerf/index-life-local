@@ -99,11 +99,14 @@ Do not use <think> tags or reveal reasoning. Answer with result only.
 SUMMARY: <краткое содержание>
 THEMES: <тема1>, <тема2>, ..."""
 
-# ── Activities extraction prompt ────────────────────────────────
+# ── Shared extraction rule blocks ───────────────────────────────
+# Single source of truth for WHAT counts as an activity / a person and how
+# tone is judged. Both the standalone prompts and the combined one are
+# assembled from these blocks, so the extraction criteria cannot drift
+# between the fast path (one combined call) and the fallback path.
 
-ACTIVITIES_PROMPT = """\
-Do not use <think> tags or reveal reasoning. Answer with valid JSON array only.
-Извлеки из записи дневника список активностей — того, ЧТО пользователь \
+_ACTIVITIES_RULES = """\
+Извлеки из записи список активностей — того, ЧТО пользователь \
 делал в этот день. Не эмоции, не состояния, не абстрактные темы — только \
 конкретные действия или занятия.
 
@@ -115,37 +118,17 @@ Do not use <think> tags or reveal reasoning. Answer with valid JSON array only.
 - "встреча с друзьями" (не "виделись с Олей и Петей в кафе")
 - "работа", "учёба", "прогулка", "кино", "готовка", "уборка"
 
-Если действий не упомянуто или запись только про эмоции — верни пустой \
-массив [].
-
-Запись от {date}, оценка дня {rating}/10:
-{note}
-
 Правила:
 - Максимум 5 активностей на запись
 - Одно слово или короткая фраза (до 30 символов)
 - Без эмоций, состояний ("тревога", "усталость", "радость" — это НЕ активности)
-- Никаких пояснений, markdown или другого текста — только JSON-массив
+- Если действий не упомянуто или запись только про эмоции — пустой массив []"""
 
-Формат:
-[
-  {{"activity": "программирование"}},
-  {{"activity": "спорт"}},
-  {{"activity": "встреча с друзьями"}}
-]"""
-
-
-# ── People extraction prompt ────────────────────────────────────
-
-PEOPLE_PROMPT = """\
-Do not use <think> tags or reveal reasoning. Answer with valid JSON array only.
-Ты анализируешь запись дневника и извлекаешь упоминания людей — имена \
+_PEOPLE_RULES = """\
+Извлеки упоминания людей — имена \
 собственные ИЛИ родственные/социальные роли (мама, папа, бабушка, дедушка, \
 брат, сестра, тётя, дядя, муж, жена, парень, девушка, друг, подруга, \
 коллега, начальник, психолог и т.п.).
-
-Запись от {date}, оценка дня {rating}/10:
-{note}
 
 ПРАВИЛА ВЫБОРА ИМЕНИ:
 - Если человек упомянут с ролью+именем ("тётя Лена", "Дядя Серёжа", "брат Илья", \
@@ -184,9 +167,37 @@ Do not use <think> tags or reveal reasoning. Answer with valid JSON array only.
 ("позвонил бабушке"), ставь "neutral", даже если день плохой.
 По умолчанию — "neutral". "positive" и "negative" только когда есть явные \
 маркеры эмоции В АДРЕС этого человека.
+- Если людей не упомянуто или речь только о себе — пустой массив []"""
 
-Если людей не упомянуто или речь только о себе — верни []. Без markdown, без \
-пояснений — только JSON-массив.
+# ── Activities extraction prompt ────────────────────────────────
+
+ACTIVITIES_PROMPT = """\
+Do not use <think> tags or reveal reasoning. Answer with valid JSON array only.
+""" + _ACTIVITIES_RULES + """
+
+Запись от {date}, оценка дня {rating}/10:
+{note}
+
+Никаких пояснений, markdown или другого текста — только JSON-массив.
+
+Формат:
+[
+  {{"activity": "программирование"}},
+  {{"activity": "спорт"}},
+  {{"activity": "встреча с друзьями"}}
+]"""
+
+
+# ── People extraction prompt ────────────────────────────────────
+
+PEOPLE_PROMPT = """\
+Do not use <think> tags or reveal reasoning. Answer with valid JSON array only.
+Ты анализируешь запись дневника. """ + _PEOPLE_RULES + """
+
+Запись от {date}, оценка дня {rating}/10:
+{note}
+
+Без markdown, без пояснений — только JSON-массив.
 
 Формат:
 [
@@ -194,6 +205,39 @@ Do not use <think> tags or reveal reasoning. Answer with valid JSON array only.
   {{"mention": "мама", "tone": "neutral"}},
   {{"mention": "Лена", "tone": "neutral"}}
 ]"""
+
+
+# ── Combined extraction prompt (one call = summary + people + activities) ──
+# The fast path for new/edited entries: three LLM passes over the same note
+# collapse into one. Assembled from the SAME rule blocks as the standalone
+# prompts, so extraction criteria are identical by construction; the parser
+# falls back to the three individual calls when this JSON is unusable.
+
+COMBINED_EXTRACT_PROMPT = """\
+Do not use <think> tags or reveal reasoning. Answer with valid JSON only.
+Проанализируй запись из дневника настроения и выполни ТРИ задачи сразу.
+
+Запись от {date}, оценка дня {rating}/10:
+{note}
+
+ЗАДАЧА 1 — КРАТКОЕ СОДЕРЖАНИЕ:
+Кратко опиши эту запись в 1-2 предложениях и выдели основные темы записи \
+(максимум 5 тем).
+
+ЗАДАЧА 2 — ЛЮДИ:
+""" + _PEOPLE_RULES + """
+
+ЗАДАЧА 3 — АКТИВНОСТИ:
+""" + _ACTIVITIES_RULES + """
+
+Ответь ТОЛЬКО валидным JSON-объектом строго такого вида, без markdown и \
+пояснений:
+{{
+  "summary": "<краткое содержание в 1-2 предложениях>",
+  "themes": ["<тема1>", "<тема2>"],
+  "people": [{{"mention": "Оля", "tone": "positive"}}, {{"mention": "мама", "tone": "neutral"}}],
+  "activities": ["программирование", "спорт"]
+}}"""
 
 
 # ── Profile generation prompt ───────────────────────────────────

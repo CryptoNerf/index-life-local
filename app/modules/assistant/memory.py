@@ -800,22 +800,12 @@ def _normalize_mention(raw: str) -> str:
     return s[0].upper() + s[1:]
 
 
-def _parse_people_response(text: str) -> list[dict]:
-    """Parse LLM people-extraction response into [{mention, tone}, ...]."""
-    text = _strip_think(text)
-    # Find the JSON array (LLM occasionally wraps it or adds preamble)
-    start = text.find('[')
-    end = text.rfind(']')
-    if start == -1 or end == -1 or end < start:
-        return []
-    raw = text[start:end + 1]
-    try:
-        data = json.loads(raw)
-    except Exception:
-        return []
-    if not isinstance(data, list):
-        return []
+def _clean_people_items(data: list) -> list[dict]:
+    """Validate/normalize raw people items into [{mention, tone}, ...].
 
+    Shared by the standalone people extraction and the combined one, so both
+    paths apply the identical blacklist / normalization / dedupe rules.
+    """
     result = []
     seen = set()
     for item in data:
@@ -837,6 +827,24 @@ def _parse_people_response(text: str) -> list[dict]:
         seen.add(key)
         result.append({'mention': mention, 'tone': tone})
     return result
+
+
+def _parse_people_response(text: str) -> list[dict]:
+    """Parse LLM people-extraction response into [{mention, tone}, ...]."""
+    text = _strip_think(text)
+    # Find the JSON array (LLM occasionally wraps it or adds preamble)
+    start = text.find('[')
+    end = text.rfind(']')
+    if start == -1 or end == -1 or end < start:
+        return []
+    raw = text[start:end + 1]
+    try:
+        data = json.loads(raw)
+    except Exception:
+        return []
+    if not isinstance(data, list):
+        return []
+    return _clean_people_items(data)
 
 
 def extract_people_mentions(entry: MoodEntry, llm) -> list[EntryPerson]:
@@ -889,21 +897,12 @@ def extract_people_mentions(entry: MoodEntry, llm) -> list[EntryPerson]:
     return objs
 
 
-def _parse_activities_response(text: str) -> list[str]:
-    """Parse LLM activities-extraction response into a list of canonical labels."""
-    text = _strip_think(text)
-    start = text.find('[')
-    end = text.rfind(']')
-    if start == -1 or end == -1 or end < start:
-        return []
-    raw = text[start:end + 1]
-    try:
-        data = json.loads(raw)
-    except Exception:
-        return []
-    if not isinstance(data, list):
-        return []
+def _clean_activity_items(data: list) -> list[str]:
+    """Validate/normalize raw activity items into canonical labels.
 
+    Shared by the standalone activities extraction and the combined one, so
+    both paths apply the identical caps and dedupe rules.
+    """
     result = []
     seen = set()
     for item in data:
@@ -923,6 +922,23 @@ def _parse_activities_response(text: str) -> list[str]:
         if len(result) >= 5:
             break
     return result
+
+
+def _parse_activities_response(text: str) -> list[str]:
+    """Parse LLM activities-extraction response into a list of canonical labels."""
+    text = _strip_think(text)
+    start = text.find('[')
+    end = text.rfind(']')
+    if start == -1 or end == -1 or end < start:
+        return []
+    raw = text[start:end + 1]
+    try:
+        data = json.loads(raw)
+    except Exception:
+        return []
+    if not isinstance(data, list):
+        return []
+    return _clean_activity_items(data)
 
 
 def extract_activities(entry: MoodEntry, llm) -> list[EntryActivity]:
@@ -972,6 +988,128 @@ def extract_activities(entry: MoodEntry, llm) -> list[EntryActivity]:
         objs.append(obj)
     db.session.commit()
     return objs
+
+
+# ── Combined extraction (one LLM call = summary + people + activities) ──
+
+def _parse_combined_response(text: str) -> dict | None:
+    """Parse the combined-extraction JSON object.
+
+    Returns {'summary', 'themes', 'people', 'activities'} — with the exact
+    same per-item validation as the standalone extractors — or None when the
+    response is unusable (missing/invalid summary, or a section that isn't a
+    list). None tells the caller to fall back to the three individual calls,
+    so a bad combined answer can never produce silently-empty sections.
+    """
+    text = _strip_think(text)
+    data = _extract_json(text)
+    if not isinstance(data, dict):
+        return None
+
+    summary = str(data.get('summary') or '').strip()
+    if _summary_invalid(summary):
+        return None
+
+    raw_themes = data.get('themes')
+    if raw_themes is None:
+        raw_themes = []
+    if not isinstance(raw_themes, list):
+        return None
+    themes = [str(t).strip() for t in raw_themes if str(t).strip()][:5]
+
+    raw_people = data.get('people')
+    if raw_people is None:
+        raw_people = []
+    if not isinstance(raw_people, list):
+        return None
+    people = _clean_people_items(raw_people)
+
+    raw_acts = data.get('activities')
+    if raw_acts is None:
+        raw_acts = []
+    if not isinstance(raw_acts, list):
+        return None
+    activities = _clean_activity_items(raw_acts)
+
+    return {'summary': summary, 'themes': themes,
+            'people': people, 'activities': activities}
+
+
+def extract_entry_combined(entry: MoodEntry, llm) -> bool:
+    """Summary + themes + people + activities in ONE LLM call.
+
+    The fast path for a new/edited entry: the three standalone extractors
+    each re-read the same note through the model, so collapsing them cuts
+    per-save background work ~3×. Returns True when everything was parsed
+    and written; False means "run the individual extractors instead" — the
+    caller's fallback guarantees a degraded model answer never loses a
+    section. Replaces prior rows (same idempotency as the standalone paths),
+    and — unlike them — writes all three sections in one transaction, only
+    after a successful parse.
+    """
+    from .prompts import COMBINED_EXTRACT_PROMPT
+
+    existing_summary = EntrySummary.query.filter_by(entry_id=entry.id).first()
+
+    # Capture primitives before releasing the DB connection.
+    entry_id = entry.id
+    entry_date = entry.date
+    entry_rating = entry.rating
+    note = (entry.note or '').strip()
+    has_summary = existing_summary is not None
+    db.session.remove()  # release connection before the LLM call
+
+    if not note:
+        # Same behavior as the standalone paths for empty notes: placeholder
+        # summary, no people/activities rows.
+        parsed = {'summary': f'Настроение {entry_rating}/10, без заметки.',
+                  'themes': [], 'people': [], 'activities': []}
+    else:
+        prompt = COMBINED_EXTRACT_PROMPT.format(
+            date=entry_date.isoformat(), rating=entry_rating, note=note)
+        try:
+            from .routes import _llm_inference_lock
+            with _llm_inference_lock:
+                result = llm.create_chat_completion(
+                    messages=[{'role': 'user', 'content': prompt}],
+                    max_tokens=700,
+                    temperature=0.2,
+                )
+            response_text = result['choices'][0]['message']['content'].strip()
+        except Exception as e:
+            log.warning(f'Combined extract failed for entry {entry_id}: {e}')
+            return False
+        parsed = _parse_combined_response(response_text)
+        if parsed is None:
+            log.info('Combined extract: unusable JSON for entry %d — '
+                     'falling back to individual extractors', entry_id)
+            return False
+
+    # Write all three sections in one transaction (prior rows replaced).
+    EntryPerson.query.filter_by(entry_id=entry_id).delete()
+    EntryActivity.query.filter_by(entry_id=entry_id).delete()
+
+    existing_summary = (EntrySummary.query.filter_by(entry_id=entry_id).first()
+                        if has_summary else None)
+    themes_json = json.dumps(parsed['themes'], ensure_ascii=False)
+    if existing_summary:
+        existing_summary.summary = parsed['summary']
+        existing_summary.themes = themes_json
+        existing_summary.created_at = utcnow()
+    else:
+        db.session.add(EntrySummary(
+            entry_id=entry_id, summary=parsed['summary'],
+            themes=themes_json, created_at=utcnow(),
+        ))
+
+    for m in parsed['people']:
+        db.session.add(EntryPerson(
+            entry_id=entry_id, mention=m['mention'], tone=m['tone']))
+    for a in parsed['activities']:
+        db.session.add(EntryActivity(entry_id=entry_id, activity=a))
+
+    db.session.commit()
+    return True
 
 
 def generate_month_summary(year: int, month: int, llm) -> PeriodSummary | None:

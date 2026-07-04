@@ -35,6 +35,22 @@ def _extract_yield() -> float:
     return _env_float('ASSISTANT_EXTRACT_YIELD', 0.3)
 
 
+def _combined_extract_enabled() -> bool:
+    """Whether new/edited entries use the single combined LLM call
+    (summary + people + activities) instead of three separate ones.
+
+    OFF by default. The A/B run (tools/ab_extract.py, Qwen3.5-9B on Metal)
+    showed quality parity but NO wall-clock win (×1.00): generation
+    dominates and the combined answer carries the same total tokens, so
+    collapsing the calls only saves re-processing the short prompts. With
+    no measured benefit, the battle-tested individual extractors stay the
+    default. Set ASSISTANT_COMBINED_EXTRACT=1 to opt in — worth
+    re-measuring on a future faster model, where prompt processing may
+    dominate and the ~3x hypothesis could hold."""
+    raw = (os.environ.get('ASSISTANT_COMBINED_EXTRACT') or '').strip().lower()
+    return raw in ('1', 'true', 'yes', 'on')
+
+
 def _ai_index_mode(app) -> str:
     """'auto' (process LLM data in the background) or 'manual' (only when the
     user presses the "update" button). Reads UserProfile; defaults to 'auto'.
@@ -525,56 +541,83 @@ def _process_entry(app, entry_id: int):
             return
         _wait_if_chat_active()  # don't compete with a live conversation
 
-        # 2. Summary
-        with app.app_context():
-            entry = db.session.get(MoodEntry, entry_id)
-            if entry is None:
-                return
-            try:
-                from .memory import generate_entry_summary
-                from .routes import _get_llm
-                generate_entry_summary(entry, _get_llm())
-                log.info('Summary generated for entry %d', entry_id)
-            except Exception as e:
+        # 2. Summary + people + activities — ONE combined LLM call (the fast
+        # path: three passes over the same note collapse into one). Any
+        # failure or unusable JSON falls back to the three individual steps
+        # below, so a degraded model answer never loses a section.
+        combined_done = False
+        if _combined_extract_enabled():
+            with app.app_context():
+                entry = db.session.get(MoodEntry, entry_id)
+                if entry is None:
+                    return
                 try:
-                    db.session.rollback()
-                except Exception:
-                    pass
-                log.warning('Summary failed for entry %d: %s', entry_id, e)
+                    from .memory import extract_entry_combined
+                    from .routes import _get_llm
+                    combined_done = extract_entry_combined(entry, _get_llm())
+                    if combined_done:
+                        log.info('Combined extract done for entry %d', entry_id)
+                except Exception as e:
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
+                    log.warning('Combined extract failed for entry %d: %s',
+                                entry_id, e)
+
+        # 2b. Summary (fallback path)
+        if not combined_done:
+            with app.app_context():
+                entry = db.session.get(MoodEntry, entry_id)
+                if entry is None:
+                    return
+                try:
+                    from .memory import generate_entry_summary
+                    from .routes import _get_llm
+                    generate_entry_summary(entry, _get_llm())
+                    log.info('Summary generated for entry %d', entry_id)
+                except Exception as e:
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
+                    log.warning('Summary failed for entry %d: %s', entry_id, e)
 
         # 3. People mentions (idempotent — replaces prior rows on re-run)
-        with app.app_context():
-            entry = db.session.get(MoodEntry, entry_id)
-            if entry is None:
-                return
-            try:
-                from .memory import extract_people_mentions
-                from .routes import _get_llm
-                extract_people_mentions(entry, _get_llm())
-                log.info('People mentions extracted for entry %d', entry_id)
-            except Exception as e:
+        if not combined_done:
+            with app.app_context():
+                entry = db.session.get(MoodEntry, entry_id)
+                if entry is None:
+                    return
                 try:
-                    db.session.rollback()
-                except Exception:
-                    pass
-                log.warning('People extraction failed for entry %d: %s', entry_id, e)
+                    from .memory import extract_people_mentions
+                    from .routes import _get_llm
+                    extract_people_mentions(entry, _get_llm())
+                    log.info('People mentions extracted for entry %d', entry_id)
+                except Exception as e:
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
+                    log.warning('People extraction failed for entry %d: %s', entry_id, e)
 
         # 4. Activities (idempotent like people)
-        with app.app_context():
-            entry = db.session.get(MoodEntry, entry_id)
-            if entry is None:
-                return
-            try:
-                from .memory import extract_activities
-                from .routes import _get_llm
-                extract_activities(entry, _get_llm())
-                log.info('Activities extracted for entry %d', entry_id)
-            except Exception as e:
+        if not combined_done:
+            with app.app_context():
+                entry = db.session.get(MoodEntry, entry_id)
+                if entry is None:
+                    return
                 try:
-                    db.session.rollback()
-                except Exception:
-                    pass
-                log.warning('Activities extraction failed for entry %d: %s', entry_id, e)
+                    from .memory import extract_activities
+                    from .routes import _get_llm
+                    extract_activities(entry, _get_llm())
+                    log.info('Activities extracted for entry %d', entry_id)
+                except Exception as e:
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
+                    log.warning('Activities extraction failed for entry %d: %s', entry_id, e)
 
         # 5. Monthly summary for this entry's month
         with app.app_context():
