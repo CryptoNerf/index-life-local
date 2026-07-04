@@ -1,0 +1,11 @@
+{
+  "_comment": "Desktop-style snapshot: naive-UTC timestamps (Python isoformat of naive datetimes), microsecond precision on a01. Merged as the base/local side.",
+  "snapshot_version": 4,
+  "device_id": "dev-a",
+  "mood_entries": [
+    {"uuid": "a01", "date": "2026-07-01", "rating": 8, "note": "desktop wins", "created_at": "2026-07-01T08:00:00", "updated_at": "2026-07-03T10:00:00.500000", "device_id": "dev-a", "deleted": false},
+    {"uuid": "a02", "date": "2026-07-02", "rating": 4, "note": "desktop stale", "created_at": "2026-07-02T08:00:00", "updated_at": "2026-07-02T09:00:00", "device_id": "dev-a", "deleted": false},
+    {"uuid": "a03", "date": "2026-07-03", "rating": 6, "note": "tie keeps local", "created_at": "2026-07-03T08:00:00", "updated_at": "2026-07-03T12:00:00", "device_id": "dev-a", "deleted": false},
+    {"uuid": "a05", "date": "2026-07-05", "rating": 7, "note": "to be deleted", "created_at": "2026-07-05T08:00:00", "updated_at": "2026-07-05T09:00:00", "device_id": "dev-a", "deleted": false}
+  ]
+}

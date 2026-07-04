@@ -1,0 +1,10 @@
+{
+  "_comment": "Result of merging a (desktop-style, naive UTC) then b (phone-style, Z-suffixed) — the cross-stack timestamp contract (SPEC.md §Timestamps). Zone-less and Z-suffixed spellings of the same instant MUST compare equal: 07-01 desktop wins (10:00:00.5 UTC > 09:00 UTC — a zone-less string is UTC, never local time); 07-02 phone wins (crashed the desktop merge before _parse_dt normalized aware→naive); 07-03 is a tie spelled two different ways — local keeps; 07-04 inserts; 07-05 a newer phone tombstone deletes but keeps local rating/note. Timestamps here are written in the desktop's re-serialized form (naive UTC): the Python test compares byte-for-byte, the JS test compares them as instants (toEpochMs). mood_entries sorted by date.",
+  "mood_entries": [
+    {"uuid": "a01", "date": "2026-07-01", "rating": 8, "note": "desktop wins", "created_at": "2026-07-01T08:00:00", "updated_at": "2026-07-03T10:00:00.500000", "device_id": "dev-a", "deleted": false},
+    {"uuid": "a02", "date": "2026-07-02", "rating": 9, "note": "phone wins", "created_at": "2026-07-02T08:00:00", "updated_at": "2026-07-02T10:30:00", "device_id": "dev-b", "deleted": false},
+    {"uuid": "a03", "date": "2026-07-03", "rating": 6, "note": "tie keeps local", "created_at": "2026-07-03T08:00:00", "updated_at": "2026-07-03T12:00:00", "device_id": "dev-a", "deleted": false},
+    {"uuid": "b04", "date": "2026-07-04", "rating": 10, "note": "phone only", "created_at": "2026-07-04T08:30:00", "updated_at": "2026-07-04T08:30:00", "device_id": "dev-b", "deleted": false},
+    {"uuid": "a05", "date": "2026-07-05", "rating": 7, "note": "to be deleted", "created_at": "2026-07-05T08:00:00", "updated_at": "2026-07-05T11:00:00", "device_id": "dev-b", "deleted": true}
+  ]
+}

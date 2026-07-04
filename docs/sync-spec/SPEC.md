@@ -174,6 +174,39 @@ conflict the first-seen side's `uuid` is kept while the newer side's content
 wins; identity is the **date**, so this is benign. Float canonicalization
 (§2) remains the one open cross-stack item.
 
+**Change detection (local optimization, not wire format).** A client MAY
+skip re-merging a peer blob whose bytes are identical to the last blob it
+successfully merged from that name (the desktop keeps SHA-256 hashes in
+`sync_meta`, key `peer_hash:<name>`), and MAY skip re-uploading its own
+blob when the snapshot content is unchanged (hash over the canonical body
+minus `generated_at`, mixed with the encryption flag). Two invariants make
+this safe: a hash is recorded only after a **successful** merge (every
+failure path retries), and the push-skip applies only while the client's
+own blob is still listed in the folder. This never changes what is on the
+wire — a client without the optimization behaves identically, just slower.
+
+**Timestamps.** All `created_at` / `updated_at` / `written_at` values are
+UTC. Two spellings are legal on the wire and MUST compare as the same
+instant:
+
+- zone-less — `2026-07-03T10:00:00.500000` (Python `isoformat()` of a
+  naive-UTC datetime; the desktop writes this);
+- Z-suffixed — `2026-07-03T10:00:00.500Z` (JS `toISOString()`; the PWA
+  writes this). An explicit numeric offset is also accepted.
+
+A parser MUST treat a zone-less timestamp as UTC — **never** local time —
+and MUST accept 0, 3 or 6 fractional digits. LWW comparison is done at
+millisecond precision or better on every stack; writers must not rely on
+sub-millisecond ordering (the desktop compares at µs, the PWA at ms — a
+µs-only difference may resolve as a tie on one stack and a win on another).
+Reference implementations: `app/sync.py:_parse_dt` (normalizes everything
+to naive UTC before comparing) and `pwa/src/lib/snapshot.js:toEpochMs`
+(normalizes to epoch ms). The contract is pinned cross-stack by
+`fixtures/merge-timestamps/{a,b,expected}.json` — `a` is a desktop-style
+snapshot, `b` a phone-style one; both stacks must converge to `expected`
+(the Python test compares byte-for-byte since the desktop re-serializes
+naive UTC; the JS test compares timestamps as instants).
+
 ---
 
 ## Fixtures

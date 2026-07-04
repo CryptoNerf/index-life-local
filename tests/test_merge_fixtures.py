@@ -12,10 +12,11 @@ from app import db, sync
 from app.models import SyncMeta
 
 _FX = Path(__file__).resolve().parents[1] / 'docs' / 'sync-spec' / 'fixtures' / 'merge'
+_FX_TS = _FX.parent / 'merge-timestamps'
 
 
-def _load(name):
-    return json.loads((_FX / name).read_text(encoding='utf-8'))
+def _load(name, base=None):
+    return json.loads(((base or _FX) / name).read_text(encoding='utf-8'))
 
 
 def _by_date(entries):
@@ -47,3 +48,33 @@ def test_merge_is_idempotent(app):
 
     got = _by_date(sync.build_snapshot()['mood_entries'])
     assert got == _expected()
+
+
+# ── mixed timestamp styles (desktop naive UTC vs PWA Z-suffixed) ──────
+# fixtures/merge-timestamps/: `a` is a desktop-style snapshot, `b` a
+# phone-style one (Z-suffixed ms, as JS toISOString writes). SPEC §Timestamps:
+# both spellings of the same instant must compare equal, so the merge must
+# reproduce expected.json — byte-for-byte here, since the desktop
+# re-serializes everything as naive UTC.
+
+def test_mixed_timestamp_merge_matches_expected(app):
+    db.session.add(SyncMeta(key='device_id', value='dev-local'))
+    db.session.commit()
+
+    sync.apply_snapshot(_load('a.json', _FX_TS))   # desktop-style base
+    sync.apply_snapshot(_load('b.json', _FX_TS))   # phone-style peer
+
+    got = _by_date(sync.build_snapshot()['mood_entries'])
+    assert got == _by_date(_load('expected.json', _FX_TS)['mood_entries'])
+
+
+def test_mixed_timestamp_merge_is_idempotent(app):
+    db.session.add(SyncMeta(key='device_id', value='dev-local'))
+    db.session.commit()
+
+    sync.apply_snapshot(_load('a.json', _FX_TS))
+    sync.apply_snapshot(_load('b.json', _FX_TS))
+    sync.apply_snapshot(_load('b.json', _FX_TS))   # re-applying the phone changes nothing
+
+    got = _by_date(sync.build_snapshot()['mood_entries'])
+    assert got == _by_date(_load('expected.json', _FX_TS)['mood_entries'])

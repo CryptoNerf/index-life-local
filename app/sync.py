@@ -39,10 +39,11 @@ Safety guarantees:
 Storage backend (local folder vs WebDAV URL) is abstracted in
 app.sync_backends.
 """
+import hashlib
 import json
 import logging
 import threading
-from datetime import datetime, date as date_type, timedelta
+from datetime import datetime, date as date_type, timedelta, timezone
 from app.timeutil import utcnow
 
 from app import db
@@ -58,6 +59,13 @@ log = logging.getLogger(__name__)
 
 _sync_lock = threading.Lock()
 _sync_timer: threading.Timer | None = None
+
+# How long a manual push/pull waits for a running cycle before giving up.
+# Local-folder cycles finish in milliseconds and WebDAV ones in seconds, so
+# hitting this means something is genuinely stuck — better to skip (the
+# running cycle pushes the same committed state) than to block a request
+# thread indefinitely.
+_LOCK_TIMEOUT_S = 10.0
 
 # v3 added derived AI data (summaries, profile, people/activities, aliases),
 # keyed by entry UUID. v4 adds external daily_signals (weather…), keyed by
@@ -105,6 +113,21 @@ def set_sync_config(mode: str, folder: str = '', url: str = '',
     _meta_set('webdav_url', url.strip())
     _meta_set('webdav_user', username)
     _meta_set('webdav_pass', password)
+    # The change-detection hashes describe blobs of the PREVIOUS target;
+    # against a new folder/server they could wrongly skip the first pull
+    # of every peer and the first push of our own state.
+    _reset_change_detection()
+
+
+def _reset_change_detection() -> None:
+    """Forget all peer-blob hashes and the last-push hash."""
+    rows = SyncMeta.query.filter(SyncMeta.key.like('peer_hash:%')).all()
+    for row in rows:
+        db.session.delete(row)
+    lp = db.session.get(SyncMeta, 'last_push_hash')
+    if lp:
+        db.session.delete(lp)
+    db.session.commit()
 
 
 def is_sync_configured() -> bool:
@@ -171,6 +194,36 @@ def get_last_sync() -> datetime | None:
 
 def _set_last_sync(ts: datetime) -> None:
     _meta_set('last_sync', ts.isoformat())
+
+
+def _record_sync_report(stats: dict, push_ok: bool) -> None:
+    """Persist the outcome of the last full sync cycle into sync_meta.
+
+    The periodic sync runs unattended every 120 s; without this record a
+    failing merge (undecryptable peer, crashed apply) or a failed push is
+    indistinguishable from success — `last_sync` keeps updating either way.
+    The /sync page reads the report back and shows a warning banner, so a
+    stuck snapshot can't hide behind "everything is up to date".
+    """
+    report = {
+        'at': utcnow().isoformat(),
+        'errors': stats.get('errors', 0),
+        'error_files': (stats.get('error_files') or [])[:5],
+        'push_ok': push_ok,
+    }
+    _meta_set('last_sync_report', json.dumps(report, ensure_ascii=False))
+
+
+def get_last_sync_report() -> dict | None:
+    """The persisted outcome of the last full sync cycle, or None."""
+    raw = _meta_get('last_sync_report')
+    if not raw:
+        return None
+    try:
+        report = json.loads(raw)
+    except (json.JSONDecodeError, ValueError):
+        return None
+    return report if isinstance(report, dict) else None
 
 
 def _own_snapshot_filename() -> str:
@@ -300,12 +353,28 @@ def build_snapshot() -> dict:
 # ── Validation ────────────────────────────────────────────────
 
 def _parse_dt(value):
+    """Parse an ISO timestamp into a NAIVE UTC datetime.
+
+    Local columns hold naive UTC, and desktop peers serialize them that way —
+    but the PWA writes JS `toISOString()`, which is Z-suffixed. fromisoformat
+    maps 'Z'/offset forms to *aware* datetimes, and comparing aware vs naive
+    raises TypeError — which used to abort the merge of the entire phone
+    snapshot the moment both devices had an entry on the same date. Normalize
+    everything to naive UTC so every LWW comparison is naive-vs-naive.
+    (See docs/sync-spec/SPEC.md §Timestamps.)
+    """
     if not value:
         return None
+    if isinstance(value, str) and value.endswith(('Z', 'z')):
+        # Python 3.10's fromisoformat can't parse a literal 'Z' suffix.
+        value = value[:-1] + '+00:00'
     try:
-        return datetime.fromisoformat(value)
+        dt = datetime.fromisoformat(value)
     except (ValueError, TypeError):
         return None
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
 
 
 def _valid_mood(d: dict) -> bool:
@@ -626,24 +695,56 @@ def cleanup_old_conflicts(days: int = 30):
 
 # ── Pull / push via backend ───────────────────────────────────
 
-def pull_peers(backend) -> dict:
-    """Read & merge every peer snapshot from the backend."""
+def pull_peers(backend, names: list[str] | None = None,
+               before_first_merge=None, ignore_hashes: bool = False) -> dict:
+    """Read & merge every peer snapshot from the backend.
+
+    Every failure path counts into `errors` AND records the blob name in
+    `error_files` — a skipped peer means that device's changes silently stop
+    arriving, so the caller must be able to tell the user *which* snapshot
+    is stuck instead of reporting "everything is up to date".
+
+    Change detection: the SHA-256 of each successfully merged blob is kept
+    in sync_meta (`peer_hash:<name>`), so an unchanged blob is skipped
+    before any JSON parse / decrypt / merge — 99% of periodic cycles do no
+    DB work at all. The hash is recorded ONLY after a successful merge, so
+    every failure path retries on the next cycle. `ignore_hashes=True`
+    (the manual Import button) re-merges everything — the escape hatch when
+    local data was changed outside the app. `before_first_merge` is called
+    once, right before the first actual merge (the pre-sync backup hook —
+    no changes, no backup churn).
+    """
     own_device = get_device_id()
     total = {'files': 0, 'inserted': 0, 'updated': 0, 'conflicts': 0,
-             'chat_inserted': 0, 'skipped_invalid': 0, 'errors': 0}
+             'chat_inserted': 0, 'skipped_invalid': 0, 'errors': 0,
+             'error_files': [], 'peers_unchanged': 0}
 
+    def _record_error(name: str):
+        total['errors'] += 1
+        total['error_files'].append(name)
+
+    merged_anything = False
     vk = sync_vault.get_vault_key()
-    for name in backend.list_files():
+    own_name = _own_snapshot_filename()
+    if names is None:
+        names = backend.list_files()
+    for name in names:
         if name == sync_vault.VAULT_FILENAME:   # wrapped-key file, not a snapshot
+            continue
+        if name == own_name:                    # our own blob — never merged
             continue
         text = backend.read(name)
         if text is None:
+            continue
+        digest = hashlib.sha256(text.encode('utf-8')).hexdigest()
+        if not ignore_hashes and _meta_get(f'peer_hash:{name}') == digest:
+            total['peers_unchanged'] += 1
             continue
         try:
             obj = json.loads(text)
         except (json.JSONDecodeError, ValueError) as exc:
             log.warning('Sync: skipping unreadable %s: %s', name, exc)
-            total['errors'] += 1
+            _record_error(name)
             continue
 
         # Dual-read for migration: a blob is either an encrypted envelope or
@@ -655,26 +756,37 @@ def pull_peers(backend) -> dict:
                 continue
             if vk is None:                           # locked: can't read peers
                 log.warning('Sync: %s is encrypted but no vault key — skipping', name)
-                total['errors'] += 1
+                _record_error(name)
                 continue
             try:
                 snapshot = sync_crypto.open_envelope(text, vk)
             except Exception as exc:
                 log.error('Sync: cannot decrypt %s: %s', name, exc)
-                total['errors'] += 1
+                _record_error(name)
                 continue
         else:
             snapshot = obj
             # Skip our own snapshot by content (robust across naming changes).
             if snapshot.get('device_id') == own_device:
                 continue
+        if not merged_anything and before_first_merge is not None:
+            # First blob that will actually be merged this cycle — take the
+            # safety backup NOW, before local data is modified.
+            merged_anything = True
+            try:
+                before_first_merge()
+            except Exception as exc:
+                log.warning('Sync: before_first_merge hook failed: %s', exc)
         try:
             s = apply_snapshot(snapshot)
         except Exception as exc:
             log.error('Sync: apply_snapshot(%s) failed: %s', name, exc)
             db.session.rollback()
-            total['errors'] += 1
+            _record_error(name)
             continue
+        # Merge succeeded (or was a self-snapshot no-op) — remember the blob
+        # hash so the next cycle skips it until the peer writes new content.
+        _meta_set(f'peer_hash:{name}', digest)
         if s.get('skipped'):
             continue
         total['files'] += 1
@@ -683,14 +795,43 @@ def pull_peers(backend) -> dict:
     return total
 
 
-def push_snapshot(backend) -> bool:
+def _snapshot_content_hash(snapshot: dict) -> str:
+    """Stable digest of a snapshot's CONTENT — what the push-skip compares.
+
+    `generated_at` changes on every build and the sealed envelope has a
+    random nonce, so both are useless for change detection; hash the
+    canonical body instead. The encryption flag is mixed in so toggling
+    encryption forces a re-push (same content, but the cloud must switch
+    from plaintext to envelope).
+    """
+    body = {k: v for k, v in snapshot.items() if k != 'generated_at'}
+    body['_encrypted'] = sync_vault.is_encryption_enabled()
+    return hashlib.sha256(sync_crypto.canonical_json(body)).hexdigest()
+
+
+def push_snapshot(backend, skip_unchanged: bool = False,
+                  listed_names: list[str] | None = None) -> bool:
     """Write our full snapshot to the backend, atomically.
 
     With encrypted sync on, the snapshot is sealed into an envelope so the
     cloud only ever sees ciphertext. If encryption is on but the vault is
     locked (no key), we **refuse to push** rather than leak plaintext.
+
+    `skip_unchanged` (the periodic cycle) compares the snapshot's content
+    hash with the last successfully pushed one and skips the upload when
+    nothing changed — otherwise the cloud client re-syncs an identical blob
+    every 2 minutes. Guard rails: the skip only applies when our blob is
+    still present in `listed_names` (someone cleaning the cloud folder must
+    not leave us silently un-pushed forever), and manual Export always
+    pushes (no skip_unchanged).
     """
     snapshot = build_snapshot()
+    digest = _snapshot_content_hash(snapshot)
+    if (skip_unchanged and listed_names is not None
+            and _own_snapshot_filename() in listed_names
+            and _meta_get('last_push_hash') == digest):
+        log.debug('Sync: push skipped — snapshot unchanged')
+        return True
     if sync_vault.is_encryption_enabled():
         vk = sync_vault.get_vault_key()
         if vk is None:
@@ -706,6 +847,7 @@ def push_snapshot(backend) -> bool:
         text = json.dumps(snapshot, ensure_ascii=False, indent=2)
     try:
         backend.write_atomic(_own_snapshot_filename(), text)
+        _meta_set('last_push_hash', digest)
         return True
     except Exception as exc:
         log.error('Sync: failed to write own snapshot: %s', exc)
@@ -715,54 +857,99 @@ def push_snapshot(backend) -> bool:
 # ── Full sync ─────────────────────────────────────────────────
 
 def full_sync(app) -> dict:
-    """One safe sync cycle: backup → pull peers → push own snapshot."""
+    """One safe sync cycle: (backup →) pull peers → push own snapshot.
+
+    Change-detection keeps the idle cycle cheap: unchanged peer blobs are
+    skipped by hash, the pre-sync backup is taken lazily — only right
+    before the first blob that will actually merge — and the push is
+    skipped when our own snapshot content hasn't changed.
+    """
     with _sync_lock:
         with app.app_context():
             backend = _current_backend()
             if backend is None:
                 return {'error': 'Sync not configured'}
 
-            # Safety net BEFORE we touch local data — own rotation pool so
-            # daily backups aren't evicted by frequent sync backups.
-            try:
-                from app.backup import presync_backup
-                presync_backup(app)
-            except Exception as exc:
-                log.warning('Pre-sync backup failed: %s', exc)
+            # Safety net BEFORE any local data is touched — but only when
+            # something will actually merge (own rotation pool; see
+            # app.backup.presync_backup). pull_peers calls this at most once.
+            def _presync():
+                try:
+                    from app.backup import presync_backup
+                    presync_backup(app)
+                except Exception as exc:
+                    log.warning('Pre-sync backup failed: %s', exc)
 
-            import_stats = pull_peers(backend)
-            push_snapshot(backend)
+            names = backend.list_files()
+            import_stats = pull_peers(backend, names=names,
+                                      before_first_merge=_presync)
+            push_ok = push_snapshot(backend, skip_unchanged=True,
+                                    listed_names=names)
             _set_last_sync(utcnow())
+            import_stats['push_ok'] = push_ok
+            _record_sync_report(import_stats, push_ok)
 
             if import_stats.get('files'):
                 cleanup_old_conflicts()
             if import_stats.get('inserted') or import_stats.get('updated'):
                 _trigger_reprocessing(app)
 
-            log.info('Sync complete: %s', import_stats)
+            # Idle cycles (everything skipped by hash) log at DEBUG so the
+            # every-2-minutes heartbeat doesn't flood the file.
+            if import_stats.get('files') or import_stats.get('errors'):
+                log.info('Sync complete: %s', import_stats)
+            else:
+                log.debug('Sync complete (no changes): %s', import_stats)
             return import_stats
 
 
 def export_now(app) -> bool:
-    """Manual push only."""
-    with app.app_context():
-        backend = _current_backend()
-        if backend is None:
-            return False
-        return push_snapshot(backend)
+    """Manual push only.
+
+    Serialised on the same lock as full_sync: two unsynchronised writers of
+    the device blob (a save-triggered push racing the periodic cycle's push)
+    collided on the backend's temp file and one write failed outright. On a
+    busy lock we skip instead of blocking the request thread — the entry is
+    already committed, so the running cycle's own push includes it.
+    """
+    if not _sync_lock.acquire(timeout=_LOCK_TIMEOUT_S):
+        log.info('export_now: sync cycle in progress — it will push our state')
+        return False
+    try:
+        with app.app_context():
+            backend = _current_backend()
+            if backend is None:
+                return False
+            return push_snapshot(backend)
+    finally:
+        _sync_lock.release()
 
 
 def import_now(app) -> dict:
-    """Manual pull only."""
-    with app.app_context():
-        backend = _current_backend()
-        if backend is None:
-            return {'error': 'Sync not configured'}
-        stats = pull_peers(backend)
-        if stats.get('inserted') or stats.get('updated'):
-            _trigger_reprocessing(app)
-        _set_last_sync(utcnow())
-        return stats
+    """Manual pull only.
+
+    Serialised on the sync lock: two threads applying peer snapshots
+    concurrently could double-insert the same date (UNIQUE violation aborts
+    the whole snapshot) or duplicate derived rows (entry_people has no
+    unique constraint).
+    """
+    if not _sync_lock.acquire(timeout=_LOCK_TIMEOUT_S):
+        return {'error': 'Sync is already running — try again in a moment'}
+    try:
+        with app.app_context():
+            backend = _current_backend()
+            if backend is None:
+                return {'error': 'Sync not configured'}
+            # Manual Import deliberately ignores the change-detection
+            # hashes: it's the escape hatch that re-merges everything,
+            # e.g. after local data was modified outside the app.
+            stats = pull_peers(backend, ignore_hashes=True)
+            if stats.get('inserted') or stats.get('updated'):
+                _trigger_reprocessing(app)
+            _set_last_sync(utcnow())
+            return stats
+    finally:
+        _sync_lock.release()
 
 
 def test_connection(mode: str, folder: str = '', url: str = '',

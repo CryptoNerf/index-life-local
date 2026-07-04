@@ -289,3 +289,60 @@ def test_older_profile_is_ignored(app):
     }))
 
     assert UserProfile.query.first().username == 'current'
+
+
+# ── cross-stack timestamps (PWA writes Z-suffixed UTC, desktop naive UTC) ──
+
+def test_parse_dt_normalizes_every_spelling_to_naive_utc():
+    """Zone-less, Z-suffixed and explicit-offset spellings of the same
+    instant must parse to the identical naive-UTC datetime (SPEC §Timestamps)."""
+    naive = sync._parse_dt('2026-07-03T10:00:00.500000')
+    zulu = sync._parse_dt('2026-07-03T10:00:00.500Z')
+    offset = sync._parse_dt('2026-07-03T13:00:00.500+03:00')
+
+    assert naive == zulu == offset
+    assert naive.tzinfo is None and zulu.tzinfo is None and offset.tzinfo is None
+
+
+def test_newer_z_suffixed_remote_wins(app):
+    """Regression: a PWA snapshot must merge, not crash.
+
+    fromisoformat maps 'Z' strings to *aware* datetimes; before _parse_dt
+    normalized them to naive UTC, comparing against the naive local
+    updated_at raised TypeError — and pull_peers then silently skipped the
+    entire phone snapshot.
+    """
+    _add_local_entry('2025-03-10', rating=4, note='old', updated_at=OLD)
+
+    remote = _remote_entry('2025-03-10', rating=9, note='phone')
+    remote['updated_at'] = '2025-02-01T12:00:00.000Z'   # == NEW, as JS toISOString writes
+    stats = sync.apply_snapshot(_snapshot(entries=[remote]))
+
+    row = MoodEntry.query.first()
+    assert stats['updated'] == 1
+    assert row.rating == 9
+    assert row.note == 'phone'
+    assert row.updated_at == NEW                        # stored naive UTC
+
+
+def test_older_z_suffixed_remote_is_ignored(app):
+    _add_local_entry('2025-03-10', note='keep', updated_at=NEW)
+
+    remote = _remote_entry('2025-03-10', note='stale')
+    remote['updated_at'] = '2025-01-01T12:00:00.000Z'   # == OLD
+    stats = sync.apply_snapshot(_snapshot(entries=[remote]))
+
+    assert MoodEntry.query.first().note == 'keep'
+    assert stats['updated'] == 0
+
+
+def test_z_suffixed_tie_keeps_local(app):
+    # The same instant spelled the PWA way must still count as a tie.
+    _add_local_entry('2025-03-10', note='keep', updated_at=OLD)
+
+    remote = _remote_entry('2025-03-10', note='tie')
+    remote['updated_at'] = '2025-01-01T12:00:00.000Z'   # == OLD
+    stats = sync.apply_snapshot(_snapshot(entries=[remote]))
+
+    assert MoodEntry.query.first().note == 'keep'
+    assert stats['updated'] == 0

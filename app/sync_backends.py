@@ -33,6 +33,7 @@ import base64
 import logging
 import os
 import socket
+import threading
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -94,9 +95,12 @@ class FileBackend(SyncBackend):
     def write_atomic(self, name: str, text: str) -> None:
         self.folder.mkdir(parents=True, exist_ok=True)
         final = self.folder / name
-        # Unique temp sibling so two concurrent writers don't clobber the
-        # same temp file. os.replace is atomic on the same filesystem.
-        tmp = self.folder / f'.{name}.{os.getpid()}.tmp'
+        # Temp sibling unique per process AND thread: a pid-only name let a
+        # save-triggered push and the periodic sync (threads of one process)
+        # share the temp file — one thread's os.replace yanked it out from
+        # under the other and that push failed with FileNotFoundError.
+        # os.replace is atomic on the same filesystem.
+        tmp = self.folder / f'.{name}.{os.getpid()}.{threading.get_ident()}.tmp'
         with open(tmp, 'w', encoding='utf-8') as f:
             f.write(text)
             f.flush()
@@ -193,7 +197,10 @@ class WebDavBackend(SyncBackend):
 
     def write_atomic(self, name: str, text: str) -> None:
         data = text.encode('utf-8')
-        tmp_name = f'.{name}.tmp'
+        # Same uniqueness rationale as FileBackend.write_atomic: concurrent
+        # writers (threads or two devices that somehow share an id) must not
+        # PUT to the same remote temp name.
+        tmp_name = f'.{name}.{os.getpid()}.{threading.get_ident()}.tmp'
         # PUT to a temp name, then MOVE over the target. MOVE is atomic on
         # spec-compliant WebDAV servers. If MOVE is unsupported we fall
         # back to a direct PUT (still a single request, just not atomic).
