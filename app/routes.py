@@ -20,6 +20,7 @@ import os
 import re
 
 from app import db
+from app.i18n import t
 from app.models import MoodEntry, UserProfile, SyncMeta
 
 log = logging.getLogger(__name__)
@@ -199,7 +200,7 @@ def delete_day(day):
     try:
         day_date = datetime.strptime(day, "%Y-%m-%d").date()
     except ValueError:
-        flash('Invalid date format', 'error')
+        flash(t('flash.invalid_date'), 'error')
         return redirect(url_for('main.mood_grid'))
 
     entry = MoodEntry.query.filter_by(date=day_date).first()
@@ -228,7 +229,7 @@ def delete_day(day):
             return redirect(url_for('main.mood_grid', year=entry_year))
         except Exception as e:
             db.session.rollback()
-            flash(f'Error deleting entry: {e}', 'error')
+            flash(t('flash.entry_delete_error', err=e), 'error')
             return redirect(url_for('main.edit_day', day=day))
     else:
         return redirect(url_for('main.mood_grid'))
@@ -240,7 +241,7 @@ def edit_day(day):
     try:
         day_date = datetime.strptime(day, "%Y-%m-%d").date()
     except ValueError:
-        flash('Invalid date format', 'error')
+        flash(t('flash.invalid_date'), 'error')
         return redirect(url_for('main.mood_grid'))
 
     # Get existing entry or None
@@ -253,7 +254,7 @@ def edit_day(day):
 
         # Validate rating - MUST be provided
         if rating is None or not (1 <= rating <= 10):
-            flash('Please select your day mood rating (1-10) before saving', 'error')
+            flash(t('flash.rating_required'), 'error')
             return redirect(url_for('main.edit_day', day=day))
 
         # Get device_id for sync
@@ -321,7 +322,7 @@ def edit_day(day):
                 break
 
         if not saved:
-            flash(f'Error saving entry: {last_exc}', 'error')
+            flash(t('flash.entry_save_error', err=last_exc), 'error')
         else:
             # Trigger background processing if assistant module is active
             from flask import current_app
@@ -415,7 +416,7 @@ def account():
             try:
                 profile.birthdate = datetime.strptime(birthdate_str, '%Y-%m-%d').date()
             except ValueError:
-                flash('Invalid birth date format', 'error')
+                flash(t('flash.invalid_birthdate'), 'error')
         else:
             profile.birthdate = None
 
@@ -425,11 +426,17 @@ def account():
             if file and file.filename:
                 from flask import current_app
                 if allowed_file(file.filename, current_app.config['ALLOWED_EXTENSIONS']):
-                    # Delete old photo if exists
+                    # Delete old photo if exists. Best-effort: a locked or
+                    # permission-blocked file must not turn a profile save
+                    # into a 500 — the new photo still replaces it in the UI.
                     if profile.photo_filename:
                         old_photo_path = Path(current_app.config['UPLOAD_FOLDER']) / profile.photo_filename
-                        if old_photo_path.exists():
-                            old_photo_path.unlink()
+                        try:
+                            if old_photo_path.exists():
+                                old_photo_path.unlink()
+                        except OSError as exc:
+                            log.warning('Could not delete old photo %s: %s',
+                                        old_photo_path, exc)
 
                     # Save new photo
                     filename = secure_filename(file.filename)
@@ -441,15 +448,15 @@ def account():
                     file.save(str(filepath))
                     profile.photo_filename = filename
                 else:
-                    flash('Invalid file type. Allowed: png, jpg, jpeg, gif', 'error')
+                    flash(t('flash.invalid_file_type'), 'error')
 
         try:
             db.session.commit()
-            flash('Profile updated successfully!', 'success')
+            flash(t('flash.profile_updated'), 'success')
             return redirect(url_for('main.account'))
         except Exception as e:
             db.session.rollback()
-            flash(f'Error updating profile: {e}', 'error')
+            flash(t('flash.profile_update_error', err=e), 'error')
 
     from app import signals
     return render_template('account.html',
@@ -540,7 +547,7 @@ def set_language():
     from app.i18n import SUPPORTED_LANGS
     lang = (request.form.get('language') or '').strip().lower()
     if lang not in SUPPORTED_LANGS:
-        flash('Unsupported language', 'error')
+        flash(t('flash.language_unsupported'), 'error')
         return redirect(url_for('main.account'))
 
     profile = UserProfile.query.first()
@@ -552,7 +559,7 @@ def set_language():
         db.session.commit()
     except Exception as exc:
         db.session.rollback()
-        flash(f'Could not save language: {exc}', 'error')
+        flash(t('flash.language_save_error', err=exc), 'error')
     return redirect(url_for('main.account'))
 
 
@@ -632,7 +639,7 @@ def life_set_birthdate():
         try:
             bd = datetime.strptime(legacy_str, '%Y-%m-%d').date()
         except ValueError:
-            flash('Invalid date format', 'error')
+            flash(t('flash.invalid_date'), 'error')
             return redirect(url_for('main.life_calendar'))
     else:
         d = request.form.get('birthdate_day', '').strip()
@@ -642,7 +649,7 @@ def life_set_birthdate():
             try:
                 bd = date(int(y), int(m), int(d))
             except ValueError:
-                flash('Invalid date — please pick a real day/month/year combination', 'error')
+                flash(t('flash.invalid_birthdate_combo'), 'error')
                 return redirect(url_for('main.life_calendar'))
     if bd:
 
@@ -656,7 +663,7 @@ def life_set_birthdate():
             db.session.commit()
         except Exception as e:
             db.session.rollback()
-            flash(f'Error saving birthdate: {e}', 'error')
+            flash(t('flash.birthdate_save_error', err=e), 'error')
 
     return redirect(url_for('main.life_calendar'))
 
@@ -739,7 +746,7 @@ def export_markdown():
     """
     result = _build_markdown_export()
     if result is None:
-        flash('No entries to export', 'error')
+        flash(t('flash.no_entries_export'), 'error')
         return redirect(url_for('main.account'))
     content, filename = result
     response = make_response(content)
