@@ -2,10 +2,11 @@
   import RatingCubes from '../components/RatingCubes.svelte';
   import MoodFace from '../components/MoodFace.svelte';
   import { getEntry } from '../lib/db.js';
-  import { saveEntry } from '../lib/store.svelte.js';
+  import { moodStore, saveEntry } from '../lib/store.svelte.js';
   import { scheduleSync } from '../lib/sync-state.svelte.js';
-  import { loadDraft, saveDraft, clearDraft } from '../lib/drafts.js';
-  import { todayISO, prettyDate, isToday, addDays } from '../lib/mood.js';
+  import { loadDraft, saveDraft, clearDraft, draftIsFresh } from '../lib/drafts.js';
+  import { currentStreak } from '../lib/stats.js';
+  import { todayISO, prettyDate, isToday, addDays, pluralDays } from '../lib/mood.js';
 
   // Bindable so date navigation here propagates to the app (and "День" in the
   // nav resets it to today). Any past day can be opened to backfill it.
@@ -21,13 +22,20 @@
     date = next > TODAY ? TODAY : next; // never log a future day
   }
 
+  // Logging streak — the little daily-habit reward. Reactive off the shared
+  // store, so it bumps the moment today's entry is saved.
+  const streak = $derived(currentStreak(moodStore.entries, TODAY));
+
   // Load whenever the target day changes. An unsaved draft (from a previous
   // visit where the user typed but didn't save) takes priority over the saved
-  // entry, so nothing is ever lost on tab switch / app restart.
+  // entry — but only while it's the fresher of the two: an entry edited on
+  // another device and synced later must not be hidden behind a stale draft
+  // (see draftIsFresh).
   $effect(() => {
     const d = date;
     getEntry(d).then((e) => {
-      const draft = loadDraft(d);
+      let draft = loadDraft(d);
+      if (!draftIsFresh(draft, e)) draft = null;
       rating = draft?.rating ?? e?.rating ?? 0;
       note = draft?.note ?? e?.note ?? '';
     });
@@ -65,6 +73,9 @@
               aria-label="Следующий день">›</button>
     </div>
     {#if isToday(date)}<div class="cap-today">сегодня</div>{/if}
+    {#if streak >= 2 && isToday(date)}
+      <div class="cap-streak">▪ {streak} {pluralDays(streak)} подряд</div>
+    {/if}
     <MoodFace {rating} size={92} />
   </header>
 

@@ -52,3 +52,11 @@ export function timeAgo(ts) {
   if (h < 24) return `${h} ч назад`;
   return `${Math.floor(h / 24)} дн назад`;
 }
+
+// Russian plural for "день/дня/дней".
+export function pluralDays(n) {
+  const mod10 = n % 10, mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'день';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'дня';
+  return 'дней';
+}

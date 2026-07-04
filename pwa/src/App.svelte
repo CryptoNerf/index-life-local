@@ -2,13 +2,14 @@
   import { onMount } from 'svelte';
   import Capture from './screens/Capture.svelte';
   import Feed from './screens/Feed.svelte';
+  import Year from './screens/Year.svelte';
   import Chart from './screens/Chart.svelte';
   import Settings from './screens/Settings.svelte';
   import BottomNav from './components/BottomNav.svelte';
   import DurabilityBanner from './components/DurabilityBanner.svelte';
   import { todayISO } from './lib/mood.js';
   import { refreshEntries } from './lib/store.svelte.js';
-  import { runSync } from './lib/sync-state.svelte.js';
+  import { runSync, initAutoSync } from './lib/sync-state.svelte.js';
 
   let screen = $state('capture');
   let editDate = $state(todayISO());
@@ -18,6 +19,9 @@
     // Sync on open if cloud encryption is already set up — silent, so a user
     // who hasn't connected sees nothing and a lapsed session just no-ops.
     runSync({ silent: true });
+    // Keep syncing while the app stays open: on return to the foreground
+    // and on a gentle interval (see initAutoSync).
+    initAutoSync();
   });
 
   function openDay(date) {
@@ -41,6 +45,8 @@
     <Capture bind:date={editDate} />
   {:else if screen === 'feed'}
     <Feed onopen={openDay} />
+  {:else if screen === 'year'}
+    <Year />
   {:else if screen === 'chart'}
     <Chart />
   {:else}

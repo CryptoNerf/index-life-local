@@ -40,3 +40,26 @@ export function weekdayAverages(entries) {
     label, value: n[i] ? sum[i] / n[i] : 0, count: n[i]
   }));
 }
+
+// Current logging streak: consecutive rated days counting back from today —
+// or from yesterday, so the streak doesn't read as broken before today's
+// entry is made. Mirrors the desktop's proactive-note streak.
+export function currentStreak(entries, today) {
+  const dates = new Set();
+  for (const e of entries) {
+    if (!e.deleted && e.rating >= 1) dates.add(e.date);
+  }
+  const dayBefore = (iso) => {
+    const d = new Date(iso + 'T00:00:00');
+    d.setDate(d.getDate() - 1);
+    const p = (x) => String(x).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  };
+  let d = dates.has(today) ? today : dayBefore(today);
+  let streak = 0;
+  while (dates.has(d)) {
+    streak++;
+    d = dayBefore(d);
+  }
+  return streak;
+}

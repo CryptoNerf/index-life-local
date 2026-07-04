@@ -519,3 +519,70 @@ button {
 }
 .nav-btn .nav-ico { font-size: 20px; line-height: 1; }
 .nav-btn.active { color: var(--text); font-weight: 600; }
+
+/* ── Logging streak (Capture) ──────────────────────────────── */
+
+.cap-streak {
+  font-size: 12px;
+  color: var(--text-muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 10px;
+  margin-top: 6px;
+}
+
+/* ── Year-at-a-glance grid ─────────────────────────────────── */
+
+.year-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin: 4px 0 14px;
+}
+.year-label {
+  font-family: var(--font-serif);
+  font-size: 20px;
+  min-width: 64px;
+  text-align: center;
+}
+.year-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  padding: 12px 10px;
+}
+.year-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.year-month {
+  width: 28px;
+  flex: none;
+  font-size: 10px;
+  color: var(--text-muted);
+  text-align: right;
+}
+.year-cells {
+  display: grid;
+  grid-template-columns: repeat(31, 1fr);
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.year-cell {
+  aspect-ratio: 1;
+  border-radius: 2px;
+  background: var(--line);
+}
+.year-cell.is-today {
+  outline: 1px solid var(--ink);
+  outline-offset: 1px;
+}
+.year-cell-void {
+  background: transparent;
+}

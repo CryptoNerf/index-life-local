@@ -70,3 +70,30 @@ export function scheduleSync(delay = 2500) {
   clearTimeout(debounce);
   debounce = setTimeout(() => runSync({ silent: true }), delay);
 }
+
+// ── Auto-sync while the app is open ─────────────────────────────────
+// Two triggers: returning to the foreground (the common "opened the PWA
+// after editing on the desktop" case) and a gentle interval while visible.
+// Both funnel through runSync's isUnlocked guard + concurrent-run dedupe,
+// so an install without cloud sync stays completely silent. MIN_GAP keeps
+// rapid tab switches from hammering the cloud API.
+
+const AUTO_SYNC_MIN_GAP_MS = 60 * 1000;
+const AUTO_SYNC_INTERVAL_MS = 5 * 60 * 1000;
+
+function autoSync() {
+  if (Date.now() - syncState.lastSyncedAt < AUTO_SYNC_MIN_GAP_MS) return;
+  runSync({ silent: true });
+}
+
+let autoSyncStarted = false;
+export function initAutoSync() {
+  if (autoSyncStarted) return; // idempotent — App mounts once, but be safe
+  autoSyncStarted = true;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') autoSync();
+  });
+  setInterval(() => {
+    if (document.visibilityState === 'visible') autoSync();
+  }, AUTO_SYNC_INTERVAL_MS);
+}
