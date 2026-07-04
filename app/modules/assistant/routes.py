@@ -1443,9 +1443,35 @@ def reset_profile():
     return jsonify({'status': 'started', 'message': 'Profile rebuilding...'})
 
 
+def _mark_chat_cutoff() -> None:
+    """Record "chat history was pruned at this instant" in sync_meta.
+
+    apply_snapshot drops peer chat messages created before this mark, so
+    locally removed messages can't silently re-import on the next sync pull
+    (chat merge is append-only by uuid). Shared by clear-chat (removes
+    everything) and compress-chat (keeps the last few — those survive the
+    mark untouched because they're already local, and peer copies are
+    de-duped by uuid). Messages exchanged after the mark sync normally.
+    Does not commit — callers commit together with their deletes.
+    """
+    from app.models import SyncMeta
+    from app.timeutil import utcnow
+    cleared_at = utcnow().isoformat()
+    row = db.session.get(SyncMeta, 'chat_cleared_at')
+    if row:
+        row.value = cleared_at
+    else:
+        db.session.add(SyncMeta(key='chat_cleared_at', value=cleared_at))
+
+
 @bp.route('/compress-chat', methods=['POST'])
 def compress_chat():
-    """Keep only the last 4 chat messages (2 exchanges) to free context."""
+    """Keep only the last 4 chat messages (2 exchanges) to free context.
+
+    Records the same sync cutoff as clear-chat: without it, the next sync
+    pull re-imported every compressed-away message from peer snapshots,
+    silently undoing the compression.
+    """
     keep = 4
     all_msgs = (ChatMessage.query
                 .order_by(ChatMessage.created_at.desc())
@@ -1455,6 +1481,7 @@ def compress_chat():
     to_delete = all_msgs[keep:]
     for msg in to_delete:
         db.session.delete(msg)
+    _mark_chat_cutoff()
     db.session.commit()
     return jsonify({'status': 'ok', 'removed': len(to_delete), 'remaining': keep})
 
@@ -1463,21 +1490,12 @@ def compress_chat():
 def clear_chat():
     """Clear all chat history.
 
-    Also writes a `chat_cleared_at` timestamp into sync_meta so the
-    next sync pull can't silently re-import the messages we just
-    removed: apply_snapshot filters chat messages whose `created_at`
-    is older than this device's clear time. The chat continues to
-    sync normally for any new messages exchanged after the clear.
+    The cutoff written by _mark_chat_cutoff keeps the next sync pull from
+    silently re-importing the messages we just removed. The chat continues
+    to sync normally for any new messages exchanged after the clear.
     """
-    from app.models import SyncMeta
-    from app.timeutil import utcnow
     ChatMessage.query.delete()
-    cleared_at = utcnow().isoformat()
-    row = db.session.get(SyncMeta, 'chat_cleared_at')
-    if row:
-        row.value = cleared_at
-    else:
-        db.session.add(SyncMeta(key='chat_cleared_at', value=cleared_at))
+    _mark_chat_cutoff()
     db.session.commit()
     return jsonify({'status': 'ok'})
 

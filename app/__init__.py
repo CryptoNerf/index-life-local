@@ -483,12 +483,17 @@ def register_error_handlers(app) -> None:
         if isinstance(e, HTTPException):
             return e
         tb = _tb.format_exc()
-        # Write directly to log file — bypass all logger machinery
+        # Write directly to log file — bypass all logger machinery. The path
+        # comes from the app's own config (set by create_app), NOT from the
+        # global data-dir resolver: apps that never set DATA_DIR (unit-test
+        # apps) must not append test tracebacks to the real dev log.
         try:
-            _log_path = _get_data_dir() / 'index-life.log'
-            with open(str(_log_path), 'a') as _f:
-                from datetime import datetime as _dt
-                _f.write(f'{_dt.now()} ERROR handle_exception: {type(e).__name__}: {e}\n{tb}\n')
+            _data_dir = app.config.get('DATA_DIR')
+            if _data_dir:
+                _log_path = Path(_data_dir) / 'index-life.log'
+                with open(str(_log_path), 'a') as _f:
+                    from datetime import datetime as _dt
+                    _f.write(f'{_dt.now()} ERROR handle_exception: {type(e).__name__}: {e}\n{tb}\n')
         except Exception:
             pass
         # Also try app.logger
@@ -737,33 +742,6 @@ def create_app(config_class='config.Config'):
     from app.modules import register_modules
     register_modules(app)
 
-    # Warm up assistant module on startup (if enabled)
-    if 'assistant' in app.config.get('ACTIVE_MODULES', []):
-        try:
-            from app.modules.assistant.background import (
-                warmup_async, backfill_assistant_data_async, sync_missing_async,
-            )
-            warmup_async(app)
-            # Proactive processing of any pending entries. Both are mode-aware:
-            # in 'auto' they load the model (pre-warmed, no freeze) and generate
-            # summaries / people / activities; in 'manual' they only refresh the
-            # cheap CPU embeddings and defer LLM work to the update button. Both
-            # no-op quickly when nothing is pending. They serialise on the
-            # shared lock, so running them together is safe.
-            sync_missing_async(app)
-            backfill_assistant_data_async(app)
-        except Exception:
-            log.warning('Assistant warmup/backfill failed to start', exc_info=True)
-        # Head start: gradually warm the 5+ GB model file into the OS cache a
-        # few seconds after launch (throttled, low-impact, reclaimable) so it's
-        # ready when the user opens the assistant — the actual model then loads
-        # from a warm cache with NO memory-pressure freeze. See _prewarm_model_file.
-        try:
-            from app.modules.assistant.routes import prewarm_model_async
-            prewarm_model_async(delay_s=15.0)
-        except Exception:
-            log.warning('Assistant model pre-warm failed to start', exc_info=True)
-
     # Check for updates (non-blocking)
     try:
         from app.updater import check_for_update
@@ -826,5 +804,38 @@ def create_app(config_class='config.Config'):
                 schedule_periodic_sync(app, interval_seconds=120)
         except Exception as exc:
             log.warning('Startup sync failed: %s', exc)
+
+    # Warm up assistant module on startup (if enabled).
+    # MUST come after the app_context block above: the catch-up threads
+    # query entry_embeddings / entry_summaries right away, so starting them
+    # before db.create_all() + migrations crashed them with "no such table"
+    # on every fresh database (first launch, restore, new data dir).
+    # Running after the startup full_sync is also deliberate — entries just
+    # merged from peers are visible to the catch-up instead of racing it.
+    if 'assistant' in app.config.get('ACTIVE_MODULES', []):
+        try:
+            from app.modules.assistant.background import (
+                warmup_async, backfill_assistant_data_async, sync_missing_async,
+            )
+            warmup_async(app)
+            # Proactive processing of any pending entries. Both are mode-aware:
+            # in 'auto' they load the model (pre-warmed, no freeze) and generate
+            # summaries / people / activities; in 'manual' they only refresh the
+            # cheap CPU embeddings and defer LLM work to the update button. Both
+            # no-op quickly when nothing is pending. They serialise on the
+            # shared lock, so running them together is safe.
+            sync_missing_async(app)
+            backfill_assistant_data_async(app)
+        except Exception:
+            log.warning('Assistant warmup/backfill failed to start', exc_info=True)
+        # Head start: gradually warm the 5+ GB model file into the OS cache a
+        # few seconds after launch (throttled, low-impact, reclaimable) so it's
+        # ready when the user opens the assistant — the actual model then loads
+        # from a warm cache with NO memory-pressure freeze. See _prewarm_model_file.
+        try:
+            from app.modules.assistant.routes import prewarm_model_async
+            prewarm_model_async(delay_s=15.0)
+        except Exception:
+            log.warning('Assistant model pre-warm failed to start', exc_info=True)
 
     return app
