@@ -46,6 +46,24 @@
         <div class="sync-meta">{{ t('sync.last_sync') }}: {{ last_sync.strftime('%Y-%m-%d %H:%M') }}</div>
       {% endif %}
 
+      {# Outcome of the last (possibly background) sync cycle: a stuck peer
+         snapshot or a failed push must never hide behind a fresh
+         "last sync" time. #}
+      {% if sync_report and (sync_report.errors or sync_report.push_ok == false) %}
+        <div class="flash-msg flash-warning">
+          {% if sync_report.errors %}
+            ⚠️ {{ t('sync.report_errors', count=sync_report.errors) }}
+            {% if sync_report.error_files %}
+              (<code>{{ sync_report.error_files|join(', ') }}</code>)
+            {% endif %}
+          {% endif %}
+          {% if sync_report.push_ok == false %}
+            ⚠️ {{ t('sync.report_push_failed') }}
+          {% endif %}
+          {{ t('sync.report_see_log') }}
+        </div>
+      {% endif %}
+
       <form method="post" action="{{ url_for('sync.sync_settings') }}" class="sync-form" id="sync-settings-form">
         <div class="sync-row sync-mode-row">
           <label class="sync-mode-opt">
@@ -75,8 +93,10 @@
           <div class="sync-row">
             <input type="text" name="webdav_user" value="{{ webdav_user }}"
                    placeholder="{{ t('sync.webdav_user') }}" class="sync-input" autocomplete="username">
-            <input type="password" name="webdav_pass" value="{{ webdav_pass }}"
-                   placeholder="{{ t('sync.webdav_pass') }}" class="sync-input" autocomplete="current-password">
+            {# Never pre-fill the stored password — empty means "keep it". #}
+            <input type="password" name="webdav_pass" value=""
+                   placeholder="{{ t('sync.webdav_pass_saved') if webdav_pass_set else t('sync.webdav_pass') }}"
+                   class="sync-input" autocomplete="current-password">
           </div>
           <p class="sync-hint">{{ t('sync.webdav_hint') }}</p>
           <p class="sync-hint">{{ t('sync.webdav_creds_hint') }}</p>

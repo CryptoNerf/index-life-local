@@ -3,13 +3,14 @@ Routes for sync & backup management UI.
 """
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app
 from datetime import date
+from pathlib import Path
 
 from app.models import SyncConflict
 from app.backup import list_backups, backup_and_rotate, restore_backup
 from app.sync import (
     get_device_id, get_sync_config, set_sync_config, is_sync_configured,
-    get_last_sync, full_sync, import_now, export_now, test_connection,
-    is_webdav_insecure, _current_backend,
+    get_last_sync, get_last_sync_report, full_sync, import_now, export_now,
+    test_connection, is_webdav_insecure, _current_backend,
 )
 from app import sync_vault
 from app.i18n import t
@@ -39,8 +40,11 @@ def _render_sync(**extra):
         sync_folder=cfg['folder'],
         webdav_url=cfg['url'],
         webdav_user=cfg['username'],
-        webdav_pass=cfg['password'],
+        # Only a "is one stored?" flag — the password itself must never be
+        # echoed into the HTML (page source, screenshots, devtools dumps).
+        webdav_pass_set=bool(cfg['password']),
         last_sync=get_last_sync(),
+        sync_report=get_last_sync_report(),
         backups=backups,
         conflicts=conflicts,
         current_year=date.today().year,
@@ -60,15 +64,20 @@ def sync_settings():
     url = request.form.get('webdav_url', '').strip()
     username = request.form.get('webdav_user', '').strip()
     password = request.form.get('webdav_pass', '')
+    # The form never pre-fills the stored password (see _render_sync), so an
+    # empty field means "keep what I have", not "clear it". Clearing happens
+    # via Disconnect, which wipes the whole config.
+    if not password:
+        password = get_sync_config()['password']
 
     set_sync_config(mode, folder=folder, url=url, username=username, password=password)
     if is_sync_configured():
-        flash('Sync settings saved', 'success')
+        flash(t('sync.flash_settings_saved'), 'success')
         # Saved over plain http — credentials + diary go in clear text.
         if is_webdav_insecure(mode, url):
             flash(t('sync.webdav_insecure'), 'warning')
     else:
-        flash('Sync disabled', 'success')
+        flash(t('sync.flash_disabled'), 'success')
     return redirect(url_for('sync.sync_page'))
 
 
@@ -82,7 +91,7 @@ def sync_disconnect():
     still read what we last pushed.
     """
     set_sync_config('local', folder='', url='', username='', password='')
-    flash('Sync disconnected — your data stays on this device', 'success')
+    flash(t('sync.flash_disconnected'), 'success')
     return redirect(url_for('sync.sync_page'))
 
 
@@ -167,6 +176,10 @@ def sync_test():
     url = request.form.get('webdav_url', '').strip()
     username = request.form.get('webdav_user', '').strip()
     password = request.form.get('webdav_pass', '')
+    # Empty field = "use the stored password" (the form never pre-fills it),
+    # so the Test button keeps working without re-typing the password.
+    if not password:
+        password = get_sync_config()['password']
     error = test_connection(mode, folder=folder, url=url,
                             username=username, password=password)
     warning = t('sync.webdav_insecure') if is_webdav_insecure(mode, url) else None
@@ -175,17 +188,31 @@ def sync_test():
     return jsonify({'ok': True, 'warning': warning})
 
 
+# Engine-level error strings → translation keys. The engine returns plain
+# strings (it has no request context); the UI maps the known ones so the
+# flash follows the interface language.
+_ENGINE_ERRORS = {
+    'Sync not configured': 'sync.err_not_configured',
+    'Sync is already running — try again in a moment': 'sync.err_busy',
+}
+
+
+def _flash_engine_error(msg: str):
+    key = _ENGINE_ERRORS.get(msg)
+    flash(t(key) if key else msg, 'error')
+
+
 @bp.route('/sync/now', methods=['POST'])
 def sync_now():
     """Trigger a full sync cycle."""
     try:
         stats = full_sync(current_app._get_current_object())
         if stats.get('error'):
-            flash(stats['error'], 'error')
+            _flash_engine_error(stats['error'])
         else:
             _flash_sync_stats(stats)
     except Exception as e:
-        flash(f'Sync error: {e}', 'error')
+        flash(t('sync.flash_sync_error', err=e), 'error')
     return redirect(url_for('sync.sync_page'))
 
 
@@ -193,13 +220,16 @@ def sync_now():
 def sync_export():
     """Manual push of our snapshot."""
     if not is_sync_configured():
-        flash('Configure sync first', 'error')
+        flash(t('sync.flash_configure_first'), 'error')
         return redirect(url_for('sync.sync_page'))
     try:
         ok = export_now(current_app._get_current_object())
-        flash('Snapshot uploaded' if ok else 'Upload failed', 'success' if ok else 'error')
+        if ok:
+            flash(t('sync.flash_uploaded'), 'success')
+        else:
+            flash(t('sync.flash_upload_failed'), 'error')
     except Exception as e:
-        flash(f'Export error: {e}', 'error')
+        flash(t('sync.flash_export_error', err=e), 'error')
     return redirect(url_for('sync.sync_page'))
 
 
@@ -207,33 +237,42 @@ def sync_export():
 def sync_import():
     """Manual pull from peers."""
     if not is_sync_configured():
-        flash('Configure sync first', 'error')
+        flash(t('sync.flash_configure_first'), 'error')
         return redirect(url_for('sync.sync_page'))
     try:
         stats = import_now(current_app._get_current_object())
         if stats.get('error'):
-            flash(stats['error'], 'error')
+            _flash_engine_error(stats['error'])
         else:
             _flash_sync_stats(stats)
     except Exception as e:
-        flash(f'Import error: {e}', 'error')
+        flash(t('sync.flash_import_error', err=e), 'error')
     return redirect(url_for('sync.sync_page'))
 
 
 def _flash_sync_stats(stats: dict):
+    # Failures first — a skipped peer snapshot means that device's changes
+    # silently stop arriving, so it must never hide behind a success flash.
+    if stats.get('errors'):
+        names = ', '.join((stats.get('error_files') or [])[:5])
+        flash(t('sync.errors_flash', count=stats['errors'], files=names),
+              'warning')
+    if stats.get('push_ok') is False:
+        flash(t('sync.push_failed_flash'), 'error')
+
     parts = []
     if stats.get('inserted'):
-        parts.append(f"{stats['inserted']} new entries")
+        parts.append(t('sync.flash_part_new', n=stats['inserted']))
     if stats.get('updated'):
-        parts.append(f"{stats['updated']} updated")
+        parts.append(t('sync.flash_part_updated', n=stats['updated']))
     if stats.get('chat_inserted'):
-        parts.append(f"{stats['chat_inserted']} chat messages")
+        parts.append(t('sync.flash_part_chat', n=stats['chat_inserted']))
     if stats.get('conflicts'):
-        parts.append(f"{stats['conflicts']} conflicts resolved")
+        parts.append(t('sync.flash_part_conflicts', n=stats['conflicts']))
     if parts:
-        flash('Synced: ' + ', '.join(parts), 'success')
-    else:
-        flash('Everything is up to date', 'success')
+        flash(t('sync.flash_synced', parts=', '.join(parts)), 'success')
+    elif not stats.get('errors'):
+        flash(t('sync.flash_up_to_date'), 'success')
 
 
 @bp.route('/backup/create', methods=['POST'])
@@ -244,27 +283,40 @@ def backup_create():
         backup_dir = current_app.config['BACKUP_DIR']
         max_count = current_app.config.get('BACKUP_MAX_COUNT', 10)
         result = backup_and_rotate(db_path, backup_dir, max_count)
-        flash(f'Backup created: {result.name}' if result else 'Backup failed',
-              'success' if result else 'error')
+        if result:
+            flash(t('sync.flash_backup_created', name=result.name), 'success')
+        else:
+            flash(t('sync.flash_backup_failed'), 'error')
     except Exception as e:
-        flash(f'Backup error: {e}', 'error')
+        flash(t('sync.flash_backup_error', err=e), 'error')
     return redirect(url_for('sync.sync_page'))
 
 
 @bp.route('/backup/restore', methods=['POST'])
 def backup_restore():
-    """Restore database from a backup."""
+    """Restore database from a backup.
+
+    The path must resolve inside BACKUP_DIR: the form only ever submits
+    paths from list_backups(), so anything else is a forged or garbled
+    request — refuse it rather than overwrite the diary with an arbitrary
+    SQLite file from disk.
+    """
     backup_path = request.form.get('backup_path', '').strip()
     if not backup_path:
-        flash('No backup selected', 'error')
+        flash(t('sync.flash_no_backup_selected'), 'error')
         return redirect(url_for('sync.sync_page'))
     try:
         db_path = current_app.config['DB_PATH']
-        success = restore_backup(backup_path, db_path)
+        backup_dir = Path(current_app.config['BACKUP_DIR']).resolve()
+        candidate = Path(backup_path).resolve()
+        if not (candidate.is_file() and candidate.is_relative_to(backup_dir)):
+            flash(t('sync.restore_invalid_path'), 'error')
+            return redirect(url_for('sync.sync_page'))
+        success = restore_backup(candidate, db_path)
         if success:
-            flash('Database restored. Please restart the application.', 'success')
+            flash(t('sync.flash_restored'), 'success')
         else:
-            flash('Restore failed — backup may be corrupted', 'error')
+            flash(t('sync.flash_restore_failed'), 'error')
     except Exception as e:
-        flash(f'Restore error: {e}', 'error')
+        flash(t('sync.flash_restore_error', err=e), 'error')
     return redirect(url_for('sync.sync_page'))

@@ -12,6 +12,32 @@ log = logging.getLogger(__name__)
 
 _backup_timer: threading.Timer | None = None
 
+# Device-local secrets cached in sync_meta that must never travel inside a
+# backup: the sync Vault Key and the WebDAV password. A backup is exactly
+# the file users copy off the device — often into the same cloud that holds
+# the encrypted snapshots — and a VK sitting next to the ciphertext would
+# void the zero-knowledge design (see app/sync_vault.py's threat model:
+# "the VK never leaves the device").
+_SECRET_META_KEYS = ('sync_vault_key', 'webdav_pass')
+
+
+def _scrub_secrets(conn: sqlite3.Connection) -> None:
+    """Delete device-local secrets from a BACKUP connection (never the live
+    DB). After restoring such a backup the vault is simply locked — the user
+    re-unlocks with the passphrase (or recovery key) and re-enters the WebDAV
+    password; until then sync refuses to push (fail-safe), so nothing leaks
+    and nothing breaks silently.
+    """
+    try:
+        placeholders = ','.join('?' * len(_SECRET_META_KEYS))
+        conn.execute(
+            f'DELETE FROM sync_meta WHERE key IN ({placeholders})',
+            _SECRET_META_KEYS,
+        )
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass  # sync_meta doesn't exist yet (pre-sync-era database)
+
 
 def create_backup(db_path: str | Path, backup_dir: str | Path) -> Path | None:
     """Create a verified backup of the SQLite database.
@@ -33,6 +59,7 @@ def create_backup(db_path: str | Path, backup_dir: str | Path) -> Path | None:
         source = sqlite3.connect(str(db_path))
         dest = sqlite3.connect(str(backup_path))
         source.backup(dest)
+        _scrub_secrets(dest)   # backups travel; the VK/password must not
         dest.close()
         source.close()
     except Exception as exc:
