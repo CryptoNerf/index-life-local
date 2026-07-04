@@ -5,7 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import Ajv2020 from 'ajv/dist/2020.js';
-import { buildSnapshot, mergeMoodEntries, applySnapshot } from '../src/lib/snapshot.js';
+import { buildSnapshot, mergeMoodEntries, applySnapshot, toEpochMs } from '../src/lib/snapshot.js';
 
 const SPEC = new URL('../../docs/sync-spec/', import.meta.url);
 const schema = JSON.parse(readFileSync(new URL('snapshot.schema.json', SPEC), 'utf8'));
@@ -117,5 +117,51 @@ describe('applySnapshot', () => {
     const peer = buildSnapshot([entry('2026-06-20')], 'dev-b');
     const out = applySnapshot([], peer, 'dev-a');
     expect(out).toHaveLength(1);
+  });
+});
+
+// ── cross-stack timestamps (SPEC §Timestamps) ─────────────────
+
+describe('toEpochMs', () => {
+  it('treats a zone-less desktop timestamp as UTC, never local time', () => {
+    expect(toEpochMs('2026-07-03T12:00:00')).toBe(Date.parse('2026-07-03T12:00:00Z'));
+  });
+
+  it('parses 6-digit microseconds (Python isoformat) at ms precision', () => {
+    expect(toEpochMs('2026-07-03T12:00:00.123456')).toBe(Date.parse('2026-07-03T12:00:00.123Z'));
+  });
+
+  it('naive and Z-suffixed spellings of one instant compare equal', () => {
+    expect(toEpochMs('2026-07-03T12:00:00.500000')).toBe(toEpochMs('2026-07-03T12:00:00.500Z'));
+  });
+
+  it('honours an explicit offset', () => {
+    expect(toEpochMs('2026-07-03T15:00:00+03:00')).toBe(Date.parse('2026-07-03T12:00:00Z'));
+  });
+
+  it('returns NaN for empty / missing values', () => {
+    expect(Number.isNaN(toEpochMs(null))).toBe(true);
+    expect(Number.isNaN(toEpochMs(''))).toBe(true);
+  });
+});
+
+describe('merge across timestamp styles', () => {
+  it('a later desktop edit (zone-less UTC) beats an earlier phone edit (Z-suffixed)', () => {
+    // Regression: Date.parse read zone-less strings as LOCAL time, so on any
+    // UTC+ machine the desktop edit looked hours older than it was and a
+    // stale phone edit would wrongly win.
+    const out = mergeMoodEntries(
+      [entry('2026-06-20', { rating: 3, updated_at: '2026-06-20T10:00:00.500000' })],
+      [entry('2026-06-20', { rating: 9, updated_at: '2026-06-20T09:00:00.000Z' })]
+    );
+    expect(out[0].rating).toBe(3);
+  });
+
+  it('the same instant spelled two ways is a tie — local keeps', () => {
+    const out = mergeMoodEntries(
+      [entry('2026-06-20', { rating: 3, updated_at: '2026-06-20T12:00:00' })],
+      [entry('2026-06-20', { rating: 9, updated_at: '2026-06-20T12:00:00.000Z' })]
+    );
+    expect(out[0].rating).toBe(3);
   });
 });

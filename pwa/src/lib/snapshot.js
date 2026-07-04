@@ -41,7 +41,24 @@ export function validMood(d) {
   return true;
 }
 
-const ms = (s) => (s ? Date.parse(s) : NaN);
+// Parse an ISO timestamp to epoch ms, treating zone-less strings as UTC.
+// Desktop peers serialize naive UTC with microsecond precision
+// ("2026-07-03T12:00:00.123456"); Date.parse would read that as *local*
+// time — skewing last-write-wins by the phone's UTC offset — and some
+// engines reject >3 fractional digits outright. Trim the fraction to
+// milliseconds and pin UTC explicitly when no zone is given.
+// (See docs/sync-spec/SPEC.md §Timestamps.)
+const TZ_RE = /(?:Z|[+-]\d{2}:?\d{2})$/i;
+export function toEpochMs(s) {
+  if (!s) return NaN;
+  const str = String(s);
+  if (!str.includes('T')) return Date.parse(str); // date-only is UTC per spec
+  const zone = TZ_RE.exec(str)?.[0] || '';
+  let base = zone ? str.slice(0, -zone.length) : str;
+  base = base.replace(/(\.\d{3})\d+$/, '$1'); // µs → ms precision
+  return Date.parse(base + (zone || 'Z'));
+}
+const ms = toEpochMs;
 
 function inserted(p) {
   return {
