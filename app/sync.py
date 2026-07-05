@@ -44,6 +44,8 @@ import json
 import logging
 import threading
 from datetime import datetime, date as date_type, timedelta, timezone
+from typing import Any
+
 from app.timeutil import utcnow
 
 from app import db
@@ -209,6 +211,7 @@ def _record_sync_report(stats: dict, push_ok: bool) -> None:
         'at': utcnow().isoformat(),
         'errors': stats.get('errors', 0),
         'error_files': (stats.get('error_files') or [])[:5],
+        'locked': stats.get('locked', 0),
         'push_ok': push_ok,
     }
     _meta_set('last_sync_report', json.dumps(report, ensure_ascii=False))
@@ -715,9 +718,10 @@ def pull_peers(backend, names: list[str] | None = None,
     no changes, no backup churn).
     """
     own_device = get_device_id()
-    total = {'files': 0, 'inserted': 0, 'updated': 0, 'conflicts': 0,
-             'chat_inserted': 0, 'skipped_invalid': 0, 'errors': 0,
-             'error_files': [], 'peers_unchanged': 0}
+    total: dict[str, Any] = {
+        'files': 0, 'inserted': 0, 'updated': 0, 'conflicts': 0,
+        'chat_inserted': 0, 'skipped_invalid': 0, 'errors': 0,
+        'error_files': [], 'peers_unchanged': 0, 'locked': 0}
 
     def _record_error(name: str):
         total['errors'] += 1
@@ -757,6 +761,9 @@ def pull_peers(backend, names: list[str] | None = None,
             if vk is None:                           # locked: can't read peers
                 log.warning('Sync: %s is encrypted but no vault key — skipping', name)
                 _record_error(name)
+                # Counted separately so the UI can say the actionable thing
+                # ("enter the passphrase") instead of a generic error.
+                total['locked'] += 1
                 continue
             try:
                 snapshot = sync_crypto.open_envelope(text, vk)
@@ -969,6 +976,53 @@ def _trigger_reprocessing(app):
             sync_missing_async(app)
         except Exception as exc:
             log.warning('Post-sync reprocessing failed: %s', exc)
+
+
+# ── Devices panel ─────────────────────────────────────────────
+
+def list_peer_devices(backend) -> list[dict]:
+    """Metadata of every device blob in the sync folder.
+
+    Powers the "did my devices actually meet?" panel: after setting up a
+    phone there was no way to see whether it ever wrote into the folder.
+    Reads only the PLAINTEXT parts — the envelope routing header or a
+    legacy snapshot's top-level fields — and never decrypts, so it works
+    even while the vault is locked.
+    """
+    own = get_device_id()
+    devices: list[dict] = []
+    for name in backend.list_files():
+        if not (name.startswith('device_') and name.endswith('.json')):
+            continue
+        text = backend.read(name)
+        if text is None:
+            continue
+        try:
+            obj = json.loads(text)
+        except (json.JSONDecodeError, ValueError):
+            devices.append({'file': name, 'device_id': None,
+                            'written_at': None, 'encrypted': False,
+                            'is_self': False, 'unreadable': True})
+            continue
+        if sync_vault.is_envelope(obj):
+            dev, written, enc = obj.get('device'), obj.get('written_at'), True
+        else:
+            dev, written, enc = obj.get('device_id'), obj.get('generated_at'), False
+        devices.append({
+            'file': name,
+            'device_id': dev,
+            'written_at': written,
+            'encrypted': enc,
+            'is_self': bool(dev) and dev == own,
+            'unreadable': False,
+        })
+
+    def _epoch(d: dict) -> float:
+        dt = _parse_dt(d.get('written_at'))
+        return dt.timestamp() if dt else 0.0
+
+    devices.sort(key=lambda d: (not d['is_self'], -_epoch(d)))
+    return devices
 
 
 # ── Periodic auto-sync ────────────────────────────────────────

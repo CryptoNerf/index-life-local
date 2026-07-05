@@ -1,0 +1,101 @@
+"""Devices panel + the locked-vault report.
+
+After connecting a phone there was no way to see whether the devices ever
+met. list_peer_devices reads only plaintext headers (works while the vault
+is locked), and pull_peers counts locked-out envelopes separately so the
+UI can say the actionable thing ("enter the passphrase") instead of a
+generic error.
+"""
+import json
+
+from app import db, sync
+from app.models import SyncMeta
+from app.sync_backends import make_backend
+
+
+def _set_device(device_id='dev-local'):
+    db.session.add(SyncMeta(key='device_id', value=device_id))
+    db.session.commit()
+
+
+def _backend(tmp_path):
+    folder = tmp_path / 'cloud'
+    folder.mkdir(exist_ok=True)
+    return make_backend('local', folder=str(folder)), folder
+
+
+def _envelope_blob(device, written_at):
+    return json.dumps({
+        'env': 1, 'alg': 'xchacha20poly1305', 'device': device,
+        'snapshot_version': 4, 'written_at': written_at,
+        'nonce': 'AAAA', 'ct': 'AAAA',
+    })
+
+
+def _plain_blob(device, generated_at):
+    return json.dumps({
+        'snapshot_version': 4, 'device_id': device,
+        'generated_at': generated_at, 'mood_entries': [],
+    })
+
+
+def test_lists_own_and_peer_devices_with_headers_only(app, tmp_path):
+    _set_device('dev-local')
+    backend, folder = _backend(tmp_path)
+    (folder / 'device_dev-local.json').write_text(
+        _plain_blob('dev-local', '2026-07-04T10:00:00'), encoding='utf-8')
+    (folder / 'device_phone.json').write_text(
+        _envelope_blob('phone-1', '2026-07-05T09:00:00Z'), encoding='utf-8')
+    (folder / 'vault.json').write_text('{}', encoding='utf-8')      # ignored
+    (folder / 'notes.json').write_text('{}', encoding='utf-8')      # ignored
+
+    devices = sync.list_peer_devices(backend)
+
+    assert len(devices) == 2
+    assert devices[0]['is_self'] is True                 # self first
+    assert devices[0]['device_id'] == 'dev-local'
+    assert devices[0]['encrypted'] is False
+    assert devices[1]['device_id'] == 'phone-1'
+    assert devices[1]['encrypted'] is True
+    assert devices[1]['written_at'] == '2026-07-05T09:00:00Z'
+
+
+def test_peers_sort_by_recency(app, tmp_path):
+    _set_device('dev-local')
+    backend, folder = _backend(tmp_path)
+    (folder / 'device_old.json').write_text(
+        _envelope_blob('old-peer', '2026-07-01T00:00:00Z'), encoding='utf-8')
+    (folder / 'device_new.json').write_text(
+        _envelope_blob('new-peer', '2026-07-05T00:00:00Z'), encoding='utf-8')
+
+    devices = sync.list_peer_devices(backend)
+
+    assert [d['device_id'] for d in devices] == ['new-peer', 'old-peer']
+
+
+def test_garbage_blob_is_reported_not_fatal(app, tmp_path):
+    _set_device()
+    backend, folder = _backend(tmp_path)
+    (folder / 'device_broken.json').write_text('{nope', encoding='utf-8')
+
+    devices = sync.list_peer_devices(backend)
+
+    assert len(devices) == 1
+    assert devices[0]['unreadable'] is True
+
+
+def test_locked_envelopes_counted_separately_in_the_report(app, tmp_path):
+    """The 'phone syncs encrypted, PC has no key' case must be
+    distinguishable from generic errors — it has a one-step fix."""
+    _set_device()
+    backend, folder = _backend(tmp_path)
+    sync.set_sync_config('local', folder=str(folder))
+    (folder / 'device_phone.json').write_text(
+        _envelope_blob('phone-1', '2026-07-05T09:00:00Z'), encoding='utf-8')
+
+    stats = sync.full_sync(app)
+
+    assert stats['locked'] == 1
+    assert stats['errors'] == 1
+    report = sync.get_last_sync_report()
+    assert report['locked'] == 1
