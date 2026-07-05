@@ -62,6 +62,13 @@ export async function pullPeers(transport, ownDeviceId, localEntries, vk, stats 
 
     if (snapshot && Array.isArray(snapshot.mood_entries)) {
       entries = mergeMoodEntries(entries, snapshot.mood_entries);
+      // Collect peers' display names for the devices panel (the caller
+      // caches them — envelope headers stay name-free, so a peer's name is
+      // only known after a successful decrypt+merge).
+      if (stats && snapshot.device_id && typeof snapshot.device_name === 'string') {
+        (stats.names || (stats.names = {}))[snapshot.device_id] =
+          snapshot.device_name.slice(0, 60);
+      }
     }
   }
   return entries;
@@ -69,10 +76,10 @@ export async function pullPeers(transport, ownDeviceId, localEntries, vk, stats 
 
 // Seal our snapshot and write it. Requires a vk — refuses (throws) rather than
 // ever putting plaintext in the cloud.
-export async function pushSnapshot(transport, ownDeviceId, entries, vk) {
+export async function pushSnapshot(transport, ownDeviceId, entries, vk, deviceName = null) {
   await crypto.ready;
   if (!vk) throw new Error('vault is locked — refusing to push plaintext');
-  const snapshot = buildSnapshot(entries, ownDeviceId);
+  const snapshot = buildSnapshot(entries, ownDeviceId, deviceName);
   const text = crypto.sealEnvelope(snapshot, vk, {
     device: ownDeviceId,
     snapshotVersion: snapshot.snapshot_version,
@@ -83,8 +90,9 @@ export async function pushSnapshot(transport, ownDeviceId, entries, vk) {
 
 // One cycle: pull peers → merge → push our merged state. Returns the merged
 // entries for the caller to persist locally. `stats` — see pullPeers.
-export async function fullSync(transport, ownDeviceId, localEntries, vk, stats = null) {
+export async function fullSync(transport, ownDeviceId, localEntries, vk,
+                               stats = null, deviceName = null) {
   const merged = await pullPeers(transport, ownDeviceId, localEntries, vk, stats);
-  await pushSnapshot(transport, ownDeviceId, merged, vk);
+  await pushSnapshot(transport, ownDeviceId, merged, vk, deviceName);
   return merged;
 }

@@ -9,10 +9,14 @@
 export const SNAPSHOT_VERSION = 4;
 
 // ── build ────────────────────────────────────────────────────────────
-export function buildSnapshot(entries, deviceId) {
+// `deviceName`, when given, is embedded as the optional `device_name`
+// field — the human label peers show in their device panels. Optional so
+// old snapshots and old clients interoperate unchanged.
+export function buildSnapshot(entries, deviceId, deviceName = null) {
   return {
     snapshot_version: SNAPSHOT_VERSION,
     device_id: deviceId,
+    ...(deviceName ? { device_name: deviceName } : {}),
     generated_at: new Date().toISOString(),
     mood_entries: entries.map((e) => ({
       uuid: e.uuid,

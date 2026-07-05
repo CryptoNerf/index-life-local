@@ -4,8 +4,30 @@
 // …); the engine and crypto do the rest.
 
 import { allEntries, putEntries } from './db.js';
-import { getDeviceId, getVaultKey, isEncryptionEnabled } from './vault.js';
+import { getDeviceId, getDeviceName, getVaultKey, isEncryptionEnabled } from './vault.js';
 import { fullSync } from './sync.js';
+
+// Peers' display names, cached from their (decrypted) snapshots — envelope
+// headers are name-free, so a peer's name is only learnable on merge.
+const PEER_NAME_PREFIX = 'indexlife:peer-name:';
+
+export function getPeerName(deviceId) {
+  try {
+    return localStorage.getItem(PEER_NAME_PREFIX + deviceId);
+  } catch {
+    return null;
+  }
+}
+
+function cachePeerNames(names) {
+  for (const [id, name] of Object.entries(names || {})) {
+    try {
+      localStorage.setItem(PEER_NAME_PREFIX + id, name);
+    } catch {
+      /* best-effort */
+    }
+  }
+}
 
 // One sync cycle against a transport: pull peers → merge → push our state →
 // persist the merged result locally. Returns a small status object.
@@ -24,8 +46,10 @@ export async function syncWith(transport) {
   const deviceId = getDeviceId();
   const local = await allEntries();
   const stats = { locked: 0, errors: 0 };
-  const merged = await fullSync(transport, deviceId, local, vk, stats);
+  const merged = await fullSync(transport, deviceId, local, vk, stats,
+                                getDeviceName());
   await putEntries(merged);
+  cachePeerNames(stats.names);
 
   // locked/errors — peers whose data could NOT be read (key mismatch /
   // junk blob); the UI surfaces them so a broken link never looks "ok".
@@ -55,7 +79,15 @@ export async function listDevices(transport, ownDeviceId = getDeviceId()) {
     const env = isEnvelope(obj);
     const id = (env ? obj.device : obj.device_id) || '?';
     const at = toEpochMs(env ? obj.written_at : obj.generated_at);
-    out.push({ id, at, encrypted: env, self: id === ownDeviceId });
+    const self = id === ownDeviceId;
+    // Display name: plaintext desktop snapshots carry it in the open;
+    // encrypted peers' names come from the merge-time cache.
+    const peerName = env ? getPeerName(id)
+      : (typeof obj.device_name === 'string' ? obj.device_name : getPeerName(id));
+    out.push({
+      id, at, encrypted: env, self,
+      name: self ? getDeviceName() : (peerName || null)
+    });
   }
   // self first, then most recently synced
   out.sort((a, b) => (a.self === b.self ? (b.at || 0) - (a.at || 0) : (a.self ? -1 : 1)));

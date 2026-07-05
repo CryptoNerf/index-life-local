@@ -456,7 +456,9 @@
             label = '⚠ ' + d.file + ' — ' + DEV_I18N.unreadable;
           } else {
             var shortId = (d.device_id || '?').slice(0, 8);
-            label = (d.is_self ? '💻 ' + DEV_I18N.self : '📱 ' + DEV_I18N.device) +
+            var who = d.name || (d.is_self ? DEV_I18N.self : DEV_I18N.device);
+            label = (d.is_self ? '💻 ' : '📱 ') + who +
+              (d.is_self && d.name ? ' (' + DEV_I18N.self + ')' : '') +
               ' · ' + shortId + '… · ' + relTime(toMs(d.written_at)) +
               (d.encrypted ? ' · 🔒' : '');
           }

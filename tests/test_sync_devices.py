@@ -99,3 +99,53 @@ def test_locked_envelopes_counted_separately_in_the_report(app, tmp_path):
     assert stats['errors'] == 1
     report = sync.get_last_sync_report()
     assert report['locked'] == 1
+
+
+# ── display names (device_name in the snapshot body) ──────────
+
+def test_own_snapshot_carries_a_device_name(app):
+    _set_device('dev-local')
+    snap = sync.build_snapshot()
+    assert isinstance(snap['device_name'], str) and snap['device_name']
+
+
+def test_peer_name_cached_on_merge_and_shown_for_envelopes(app, tmp_path):
+    """Envelope headers are name-free (AAD), so a peer's name comes from the
+    snapshot body cached at merge time — and survives into the panel."""
+    _set_device('dev-local')
+    backend, folder = _backend(tmp_path)
+
+    sync.apply_snapshot({
+        'snapshot_version': 4, 'device_id': 'phone-1',
+        'device_name': 'Телефон Эмиля', 'mood_entries': [],
+    })
+
+    (folder / 'device_phone.json').write_text(
+        _envelope_blob('phone-1', '2026-07-05T09:00:00Z'), encoding='utf-8')
+    devices = sync.list_peer_devices(backend)
+
+    assert devices[0]['name'] == 'Телефон Эмиля'
+
+
+def test_plaintext_peer_name_read_directly(app, tmp_path):
+    _set_device('dev-local')
+    backend, folder = _backend(tmp_path)
+    blob = json.loads(_plain_blob('pc-2', '2026-07-04T10:00:00'))
+    blob['device_name'] = 'Рабочий ПК'
+    (folder / 'device_pc2.json').write_text(json.dumps(blob), encoding='utf-8')
+
+    devices = sync.list_peer_devices(backend)
+
+    assert devices[0]['name'] == 'Рабочий ПК'
+
+
+def test_self_row_uses_the_hostname(app, tmp_path):
+    _set_device('dev-local')
+    backend, folder = _backend(tmp_path)
+    (folder / 'device_dev-local.json').write_text(
+        _plain_blob('dev-local', '2026-07-04T10:00:00'), encoding='utf-8')
+
+    devices = sync.list_peer_devices(backend)
+
+    assert devices[0]['is_self'] is True
+    assert devices[0]['name'] == sync.device_display_name()

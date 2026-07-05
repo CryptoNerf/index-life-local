@@ -135,3 +135,22 @@ describe('pullPeers stats', () => {
     expect(stats.locked).toBe(1);
   });
 });
+
+// ── peer names travel inside the (decrypted) snapshot body ───────────
+
+describe('peer name collection on pull', () => {
+  it('stats.names carries device_name from a decrypted peer snapshot', async () => {
+    const vk = randomVk();
+    const text = crypto.sealEnvelope(
+      { snapshot_version: 4, device_id: 'pc-1', device_name: 'MacBook-Pro',
+        mood_entries: [] },
+      vk, { device: 'pc-1', snapshotVersion: 4, writtenAt: '2026-07-05T00:00:00Z' }
+    );
+    const t = new MemoryTransport({ 'device_pc-1.json': text });
+
+    const stats = { locked: 0, errors: 0 };
+    await pullPeers(t, 'phone-1', [], vk, stats);
+
+    expect(stats.names).toEqual({ 'pc-1': 'MacBook-Pro' });
+  });
+});

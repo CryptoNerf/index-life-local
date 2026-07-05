@@ -5,8 +5,8 @@
 
 import { syncWith } from './app-sync.js';
 import { refreshEntries } from './store.svelte.js';
-import { GoogleDriveTransport } from './drive.js';
-import { YandexDiskTransport } from './yandex.js';
+import { GoogleDriveTransport, clearToken as clearGoogleToken } from './drive.js';
+import { YandexDiskTransport, clearToken as clearYandexToken } from './yandex.js';
 import { isUnlocked } from './vault.js';
 
 const LAST_KEY = 'indexlife:last-sync';
@@ -20,6 +20,17 @@ export function setProvider(name) {
   if (name) localStorage.setItem(PROVIDER_KEY, name);
   else localStorage.removeItem(PROVIDER_KEY);
   transport = null; // rebuild for the new provider
+}
+
+// Sign out of the cloud on this device: forget OAuth tokens of BOTH
+// providers and the chosen one. Without this, "switch cloud" kept the
+// year-long Yandex token and silently reused the previous account.
+export function signOutCloud() {
+  try { clearYandexToken(); } catch { /* best-effort */ }
+  try { clearGoogleToken(); } catch { /* best-effort */ }
+  setProvider(null);
+  syncState.status = 'idle';
+  syncState.error = '';
 }
 
 export const syncState = $state({
@@ -62,8 +73,21 @@ export async function runSync({ silent = false } = {}) {
     syncState.status = 'ok';
     return true;
   } catch (e) {
+    const msg = e?.message || '';
+    if (msg === 'auth-expired') {
+      // Cloud session gone (token revoked / expired server-side) — a
+      // distinct state so the UI offers "sign in again" instead of a
+      // generic error, and background syncs stop looking mysterious.
+      syncState.status = 'auth';
+      syncState.error = '';
+      return false;
+    }
     syncState.status = 'error';
-    if (!silent) syncState.error = e?.message || 'Ошибка синхронизации';
+    if (!silent) {
+      syncState.error = msg.includes('Failed to fetch')
+        ? 'Нет сети или облако недоступно — попробуйте позже'
+        : (msg || 'Ошибка синхронизации');
+    }
     return false;
   }
 }

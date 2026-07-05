@@ -96,6 +96,16 @@ def get_device_id() -> str | None:
     return _meta_get('device_id')
 
 
+def device_display_name() -> str:
+    """Human name of THIS device for peers' device panels (hostname)."""
+    import platform
+    name = (platform.node() or '').strip()
+    # Strip the noisy '.local' suffix macOS appends to hostnames.
+    if name.endswith('.local'):
+        name = name[:-len('.local')]
+    return name[:60] or 'Компьютер'
+
+
 # ── Config (mode + folder/webdav) ─────────────────────────────
 
 def get_sync_config() -> dict:
@@ -260,6 +270,10 @@ def build_snapshot() -> dict:
     snapshot = {
         'snapshot_version': SNAPSHOT_VERSION,
         'device_id': device_id,
+        # Human name for the devices panel on peers ("MacBook-Pro", not a
+        # uuid). Optional field — old clients ignore it (forward-compatible
+        # snapshot shape per SPEC).
+        'device_name': device_display_name(),
         'generated_at': utcnow().isoformat(),
         'mood_entries': [
             {
@@ -420,6 +434,14 @@ def apply_snapshot(snapshot: dict) -> dict:
     if remote_device == get_device_id():
         stats['skipped'] = True
         return stats
+
+    # Remember the peer's human name for the devices panel. Cached in
+    # sync_meta because envelope headers stay name-free (they are AAD;
+    # adding fields would be a format change) — so names surface only
+    # after the first successful merge.
+    peer_name = snapshot.get('device_name')
+    if peer_name and isinstance(peer_name, str) and remote_device != 'unknown':
+        _meta_set(f'peer_name:{remote_device}', peer_name[:60])
 
     # ── Mood entries ──
     for ed in snapshot.get('mood_entries', []):
@@ -1006,14 +1028,23 @@ def list_peer_devices(backend) -> list[dict]:
             continue
         if sync_vault.is_envelope(obj):
             dev, written, enc = obj.get('device'), obj.get('written_at'), True
+            # Envelope headers carry no name (AAD-bound format); use the
+            # name cached from the last successful merge, if any.
+            display = _meta_get(f'peer_name:{dev}') if dev else None
         else:
             dev, written, enc = obj.get('device_id'), obj.get('generated_at'), False
+            display = obj.get('device_name') or (
+                _meta_get(f'peer_name:{dev}') if dev else None)
+        is_self = bool(dev) and dev == own
+        if is_self:
+            display = device_display_name()
         devices.append({
             'file': name,
             'device_id': dev,
+            'name': display,
             'written_at': written,
             'encrypted': enc,
-            'is_self': bool(dev) and dev == own,
+            'is_self': is_self,
             'unreadable': False,
         })
 

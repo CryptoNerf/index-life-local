@@ -3,7 +3,7 @@
   import * as vault from '../lib/vault.js';
   import PairScan from './PairScan.svelte';
   import { listDevices } from '../lib/app-sync.js';
-  import { getProvider, setProvider, getTransport, runSync, syncState } from '../lib/sync-state.svelte.js';
+  import { getProvider, setProvider, signOutCloud, getTransport, runSync, syncState } from '../lib/sync-state.svelte.js';
   import { timeAgo } from '../lib/mood.js';
 
   let provider = $state(getProvider()); // 'yandex' | 'google' | null
@@ -126,13 +126,15 @@
     refresh();
   }
 
-  // Forget the key AND the chosen provider → back to the cloud-choice screen,
-  // so the user can connect a different cloud (and unlock/create its vault).
+  // Forget the key, the OAuth tokens AND the chosen provider → back to the
+  // cloud-choice screen. Tokens must go too: keeping the year-long Yandex
+  // token silently reused the previous account on the next connect.
   function switchCloud() {
     vault.lock();
-    setProvider(null);
+    signOutCloud();
     provider = null;
     connected = false;
+    devices = [];
     st = { enabled: vault.isEncryptionEnabled(), unlocked: false, vaultInFolder: false };
   }
 </script>
@@ -156,10 +158,15 @@
     <button class="save-btn" onclick={doSync} disabled={syncState.status === 'syncing'}>
       {syncState.status === 'syncing' ? 'Синхронизация…' : 'Синхронизировать'}
     </button>
-    <p class="hint">
-      {#if syncState.status === 'error'}⚠ {syncState.error}
-      {:else}Последняя синхронизация: {timeAgo(syncState.lastSyncedAt)}{/if}
-    </p>
+    {#if syncState.status === 'auth'}
+      <p class="hint">⚠ Сессия облака истекла — войдите заново, данные не пострадали.</p>
+      <button class="row-btn" onclick={doSync} disabled={busy}>Войти в {providerName} заново</button>
+    {:else}
+      <p class="hint">
+        {#if syncState.status === 'error'}⚠ {syncState.error}
+        {:else}Последняя синхронизация: {timeAgo(syncState.lastSyncedAt)}{/if}
+      </p>
+    {/if}
     {#if syncState.lastLocked}
       <p class="hint">
         ⚠ Не удалось расшифровать данные {syncState.lastLocked} устройств(а) —
@@ -172,8 +179,8 @@
         <div class="dev-title">Устройства в облаке</div>
         {#each devices as d (d.id)}
           <div class="dev-row">
-            {d.self ? '📱 это устройство' : '💻 устройство'} · {d.id.slice(0, 8)}… ·
-            {d.at ? timeAgo(d.at) : 'ещё не синхронизировалось'}
+            {d.self ? '📱' : '💻'} {d.name || (d.self ? 'это устройство' : 'устройство')}{d.self && d.name ? ' (это устройство)' : ''}
+            · {d.id.slice(0, 8)}… · {d.at ? timeAgo(d.at) : 'ещё не синхронизировалось'}
           </div>
         {/each}
         {#if devices.length === 1 && devices[0].self}

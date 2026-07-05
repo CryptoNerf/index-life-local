@@ -174,3 +174,19 @@ export async function adoptPairingCode(text, transport = null) {
   cacheVaultKey(vk);
   return vk;
 }
+
+// ── Device display name ──────────────────────────────────────────────
+// Shown in peers' device panels instead of a bare uuid. Travels inside the
+// (encrypted) snapshot body — envelope headers stay name-free (AAD).
+
+const NAME_KEY = 'indexlife:device-name';
+
+export function getDeviceName() {
+  return localStorage.getItem(NAME_KEY) || 'Телефон';
+}
+
+export function setDeviceName(name) {
+  const clean = (name || '').trim().slice(0, 60);
+  if (clean) localStorage.setItem(NAME_KEY, clean);
+  else localStorage.removeItem(NAME_KEY);
+}

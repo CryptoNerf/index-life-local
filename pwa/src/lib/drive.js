@@ -62,6 +62,15 @@ async function getToken(interactive) {
   });
 }
 
+// Sign out on this device: drop the cached access token (and the folder
+// index tied to the account) so the next connect() asks Google again.
+export function clearToken() {
+  accessToken = null;
+  tokenExpiry = 0;
+  folderId = null;
+  index = null;
+}
+
 // ── Drive REST helper ────────────────────────────────────────────────
 async function api(path, opts = {}) {
   const token = await getToken(false);
@@ -69,6 +78,12 @@ async function api(path, opts = {}) {
     ...opts,
     headers: { Authorization: `Bearer ${token}`, ...(opts.headers || {}) }
   });
+  if (resp.status === 401) {
+    // The silent refresh produced a stale/revoked token — sign-in state is
+    // gone. Drop it and tell the UI to offer a re-login.
+    clearToken();
+    throw new Error('auth-expired');
+  }
   if (!resp.ok) {
     throw new Error(`Drive API ${resp.status}: ${await resp.text()}`);
   }

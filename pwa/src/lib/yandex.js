@@ -29,6 +29,12 @@ function saveToken(token, expiresIn) {
   }));
 }
 
+// Sign out on this device. Without this, "switch cloud" kept the year-long
+// token and silently reused the previous Yandex account.
+export function clearToken() {
+  localStorage.removeItem(TOKEN_KEY);
+}
+
 // Interactive sign-in: open Yandex OAuth in a popup; the callback page posts
 // the token back. Must be called from a user gesture (popups).
 function authorize() {
@@ -59,6 +65,12 @@ async function api(path, opts = {}) {
     ...opts,
     headers: { Authorization: `OAuth ${token}`, ...(opts.headers || {}) }
   });
+  if (resp.status === 401) {
+    // Token revoked/expired server-side: drop it and tell the UI to offer
+    // a re-login instead of failing every background sync silently.
+    clearToken();
+    throw new Error('auth-expired');
+  }
   if (!resp.ok) throw new Error(`Yandex ${resp.status}: ${await resp.text()}`);
   return resp;
 }
