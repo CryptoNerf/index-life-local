@@ -133,3 +133,101 @@ ciphertext. Connecting takes a couple of minutes:
 
 > ⚠️ The pairing code (and its QR) contains the diary's encryption key. Show
 > it only to your own devices — never photograph or share it.
+
+## Each cloud in detail
+
+### Google Drive
+
+- **Phone:** Settings → Sync → Google Drive → sign in. The app creates a
+  visible `index.life` folder in My Drive root and can only see files it
+  created itself (`drive.file` scope).
+- **Desktop:** install [Google Drive for desktop](https://www.google.com/drive/download/).
+  The phone's folder mirrors to
+  `~/Library/CloudStorage/GoogleDrive-<email>/My Drive/index.life` (macOS) or
+  `G:\My Drive\index.life` (Windows). The **"Find cloud folders"** button
+  locates it automatically.
+
+### Yandex.Disk
+
+- **Phone:** Settings → Sync → Yandex.Disk → sign in. Works in Russia
+  without a VPN. Data lives in the app folder:
+  `Disk → Applications (Приложения) → <app name>`.
+- **Desktop, option 1 (simpler):** install the Yandex.Disk desktop client —
+  the app folder mirrors under `<Yandex.Disk>/Приложения/…`;
+  "Find cloud folders" highlights it.
+- **Desktop, option 2 (no client):** "WebDAV link" mode with
+  `https://webdav.yandex.ru/Приложения/<app name>/`. Login is your Yandex
+  login; the password must be an **app password**
+  ([id.yandex.ru → Security → App passwords](https://id.yandex.ru/security/app-passwords)) —
+  the regular account password won't work.
+
+### Dropbox / iCloud Drive / OneDrive / Mega and others
+
+These have no index.life phone client — they fit **desktop-to-desktop**
+sync: install their desktop client on both PCs and point both at the same
+folder (e.g. `Dropbox/index.life`) via "Find cloud folders" or "Choose
+folder…".
+
+### Nextcloud / ownCloud / self-hosted (WebDAV)
+
+"WebDAV link" mode: a folder URL like
+`https://your-server/remote.php/dav/files/login/index-life/` plus the
+server credentials. Use **https** only — over http the password and the
+diary travel in clear text (the app warns). "Test connection" confirms the
+settings.
+
+## Scenarios
+
+### Two computers
+
+1. PC #1: cloud folder → save → enable encryption → store the recovery key.
+2. PC #2 (same cloud account, client installed): "Find cloud folders" →
+   pick the same folder → enter the passphrase (or a pairing code from
+   PC #1) in the encryption section.
+
+### A new device / recovery
+
+The diary restores fully from the cloud: set up the folder/cloud as usual
+and enter the passphrase (or the recovery key if the passphrase is lost).
+Everything arrives on the first sync.
+
+### Phone only, no computer
+
+Cloud sync is still worth enabling — it's an encrypted backup: phone
+drowns → new phone → same cloud → passphrase → everything is back.
+
+### No cloud at all
+
+Even without sync the entries are protected by three layers:
+
+1. **Persistent storage** — the app asks the browser not to evict its data
+   (requested automatically after the first save; status under "Data
+   safety").
+2. **Internal mirror** — a second copy of all entries in a separate browser
+   store; if the main database is corrupted or evicted, entries restore
+   automatically on the next open.
+3. **Backup file (JSON)** — "Data safety" → "Save file": an exact copy of
+   all entries in one file. Imports back losslessly (merged under the same
+   rules as cloud sync — never overwrites or deletes anything). Make one
+   occasionally and keep it off the phone.
+
+### Moving from the browser to the installed app
+
+- **Android / Chrome:** nothing to do — the browser tab and the installed
+  app share the same data.
+- **iPhone / Safari:** the Home-Screen app gets a **separate** storage
+  container. Transfer: in the Safari version "Data safety" → "Save file" →
+  in the installed app "Import file". Or connect the cloud in both — they
+  merge on their own.
+
+## Troubleshooting
+
+| Symptom | Cause & fix |
+|---|---|
+| Desktop banner "Another device syncs with encryption…" | This PC has no key. Enter the passphrase in the encryption section — or a pairing code from the phone. |
+| Phone: "The code doesn't fit this cloud's data" | The phone is connected to a different cloud or account than the computer. Check the account and rescan. |
+| Phone: "⚠ Couldn't decrypt N device(s)" | Some device uses a different key (e.g. it created its own vault in another folder). Re-pair it with a code from a working device. |
+| A device never appears in "Devices in this folder" | The devices look at different folders. On the PC check the path ("Find cloud folders" shows where the phone's data lives); give the cloud client time to mirror. |
+| Phone: "Cloud session expired" | The OAuth token lapsed. Tap "Sign in again" — no data is affected. |
+| "Last sync" updates but no entries arrive | Read the banner above it: it names the file that can't be read and why. Details in index-life.log on the PC. |
+| Forgot the passphrase | Enter the recovery key (shown once when encryption was enabled). If that is lost too, the cloud data is unreadable; local entries on devices are intact — disable encryption and set it up again. |
