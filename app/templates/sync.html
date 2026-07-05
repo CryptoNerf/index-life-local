@@ -51,7 +51,12 @@
          "last sync" time. #}
       {% if sync_report and (sync_report.errors or sync_report.push_ok == false) %}
         <div class="flash-msg flash-warning">
-          {% if sync_report.errors %}
+          {% if sync_report.locked %}
+            {# The actionable case: a peer (the phone) writes encrypted
+               snapshots and this device has no vault key yet. #}
+            🔒 {{ t('sync.report_locked') }}
+          {% endif %}
+          {% if sync_report.errors and sync_report.errors > (sync_report.locked or 0) %}
             ⚠️ {{ t('sync.report_errors', count=sync_report.errors) }}
             {% if sync_report.error_files %}
               (<code>{{ sync_report.error_files|join(', ') }}</code>)
@@ -62,6 +67,18 @@
           {% endif %}
           {{ t('sync.report_see_log') }}
         </div>
+      {% endif %}
+
+      {% if sync_configured %}
+        <div class="sync-devices" id="sync-devices" data-self="{{ device_id }}">
+          <div class="sync-devices-title">{{ t('sync.devices_heading') }}</div>
+          <div id="sync-devices-list" class="sync-meta">…</div>
+        </div>
+        {% if not encryption.unlocked %}
+          {# The next step toward connecting a phone: the PWA only syncs
+             encrypted, so a vault must exist and be unlocked first. #}
+          <p class="sync-hint">📱 {{ t('sync.next_step_encrypt') }}</p>
+        {% endif %}
       {% endif %}
 
       <form method="post" action="{{ url_for('sync.sync_settings') }}" class="sync-form" id="sync-settings-form">
@@ -81,6 +98,11 @@
           <label>{{ t('sync.folder_label') }}</label>
           <input type="text" name="sync_folder" value="{{ sync_folder }}"
                  placeholder="/Users/you/Dropbox/index-life-sync" class="sync-input">
+          <div class="sync-row" style="margin-top:8px">
+            <button type="button" class="sync-btn" id="sync-discover-btn">{{ t('sync.discover_btn') }}</button>
+            <button type="button" class="sync-btn" id="sync-pick-folder-btn" style="display:none">{{ t('sync.pick_folder') }}</button>
+          </div>
+          <div id="sync-discover-results" class="discover-results"></div>
           <p class="sync-hint">{{ t('sync.local_hint') }}</p>
         </div>
 
@@ -146,6 +168,17 @@
       {% elif encryption.unlocked %}
         <div class="enc-status enc-on">🔒 {{ t('sync.enc_on') }}</div>
         <p class="sync-hint">{{ t('sync.enc_on_hint') }}</p>
+
+        {% if pairing_payload %}
+          <details class="pair-block" id="pair-block">
+            <summary>📱 {{ t('sync.pair_show') }}</summary>
+            <p class="sync-hint">{{ t('sync.pair_hint') }}</p>
+            <div id="pair-qr" class="pair-qr" data-payload="{{ pairing_payload }}"></div>
+            <code class="enc-recovery-key">{{ pairing_code }}</code>
+            <p class="sync-hint">⚠️ {{ t('sync.pair_warning') }}</p>
+          </details>
+        {% endif %}
+
         <form method="post" action="{{ url_for('sync.encryption_lock') }}"
               onsubmit="return confirm({{ t('sync.enc_lock_confirm')|tojson }})">
           <button class="sync-btn">{{ t('sync.enc_lock') }}</button>
@@ -168,6 +201,15 @@
             <input type="text" name="recovery_key" class="sync-input"
                    placeholder="{{ t('sync.enc_recovery_key') }}" autocomplete="off">
             <button class="sync-btn">{{ t('sync.enc_unlock') }}</button>
+          </form>
+        </details>
+        <details class="enc-recovery-toggle">
+          <summary>{{ t('sync.pair_use_code') }}</summary>
+          <p class="sync-hint">{{ t('sync.pair_use_code_hint') }}</p>
+          <form method="post" action="{{ url_for('sync.encryption_pair') }}" class="enc-form">
+            <input type="text" name="pairing_code" class="sync-input"
+                   placeholder="{{ t('sync.pair_code_placeholder') }}" autocomplete="off">
+            <button class="sync-btn">{{ t('sync.pair_join') }}</button>
           </form>
         </details>
 
@@ -283,7 +325,171 @@
             });
         });
       }
+
+      // ── Cloud-folder discovery + native folder picker ─────────
+      var discoverBtn = document.getElementById('sync-discover-btn');
+      var pickBtn = document.getElementById('sync-pick-folder-btn');
+      var resultsBox = document.getElementById('sync-discover-results');
+      var folderInput = form.querySelector('input[name="sync_folder"]');
+      var DISCOVER_I18N = {
+        btn: {{ t('sync.discover_btn')|tojson }},
+        scanning: {{ t('sync.discover_scanning')|tojson }},
+        none: {{ t('sync.discover_none')|tojson }},
+        existing: {{ t('sync.discover_existing')|tojson }},
+        suggested: {{ t('sync.discover_suggested')|tojson }},
+      };
+
+      // The folder picker only exists inside the native window (pywebview
+      // bridge) — a plain browser cannot return a filesystem path.
+      function showPickerIfBridged() {
+        if (window.pywebview && window.pywebview.api &&
+            typeof window.pywebview.api.select_folder === 'function') {
+          pickBtn.style.display = '';
+        }
+      }
+      showPickerIfBridged();
+      window.addEventListener('pywebviewready', showPickerIfBridged);
+
+      if (pickBtn) {
+        pickBtn.addEventListener('click', function () {
+          window.pywebview.api.select_folder().then(function (path) {
+            if (path) folderInput.value = path;
+          });
+        });
+      }
+
+      function renderFolders(folders) {
+        resultsBox.textContent = '';
+        if (!folders.length) {
+          var p = document.createElement('p');
+          p.className = 'sync-hint';
+          p.textContent = DISCOVER_I18N.none;
+          resultsBox.appendChild(p);
+          return;
+        }
+        folders.forEach(function (f) {
+          var row = document.createElement('button');
+          row.type = 'button';
+          row.className = 'discover-row' + (f.kind === 'existing' ? ' discover-existing' : '');
+          var title = document.createElement('span');
+          title.className = 'discover-title';
+          title.textContent = (f.kind === 'existing' ? '📱 ' : '＋ ') + f.provider +
+            ' — ' + (f.kind === 'existing'
+              ? DISCOVER_I18N.existing.replace('{n}', f.devices)
+              : DISCOVER_I18N.suggested);
+          var path = document.createElement('span');
+          path.className = 'discover-path';
+          path.textContent = f.path;
+          row.appendChild(title);
+          row.appendChild(path);
+          row.addEventListener('click', function () {
+            folderInput.value = f.path;
+            resultsBox.querySelectorAll('.discover-row').forEach(function (r) {
+              r.classList.remove('discover-picked');
+            });
+            row.classList.add('discover-picked');
+          });
+          resultsBox.appendChild(row);
+        });
+      }
+
+      if (discoverBtn) {
+        discoverBtn.addEventListener('click', function () {
+          discoverBtn.disabled = true;
+          discoverBtn.textContent = DISCOVER_I18N.scanning;
+          fetch('{{ url_for("sync.sync_discover") }}')
+            .then(function (r) { return r.json(); })
+            .then(function (data) { renderFolders(data.folders || []); })
+            .catch(function () { renderFolders([]); })
+            .then(function () {
+              discoverBtn.disabled = false;
+              discoverBtn.textContent = DISCOVER_I18N.btn;
+            });
+        });
+      }
+
+      // ── Devices panel: who is actually syncing through this folder ──
+      var devicesBox = document.getElementById('sync-devices-list');
+      var DEV_I18N = {
+        self: {{ t('sync.devices_self')|tojson }},
+        device: {{ t('sync.devices_device')|tojson }},
+        none: {{ t('sync.devices_none')|tojson }},
+        unreadable: {{ t('sync.devices_unreadable')|tojson }},
+        never: {{ t('sync.devices_never')|tojson }},
+        justNow: {{ t('sync.time_just_now')|tojson }},
+        minAgo: {{ t('sync.time_min_ago')|tojson }},
+        hAgo: {{ t('sync.time_h_ago')|tojson }},
+        dAgo: {{ t('sync.time_d_ago')|tojson }},
+      };
+
+      // Desktop peers write naive-UTC timestamps (no zone); pin UTC so the
+      // relative time isn't skewed by the local offset.
+      function toMs(s) {
+        if (!s) return NaN;
+        var hasZone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(s);
+        return Date.parse(hasZone ? s : s + 'Z');
+      }
+
+      function relTime(ms) {
+        if (isNaN(ms)) return DEV_I18N.never;
+        var sec = Math.floor((Date.now() - ms) / 1000);
+        if (sec < 90) return DEV_I18N.justNow;
+        var min = Math.floor(sec / 60);
+        if (min < 60) return DEV_I18N.minAgo.replace('{n}', min);
+        var h = Math.floor(min / 60);
+        if (h < 48) return DEV_I18N.hAgo.replace('{n}', h);
+        return DEV_I18N.dAgo.replace('{n}', Math.floor(h / 24));
+      }
+
+      function renderDevices(devices) {
+        if (!devicesBox) return;
+        devicesBox.textContent = '';
+        if (!devices.length) {
+          devicesBox.textContent = DEV_I18N.none;
+          return;
+        }
+        devices.forEach(function (d) {
+          var row = document.createElement('div');
+          row.className = 'device-row';
+          var label;
+          if (d.unreadable) {
+            label = '⚠ ' + d.file + ' — ' + DEV_I18N.unreadable;
+          } else {
+            var shortId = (d.device_id || '?').slice(0, 8);
+            label = (d.is_self ? '💻 ' + DEV_I18N.self : '📱 ' + DEV_I18N.device) +
+              ' · ' + shortId + '… · ' + relTime(toMs(d.written_at)) +
+              (d.encrypted ? ' · 🔒' : '');
+          }
+          row.textContent = label;
+          devicesBox.appendChild(row);
+        });
+      }
+
+      if (devicesBox) {
+        fetch('{{ url_for("sync.sync_devices") }}')
+          .then(function (r) { return r.json(); })
+          .then(function (data) { renderDevices(data.devices || []); })
+          .catch(function () { renderDevices([]); });
+      }
+
+      // ── Pairing QR (rendered lazily when the block is opened) ──
+      var pairBlock = document.getElementById('pair-block');
+      var pairQr = document.getElementById('pair-qr');
+      if (pairBlock && pairQr) {
+        var qrDone = false;
+        pairBlock.addEventListener('toggle', function () {
+          // window.qrcode checked HERE: the vendor script loads after this
+          // inline one, but always before the user can open the block.
+          if (qrDone || !pairBlock.open || !window.qrcode) return;
+          qrDone = true;
+          var qr = window.qrcode(0, 'M');
+          qr.addData(pairQr.getAttribute('data-payload'));
+          qr.make();
+          pairQr.innerHTML = qr.createSvgTag({ cellSize: 4, margin: 2 });
+        });
+      }
     })();
   </script>
+  <script src="{{ url_for('static', filename='js/vendor/qrcode.js') }}"></script>
 </body>
 </html>

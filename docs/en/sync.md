@@ -93,3 +93,43 @@ Sync and backups are independent safety mechanisms:
 - Restore on the Sync page, then restart the app.
 
 More in [The application → Backups](application.md#backups--restore).
+
+## Connecting your phone (PWA)
+
+The phone client syncs **encrypted only** — the cloud sees nothing but
+ciphertext. Connecting takes a couple of minutes:
+
+### Desktop first (recommended)
+
+1. **Desktop.** Sync page → "Find cloud folders" — pick a discovered folder in
+   one click (or "Choose folder…"). Save.
+2. **Desktop.** Enable end-to-end encryption (passphrase → store the recovery
+   key somewhere safe).
+3. **Desktop.** In the encryption section open **"Connect your phone"** — a QR
+   code appears.
+4. **Phone.** Settings → Sync → pick the same cloud (Google Drive /
+   Yandex.Disk) → sign in → **"Scan the code from the computer"** → point the
+   camera at the QR. No passphrase needed. If the scanner isn't supported
+   (iOS Safari), type the code from the desktop screen instead.
+5. Check: "Devices in this folder" (both sides) now lists two devices with
+   their last-sync times.
+
+### Phone first
+
+1. **Phone.** Settings → Sync → cloud → OAuth → create a passphrase (store the
+   recovery key).
+2. **Desktop.** Install the same cloud's desktop client and let it mirror.
+3. **Desktop.** "Find cloud folders" — the phone's folder is highlighted as
+   "sync folder found". Pick it and save.
+4. **Desktop.** In the encryption section enter the passphrase — or, on the
+   phone, open "Show pairing code" and enter it on the desktop under
+   "Enter a pairing code from another device".
+
+### Where the cloud folders live
+
+- **Google Drive** (macOS): `~/Library/CloudStorage/GoogleDrive-<email>/My Drive/index.life`
+- **Yandex.Disk**: `<Yandex.Disk folder>/Приложения (Applications)/<app name>/`
+- The "Find cloud folders" button scans these locations automatically.
+
+> ⚠️ The pairing code (and its QR) contains the diary's encryption key. Show
+> it only to your own devices — never photograph or share it.

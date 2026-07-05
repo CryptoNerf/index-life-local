@@ -1,6 +1,8 @@
 """
 Routes for sync & backup management UI.
 """
+import threading
+
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app
 from datetime import date
 from pathlib import Path
@@ -10,12 +12,24 @@ from app.backup import list_backups, backup_and_rotate, restore_backup
 from app.sync import (
     get_device_id, get_sync_config, set_sync_config, is_sync_configured,
     get_last_sync, get_last_sync_report, full_sync, import_now, export_now,
-    test_connection, is_webdav_insecure, _current_backend,
+    test_connection, is_webdav_insecure, list_peer_devices, _current_backend,
 )
 from app import sync_vault
 from app.i18n import t
 
 bp = Blueprint('sync', __name__)
+
+
+def _kick_full_sync():
+    """Background full sync right after joining/unlocking the vault.
+
+    The whole point of unlocking is to receive the peer's entries — waiting
+    for the 2-minute timer makes the flow look broken. Runs in a thread so
+    a slow WebDAV folder never blocks the redirect; full_sync serialises on
+    its own lock and manages its own app context.
+    """
+    app_obj = current_app._get_current_object()
+    threading.Thread(target=full_sync, args=(app_obj,), daemon=True).start()
 
 
 @bp.route('/sync', methods=['GET'])
@@ -51,6 +65,10 @@ def _render_sync(**extra):
         sync_configured=configured,
         encryption=sync_vault.status(backend),
         new_recovery_key=None,
+        # "Connect your phone" block: the VK as QR payload + text code.
+        # Only present while unlocked — a locked vault has nothing to show.
+        pairing_payload=sync_vault.pairing_payload() if configured else None,
+        pairing_code=sync_vault.pairing_code() if configured else None,
     )
     ctx.update(extra)
     return render_template('sync.html', **ctx)
@@ -157,6 +175,33 @@ def encryption_unlock():
         flash(t('sync.enc_wrong'), 'error')
         return redirect(url_for('sync.sync_page'))
     flash(t('sync.enc_unlocked_flash'), 'success')
+    # Pull the peers' entries right away — that's what unlocking is for.
+    _kick_full_sync()
+    return redirect(url_for('sync.sync_page'))
+
+
+@bp.route('/sync/encryption/pair', methods=['POST'])
+def encryption_pair():
+    """Join the vault with a pairing code shown on another device.
+
+    The no-passphrase path: the phone (or another PC) displays its Vault
+    Key as a code, this device pastes it. A wrong code fails loudly
+    (verified against the folder's envelopes when any exist).
+    """
+    if not is_sync_configured():
+        flash(t('sync.enc_need_sync'), 'error')
+        return redirect(url_for('sync.sync_page'))
+    code = request.form.get('pairing_code', '')
+    try:
+        outcome = sync_vault.adopt_pairing_code(_current_backend(), code)
+    except ValueError:
+        flash(t('sync.pair_bad_code'), 'error')
+        return redirect(url_for('sync.sync_page'))
+    flash(t('sync.pair_joined_verified' if outcome == 'verified'
+            else 'sync.pair_joined_unverified'), 'success')
+    # Full cycle, not just a push: merge the peer's entries immediately AND
+    # replace any plaintext snapshot of ours with a sealed one.
+    _kick_full_sync()
     return redirect(url_for('sync.sync_page'))
 
 
@@ -166,6 +211,38 @@ def encryption_lock():
     sync_vault.lock()
     flash(t('sync.enc_locked_flash'), 'success')
     return redirect(url_for('sync.sync_page'))
+
+
+@bp.route('/sync/devices')
+def sync_devices():
+    """Devices seen in the sync folder (JSON, plaintext headers only).
+
+    Loaded asynchronously by the /sync page so listing a slow WebDAV
+    folder never delays the page render.
+    """
+    if not is_sync_configured():
+        return jsonify({'devices': []})
+    try:
+        return jsonify({'devices': list_peer_devices(_current_backend())})
+    except Exception as e:
+        current_app.logger.warning('device listing failed: %s', e)
+        return jsonify({'devices': [], 'error': str(e)})
+
+
+@bp.route('/sync/discover')
+def sync_discover():
+    """Scan known cloud-client mounts for candidate sync folders (JSON).
+
+    Powers the "Найти облачные папки" button: folders that already hold
+    sync artifacts (the phone's folder) come first, then per-cloud
+    suggestions for a fresh setup. Pure local filesystem reads.
+    """
+    from app.sync_discovery import discover_sync_folders
+    try:
+        return jsonify({'folders': discover_sync_folders()})
+    except Exception as e:
+        current_app.logger.warning('sync discovery failed: %s', e)
+        return jsonify({'folders': [], 'error': str(e)})
 
 
 @bp.route('/sync/test', methods=['POST'])

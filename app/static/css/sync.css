@@ -301,3 +301,37 @@ header { width: 100%; }
   margin-bottom: 10px;
   user-select: all;          /* one tap/click selects the whole key */
 }
+
+/* ── Cloud-folder discovery ─────────────────────────────────── */
+
+.discover-results { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.discover-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #fafafa;
+  cursor: pointer;
+  font: inherit;
+}
+.discover-row:hover { border-color: #999; }
+.discover-existing { border-color: #2a8f2a; }
+.discover-picked { outline: 2px solid #2a8f2a; }
+.discover-title { font-weight: 600; font-size: 13px; }
+.discover-path { font-size: 12px; color: #777; word-break: break-all; }
+
+/* ── Devices panel ──────────────────────────────────────────── */
+
+.sync-devices { margin: 14px 0 4px; }
+.sync-devices-title { font-weight: 600; font-size: 14px; margin-bottom: 6px; }
+.device-row { font-size: 13px; color: #555; padding: 3px 0; }
+
+/* ── Phone pairing (QR) ─────────────────────────────────────── */
+
+.pair-block { margin: 12px 0; }
+.pair-block summary { cursor: pointer; font-weight: 600; }
+.pair-qr { margin: 10px 0; }
+.pair-qr svg { display: block; }

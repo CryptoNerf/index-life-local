@@ -337,6 +337,25 @@ def main():
                 logging.getLogger(__name__).error('save_text_file failed: %s', exc)
                 return None
 
+        def select_folder(self) -> str | None:
+            """Open a native folder-picker; return the chosen path or None.
+
+            Used by the sync page: cloud-client mirror paths are deep and
+            obscure (~/Library/CloudStorage/...), so folders must be
+            pickable, not typed. There is no browser fallback — a web page
+            cannot read a filesystem path from a folder input — so the UI
+            only shows the button when this bridge exists.
+            """
+            try:
+                paths = window.create_file_dialog(webview.FOLDER_DIALOG)
+                if not paths:
+                    return None
+                target = paths[0] if isinstance(paths, (list, tuple)) else paths
+                return str(target)
+            except Exception as exc:
+                logging.getLogger(__name__).error('select_folder failed: %s', exc)
+                return None
+
         def open_file_dialog(self, label: str, extensions: list[str],
                              max_bytes: int | None = None) -> dict | None:
             """Open native Open dialog filtered to `extensions`; return the
