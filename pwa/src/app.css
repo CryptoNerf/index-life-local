@@ -586,3 +586,26 @@ button {
 .year-cell-void {
   background: transparent;
 }
+
+/* ── Devices in the cloud folder (CloudSync) ────────────────── */
+
+.dev-list { margin: 10px 0 4px; }
+.dev-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+.dev-row { font-size: 13px; color: var(--text-muted); padding: 2px 0; }
+
+/* ── Pairing (QR scan) ──────────────────────────────────────── */
+
+.pair-video {
+  width: 100%;
+  max-height: 55vw;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: #000;
+  object-fit: cover;
+}
+.pair-sep {
+  font-size: 13px;
+  color: var(--text-muted);
+  text-align: center;
+  margin: 14px 0 6px;
+}

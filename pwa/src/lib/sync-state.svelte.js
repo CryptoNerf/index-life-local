@@ -25,7 +25,11 @@ export function setProvider(name) {
 export const syncState = $state({
   status: 'idle',                                       // idle | syncing | ok | error
   lastSyncedAt: Number(localStorage.getItem(LAST_KEY)) || 0,
-  error: ''
+  error: '',
+  // Peers whose blobs could not be read on the last cycle (key mismatch /
+  // junk) — a broken link must never look like a clean sync.
+  lastLocked: 0,
+  lastErrors: 0
 });
 
 let transport = null;
@@ -49,7 +53,9 @@ export async function runSync({ silent = false } = {}) {
   syncState.status = 'syncing';
   syncState.error = '';
   try {
-    await syncWith(getTransport());
+    const r = await syncWith(getTransport());
+    syncState.lastLocked = r.locked || 0;
+    syncState.lastErrors = r.errors || 0;
     await refreshEntries();
     syncState.lastSyncedAt = Date.now();
     localStorage.setItem(LAST_KEY, String(syncState.lastSyncedAt));

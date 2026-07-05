@@ -20,7 +20,13 @@ export function isEnvelope(obj) {
 // plaintext desktop snapshots (migration), skips vault.json and our own blob.
 // A null vk (locked) means encrypted peers are skipped — nothing leaks, sync
 // simply doesn't progress.
-export async function pullPeers(transport, ownDeviceId, localEntries, vk) {
+//
+// `stats`, when given, collects what could NOT be read: `locked` counts
+// envelopes this key can't open (locked vault or key mismatch — the
+// actionable case), `errors` counts unparseable blobs. A skipped peer means
+// that device's changes silently stop arriving, so the UI must be able to
+// say so instead of reporting a clean sync.
+export async function pullPeers(transport, ownDeviceId, localEntries, vk, stats = null) {
   await crypto.ready;
   let entries = localEntries;
   for (const name of await transport.list()) {
@@ -32,16 +38,21 @@ export async function pullPeers(transport, ownDeviceId, localEntries, vk) {
     try {
       obj = JSON.parse(text);
     } catch {
+      if (stats) stats.errors++;
       continue;
     }
 
     let snapshot;
     if (isEnvelope(obj)) {
       if (obj.device === ownDeviceId) continue; // our own encrypted blob
-      if (!vk) continue; // locked — can't read peers
+      if (!vk) {
+        if (stats) stats.locked++;
+        continue; // locked — can't read peers
+      }
       try {
         snapshot = crypto.openEnvelope(text, vk);
       } catch {
+        if (stats) stats.locked++;
         continue; // wrong key / tampered — skip, never fatal
       }
     } else {
@@ -71,9 +82,9 @@ export async function pushSnapshot(transport, ownDeviceId, entries, vk) {
 }
 
 // One cycle: pull peers → merge → push our merged state. Returns the merged
-// entries for the caller to persist locally.
-export async function fullSync(transport, ownDeviceId, localEntries, vk) {
-  const merged = await pullPeers(transport, ownDeviceId, localEntries, vk);
+// entries for the caller to persist locally. `stats` — see pullPeers.
+export async function fullSync(transport, ownDeviceId, localEntries, vk, stats = null) {
+  const merged = await pullPeers(transport, ownDeviceId, localEntries, vk, stats);
   await pushSnapshot(transport, ownDeviceId, merged, vk);
   return merged;
 }

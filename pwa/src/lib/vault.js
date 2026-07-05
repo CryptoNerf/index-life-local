@@ -5,7 +5,7 @@
 // cloud holds only ciphertext + the wrapped-key vault.json.
 
 import * as crypto from './crypto.js';
-import { VAULT_FILENAME } from './sync.js';
+import { VAULT_FILENAME, isEnvelope } from './sync.js';
 
 const DEVICE_KEY = 'indexlife:device-id';
 const ENABLED_KEY = 'indexlife:enc-enabled';
@@ -102,4 +102,75 @@ export async function status(transport) {
     unlocked: isUnlocked(),
     vaultInFolder: await vaultExists(transport)
   };
+}
+
+// ── Device pairing: VK hand-off without the passphrase ───────────────
+// Twin of app/sync_vault.py's pairing block. The Vault Key is rendered in
+// the same grouped base32 the recovery key uses; the QR payload wraps it
+// in a versioned prefix. Scanning/typing the code replaces typing the
+// passphrase on the second device.
+
+export const PAIRING_PREFIX = 'indexlife-pair:v1:';
+
+// The code to DISPLAY on this device (phone → PC direction). Null while
+// locked — nothing to hand off.
+export function getPairingCode() {
+  const vk = getVaultKey();
+  return vk ? crypto.encodeRecoveryKey(vk) : null;
+}
+
+export function getPairingPayload() {
+  const code = getPairingCode();
+  return code ? PAIRING_PREFIX + code : null;
+}
+
+// Accept a scanned QR payload or a hand-typed grouped code; cache the key
+// and enable encryption. Throws when the text isn't a 32-byte key.
+//
+// When a transport is given, the key is VERIFIED against the folder first —
+// the mirror of the desktop's adopt_pairing_code: if any peer envelope
+// exists, it must decrypt with the pasted key. Without this, scanning a
+// code while connected to the wrong cloud/account "unlocked" happily and
+// then silently never received the desktop's entries.
+export async function adoptPairingCode(text, transport = null) {
+  await crypto.ready;
+  let cleaned = (text || '').trim();
+  if (cleaned.toLowerCase().startsWith(PAIRING_PREFIX)) {
+    cleaned = cleaned.slice(PAIRING_PREFIX.length);
+  }
+  const vk = crypto.decodeRecoveryKey(cleaned);
+  if (vk.length !== crypto.VK_BYTES) {
+    throw new Error('Код не распознан — проверьте, что он скопирован целиком');
+  }
+  if (transport) {
+    let names = [];
+    try {
+      names = await transport.list();
+    } catch {
+      /* folder unreachable — adopt unverified; the devices panel will tell */
+    }
+    for (const name of names) {
+      if (!name.startsWith('device_') || !name.endsWith('.json')) continue;
+      const blob = await transport.get(name);
+      if (!blob) continue;
+      let obj;
+      try {
+        obj = JSON.parse(blob);
+      } catch {
+        continue;
+      }
+      if (!isEnvelope(obj)) continue;
+      try {
+        crypto.openEnvelope(blob, vk);
+      } catch {
+        throw new Error(
+          'Код не подходит к данным этого облака — проверьте, что выбраны ' +
+          'то же облако и тот же аккаунт, что на компьютере'
+        );
+      }
+      break; // first envelope decrypted — the key is verified
+    }
+  }
+  cacheVaultKey(vk);
+  return vk;
 }
