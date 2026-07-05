@@ -2,7 +2,6 @@
   import { onMount } from 'svelte';
   import Capture from './screens/Capture.svelte';
   import Feed from './screens/Feed.svelte';
-  import Year from './screens/Year.svelte';
   import Chart from './screens/Chart.svelte';
   import Settings from './screens/Settings.svelte';
   import BottomNav from './components/BottomNav.svelte';
@@ -45,8 +44,6 @@
     <Capture bind:date={editDate} />
   {:else if screen === 'feed'}
     <Feed onopen={openDay} />
-  {:else if screen === 'year'}
-    <Year />
   {:else if screen === 'chart'}
     <Chart />
   {:else}
