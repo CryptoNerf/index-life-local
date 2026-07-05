@@ -84,3 +84,41 @@ export async function isPersisted() {
   if (navigator.storage?.persisted) return navigator.storage.persisted();
   return false;
 }
+
+// ── localStorage mirror (second same-device copy) ────────────────────
+// IndexedDB and localStorage are evicted/corrupted independently, and
+// IndexedDB has historically been the more fragile of the two on iOS.
+// The diary is small text, so mirroring every refresh gives a same-device
+// fallback that survives an IndexedDB wipe — one more layer of the
+// "ratings must not vanish even with no cloud" guarantee. Best-effort:
+// silently skipped when the diary outgrows the quota guard.
+
+const MIRROR_KEY = 'indexlife:mirror';
+const MIRROR_MAX_CHARS = 3_500_000; // ~7 MB UTF-16 — under browser quotas
+
+export function mirrorEntries(entries) {
+  try {
+    const json = JSON.stringify(entries);
+    if (json.length > MIRROR_MAX_CHARS) return;
+    localStorage.setItem(MIRROR_KEY, json);
+  } catch {
+    /* quota full / storage disabled — best-effort */
+  }
+}
+
+// If IndexedDB came up EMPTY but the mirror has data (eviction/corruption),
+// restore from the mirror. Returns the number of restored entries.
+export async function restoreFromMirrorIfEmpty() {
+  try {
+    const existing = await allEntries();
+    if (existing.length) return 0;
+    const raw = localStorage.getItem(MIRROR_KEY);
+    if (!raw) return 0;
+    const entries = JSON.parse(raw);
+    if (!Array.isArray(entries) || !entries.length) return 0;
+    await putEntries(entries);
+    return entries.length;
+  } catch {
+    return 0;
+  }
+}
