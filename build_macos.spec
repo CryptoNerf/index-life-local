@@ -18,6 +18,25 @@ import re
 from pathlib import Path
 from PyInstaller.utils.hooks import collect_submodules, collect_all
 
+# ── Code-signing / notarization (turn-key, opt-in) ───────────────────
+# The ONLY way to make the app open with a normal double-click and ZERO
+# Gatekeeper warning is a Developer ID signature + notarization. It needs a
+# paid Apple Developer account ($99/yr), so it's off by default; when you
+# have the identity, signing becomes turn-key:
+#
+#   export MACOS_CODESIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)"
+#   pyinstaller build_macos.spec
+#   # then notarize + staple the produced .app:
+#   xcrun notarytool submit index.life.app.zip --keychain-profile NOTARY --wait
+#   xcrun stapler staple dist/index.life.app
+#
+# Without the identity the build is unsigned (or ad-hoc) exactly as before;
+# users fall back to First Launch.command / "Open Anyway" (see docs).
+_CODESIGN_IDENTITY = os.environ.get('MACOS_CODESIGN_IDENTITY') or None
+_ENTITLEMENTS = os.environ.get('MACOS_ENTITLEMENTS_FILE') or None
+if _ENTITLEMENTS and not os.path.isfile(_ENTITLEMENTS):
+    _ENTITLEMENTS = None
+
 # PyNaCl ships libsodium as a compiled cffi extension (nacl._sodium) that
 # PyInstaller can miss; collect the whole package so encrypted-sync crypto
 # (app/sync_crypto.py) works in the frozen build.
@@ -153,8 +172,8 @@ exe = EXE(
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
-    codesign_identity=None,
-    entitlements_file=None,
+    codesign_identity=_CODESIGN_IDENTITY,
+    entitlements_file=_ENTITLEMENTS,
 )
 
 coll = COLLECT(

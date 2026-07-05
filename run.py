@@ -165,6 +165,47 @@ def _unblock_self() -> None:
         'MOTW unblock: cleared %d Zone.Identifier stream(s)', cleared)
 
 
+def _self_unquarantine() -> None:
+    """Strip macOS's com.apple.quarantine from our own .app bundle.
+
+    The macOS twin of _unblock_self(). IMPORTANT — what this does and does
+    NOT do: it CANNOT fix the very first launch. Gatekeeper blocks an
+    unsigned downloaded app before any of its code runs, so the app can't
+    remove its own quarantine to get past that first gate — that's a
+    chicken-and-egg only the user (First Launch.command / "Open Anyway") or
+    notarization can break. What it DOES do, once the app is already
+    running: remove the quarantine attribute from the whole bundle so that
+    (a) it never re-prompts, and (b) if the user later drag-copies the .app
+    elsewhere, the copy is already clean. Best-effort and idempotent.
+
+    The real zero-friction fix is notarization — see build_macos.spec, which
+    reads a Developer ID from the environment to make signing turn-key.
+    """
+    if sys.platform != 'darwin' or not getattr(sys, 'frozen', False):
+        return
+    # Walk up from the executable to the enclosing .app bundle.
+    exe = os.path.realpath(sys.executable)
+    app_path = exe
+    while app_path and app_path != '/':
+        if app_path.endswith('.app') and os.path.isdir(app_path):
+            break
+        app_path = os.path.dirname(app_path)
+    if not app_path.endswith('.app'):
+        return
+    try:
+        import subprocess
+        # -r recurse, -d delete the named attribute; succeeds silently when
+        # the attribute isn't present.
+        subprocess.run(
+            ['xattr', '-dr', 'com.apple.quarantine', app_path],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10,
+            check=False)
+        logging.getLogger(__name__).info(
+            'Cleared com.apple.quarantine on %s', app_path)
+    except Exception as exc:
+        logging.getLogger(__name__).debug('self-unquarantine failed: %s', exc)
+
+
 def main():
     """Main entry point"""
     # Enable UTF-8 output for Windows console
@@ -189,6 +230,9 @@ def main():
     # Remove 'Mark of the Web' from our own files so pywebview's WebView2
     # backend can load (otherwise it fails and we fall back to a browser).
     _unblock_self()
+    # macOS: clear our own quarantine so relaunches never re-prompt and copies
+    # of the .app stay clean (cannot fix the FIRST launch — see the docstring).
+    _self_unquarantine()
 
     flask_app = create_app()
 
