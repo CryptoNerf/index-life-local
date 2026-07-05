@@ -54,6 +54,11 @@ MODULE_INFO = {
     },
 }
 
+# Modules gated on system capability (the LLM-heavy ones). deep_mind isn't
+# listed because it already requires an ACTIVE assistant, which can't itself
+# be installed on under-spec hardware — so the gate transitively covers it.
+_HW_GATED_MODULES = frozenset({'assistant'})
+
 # Maximum number of lines kept in terminal buffer (prevent memory bloat)
 _MAX_LINES = 2000
 
@@ -478,6 +483,18 @@ def modules_page():
     def _labels(names: list[str]) -> list[str]:
         return [MODULE_INFO.get(r, {}).get('title', r) for r in names]
 
+    # The AI-psychologist needs real hardware; probe once and gate the module
+    # so we never offer an install the machine can't run.
+    from app.hardware import assistant_capability
+    hw = assistant_capability()
+
+    def _hw_block(name: str) -> dict | None:
+        """None if this module isn't hardware-gated or the machine qualifies;
+        otherwise the capability dict (its `reason` drives the UI message)."""
+        if name in _HW_GATED_MODULES and not hw['can_run']:
+            return hw
+        return None
+
     modules = []
     for name in discovered:
         # Hide modules not registered in MODULE_INFO — lets us take a
@@ -496,6 +513,7 @@ def modules_page():
             'installed_needs_restart': deps_ok and name not in active,
             'unmet_requires': unmet,
             'requires_labels': _labels(unmet),
+            'hw_block': _hw_block(name),
         })
 
     # Add known modules not yet discovered (folder doesn't exist)
@@ -511,6 +529,7 @@ def modules_page():
                 'installed_needs_restart': False,
                 'unmet_requires': unmet,
                 'requires_labels': _labels(unmet),
+                'hw_block': _hw_block(name),
             })
 
     install = _get_install_instructions()
@@ -521,6 +540,7 @@ def modules_page():
                            install=install,
                            install_status=_install_status,
                            profile=profile,
+                           hw=hw,
                            current_year=date.today().year)
 
 
@@ -534,6 +554,16 @@ def install_module_route():
         module_name = request.form.get('module', '').strip()
         if module_name not in MODULE_INFO:
             return jsonify({'error': f'Unknown module: {module_name}'}), 400
+
+        # Hardware gate (server-side enforcement — the disabled button is only
+        # a hint; a crafted POST must still be refused). Downloading a 5 GB
+        # model onto a machine that can't run it is pure harm.
+        if module_name in _HW_GATED_MODULES:
+            from app.hardware import assistant_capability
+            from app.i18n import t
+            hw = assistant_capability()
+            if not hw['can_run']:
+                return jsonify({'error': t(hw['reason']), 'hw_blocked': True}), 400
 
         # Module-level dependencies: refuse install when a required module
         # isn't currently active. Prevents users from installing deep_mind

@@ -318,3 +318,14 @@ header { width: 100%; }
     padding: 0 15px;
   }
 }
+
+/* ── Hardware gate (AI module unavailable on this machine) ──── */
+.module-hw-block {
+  margin: 8px 0;
+  padding: 10px 12px;
+  border: 1px solid #e0c14a;
+  background: #fdf6e3;
+  border-radius: 8px;
+}
+.module-hw-msg { font-weight: 600; margin: 0 0 4px; }
+.module-hw-req, .module-hw-detected { font-size: 13px; color: #6a5d2a; margin: 2px 0; }

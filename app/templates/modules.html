@@ -65,7 +65,21 @@
             {% if mod.size %}
               <span class="module-size">{{ mod.size }}</span>
             {% endif %}
-            {% if mod.unmet_requires %}
+            {% if mod.hw_block %}
+              {# Machine doesn't meet the minimum for the local LLM. #}
+              <div class="module-hw-block">
+                <p class="module-hw-msg">⚠️ {{ t(mod.hw_block.reason) }}</p>
+                <p class="module-hw-req">{{ t('hw.requirements') }}</p>
+                <p class="module-hw-detected">
+                  {{ t('hw.detected',
+                        ram=(mod.hw_block.ram_gb if mod.hw_block.ram_gb else '—'),
+                        vram=(mod.hw_block.vram_gb if mod.hw_block.vram_gb else '—')) }}
+                </p>
+              </div>
+              <div class="module-action-row">
+                <button class="install-btn" disabled>{{ t('modules.install') }}</button>
+              </div>
+            {% elif mod.unmet_requires %}
               <p class="module-action-hint">
                 {{ t('modules.requires', names=mod.requires_labels | join(', ')) }}
               </p>
