@@ -182,6 +182,92 @@ def unlock_with_recovery(backend, recovery_key_text: str) -> bool:
     return True
 
 
+# ── Device pairing: VK hand-off without the passphrase ──────────────
+# The QR flow promised by the spec ("QR pairing — handing VK device-to-
+# device — is a transport concern for the clients"). The Vault Key is
+# rendered in the SAME grouped-base32 the recovery key uses, wrapped in a
+# versioned prefix for the QR payload. Adopting a code verifies it against
+# the folder's envelopes when any exist, so a mistyped code fails loudly
+# instead of producing an unreadable fleet.
+
+PAIRING_PREFIX = 'indexlife-pair:v1:'
+
+
+def pairing_code() -> str | None:
+    """The VK as grouped base32 — the text form of the pairing code.
+    None while the vault is locked (nothing to hand off)."""
+    vk = get_vault_key()
+    return sync_crypto.encode_recovery_key(vk) if vk else None
+
+
+def pairing_payload() -> str | None:
+    """The QR content: versioned prefix + the text code."""
+    code = pairing_code()
+    return (PAIRING_PREFIX + code) if code else None
+
+
+def parse_pairing_code(text: str) -> bytes:
+    """Grouped base32 (with or without the QR prefix) → the 32-byte VK.
+    Raises ValueError on anything that doesn't decode to exactly 32 bytes."""
+    cleaned = (text or '').strip()
+    if cleaned.lower().startswith(PAIRING_PREFIX):
+        cleaned = cleaned[len(PAIRING_PREFIX):]
+    try:
+        vk = sync_crypto.decode_recovery_key(cleaned)
+    except Exception as exc:
+        raise ValueError(f'malformed pairing code: {exc}') from exc
+    if len(vk) != sync_crypto.VK_BYTES:
+        raise ValueError('pairing code has the wrong length')
+    return vk
+
+
+def adopt_pairing_code(backend, text: str) -> str:
+    """Join the vault using a pairing code shown on another device.
+
+    Verification: the first peer envelope in the folder must decrypt with
+    the pasted key — a wrong code raises instead of silently producing a
+    device that can't read anyone. Returns 'verified' when an envelope
+    proved the key, 'unverified' when the folder held nothing to check
+    against (the key is still adopted; the devices panel shows whether
+    merging works). Raises ValueError on malformed or mismatched codes.
+    """
+    vk = parse_pairing_code(text)
+    verified = False
+    if backend is not None:
+        try:
+            names = backend.list_files()
+        except Exception as exc:
+            log.warning('pairing: cannot list folder (%s) — adopting unverified', exc)
+            names = []
+        for name in names:
+            if name == VAULT_FILENAME:
+                continue
+            if not (name.startswith('device_') and name.endswith('.json')):
+                continue
+            blob = backend.read(name)
+            if not blob:
+                continue
+            try:
+                obj = json.loads(blob)
+            except (json.JSONDecodeError, ValueError):
+                continue
+            if not is_envelope(obj):
+                continue
+            try:
+                sync_crypto.open_envelope(blob, vk)
+                verified = True
+                break
+            except Exception as exc:
+                raise ValueError(
+                    "the pairing code does not match this folder's data"
+                ) from exc
+    _cache_vault_key(vk)
+    _meta_set(_ENABLED_KEY, 'true')
+    log.info('Encrypted sync joined via pairing code (%s)',
+             'verified' if verified else 'unverified')
+    return 'verified' if verified else 'unverified'
+
+
 # ── blob classification (used by the pull loop for dual-read) ────────
 
 def is_envelope(obj) -> bool:

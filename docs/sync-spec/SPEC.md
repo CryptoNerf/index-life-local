@@ -185,6 +185,19 @@ failure path retries), and the push-skip applies only while the client's
 own blob is still listed in the folder. This never changes what is on the
 wire — a client without the optimization behaves identically, just slower.
 
+**Pairing.** A second device joins the vault by receiving the raw VK
+device-to-device — the transport-level QR flow §crypto anticipated. The
+code is the VK in the recovery-key rendering (grouped base32, groups of
+5, `-` separators; decoder tolerant of case/spacing); the QR payload wraps
+it as `indexlife-pair:v1:<code>`. An adopting client MUST reject anything
+that doesn't decode to exactly 32 bytes, and MUST verify the key against
+the folder when possible: if any peer envelope exists, it must decrypt
+with the pasted key, otherwise adoption fails loudly (a wrong code must
+never produce a device that silently can't read its peers). The code is
+displayed only on an already-unlocked device and never written to the
+cloud. Reference implementations: `app/sync_vault.py` (pairing block) and
+`pwa/src/lib/vault.js`.
+
 **Timestamps.** All `created_at` / `updated_at` / `written_at` values are
 UTC. Two spellings are legal on the wire and MUST compare as the same
 instant:
