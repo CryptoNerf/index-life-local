@@ -75,7 +75,7 @@ https://github.com/user-attachments/assets/fa26269f-6dfb-484f-948c-b1cc8701da41
 
 **Нейронная карта** — [страница модуля »](docs/ru/neural-map.md)
 
-https://github.com/user-attachments/assets/cfb9aaa9-4a56-4efc-9fb3-337037c67f63
+https://github.com/user-attachments/assets/f4ed0489-6026-4ed5-8a0b-df2f6e59350e
 
 **Графики** — [страница модуля »](docs/ru/graphics.md)
 
