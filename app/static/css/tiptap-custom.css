@@ -1,3 +1,5 @@
+@import url("_tokens.css");
+
 /* ========== Tiptap Custom Styles (Times New Roman Theme) ========== */
 
 /* Main editor container */
@@ -6,7 +8,7 @@
   min-height: 150px;
   max-height: 400px;
   font-family: var(--font-notes, 'Times New Roman', Times, serif);
-  font-size: 20px;
+  font-size: var(--il-text-note);
   border: 1px solid #222;
   border-top: none;
   box-sizing: border-box;
@@ -50,19 +52,19 @@
 }
 
 .ProseMirror h1 {
-  font-size: 28px;
+  font-size: var(--il-text-display);
   font-weight: bold;
   margin: 12px 0 0 0;
 }
 
 .ProseMirror h2 {
-  font-size: 24px;
+  font-size: var(--il-text-page-title);
   font-weight: bold;
   margin: 10px 0 0 0;
 }
 
 .ProseMirror h3 {
-  font-size: 22px;
+  font-size: var(--il-text-section-title);
   font-weight: bold;
   margin: 8px 0 0 0;
 }
@@ -108,7 +110,7 @@
   margin: 12px 0;
   color: var(--text-muted, #555);
   background: #f7f7f7;
-  border-radius: 0 4px 4px 0;
+  border-radius: var(--il-radius);
 }
 
 .ProseMirror hr {
@@ -120,19 +122,19 @@
 .ProseMirror code {
   background: #e8e8e8;
   padding: 2px 6px;
-  border-radius: 3px;
+  border-radius: var(--il-radius);
   font-family: 'Courier New', monospace;
-  font-size: 18px;
+  font-size: var(--il-text-subhead);
 }
 
 .ProseMirror pre {
   background: #e8e8e8;
   padding: 12px;
-  border-radius: 4px;
+  border-radius: var(--il-radius);
   overflow-x: auto;
   margin: 8px 0;
   font-family: 'Courier New', monospace;
-  font-size: 16px;
+  font-size: var(--il-text-body);
 }
 
 .ProseMirror pre code {
@@ -153,7 +155,7 @@
   .tiptap-editor {
     min-height: 100px;
     max-height: 250px;
-    font-size: 18px;
+    font-size: var(--il-text-subhead);
   }
 
   .ProseMirror {
@@ -161,11 +163,11 @@
   }
 
   .ProseMirror code {
-    font-size: 16px;
+    font-size: var(--il-text-body);
   }
 
   .ProseMirror pre {
-    font-size: 14px;
+    font-size: var(--il-text-ui);
   }
 }
 

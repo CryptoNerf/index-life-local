@@ -1,3 +1,5 @@
+@import url("_tokens.css");
+
 /* ========== Base ========== */
 body {
   font-family: var(--font-body, 'Times New Roman', Times, serif);
@@ -11,8 +13,8 @@ body {
 
 .top-menu {
   display: flex;
-  gap: 24px;
-  font-size: 20px;
+  gap: var(--il-block);
+  font-size: var(--il-text-nav);
   margin-top: 60px;
   margin-left: 70px;
 }
@@ -23,8 +25,7 @@ body {
     margin-top: 40px;
     margin-left: 0;
     justify-content: center;
-    font-size: 22px;
-    gap: 20px;
+    gap: var(--il-block);
   }
 }
 
@@ -52,13 +53,14 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 40px 20px 60px;
+  padding: var(--il-section) var(--il-block) var(--il-page-bottom);
 }
 
 .life-title {
-  font-size: 20px;
+  font-size: var(--il-text-page-title);
   font-weight: normal;
-  margin-bottom: 32px;
+  line-height: var(--il-leading-tight);
+  margin-bottom: var(--il-section);
   text-align: center;
 }
 .life-title-print { display: none; }
@@ -73,13 +75,13 @@ body {
 }
 
 .birthdate-prompt label {
-  font-size: 18px;
+  font-size: var(--il-text-subhead);
   color: var(--text-muted, #444);
 }
 
 .birthdate-input {
   font-family: var(--font-body, 'Times New Roman', Times, serif);
-  font-size: 16px;
+  font-size: var(--il-text-body);
   border: 1px solid #222;
   padding: 8px 12px;
   background: #fff;
@@ -101,7 +103,7 @@ body {
 }
 .birthdate-select {
   font-family: var(--font-body, 'Times New Roman', Times, serif);
-  font-size: 16px;
+  font-size: var(--il-text-body);
   border: 1px solid #222;
   padding: 8px 12px;
   background: #fff;
@@ -114,17 +116,17 @@ body {
 
 .life-btn {
   font-family: var(--font-body, 'Times New Roman', Times, serif);
-  font-size: 16px;
+  font-size: var(--il-text-body);
   background: #000;
   color: #fff;
   border: none;
-  padding: 8px 24px;
+  padding: var(--il-inline) var(--il-block);
   cursor: pointer;
 }
 
 .life-btn-outline {
   font-family: var(--font-body, 'Times New Roman', Times, serif);
-  font-size: 14px;
+  font-size: var(--il-text-ui);
   background: #fff;
   color: #222;
   border: 1px solid #222;
@@ -159,7 +161,7 @@ body {
   width: 11px;
   height: 14px;
   flex-shrink: 0;
-  font-size: 14px;
+  font-size: var(--il-text-ui);
   color: var(--text-muted, #888);
   text-align: center;
   line-height: 14px;
@@ -175,7 +177,7 @@ body {
 
 .year-label {
   width: 28px;
-  font-size: 14px;
+  font-size: var(--il-text-ui);
   color: var(--text-muted, #888);
   text-align: right;
   padding-right: 4px;
@@ -207,10 +209,10 @@ body {
 
 /* ========== Stats line ========== */
 .life-stats {
-  font-size: 14px;
+  font-size: var(--il-text-ui);
   color: var(--text-muted, #666);
-  margin-top: 4px;
-  margin-bottom: 16px;
+  margin-top: var(--il-tight);
+  margin-bottom: var(--il-row);
   text-align: center;
 }
 

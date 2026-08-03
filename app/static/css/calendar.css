@@ -1,3 +1,5 @@
+@import url("_tokens.css");
+
 /* ========== Layout & Structure ========== */
 /* Themable surfaces use `var(--name, default)` so when the customization
    module is inactive the fallback (the original hard-coded value) wins
@@ -6,6 +8,8 @@ body {
   font-family: var(--font-body, 'Times New Roman', Times, serif);
   background-color: var(--bg-color, #fff);
   color: var(--text-color, #000);
+  font-size: var(--il-text-body);
+  line-height: var(--il-leading-normal);
   margin: 0;
   padding: 0;
 }
@@ -17,8 +21,8 @@ header {
 }
 .top-menu {
   display: flex;
-  gap: 24px;
-  font-size: 20px;
+  gap: var(--il-block);
+  font-size: var(--il-text-nav);
   margin-top: 60px;
   margin-left: 70px;
 }
@@ -45,8 +49,9 @@ header {
 
 .calendar-title {
   text-align: center;
-  font-size: 24px;
-  font-weight: 600;
+  font-size: var(--il-text-page-title);
+  font-weight: normal;
+  line-height: var(--il-leading-tight);
   font-family: var(--font-heading, 'Times New Roman', Times, serif);
   color: var(--heading-color, #222);
 }
@@ -105,10 +110,10 @@ main {
 .year-arrow,
 .year-select {
   font-family: var(--font-body, 'Times New Roman', Times, serif);
-  font-size: 15px;
-  padding: 6px 14px;
-  border: 1px solid #d8d8d8;
-  border-radius: 8px;
+  font-size: var(--il-text-ui);
+  padding: var(--il-inline) var(--il-field);
+  border: var(--il-hairline) solid var(--il-line-strong);
+  border-radius: var(--il-radius);
   background: #fff;
   color: #222;
   line-height: 1.2;
@@ -154,8 +159,8 @@ main {
 
 /* ========== Day Cube ========== */
 .cube {
-  width: 15px;
-  height: 15px;
+  width: var(--il-cube);
+  height: var(--il-cube);
   background: var(--cube-empty-color, #fff);
   border: 1px solid var(--cube-border-color, #000000);
   display: inline-block;
@@ -177,7 +182,7 @@ main {
   margin: 20px 0 0 0;
   text-align: center;
   color: var(--text-color, #222);
-  font-size: 16px;
+  font-size: var(--il-text-ui);
   background: transparent;  /* let body's bg show through */
   padding: 10px 0;
   flex-shrink: 0;
@@ -220,12 +225,7 @@ main {
     margin-top: 40px;
     margin-left: 0;
     justify-content: center;
-    font-size: 22px;
-    gap: 20px;
-  }
-
-  .calendar-title {
-    font-size: 22px;
+    gap: var(--il-block);
   }
 
   .calendar-grid {

@@ -1,3 +1,5 @@
+@import url("_tokens.css");
+
 /* ========== Base ========== */
 /* Themable surfaces use `var(--name, default)` so when the customization
    module is inactive the fallback wins and the page looks unchanged. */
@@ -17,8 +19,8 @@ header { width: 100%; }
 .main-header { width: 100%; }
 .top-menu {
   display: flex;
-  gap: 24px;
-  font-size: 20px;
+  gap: var(--il-block);
+  font-size: var(--il-text-nav);
   margin-top: 60px;
   margin-left: 70px;
 }
@@ -29,8 +31,7 @@ header { width: 100%; }
     margin-top: 40px;
     margin-left: 0;
     justify-content: center;
-    font-size: 22px;
-    gap: 20px;
+    gap: var(--il-block);
   }
 }
 
@@ -46,37 +47,39 @@ header { width: 100%; }
 /* ========== Page ========== */
 .modules-page {
   flex: 1;
-  max-width: 600px;
+  min-width: 0;
+  max-width: var(--il-content-width);
   width: 100%;
   margin: 0 auto;
-  padding: 40px 20px 60px;
+  padding: var(--il-section) var(--il-block) var(--il-page-bottom);
   box-sizing: border-box;
 }
 
 .modules-page h1 {
-  font-size: 22px;
+  font-size: var(--il-text-page-title);
   font-weight: normal;
-  margin: 0 0 8px;
+  line-height: var(--il-leading-tight);
+  margin: 0 0 var(--il-inline);
 }
 
 .modules-subtitle {
-  font-size: 15px;
+  font-size: var(--il-text-body);
   color: var(--text-muted, #888);
-  margin: 0 0 32px;
+  margin: 0 0 var(--il-section);
 }
 
 /* ========== Module cards ========== */
 .module-list {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  margin-bottom: 40px;
+  gap: var(--il-row);
+  margin-bottom: var(--il-section);
 }
 
 .module-card {
   background: var(--bg-color, #fff);
-  border: 1px solid #e0e0e0;
-  padding: 20px;
+  border: var(--il-hairline) solid var(--il-line);
+  padding: var(--il-row);
 }
 
 .module-active { border-color: var(--text-color, #222); }
@@ -85,20 +88,29 @@ header { width: 100%; }
 .module-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
+  gap: var(--il-field);
+  margin-bottom: var(--il-inline);
 }
 
-.module-dot { font-size: 14px; }
-.dot-active { color: var(--brand-color, #009AFA); }
-.dot-restart { color: #e8a83e; }
-.dot-inactive { color: #ccc; }
+.module-dot {
+  display: inline-block;
+  width: var(--il-marker);
+  height: var(--il-marker);
+  flex: none;
+  box-sizing: border-box;
+  font-size: 0;                       /* the glyph inside is decorative only */
+  background: var(--cube-empty-color, #fff);
+  border: var(--il-hairline) solid var(--cube-border-color, #000);
+}
+.dot-active { background: var(--cube-filled-color, #000); }
+.dot-restart { background: #e0c14a; border-color: #b8860b; }
+.dot-inactive { border-color: #ccc; }
 
-.module-title { font-size: 18px; }
+.module-title { font-size: var(--il-text-subhead); }
 
 .module-badge {
-  font-size: 12px;
-  padding: 2px 8px;
+  font-size: var(--il-text-hint);
+  padding: 2px var(--il-inline);
   margin-left: auto;
 }
 .badge-active {
@@ -111,21 +123,21 @@ header { width: 100%; }
 }
 
 .module-desc {
-  font-size: 15px;
+  font-size: var(--il-text-body);
   color: var(--text-muted, #555);
-  margin: 0 0 6px;
-  line-height: 1.5;
+  margin: 0 0 var(--il-tight);
+  line-height: var(--il-leading-normal);
 }
 
 .module-size {
-  font-size: 13px;
+  font-size: var(--il-text-hint);
   color: var(--text-muted, #999);
 }
 
-.module-action-row { margin-top: 12px; }
+.module-action-row { margin-top: var(--il-field); }
 
 .module-action-hint {
-  font-size: 14px;
+  font-size: var(--il-text-ui);
   color: #e8a83e;
 }
 
@@ -134,9 +146,9 @@ header { width: 100%; }
   background: #000;
   color: #fff;
   border: none;
-  padding: 8px 24px;
+  padding: var(--il-inline) var(--il-block);
   font-family: var(--font-body, 'Times New Roman', Times, serif);
-  font-size: 15px;
+  font-size: var(--il-text-body);
   cursor: pointer;
   transition: background 0.2s;
 }
@@ -156,7 +168,7 @@ header { width: 100%; }
 .install-terminal {
   background: #1a1a1a;
   color: #e0e0e0;
-  margin: 0 0 32px;
+  margin: 0 0 var(--il-section);
   overflow: hidden;
 }
 
@@ -164,9 +176,9 @@ header { width: 100%; }
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 16px;
+  padding: var(--il-field) var(--il-row);
   background: #111;
-  font-size: 14px;
+  font-size: var(--il-text-ui);
   color: var(--text-muted, #aaa);
 }
 
@@ -174,19 +186,19 @@ header { width: 100%; }
   background: none;
   border: none;
   color: var(--text-muted, #666);
-  font-size: 18px;
+  font-size: var(--il-text-subhead);
   cursor: pointer;
-  padding: 0 4px;
+  padding: 0 var(--il-tight);
   font-family: inherit;
 }
 .terminal-close:hover { color: #fff; }
 
 .terminal-output {
-  padding: 16px;
+  padding: var(--il-row);
   margin: 0;
   font-family: 'Courier New', monospace;
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: var(--il-text-hint);
+  line-height: var(--il-leading-normal);
   max-height: 400px;
   overflow-y: auto;
   white-space: pre-wrap;
@@ -194,44 +206,45 @@ header { width: 100%; }
 }
 
 .terminal-actions {
-  padding: 12px 16px;
+  padding: var(--il-field) var(--il-row);
   background: #111;
   border-top: 1px solid #333;
 }
 
 /* ========== Install section (manual) ========== */
 .install-section {
-  border-top: 1px solid #e0e0e0;
-  padding-top: 24px;
+  border-top: var(--il-hairline) solid var(--il-line);
+  padding-top: var(--il-block);
 }
 
 .install-section h2 {
-  font-size: 18px;
+  font-size: var(--il-text-section-title);
   font-weight: normal;
-  margin: 0 0 12px;
+  line-height: var(--il-leading-tight);
+  margin: 0 0 var(--il-field);
 }
 
 .install-platform {
-  font-size: 14px;
+  font-size: var(--il-text-ui);
   color: var(--text-muted, #888);
-  margin: 0 0 8px;
+  margin: 0 0 var(--il-inline);
 }
 
 .install-alt {
-  font-size: 13px;
+  font-size: var(--il-text-hint);
   color: var(--text-muted, #888);
   margin: 0;
 }
 
 /* ========== Troubleshooting section ========== */
 .troubleshoot-section {
-  margin-top: 32px;
-  padding-top: 16px;
-  border-top: 1px solid #f0f0f0;
+  margin-top: var(--il-section);
+  padding-top: var(--il-row);
+  border-top: var(--il-hairline) solid var(--il-line-faint);
 }
 
 .troubleshoot-section summary {
-  font-size: 13px;
+  font-size: var(--il-text-hint);
   color: var(--text-muted, #888);
   cursor: pointer;
   list-style: none;
@@ -247,10 +260,10 @@ header { width: 100%; }
 }
 
 .troubleshoot-desc {
-  font-size: 13px;
+  font-size: var(--il-text-hint);
   color: var(--text-muted, #888);
-  margin: 12px 0;
-  line-height: 1.5;
+  margin: var(--il-field) 0;
+  line-height: var(--il-leading-normal);
 }
 
 .troubleshoot-btn {
@@ -258,10 +271,10 @@ header { width: 100%; }
   border: 1px solid #c00;
   color: #c00;
   font-family: inherit;
-  font-size: 13px;
-  padding: 6px 14px;
+  font-size: var(--il-text-hint);
+  padding: 6px var(--il-field);
   cursor: pointer;
-  border-radius: 3px;
+  border-radius: var(--il-radius);
   transition: background 0.15s, color 0.15s;
 }
 .troubleshoot-btn:hover:not(:disabled) {
@@ -274,9 +287,9 @@ header { width: 100%; }
 }
 
 .troubleshoot-status {
-  font-size: 12px;
+  font-size: var(--il-text-hint);
   color: var(--text-muted, #666);
-  margin: 8px 0 0;
+  margin: var(--il-inline) 0 0;
   min-height: 16px;
 }
 
@@ -285,7 +298,7 @@ header { width: 100%; }
   width: 100%;
   text-align: center;
   color: #222;
-  font-size: 16px;
+  font-size: var(--il-text-ui);
   background: #fff;
   padding: 10px 0;
   flex-shrink: 0;
@@ -293,7 +306,7 @@ header { width: 100%; }
 .footer-link {
   color: var(--text-muted, #666);
   text-decoration: none;
-  font-size: 14px;
+  font-size: var(--il-text-ui);
 }
 .footer-link:hover { text-decoration: underline; }
 
@@ -305,27 +318,27 @@ header { width: 100%; }
     text-align: center;
     margin-left: 0;
     margin-top: 30px;
-    gap: 24px;
+    gap: var(--il-block);
     padding: 0 20px;
   }
-  .modules-page { padding: 24px 16px 40px; }
+  .modules-page { padding: var(--il-block) var(--il-row) var(--il-section); }
 }
 
 @media (max-width: 480px) {
   .top-menu {
     margin-top: 20px;
-    gap: 24px;
+    gap: var(--il-block);
     padding: 0 15px;
   }
 }
 
 /* ── Hardware gate (AI module unavailable on this machine) ──── */
 .module-hw-block {
-  margin: 8px 0;
-  padding: 10px 12px;
-  border: 1px solid #e0c14a;
+  margin: var(--il-inline) 0;
+  padding: var(--il-field);
+  border: var(--il-hairline) solid #e0c14a;
   background: #fdf6e3;
-  border-radius: 8px;
+  border-radius: var(--il-radius);
 }
 .module-hw-msg { font-weight: 600; margin: 0 0 4px; }
-.module-hw-req, .module-hw-detected { font-size: 13px; color: #6a5d2a; margin: 2px 0; }
+.module-hw-req, .module-hw-detected { font-size: var(--il-text-hint); color: #6a5d2a; margin: 2px 0; }

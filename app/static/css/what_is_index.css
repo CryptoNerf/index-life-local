@@ -1,4 +1,4 @@
-
+@import url("_tokens.css");
 
 body {
   margin: 0;
@@ -10,7 +10,8 @@ body {
   background-color: var(--bg-color, #fff);
   font-family: var(--font-body, "Times New Roman", Times, serif);
   color: var(--text-color, #000);
-  font-size: 20px;
+  font-size: var(--il-text-subhead);
+  line-height: var(--il-leading-relaxed);
 }
 
 header {
@@ -20,8 +21,8 @@ header {
 }
 .top-menu {
   display: flex;
-  gap: 24px;
-  font-size: 20px;
+  gap: var(--il-block);
+  font-size: var(--il-text-nav);
   margin-top: 60px;
   margin-left: 70px;
 }
@@ -32,8 +33,7 @@ header {
     margin-top: 40px;
     margin-left: 0;
     justify-content: center;
-    font-size: 22px;
-    gap: 20px;
+    gap: var(--il-block);
   }
 }
 
@@ -45,7 +45,7 @@ header {
     text-align: center;
     margin-left: 0;
     margin-top: 30px;
-    gap: 24px;
+    gap: var(--il-block);
     padding: 0 20px;
   }
 }
@@ -54,7 +54,7 @@ header {
 @media (max-width: 480px) {
   .top-menu {
     margin-top: 20px;
-    gap: 24px;
+    gap: var(--il-block);
     padding: 0 15px;
   }
 }
@@ -80,9 +80,9 @@ header {
   width: 100%;
 }
 .text-block {
-  max-width: 800px;
-  line-height: 1.6;
-  margin: 20px;
+  max-width: 60ch;
+  line-height: var(--il-leading-relaxed);
+  margin: var(--il-block);
   flex-grow: 1;
 }
 .main-footer {
@@ -90,7 +90,7 @@ header {
   margin: 20px 0 0 0;
   text-align: center;
   color: var(--text-color, #222);
-  font-size: 16px;
+  font-size: var(--il-text-ui);
   background: transparent;
   padding: 10px 0;
   flex-shrink: 0;

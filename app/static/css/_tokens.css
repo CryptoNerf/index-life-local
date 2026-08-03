@@ -1,0 +1,56 @@
+/* index.life — shared design tokens.
+   Imported FIRST by every page stylesheet:
+
+       @import url("_tokens.css");
+
+   Why this file exists: every page used to hard-code its own font sizes and
+   margins, so a page title was 24px on the calendar, 22px on the account and
+   modules pages, and an h2 was 20px on one screen and 18px on another. A page
+   stylesheet should now carry layout only — no raw px for text size or spacing.
+
+   Naming: the --il-* prefix keeps these apart from the --bg-color /
+   --brand-color / --font-body variables that the customization module writes
+   at runtime. Those are untouched and stay `var(--name, <fallback>)` — the
+   tokens below never replace them, they only describe size, rhythm and shape.
+   ------------------------------------------------------------------------ */
+
+:root {
+  /* ── Type roles. Seven sizes exist; reference the ROLE, never the px. ── */
+  --il-text-page-title: 24px;     /* the one <h1> per page                   */
+  --il-text-section-title: 20px;  /* every <h2>, on every page               */
+  --il-text-subhead: 18px;        /* card titles, status lines, reading copy */
+  --il-text-body: 16px;           /* body text, buttons, inputs              */
+  --il-text-ui: 14px;             /* meta, list rows, small buttons          */
+  --il-text-hint: 13px;           /* hints, captions, badges                 */
+  --il-text-nav: 20px;            /* the top menu                            */
+  --il-text-note: 20px;           /* the writing surface: editor and preview */
+  --il-text-display: 28px;        /* the day editor's date, printed sheets   */
+
+  --il-leading-tight: 1.25;       /* headings          */
+  --il-leading-normal: 1.5;       /* UI text           */
+  --il-leading-relaxed: 1.6;      /* paragraphs, notes */
+
+  /* ── Spacing roles. Reference the ROLE, never the px. ── */
+  --il-tight: 4px;          /* inside a line: glyph → its own label */
+  --il-inline: 8px;         /* between buttons on one line         */
+  --il-field: 12px;         /* label → input, marker → text        */
+  --il-row: 16px;           /* between form rows, padding in cards */
+  --il-block: 24px;         /* between blocks inside a section     */
+  --il-section: 48px;       /* between sections; page top padding  */
+  --il-page-bottom: 64px;   /* bottom of the content column        */
+
+  --il-content-width: 640px;   /* text pages: sync, account, modules */
+
+  /* ── Shape. The product has square corners: the day cube is the brand. ── */
+  --il-radius: 0;
+  --il-hairline: 1px;
+
+  /* ── Hairline colours, lightest to darkest ── */
+  --il-line-faint: #f0f0f0;    /* rows inside a list          */
+  --il-line: #e0e0e0;          /* sections, folds             */
+  --il-line-strong: #d8d8d8;   /* inputs, controls            */
+
+  /* ── The day cube, and the marker that stands in for icons ── */
+  --il-cube: 15px;
+  --il-marker: 10px;
+}
