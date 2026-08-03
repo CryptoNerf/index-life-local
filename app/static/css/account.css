@@ -1,3 +1,5 @@
+@import url("_tokens.css");
+
 header {
   width: 100%;
   top: 0;
@@ -5,8 +7,8 @@ header {
 }
 .top-menu {
   display: flex;
-  gap: 24px;
-  font-size: 20px;
+  gap: var(--il-block);
+  font-size: var(--il-text-nav);
   margin-top: 60px;
   margin-left: 70px;
 }
@@ -17,8 +19,7 @@ header {
     margin-top: 40px;
     margin-left: 0;
     justify-content: center;
-    font-size: 22px;
-    gap: 20px;
+    gap: var(--il-block);
   }
 }
 
@@ -30,7 +31,7 @@ header {
     text-align: center;
     margin-left: 0;
     margin-top: 30px;
-    gap: 24px;
+    gap: var(--il-block);
     padding: 0 20px;
   }
 }
@@ -39,7 +40,7 @@ header {
 @media (max-width: 480px) {
   .top-menu {
     margin-top: 20px;
-    gap: 24px;
+    gap: var(--il-block);
     padding: 0 15px;
   }
 }
@@ -67,6 +68,8 @@ body {
   font-family: var(--font-body, 'Times New Roman', Times, serif);
   background-color: var(--bg-color, #fff);
   color: var(--text-color, #000);
+  font-size: var(--il-text-body);
+  line-height: var(--il-leading-normal);
   margin: 0;
   padding: 0;
   display: flex;
@@ -80,7 +83,7 @@ body {
   margin: 20px 0 0 0;
   text-align: center;
   color: var(--text-color, #222);
-  font-size: 16px;
+  font-size: var(--il-text-ui);
   background: transparent;
   padding: 10px 0;
   flex-shrink: 0;
@@ -88,7 +91,7 @@ body {
 .footer-link {
   color: var(--text-muted, #666);
   text-decoration: none;
-  font-size: 14px;
+  font-size: var(--il-text-ui);
   letter-spacing: 0.2px;
 }
 .footer-link:hover {
@@ -107,16 +110,16 @@ body {
 /* Стилизуем label как кнопку (копируем стиль save-btn) */
 .input-file-label {
   display: inline-block;
-  padding: 8px;
+  padding: var(--il-inline) var(--il-block);
   background: #000;
   color: #fff;
   border: none;
   cursor: pointer;
-  font-size: 16px;
+  font-size: var(--il-text-body);
   font-family: inherit;
   text-decoration: none;
   transition: background-color 0.3s ease;
-  margin-right: 12px;
+  margin-right: var(--il-field);
   user-select: none;
 }
 
@@ -131,22 +134,23 @@ body {
 /* Стили для текста с названием файла */
 .selected-file {
   color: var(--text-muted, #666);
-  font-size: 14px;
-  margin-left: 8px;
+  font-size: var(--il-text-ui);
+  margin-left: var(--il-inline);
 }
 
 /* Контейнер для файлового инпута */
 .file-input-container {
-  margin-bottom: 16px;
+  margin-bottom: var(--il-row);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--il-inline);
 }
 
 .center-account-block {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -165,8 +169,169 @@ body {
   background: #000000;
   color: #fff;
   border: none;
-  padding: 8px 20px;
-  font-size: 16px;
+  padding: var(--il-inline) var(--il-block);
+  font-size: var(--il-text-body);
   cursor: pointer;
   transition: background 0.2s;
 }
+
+
+/* ========== Page content ==========
+   These classes replace the inline styles account.html used to carry: the
+   page mixed 15/16/17/18px text and 8/10/14/16/18/20/24/30/40px gaps, which
+   is why it looked unlike the rest of the app. Everything here is a role
+   token; the block stays centred (see .center-account-block). */
+
+.account-title {
+  font-size: var(--il-text-page-title);
+  font-weight: normal;
+  line-height: var(--il-leading-tight);
+  font-family: var(--font-heading, 'Times New Roman', Times, serif);
+  color: var(--heading-color, #222);
+  margin: var(--il-section) 0 var(--il-block);
+}
+.center-account-block h2 {
+  font-size: var(--il-text-section-title);
+  font-weight: normal;
+  line-height: var(--il-leading-tight);
+  color: var(--heading-color, #222);
+  margin: 0 0 var(--il-inline);
+}
+
+.account-stat { margin-bottom: var(--il-field); }
+.account-stat-lead { font-size: var(--il-text-subhead); margin-bottom: var(--il-block); }
+.account-muted { color: var(--text-muted, #888); }
+.account-desc {
+  color: var(--text-muted, #666);
+  margin-bottom: var(--il-row);
+  max-width: 52ch;
+}
+.account-note {
+  font-size: var(--il-text-hint);
+  color: var(--text-muted, #888);
+  margin-top: var(--il-field);
+}
+
+.account-photo-row { margin-bottom: var(--il-block); }
+.account-photo {
+  max-width: 200px;
+  max-height: 200px;
+  object-fit: cover;
+  border-radius: var(--il-radius);
+}
+
+.account-form { margin-bottom: var(--il-block); }
+.account-field { margin-bottom: var(--il-row); }
+.account-field > label {
+  display: block;
+  font-size: var(--il-text-ui);
+  color: var(--text-muted, #666);
+  margin-bottom: var(--il-inline);
+}
+.text-input {
+  width: 100%;
+  max-width: 300px;
+  box-sizing: border-box;
+  font-family: var(--font-body, 'Times New Roman', Times, serif);
+  font-size: var(--il-text-body);
+  padding: var(--il-inline) var(--il-field);
+  border: var(--il-hairline) solid var(--il-line-strong);
+  border-radius: var(--il-radius);
+  background: var(--bg-color, #fff);
+  color: var(--text-color, #000);
+  outline: none;
+}
+.text-input:focus { border-color: var(--brand-color, #009AFA); }
+.account-city { max-width: 320px; flex: 1 1 260px; min-width: 0; }
+
+/* Sections below the profile form */
+.account-section {
+  margin-top: var(--il-section);
+  padding-top: var(--il-block);
+  border-top: var(--il-hairline) solid var(--il-line);
+  width: 100%;
+  max-width: var(--il-content-width);
+}
+.account-narrow { max-width: 520px; margin: 0 auto; }
+
+.account-row {
+  display: flex;
+  gap: var(--il-field);
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.account-radio {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.account-choice-list { text-align: left; margin-bottom: var(--il-row); }
+.account-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--il-field);
+  cursor: pointer;
+  margin-bottom: var(--il-field);
+}
+.account-choice > input { margin-top: var(--il-tight); flex: none; }
+.account-choice-desc {
+  font-size: var(--il-text-ui);
+  color: var(--text-muted, #888);
+}
+
+.account-btn-quiet {
+  background: transparent;
+  color: var(--text-muted, #666);
+  border: var(--il-hairline) solid var(--il-line-strong);
+}
+.account-btn-quiet:hover { background: #f5f5f5; }
+
+/* Archive: one row per year */
+.archive-list {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 400px;
+  border-top: var(--il-hairline) solid var(--il-line-faint);
+}
+.archive-year-link {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--il-field);
+  padding: var(--il-field) 0;
+  border-bottom: var(--il-hairline) solid var(--il-line-faint);
+  text-decoration: none;
+  color: var(--text-color, #333);
+}
+.archive-year-link:hover .archive-year { text-decoration: underline; }
+.archive-year { font-size: var(--il-text-subhead); }
+.archive-year-now .archive-year { font-weight: 600; }
+.archive-year-badge {
+  font-size: var(--il-text-ui);
+  color: var(--brand-color, #009AFA);
+}
+.archive-year-count {
+  font-size: var(--il-text-ui);
+  color: var(--text-muted, #888);
+}
+
+.account-version {
+  text-align: center;
+  color: var(--text-muted, #888);
+  font-size: var(--il-text-hint);
+  margin: var(--il-block) 0 var(--il-inline);
+}
+
+/* Flash messages — same palette as the sync page */
+.flash-message {
+  padding: var(--il-field) var(--il-row);
+  margin-bottom: var(--il-row);
+  border: var(--il-hairline) solid #ddd;
+  border-radius: var(--il-radius);
+}
+.flash-success { background: #f3faf3; border-color: #d7e8d7; color: #1e7d34; }
+.flash-error   { background: #f8d7da; border-color: #f0b8bd; color: #721c24; }
+.flash-info    { background: #f5f5f5; border-color: #e0e0e0; color: #333; }
