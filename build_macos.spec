@@ -204,18 +204,5 @@ app = BUNDLE(
         'NSHighResolutionCapable': True,
         'LSBackgroundOnly': False,
         'LSUIElement': False,
-        # Needed before WKWebView will let the page start speech recognition
-        # (the "mic." button in the day editor). Without them macOS refuses
-        # the request, and the button falls back to the system dictation
-        # shortcut. A hardened-runtime build also needs the
-        # com.apple.security.device.audio-input entitlement — see
-        # docs/BUILD_SIGNING.md.
-        'NSMicrophoneUsageDescription':
-            'Dictation types your spoken note straight into the diary. '
-            'Audio never leaves your Mac unless macOS dictation itself '
-            'sends it to Apple.',
-        'NSSpeechRecognitionUsageDescription':
-            'Used only to turn your dictated words into text for the note '
-            'you are writing.',
     },
 )

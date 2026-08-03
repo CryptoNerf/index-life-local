@@ -20,6 +20,7 @@ import os
 import re
 
 from app import db
+from app.note_text import plain_text
 from app.i18n import t
 from app.models import MoodEntry, UserProfile, SyncMeta
 
@@ -375,9 +376,14 @@ def edit_day(day):
     # A soft-deleted day shows an empty form (the tombstone is invisible
     # to the user; saving will revive the row).
     display_entry = None if (entry and entry.deleted) else entry
+    # Notes written while the editor briefly supported colour and fill carry
+    # <span style="…"> wrappers that plain Markdown has no use for. Load them
+    # cleaned, so the markup is gone the next time the day is saved.
+    note = plain_text(display_entry.note) if display_entry else ''
     return render_template('edit_day.html',
                          day=day_date,
                          entry=display_entry,
+                         note=note,
                          is_new=display_entry is None,
                          current_year=date.today().year)
 

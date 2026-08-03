@@ -498,32 +498,6 @@ textarea {
   }
 }
 
-/* ── Dictation button ────────────────────────────────────────
-   Lives in the formatting toolbar, macOS only (the template unhides it).
-   Its own class, not the voice module's .mic-btn: that stylesheet is loaded
-   after this one when the module is installed and would restyle the button
-   (rounded, 16px) even though the module no longer owns it. */
-.dictation-btn {
-  background: #fff;
-  color: #222;
-  border: var(--il-hairline) solid #222;
-  border-radius: var(--il-radius);
-  padding: 5px var(--il-inline);
-  margin-left: var(--il-inline);
-  font-family: var(--font-body, 'Times New Roman', Times, serif);
-  font-size: var(--il-text-hint);
-  line-height: 1;
-  cursor: pointer;
-  transition: background 0.2s, color 0.2s;
-}
-.dictation-btn:hover { background: #f0f0f0; }
-.dictation-btn.recording { background: #222; color: #fff; }
-.dictation-hint {
-  font-size: var(--il-text-hint);
-  color: var(--text-muted, #888);
-  margin: var(--il-inline) 0 0;
-  max-width: 500px;
-}
 
 /* ── Bits that used to be inline in edit_day.html ─────────────── */
 .comment-label {

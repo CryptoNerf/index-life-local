@@ -108,23 +108,12 @@
           <button type="button" class="format-btn" data-format="hr" title="{{ t('edit_day.fmt_hr') }}">
             ―
           </button>
-          {# Dictation. Shown only on macOS (JS unhides it), where the system
-             already has speech input. In a browser it records through the Web
-             Speech API; in the desktop window, where that is blocked, it puts
-             the cursor in the note and recalls the system shortcut. The
-             project's own voice module is unfinished; when it ships it can
-             take this button back. #}
-          <button type="button" class="dictation-btn" id="dictation-btn"
-                  title="{{ t('edit_day.dictation_title') }}" hidden>
-            mic.
-          </button>
         </div>
         <!-- Hidden textarea for form submission -->
-        <textarea name="note" id="note-textarea" class="note-textarea" rows="6" style="display: none;">{{ entry.note if entry else '' }}</textarea>
+        <textarea name="note" id="note-textarea" class="note-textarea" rows="6" style="display: none;">{{ note }}</textarea>
         <!-- Tiptap editor container -->
         <div id="tiptap-editor" class="tiptap-editor"></div>
       </div>
-      <p class="dictation-hint" id="dictation-hint" hidden></p>
       <p class="markdown-hint">{{ t('edit_day.markdown_supported') }}</p>
       <button class="save-btn" type="submit">{{ t('edit_day.save') }}</button>
     </form>
@@ -256,114 +245,6 @@
     // Expose editor globally for voice module
     window.tiptapEditor = tiptapEditor;
 
-    // ── Dictation (macOS only) ───────────────────────────────────────
-    // Two ways to dictate, and the button uses whichever is actually
-    // available:
-    //
-    //  • In a browser, Web Speech (Apple's or Google's recogniser) can run
-    //    inside the page, so the button records straight into the note.
-    //  • Inside the desktop window there is no usable recogniser: WKWebView
-    //    exposes webkitSpeechRecognition but refuses to start it unless the
-    //    bundle ships microphone/speech usage descriptions and the user has
-    //    granted them. Trying anyway is what produced "couldn't start
-    //    dictation" on every click, so we don't try — the button puts the
-    //    cursor in the note and reminds you of the system shortcut, which
-    //    types into the focused field exactly the same way.
-    (function setupDictation() {
-      var btn = document.getElementById('dictation-btn');
-      var hint = document.getElementById('dictation-hint');
-      if (!btn) return;
-
-      var ua = navigator.userAgent || '';
-      var isMac = /Mac/.test(navigator.platform || '') || /Macintosh/.test(ua);
-      if (!isMac) return;                      // Windows/Linux: stays hidden
-      btn.hidden = false;
-
-      var DICT = {
-        idle: btn.textContent.trim(),
-        listening: {{ t('edit_day.dictation_listening')|tojson }},
-        shortcut: {{ t('edit_day.dictation_shortcut')|tojson }}
-      };
-      // pywebview injects its bridge into the desktop window; in a browser it
-      // is absent. `pywebviewready` can fire late, so check the flag lazily.
-      function inDesktopApp() {
-        return !!(window.pywebview || window._pywebviewReady);
-      }
-      window.addEventListener('pywebviewready', function () {
-        window._pywebviewReady = true;
-      });
-
-      var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-      var rec = null;
-      var listening = false;
-
-      function say(text) {
-        if (!hint) return;
-        hint.textContent = text || '';
-        hint.hidden = !text;
-      }
-
-      function focusNote() {
-        if (window.tiptapEditor && window.tiptapEditor.commands) {
-          window.tiptapEditor.commands.focus();
-        }
-      }
-
-      function useSystemDictation() {
-        focusNote();                 // dictation types into the focused field
-        say(hint && hint.hidden ? DICT.shortcut : '');   // click again to hide
-      }
-
-      function insert(text) {
-        if (!text) return;
-        var editor = window.tiptapEditor;
-        if (editor && editor.commands) {
-          try {
-            editor.chain().focus().insertContent(text + ' ').run();
-            return;
-          } catch (e) { /* fall through to the textarea */ }
-        }
-        var ta = document.getElementById('note-textarea');
-        if (ta) ta.value += (ta.value ? ' ' : '') + text + ' ';
-      }
-
-      function stop() {
-        listening = false;
-        btn.classList.remove('recording');
-        btn.textContent = DICT.idle;
-      }
-
-      btn.addEventListener('click', function () {
-        if (!SR || inDesktopApp()) { useSystemDictation(); return; }
-        if (listening && rec) { rec.stop(); return; }
-
-        rec = new SR();
-        rec.lang = document.documentElement.lang === 'en' ? 'en-US' : 'ru-RU';
-        rec.continuous = true;
-        rec.interimResults = false;
-        rec.onstart = function () {
-          listening = true;
-          btn.classList.add('recording');
-          btn.textContent = DICT.listening;
-          say('');
-        };
-        rec.onresult = function (e) {
-          for (var i = e.resultIndex; i < e.results.length; i++) {
-            if (e.results[i].isFinal) insert(e.results[i][0].transcript.trim());
-          }
-        };
-        // Blocked or unsupported is not an error worth reporting: fall back
-        // to the system shortcut, which is what the user wanted anyway.
-        rec.onerror = function () { stop(); useSystemDictation(); };
-        rec.onend = stop;
-        try {
-          rec.start();
-        } catch (e) {
-          stop();
-          useSystemDictation();
-        }
-      });
-    })();
 
     // Setup toolbar buttons
     const toolbar = document.querySelector('.formatting-toolbar');
