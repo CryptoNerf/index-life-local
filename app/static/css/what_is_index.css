@@ -10,7 +10,9 @@ body {
   background-color: var(--bg-color, #fff);
   font-family: var(--font-body, "Times New Roman", Times, serif);
   color: var(--text-color, #000);
-  font-size: var(--il-text-subhead);
+  /* Long-form reading copy — same size as the note editor's writing surface,
+     which is what this page's 20px always was. */
+  font-size: var(--il-text-note);
   line-height: var(--il-leading-relaxed);
 }
 
@@ -80,7 +82,11 @@ header {
   width: 100%;
 }
 .text-block {
-  max-width: 60ch;
+  /* 60ch in Times came out ~540px — a strip. 800px is what the page always
+     had before the token migration. */
+  max-width: 800px;
+  padding: 0 var(--il-block);
+  box-sizing: border-box;
   line-height: var(--il-leading-relaxed);
   margin: var(--il-block);
   flex-grow: 1;
