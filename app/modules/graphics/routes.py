@@ -19,6 +19,7 @@ from flask import render_template, redirect, url_for, current_app, jsonify, requ
 
 from app import db
 from app.models import MoodEntry, DailySignal
+from app.note_text import plain_text
 from . import bp
 
 
@@ -1834,7 +1835,6 @@ def my_people_add():
 def my_people_detail(person_id):
     from app.models import UserPerson
     from app.people_match import matching_entry_ids, name_forms, highlight_segments
-    from app.note_text import plain_text
     person = db.session.get(UserPerson, person_id)
     if person is None:
         return redirect(url_for('graphics.my_people'))
