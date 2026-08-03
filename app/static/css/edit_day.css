@@ -109,6 +109,7 @@ header {
   }
 }
 .header {
+  font-weight: normal;
   text-align: center;
   font-size: var(--il-text-page-title);
 }
@@ -496,3 +497,64 @@ textarea {
     font-size: var(--il-text-subhead);
   }
 }
+
+/* ── Dictation button ────────────────────────────────────────
+   Lives in the formatting toolbar, macOS only (the template unhides it).
+   Its own class, not the voice module's .mic-btn: that stylesheet is loaded
+   after this one when the module is installed and would restyle the button
+   (rounded, 16px) even though the module no longer owns it. */
+.dictation-btn {
+  background: #fff;
+  color: #222;
+  border: var(--il-hairline) solid #222;
+  border-radius: var(--il-radius);
+  padding: 5px var(--il-inline);
+  margin-left: var(--il-inline);
+  font-family: var(--font-body, 'Times New Roman', Times, serif);
+  font-size: var(--il-text-hint);
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+.dictation-btn:hover { background: #f0f0f0; }
+.dictation-btn.recording { background: #222; color: #fff; }
+.dictation-hint {
+  font-size: var(--il-text-hint);
+  color: var(--text-muted, #888);
+  margin: var(--il-inline) 0 0;
+  max-width: 500px;
+}
+
+/* ── Bits that used to be inline in edit_day.html ─────────────── */
+.comment-label {
+  font-size: var(--il-text-section-title);
+  margin: 0 0 var(--il-field);
+}
+.markdown-hint {
+  font-size: var(--il-text-hint);
+  color: var(--text-muted, #888);
+  margin: var(--il-inline) 0 var(--il-row);
+}
+.error-message {
+  margin-bottom: var(--il-block);
+  padding: var(--il-row);
+  background: #fee;
+  border-left: 4px solid #f44;
+  border-radius: var(--il-radius);
+  color: #c00;
+}
+.error-message p { margin: var(--il-tight) 0; }
+.delete-row {
+  text-align: center;
+  margin: var(--il-page-bottom) 0 var(--il-block);
+}
+.delete-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted, #999);
+  font-family: var(--font-body, 'Times New Roman', Times, serif);
+  font-size: var(--il-text-ui);
+  cursor: pointer;
+  padding: var(--il-inline);
+}
+.delete-btn:hover { text-decoration: underline; }

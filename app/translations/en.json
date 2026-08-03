@@ -725,5 +725,9 @@
   "sync.step_phone_2_title": "Open index.life on your phone",
   "sync.step_phone_2_text": "Sign in with the same Google account and add the page to your home screen — it then behaves like an app.",
   "sync.step_phone_3_title": "Link the devices with a QR code",
-  "sync.devices_encrypted": "encrypted"
+  "sync.devices_encrypted": "encrypted",
+  "edit_day.dictation_title": "macOS dictation",
+  "edit_day.dictation_listening": "listening…",
+  "edit_day.dictation_shortcut": "macOS dictation: press Fn twice and start speaking — the text lands in the note.",
+  "edit_day.dictation_failed": "Couldn't start dictation. Press Fn twice to use the system one."
 }
