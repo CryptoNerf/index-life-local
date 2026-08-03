@@ -92,6 +92,13 @@ def _meta_set(key: str, value: str) -> None:
     db.session.commit()
 
 
+def _meta_del(key: str) -> None:
+    row = db.session.get(SyncMeta, key)
+    if row:
+        db.session.delete(row)
+        db.session.commit()
+
+
 def get_device_id() -> str | None:
     return _meta_get('device_id')
 
@@ -1058,6 +1065,44 @@ def list_peer_devices(backend) -> list[dict]:
 
     devices.sort(key=lambda d: (not d['is_self'], -_epoch(d)))
     return devices
+
+
+def remove_peer_device(backend, device_id: str) -> bool:
+    """Remove a device's snapshot from the sync folder.
+
+    "Removing" here is exactly what a shared folder can express: the blob is
+    deleted and this computer forgets the device's merge bookkeeping. There
+    is no per-device credential to revoke — every participant holds the same
+    folder and (when encrypted) the same vault key — so a device that is
+    still alive and syncing will simply push itself back. The UI says as
+    much: to disconnect a device for good, turn sync off on that device (or
+    rotate the passphrase for an encrypted folder).
+
+    Returns True when a blob was found and deleted.
+    """
+    own = get_device_id()
+    if not device_id or device_id == own:
+        return False    # the sync page has "disconnect" for this computer
+    removed = False
+    for name in backend.list_files():
+        if not (name.startswith('device_') and name.endswith('.json')):
+            continue
+        text = backend.read(name)
+        if text is None:
+            continue
+        try:
+            obj = json.loads(text)
+        except (json.JSONDecodeError, ValueError):
+            continue
+        dev = obj.get('device') if sync_vault.is_envelope(obj) else obj.get('device_id')
+        if dev != device_id:
+            continue
+        backend.delete(name)
+        _meta_del(f'peer_hash:{name}')
+        removed = True
+    if removed:
+        _meta_del(f'peer_name:{device_id}')
+    return removed
 
 
 # ── Periodic auto-sync ────────────────────────────────────────

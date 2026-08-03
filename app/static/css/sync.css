@@ -489,6 +489,17 @@ header { width: 100%; }
 .device-name { flex: 1; min-width: 0; }
 .device-note,
 .device-when { color: var(--text-muted, #888); }
+.device-remove {
+  background: transparent;
+  border: none;
+  color: var(--text-muted, #999);
+  font-family: var(--font-body, 'Times New Roman', Times, serif);
+  font-size: var(--il-text-hint);
+  cursor: pointer;
+  padding: 2px var(--il-tight);
+}
+.device-remove:hover { color: #c0392b; text-decoration: underline; }
+.device-remove:disabled { opacity: 0.5; cursor: wait; }
 
 /* ========== Pairing (QR + code) ========== */
 .pair-block { margin: var(--il-field) 0; }

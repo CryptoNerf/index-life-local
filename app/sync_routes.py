@@ -12,7 +12,8 @@ from app.backup import list_backups, backup_and_rotate, restore_backup
 from app.sync import (
     get_device_id, get_sync_config, set_sync_config, is_sync_configured,
     get_last_sync, get_last_sync_report, full_sync, import_now, export_now,
-    test_connection, is_webdav_insecure, list_peer_devices, _current_backend,
+    test_connection, is_webdav_insecure, list_peer_devices, remove_peer_device,
+    _current_backend,
 )
 from app import sync_vault
 from app.i18n import t
@@ -284,6 +285,27 @@ def sync_devices():
     except Exception as e:
         current_app.logger.warning('device listing failed: %s', e)
         return jsonify({'devices': [], 'error': str(e)})
+
+
+@bp.route('/sync/devices/remove', methods=['POST'])
+def sync_devices_remove():
+    """Delete a peer device's snapshot from the sync folder.
+
+    A shared folder has no per-device credential to revoke, so this removes
+    the device's data and forgets it locally; a device that is still syncing
+    will push itself back — the confirm dialog says so.
+    """
+    device_id = (request.form.get('device_id') or '').strip()
+    if not is_sync_configured() or not device_id:
+        return jsonify({'ok': False, 'error': 'not configured'}), 400
+    if device_id == get_device_id():
+        return jsonify({'ok': False, 'error': 'self'}), 400
+    try:
+        removed = remove_peer_device(_current_backend(), device_id)
+    except Exception as e:
+        current_app.logger.warning('device removal failed: %s', e)
+        return jsonify({'ok': False, 'error': str(e)}), 502
+    return jsonify({'ok': bool(removed)})
 
 
 @bp.route('/sync/discover')

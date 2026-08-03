@@ -730,5 +730,8 @@
   "cz.lbl.cube_scale_low": "Rating 1",
   "cz.lbl.cube_scale_mid": "Middle of the scale",
   "cz.lbl.cube_scale_high": "Rating 10",
-  "customization.cube_scale_desc": "A filled day takes its colour from its rating — from the colour of a 1, through the middle, to the colour of a 10. Empty days and the border stay as set above."
+  "customization.cube_scale_desc": "A filled day takes its colour from its rating — from the colour of a 1, through the middle, to the colour of a 10. Empty days and the border stay as set above.",
+  "sync.devices_remove": "remove",
+  "sync.devices_remove_confirm": "Remove \"{name}\" from the sync folder? Its data is deleted from the cloud; entries other devices already received stay. If sync is still on over there, the device will reappear — turn sync off on it first.",
+  "sync.devices_remove_failed": "Couldn't remove the device. See the log for details."
 }

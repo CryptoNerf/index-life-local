@@ -585,6 +585,9 @@
         minAgo: {{ t('sync.time_min_ago')|tojson }},
         hAgo: {{ t('sync.time_h_ago')|tojson }},
         dAgo: {{ t('sync.time_d_ago')|tojson }},
+        remove: {{ t('sync.devices_remove')|tojson }},
+        removeConfirm: {{ t('sync.devices_remove_confirm')|tojson }},
+        removeFailed: {{ t('sync.devices_remove_failed')|tojson }},
       };
 
       // Desktop peers write naive-UTC timestamps (no zone); pin UTC so the
@@ -646,16 +649,41 @@
           row.appendChild(mark);
           row.appendChild(name);
           row.appendChild(when);
+          // Peers can be removed from the folder; this computer has the
+          // "disconnect" action in Settings instead.
+          if (!d.is_self && d.device_id) {
+            var rm = document.createElement('button');
+            rm.type = 'button';
+            rm.className = 'device-remove';
+            rm.textContent = DEV_I18N.remove;
+            rm.addEventListener('click', function () {
+              var who = d.name || DEV_I18N.device;
+              if (!confirm(DEV_I18N.removeConfirm.replace('{name}', who))) return;
+              rm.disabled = true;
+              var fd = new FormData();
+              fd.append('device_id', d.device_id);
+              fetch('{{ url_for("sync.sync_devices_remove") }}', { method: 'POST', body: fd })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                  if (data.ok) { refreshDevices(); }
+                  else { rm.disabled = false; alert(DEV_I18N.removeFailed); }
+                })
+                .catch(function () { rm.disabled = false; alert(DEV_I18N.removeFailed); });
+            });
+            row.appendChild(rm);
+          }
           devicesBox.appendChild(row);
         });
       }
 
-      if (devicesBox) {
+      function refreshDevices() {
         fetch('{{ url_for("sync.sync_devices") }}')
           .then(function (r) { return r.json(); })
           .then(function (data) { renderDevices(data.devices || []); })
           .catch(function () { renderDevices([]); });
       }
+
+      if (devicesBox) { refreshDevices(); }
 
       // ── Pairing QR (rendered lazily when the block is opened) ──
       var pairBlock = document.getElementById('pair-block');

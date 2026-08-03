@@ -149,3 +149,47 @@ def test_self_row_uses_the_hostname(app, tmp_path):
 
     assert devices[0]['is_self'] is True
     assert devices[0]['name'] == sync.device_display_name()
+
+
+# ── Removing a peer from the folder ─────────────────────────────────
+
+def test_remove_peer_deletes_blob_and_forgets_meta(app, tmp_path):
+    _set_device('dev-local')
+    backend, folder = _backend(tmp_path)
+    (folder / 'device_dev-phone.json').write_text(
+        _envelope_blob('dev-phone', '2026-07-01T10:00:00'), encoding='utf-8')
+    db.session.add(SyncMeta(key='peer_name:dev-phone', value='Телефон'))
+    db.session.add(SyncMeta(key='peer_hash:device_dev-phone.json', value='abc'))
+    db.session.commit()
+
+    assert sync.remove_peer_device(backend, 'dev-phone') is True
+
+    assert not (folder / 'device_dev-phone.json').exists()
+    assert db.session.get(SyncMeta, 'peer_name:dev-phone') is None
+    assert db.session.get(SyncMeta, 'peer_hash:device_dev-phone.json') is None
+    assert [d['device_id'] for d in sync.list_peer_devices(backend)] == []
+
+
+def test_remove_peer_never_touches_self_or_strangers(app, tmp_path):
+    _set_device('dev-local')
+    backend, folder = _backend(tmp_path)
+    own = folder / 'device_dev-local.json'
+    own.write_text(_plain_blob('dev-local', '2026-07-01T10:00:00'), encoding='utf-8')
+
+    # refusing to delete this computer's own blob
+    assert sync.remove_peer_device(backend, 'dev-local') is False
+    assert own.exists()
+    # unknown id: nothing found, nothing deleted
+    assert sync.remove_peer_device(backend, 'dev-ghost') is False
+    assert own.exists()
+
+
+def test_remove_matches_by_header_not_filename(app, tmp_path):
+    """The blob is found by its device header — a renamed file still goes."""
+    _set_device('dev-local')
+    backend, folder = _backend(tmp_path)
+    (folder / 'device_oddname.json').write_text(
+        _plain_blob('dev-phone', '2026-07-01T10:00:00'), encoding='utf-8')
+
+    assert sync.remove_peer_device(backend, 'dev-phone') is True
+    assert not (folder / 'device_oddname.json').exists()

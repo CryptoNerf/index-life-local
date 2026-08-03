@@ -50,7 +50,7 @@ _WEBDAV_TIMEOUT = 20  # seconds per request
 
 
 class SyncBackend:
-    """Abstract interface. Subclasses must implement all four methods."""
+    """Abstract interface. Subclasses must implement all five methods."""
 
     def list_files(self) -> list[str]:
         raise NotImplementedError
@@ -59,6 +59,10 @@ class SyncBackend:
         raise NotImplementedError
 
     def write_atomic(self, name: str, text: str) -> None:
+        raise NotImplementedError
+
+    def delete(self, name: str) -> None:
+        """Remove a blob. A blob that is already gone is success, not error."""
         raise NotImplementedError
 
     def health_check(self) -> str | None:
@@ -106,6 +110,12 @@ class FileBackend(SyncBackend):
             f.flush()
             os.fsync(f.fileno())
         os.replace(tmp, final)
+
+    def delete(self, name: str) -> None:
+        try:
+            (self.folder / name).unlink()
+        except FileNotFoundError:
+            pass
 
     def health_check(self) -> str | None:
         try:
@@ -214,6 +224,13 @@ class WebDavBackend(SyncBackend):
             log.warning('WebDAV atomic write fallback (HTTP %s) for %s', exc.code, name)
             self._request('PUT', self._file_url(name), data=data,
                           headers={'Content-Type': 'application/json'})
+
+    def delete(self, name: str) -> None:
+        try:
+            self._request('DELETE', self._file_url(name))
+        except urllib.error.HTTPError as exc:
+            if exc.code != 404:
+                raise
 
     def health_check(self) -> str | None:
         try:

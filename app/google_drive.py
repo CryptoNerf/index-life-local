@@ -425,6 +425,18 @@ class GoogleDriveApiBackend:
              data=payload, content_type='application/json')
         index[name] = created['id']
 
+    def delete(self, name: str) -> None:
+        index = self._index if self._index is not None else self._refresh_index()
+        fid = index.get(name)
+        if not fid:
+            return
+        try:
+            _api('DELETE', f'drive/v3/files/{fid}')
+        except urllib.error.HTTPError as exc:
+            if exc.code != 404:
+                raise
+        index.pop(name, None)
+
     def health_check(self) -> str | None:
         try:
             self._refresh_index()
