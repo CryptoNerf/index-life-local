@@ -203,8 +203,9 @@ body {
 .account-muted { color: var(--text-muted, #888); }
 .account-desc {
   color: var(--text-muted, #666);
-  margin-bottom: var(--il-row);
-  max-width: 52ch;
+  /* auto margins, not text-align: a max-width box does not centre itself */
+  margin: 0 auto var(--il-row);
+  max-width: 60ch;
 }
 .account-note {
   font-size: var(--il-text-hint);
@@ -267,7 +268,7 @@ body {
   gap: 6px;
   cursor: pointer;
 }
-.account-choice-list { text-align: left; margin-bottom: var(--il-row); }
+.account-choice-list { text-align: left; margin: 0 auto var(--il-row); max-width: 420px; }
 .account-choice {
   display: flex;
   align-items: flex-start;
@@ -294,6 +295,7 @@ body {
   flex-direction: column;
   width: 100%;
   max-width: 400px;
+  margin: 0 auto;
   border-top: var(--il-hairline) solid var(--il-line-faint);
 }
 .archive-year-link {

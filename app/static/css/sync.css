@@ -82,7 +82,6 @@ header { width: 100%; }
 .sync-lead {
   color: var(--text-muted, #666);
   line-height: var(--il-leading-relaxed);
-  max-width: 52ch;
   margin: 0 0 var(--il-section);
 }
 

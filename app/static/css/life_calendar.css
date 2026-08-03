@@ -53,14 +53,14 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: var(--il-section) var(--il-block) var(--il-page-bottom);
+  padding: var(--il-block) var(--il-block) var(--il-page-bottom);
 }
 
 .life-title {
   font-size: var(--il-text-page-title);
   font-weight: normal;
   line-height: var(--il-leading-tight);
-  margin-bottom: var(--il-section);
+  margin-bottom: var(--il-block);
   text-align: center;
 }
 .life-title-print { display: none; }
@@ -219,9 +219,10 @@ body {
 /* ========== Actions ========== */
 .life-actions {
   display: flex;
-  gap: 12px;
+  flex-direction: column;
+  gap: var(--il-field);
   align-items: center;
-  margin-top: 8px;
+  margin-top: var(--il-row);
 }
 
 /* ========== Print ========== */
