@@ -38,6 +38,18 @@ def sync_page():
     return _render_sync()
 
 
+def _gdrive_available() -> bool:
+    """Whether the build carries Google Desktop OAuth credentials."""
+    from app.google_drive import is_available
+    return is_available()
+
+
+def _gdrive_connected() -> bool:
+    """Whether a Google account is linked on this device."""
+    from app.google_drive import is_connected
+    return is_connected()
+
+
 def _render_sync(**extra):
     """Render the sync page. `extra` overrides context — used to surface a
     freshly-generated recovery key directly (never through a cookie)."""
@@ -69,6 +81,8 @@ def _render_sync(**extra):
         # Only present while unlocked — a locked vault has nothing to show.
         pairing_payload=sync_vault.pairing_payload() if configured else None,
         pairing_code=sync_vault.pairing_code() if configured else None,
+        gdrive_available=_gdrive_available(),
+        gdrive_connected=_gdrive_connected(),
     )
     ctx.update(extra)
     return render_template('sync.html', **ctx)
@@ -89,7 +103,11 @@ def sync_settings():
         password = get_sync_config()['password']
 
     set_sync_config(mode, folder=folder, url=url, username=username, password=password)
-    if is_sync_configured():
+    if mode == 'gdrive' and not is_sync_configured():
+        # Mode saved but the Google account isn't linked yet — point at the
+        # connect button instead of the confusing "sync disabled".
+        flash(t('sync.gdrive_connect_first'), 'warning')
+    elif is_sync_configured():
         flash(t('sync.flash_settings_saved'), 'success')
         # Saved over plain http — credentials + diary go in clear text.
         if is_webdav_insecure(mode, url):
@@ -109,6 +127,13 @@ def sync_disconnect():
     still read what we last pushed.
     """
     set_sync_config('local', folder='', url='', username='', password='')
+    # Also drop the Google link (refresh token) — "disconnect" must not
+    # leave a credential behind.
+    try:
+        from app.google_drive import disconnect as _gdrive_disconnect
+        _gdrive_disconnect()
+    except Exception as e:
+        current_app.logger.warning('google disconnect failed: %s', e)
     flash(t('sync.flash_disconnected'), 'success')
     return redirect(url_for('sync.sync_page'))
 
@@ -210,6 +235,33 @@ def encryption_lock():
     """Forget the cached key on this device (stays enabled; sync pauses)."""
     sync_vault.lock()
     flash(t('sync.enc_locked_flash'), 'success')
+    return redirect(url_for('sync.sync_page'))
+
+
+@bp.route('/sync/google/connect', methods=['POST'])
+def google_connect():
+    """Link a Google account for the direct Drive-API sync mode.
+
+    Runs the installed-app OAuth flow: opens the browser, waits for the
+    loopback redirect (blocking this request thread — fine for a local
+    single-user app), stores the refresh token, switches the mode and kicks
+    a first sync so the phone's entries appear right away.
+    """
+    from app import google_drive
+    if not google_drive.is_available():
+        flash(t('sync.gdrive_setup_hint'), 'error')
+        return redirect(url_for('sync.sync_page'))
+    try:
+        err = google_drive.connect_interactive()
+    except Exception as e:
+        current_app.logger.warning('google connect crashed: %s', e)
+        err = str(e)
+    if err:
+        flash(t('sync.gdrive_connect_failed', err=err), 'error')
+        return redirect(url_for('sync.sync_page'))
+    set_sync_config('gdrive')
+    flash(t('sync.gdrive_connected'), 'success')
+    _kick_full_sync()
     return redirect(url_for('sync.sync_page'))
 
 

@@ -120,7 +120,8 @@ def get_sync_config() -> dict:
 
 def set_sync_config(mode: str, folder: str = '', url: str = '',
                     username: str = '', password: str = '') -> None:
-    _meta_set('sync_mode', mode if mode in ('local', 'webdav') else 'local')
+    _meta_set('sync_mode',
+              mode if mode in ('local', 'webdav', 'gdrive') else 'local')
     _meta_set('sync_folder', folder.strip())
     _meta_set('webdav_url', url.strip())
     _meta_set('webdav_user', username)
@@ -146,6 +147,9 @@ def is_sync_configured() -> bool:
     cfg = get_sync_config()
     if cfg['mode'] == 'webdav':
         return bool(cfg['url'])
+    if cfg['mode'] == 'gdrive':
+        from app.google_drive import is_connected
+        return is_connected()
     return bool(cfg['folder'])
 
 

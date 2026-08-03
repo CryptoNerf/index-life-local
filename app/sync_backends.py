@@ -249,6 +249,15 @@ def make_backend(mode: str, *, folder: str = '', url: str = '',
         if not url:
             return None
         return WebDavBackend(url, username, password)
+    if mode == 'gdrive':
+        # Direct Drive API — the mode that can actually sync with the phone
+        # (drive.file visibility is per OAuth project; files uploaded by the
+        # Google Drive desktop client are invisible to the PWA). Imported
+        # lazily: it touches the DB layer, which sync engine tests stub.
+        from app.google_drive import GoogleDriveApiBackend, is_connected
+        if not is_connected():
+            return None
+        return GoogleDriveApiBackend()
     # default: local folder
     if not folder:
         return None

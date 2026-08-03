@@ -138,14 +138,39 @@ ciphertext. Connecting takes a couple of minutes:
 
 ### Google Drive
 
-- **Phone:** Settings → Sync → Google Drive → sign in. The app creates a
-  visible `index.life` folder in My Drive root and can only see files it
-  created itself (`drive.file` scope).
-- **Desktop:** install [Google Drive for desktop](https://www.google.com/drive/download/).
-  The phone's folder mirrors to
-  `~/Library/CloudStorage/GoogleDrive-<email>/My Drive/index.life` (macOS) or
-  `G:\My Drive\index.life` (Windows). The **"Find cloud folders"** button
-  locates it automatically.
+> ⚠️ **Important: pairing with the phone requires the desktop's
+> "Google Drive (direct)" mode**, not "Local folder". The phone app uses
+> the narrow `drive.file` scope and sees **only files created by
+> index.life itself**. Files uploaded by the Google Drive desktop client
+> are invisible to the phone — a mirrored local folder gives one-way sync:
+> the desktop sees the phone, the phone **never receives** the desktop's
+> entries.
+
+- **Phone:** Settings → Sync → Google Drive → sign in. The app creates the
+  `index.life` folder in My Drive root.
+- **Desktop:** Sync page → **"Google Drive (direct)"** mode → **"Sign in
+  with Google"** (same account as the phone) → consent in the browser.
+  That's all: no Google Drive desktop client, no folder paths, both sides
+  see each other.
+- The **local Google Drive folder** remains fine for **desktop ↔ desktop**
+  sync (no phone involved).
+
+<details><summary>For the distributor: enabling direct mode in a build</summary>
+
+Create a **Desktop app** OAuth client in the **same Google Cloud project**
+as the phone app's web client (`drive.file` visibility is per project, so
+the two sides see each other's files): console.cloud.google.com → APIs &
+Services → Credentials → Create Credentials → OAuth client ID → Desktop
+app. Then at build/run time:
+
+```bash
+export GOOGLE_DESKTOP_CLIENT_ID="…apps.googleusercontent.com"
+export GOOGLE_DESKTOP_CLIENT_SECRET="…"
+```
+
+Google treats the client secret of installed (desktop) apps as
+non-confidential — shipping it in a build is within Google's guidelines.
+</details>
 
 ### Yandex.Disk
 

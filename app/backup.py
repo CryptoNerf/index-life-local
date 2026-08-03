@@ -18,7 +18,7 @@ _backup_timer: threading.Timer | None = None
 # the encrypted snapshots — and a VK sitting next to the ciphertext would
 # void the zero-knowledge design (see app/sync_vault.py's threat model:
 # "the VK never leaves the device").
-_SECRET_META_KEYS = ('sync_vault_key', 'webdav_pass')
+_SECRET_META_KEYS = ('sync_vault_key', 'webdav_pass', 'gdrive_refresh_token')
 
 
 def _scrub_secrets(conn: sqlite3.Connection) -> None:
