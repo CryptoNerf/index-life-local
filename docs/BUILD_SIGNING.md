@@ -102,3 +102,30 @@ clears it after the download builds some reputation.
 
 AppImages aren't subject to Gatekeeper/SmartScreen — the user just makes the
 file executable (`chmod +x`). Nothing to sign for the equivalent warning.
+
+---
+
+## Windows 11: Smart App Control (no "Run anyway" button)
+
+The screenshot-style dialog «Интеллектуальное управление приложениями
+заблокировало приложение…» is **Smart App Control (SAC)** — a stricter layer
+than SmartScreen that ships enabled on fresh Windows 11 installs. Unlike
+SmartScreen, **SAC has no "More info → Run anyway" bypass**: unsigned apps
+are hard-blocked, and nothing the app itself can do will help (its code
+never runs).
+
+User-side options (one of):
+
+1. **Disable Smart App Control**: Параметры → Конфиденциальность и защита →
+   Безопасность Windows → Управление приложениями/браузером → Параметры
+   интеллектуального управления приложениями → **Выкл**.
+   ⚠️ Windows only allows turning SAC back ON by reinstalling/resetting the
+   OS — the user should understand that before switching it off.
+2. Run the app on a machine where SAC is off or in evaluation mode (then
+   only regular SmartScreen applies, which has "Run anyway").
+
+Distributor-side fix — the only real one: **sign the executable**. SAC
+trusts binaries with a valid Authenticode signature whose reputation is
+known good; an EV certificate works immediately, an OV one after
+reputation builds. This is the same signing recommended for SmartScreen
+above — one certificate solves both.
