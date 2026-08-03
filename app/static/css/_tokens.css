@@ -22,7 +22,7 @@
   --il-text-body: 16px;           /* body text, buttons, inputs              */
   --il-text-ui: 14px;             /* meta, list rows, small buttons          */
   --il-text-hint: 13px;           /* hints, captions, badges                 */
-  --il-text-nav: 20px;            /* the top menu                            */
+  --il-text-nav: 22px;            /* the top menu, every page                */
   --il-text-note: 20px;           /* the writing surface: editor and preview */
   --il-text-display: 28px;        /* the day editor's date, printed sheets   */
 
