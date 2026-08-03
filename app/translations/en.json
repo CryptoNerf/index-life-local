@@ -733,8 +733,5 @@
   "cz.lbl.cube_scale_low": "Rating 1",
   "cz.lbl.cube_scale_mid": "Middle of the scale",
   "cz.lbl.cube_scale_high": "Rating 10",
-  "customization.cube_scale_desc": "A filled day takes its colour from its rating — from the colour of a 1, through the middle, to the colour of a 10. Empty days and the border stay as set above.",
-  "edit_day.fmt_color": "Text colour",
-  "edit_day.fmt_fill": "Background fill",
-  "edit_day.fmt_clear_color": "Clear colour and fill"
+  "customization.cube_scale_desc": "A filled day takes its colour from its rating — from the colour of a 1, through the middle, to the colour of a 10. Empty days and the border stay as set above."
 }

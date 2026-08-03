@@ -108,20 +108,6 @@
           <button type="button" class="format-btn" data-format="hr" title="{{ t('edit_day.fmt_hr') }}">
             ―
           </button>
-          {# Colour and fill. Native pickers: a swatch that opens the OS colour
-             wheel, so there is no palette menu to style and no fixed set of
-             colours to argue about. #}
-          <label class="fmt-swatch" title="{{ t('edit_day.fmt_color') }}">
-            <span class="fmt-swatch-ink">A</span>
-            <input type="color" class="fmt-swatch-input" data-format="color" value="#c0392b">
-          </label>
-          <label class="fmt-swatch fmt-swatch-fill" title="{{ t('edit_day.fmt_fill') }}">
-            <span class="fmt-swatch-ink">A</span>
-            <input type="color" class="fmt-swatch-input" data-format="fill" value="#e0c14a">
-          </label>
-          <button type="button" class="format-btn" data-format="clear-color" title="{{ t('edit_day.fmt_clear_color') }}">
-            A&#x0338;
-          </button>
           {# Dictation. Shown only on macOS (JS unhides it), where the system
              already has speech input. In a browser it records through the Web
              Speech API; in the desktop window, where that is blocked, it puts

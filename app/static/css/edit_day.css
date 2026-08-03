@@ -190,10 +190,7 @@ textarea {
   padding: 6px;
   background: #f5f5f5;
   border: 1px solid #222;
-  /* wrap, not nowrap: with colour, fill and dictation the row no longer fits
-     the 500px editor, and squeezed buttons clipped their labels */
-  flex-wrap: wrap;
-  row-gap: 4px;
+  flex-wrap: nowrap;
   justify-content: center;
 }
 .format-btn {
@@ -561,42 +558,3 @@ textarea {
   padding: var(--il-inline);
 }
 .delete-btn:hover { text-decoration: underline; }
-
-/* ── Colour + fill swatches in the toolbar ─────────────────────
-   A native <input type="color"> laid over a letter-sized square, so the
-   control looks like the neighbouring format buttons but opens the OS
-   colour picker. The input keeps its own value as the swatch colour. */
-.fmt-swatch {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 26px;
-  border: var(--il-hairline) solid #222;
-  border-radius: var(--il-radius);
-  background: #fff;
-  cursor: pointer;
-  overflow: hidden;
-}
-.fmt-swatch-ink {
-  font-family: var(--font-body, 'Times New Roman', Times, serif);
-  font-size: var(--il-text-ui);
-  line-height: 1;
-  pointer-events: none;
-}
-/* The colour input fills the square: its swatch area becomes the button. */
-.fmt-swatch-input {
-  position: absolute;
-  left: 0;
-  bottom: -2px;
-  width: 100%;
-  height: 8px;
-  padding: 0;
-  border: none;
-  background: none;
-  cursor: pointer;
-}
-.fmt-swatch-input::-webkit-color-swatch-wrapper { padding: 0; }
-.fmt-swatch-input::-webkit-color-swatch { border: none; }
-.fmt-swatch-fill .fmt-swatch-ink { padding: 0 3px; }

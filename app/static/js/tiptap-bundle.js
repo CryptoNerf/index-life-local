@@ -169,11 +169,8 @@ var TiptapBundle = (() => {
       if (!childA.sameMarkup(childB))
         return pos;
       if (childA.isText && childA.text != childB.text) {
-        let tA = childA.text, tB = childB.text, j = 0;
-        for (; tA[j] == tB[j]; j++)
+        for (let j = 0; childA.text[j] == childB.text[j]; j++)
           pos++;
-        if (j && j < tA.length && j < tB.length && surrogateHigh(tA.charCodeAt(j - 1)) && surrogateLow(tA.charCodeAt(j)))
-          pos--;
         return pos;
       }
       if (childA.content.size || childB.content.size) {
@@ -197,16 +194,11 @@ var TiptapBundle = (() => {
       if (!childA.sameMarkup(childB))
         return { a: posA, b: posB };
       if (childA.isText && childA.text != childB.text) {
-        let tA = childA.text, tB = childB.text, iA2 = tA.length, iB2 = tB.length;
-        while (iA2 > 0 && iB2 > 0 && tA[iA2 - 1] == tB[iB2 - 1]) {
-          iA2--;
-          iB2--;
+        let same = 0, minSize = Math.min(childA.text.length, childB.text.length);
+        while (same < minSize && childA.text[childA.text.length - same - 1] == childB.text[childB.text.length - same - 1]) {
+          same++;
           posA--;
           posB--;
-        }
-        if (iA2 && iB2 && iA2 < tA.length && surrogateHigh(tA.charCodeAt(iA2 - 1)) && surrogateLow(tA.charCodeAt(iA2))) {
-          posA++;
-          posB++;
         }
         return { a: posA, b: posB };
       }
@@ -218,12 +210,6 @@ var TiptapBundle = (() => {
       posA -= size;
       posB -= size;
     }
-  }
-  function surrogateLow(ch) {
-    return ch >= 56320 && ch < 57344;
-  }
-  function surrogateHigh(ch) {
-    return ch >= 55296 && ch < 56320;
   }
   function retIndex(index, offset) {
     found.index = index;
@@ -266,14 +252,14 @@ var TiptapBundle = (() => {
       throw new RangeError("Removing non-flat range");
     return content.replaceChild(index, child.copy(removeRange(child.content, from2 - offset - 1, to - offset - 1)));
   }
-  function insertInto(content, dist, insert, openStart, openEnd, parent) {
+  function insertInto(content, dist, insert, parent) {
     let { index, offset } = content.findIndex(dist), child = content.maybeChild(index);
     if (offset == dist || child.isText) {
-      if (parent && openStart <= 0 && openEnd <= 0 && !parent.canReplace(index, index, insert))
+      if (parent && !parent.canReplace(index, index, insert))
         return null;
       return content.cut(0, dist).append(insert).append(content.cut(dist));
     }
-    let inner = insertInto(child.content, dist - offset - 1, insert, index == 0 ? openStart - 1 : 0, index == content.childCount - 1 ? openEnd - 1 : 0, child);
+    let inner = insertInto(child.content, dist - offset - 1, insert, child);
     return inner && content.replaceChild(index, child.copy(inner));
   }
   function replace($from, $to, slice2) {
@@ -332,8 +318,7 @@ var TiptapBundle = (() => {
       addNode($end.nodeBefore, target);
   }
   function close(node, content) {
-    if (!node.type.validContent(content))
-      throw new ReplaceError("Invalid content for node " + node.type.name);
+    node.type.checkContent(content);
     return node.copy(content);
   }
   function replaceThreeWay($from, $start, $end, $to, depth) {
@@ -613,12 +598,13 @@ var TiptapBundle = (() => {
     return built;
   }
   function checkAttrs(attrs2, values, type, name) {
-    for (let attr in values)
-      if (!(attr in attrs2))
-        throw new RangeError(`Unsupported attribute ${attr} for ${type} of type ${name}`);
-    for (let attr in attrs2) {
-      if (attrs2[attr].validate)
-        attrs2[attr].validate(values[attr]);
+    for (let name2 in values)
+      if (!(name2 in attrs2))
+        throw new RangeError(`Unsupported attribute ${name2} for ${type} of type ${name2}`);
+    for (let name2 in attrs2) {
+      let attr = attrs2[name2];
+      if (attr.validate)
+        attr.validate(values[name2]);
     }
   }
   function initAttrs(typeName, attrs2) {
@@ -748,9 +734,11 @@ var TiptapBundle = (() => {
     return result;
   }
   function renderSpec(doc3, structure, xmlNS, blockArraysIn) {
-    if (structure.nodeType == 1)
+    if (typeof structure == "string")
+      return { dom: doc3.createTextNode(structure) };
+    if (structure.nodeType != null)
       return { dom: structure };
-    if (structure.dom && structure.dom.nodeType == 1)
+    if (structure.dom && structure.dom.nodeType != null)
       return structure;
     let tagName = structure[0], suspicious;
     if (typeof tagName != "string")
@@ -784,8 +772,6 @@ var TiptapBundle = (() => {
         if (i < structure.length - 1 || i > start)
           throw new RangeError("Content hole must be the only child of its parent node");
         return { dom, contentDOM: dom };
-      } else if (typeof child == "string") {
-        dom.appendChild(doc3.createTextNode(child));
       } else {
         let { dom: inner, contentDOM: innerContent } = renderSpec(doc3, child, xmlNS, blockArraysIn);
         dom.appendChild(inner);
@@ -1053,7 +1039,7 @@ var TiptapBundle = (() => {
             return _Fragment.empty;
           if (!Array.isArray(value))
             throw new RangeError("Invalid input for Fragment.fromJSON");
-          return _Fragment.fromArray(value.map(schema2.nodeFromJSON));
+          return new _Fragment(value.map(schema2.nodeFromJSON));
         }
         /**
         Build a fragment from an array of nodes. Ensures that adjacent
@@ -1247,7 +1233,7 @@ var TiptapBundle = (() => {
         @internal
         */
         insertAt(pos, fragment) {
-          let content = insertInto(this.content, pos + this.openStart, fragment, this.openStart + 1, this.openEnd + 1);
+          let content = insertInto(this.content, pos + this.openStart, fragment);
           return content && new _Slice(content, this.openStart, this.openEnd);
         }
         /**
@@ -1684,11 +1670,10 @@ var TiptapBundle = (() => {
           this.content.forEach(f);
         }
         /**
-        Invoke a callback for all descendant nodes recursively overlapping
+        Invoke a callback for all descendant nodes recursively between
         the given two positions that are relative to start of this
-        node's content. This includes all ancestors of the nodes
-        containing the two positions. The callback is invoked with the
-        node, its position relative to the original node (method receiver),
+        node's content. The callback is invoked with the node, its
+        position relative to the original node (method receiver),
         its parent node, and its child index. When the callback returns
         false for a given node, that node's children will not be
         recursed over. The last parameter can be used to specify a
@@ -2767,7 +2752,6 @@ var TiptapBundle = (() => {
         article: true,
         aside: true,
         blockquote: true,
-        body: true,
         canvas: true,
         dd: true,
         div: true,
@@ -3311,8 +3295,6 @@ var TiptapBundle = (() => {
         @internal
         */
         serializeNodeInner(node, options) {
-          if (node.isText)
-            return doc(options).createTextNode(node.text);
           let { dom, contentDOM } = renderSpec(doc(options), this.nodes[node.type.name](node), null, node.attrs);
           if (contentDOM) {
             if (node.isLeaf)
@@ -3347,8 +3329,6 @@ var TiptapBundle = (() => {
           return toDOM && renderSpec(doc(options), toDOM(mark, inline2), null, mark.attrs);
         }
         static renderSpec(doc3, structure, xmlNS = null, blockArraysIn) {
-          if (typeof structure == "string")
-            return { dom: doc3.createTextNode(structure) };
           return renderSpec(doc3, structure, xmlNS, blockArraysIn);
         }
         /**
@@ -3956,23 +3936,6 @@ var TiptapBundle = (() => {
   }
   function deleteRange(tr2, from2, to) {
     let $from = tr2.doc.resolve(from2), $to = tr2.doc.resolve(to);
-    if ($from.parent.isTextblock && $to.parent.isTextblock && $from.start() != $to.start() && $from.parentOffset == 0 && $to.parentOffset == 0) {
-      let shared = $from.sharedDepth(to), isolated = false;
-      for (let d = $from.depth; d > shared; d--)
-        if ($from.node(d).type.spec.isolating)
-          isolated = true;
-      for (let d = $to.depth; d > shared; d--)
-        if ($to.node(d).type.spec.isolating)
-          isolated = true;
-      if (!isolated) {
-        for (let d = $from.depth; d > 0 && from2 == $from.start(d); d--)
-          from2 = $from.before(d);
-        for (let d = $to.depth; d > 0 && to == $to.start(d); d--)
-          to = $to.before(d);
-        $from = tr2.doc.resolve(from2);
-        $to = tr2.doc.resolve(to);
-      }
-    }
     let covered = coveredDepths($from, $to);
     for (let i = 0; i < covered.length; i++) {
       let depth = covered[i], last = i == covered.length - 1;
@@ -4569,8 +4532,7 @@ var TiptapBundle = (() => {
           return new _ReplaceStep(this.from, this.from + this.slice.size, doc3.slice(this.from, this.to));
         }
         map(mapping) {
-          let to = mapping.mapResult(this.to, -1);
-          let from2 = this.from == this.to && _ReplaceStep.MAP_BIAS < 0 ? to : mapping.mapResult(this.from, 1);
+          let from2 = mapping.mapResult(this.from, 1), to = mapping.mapResult(this.to, -1);
           if (from2.deletedAcross && to.deletedAcross)
             return null;
           return new _ReplaceStep(from2.pos, Math.max(from2.pos, to.pos), this.slice, this.structure);
@@ -4605,7 +4567,6 @@ var TiptapBundle = (() => {
           return new _ReplaceStep(json.from, json.to, Slice.fromJSON(schema2, json.slice), !!json.structure);
         }
       };
-      ReplaceStep.MAP_BIAS = 1;
       Step.jsonID("replace", ReplaceStep);
       ReplaceAroundStep = class _ReplaceAroundStep extends Step {
         /**
@@ -7019,8 +6980,6 @@ var TiptapBundle = (() => {
     };
   }
   function scrollRectIntoView(view, rect, startDOM) {
-    if (!nonZero(rect) && rect.left == 0)
-      return;
     let scrollThreshold = view.someProp("scrollThreshold") || 0, scrollMargin = view.someProp("scrollMargin") || 5;
     let doc3 = view.dom.ownerDocument;
     for (let parent = startDOM || view.dom; ; ) {
@@ -7456,7 +7415,7 @@ var TiptapBundle = (() => {
   }
   function docViewDesc(doc3, outerDeco, innerDeco, dom, view) {
     applyOuterDeco(dom, outerDeco, doc3);
-    let docView = new NodeViewDesc(void 0, doc3, outerDeco, innerDeco, dom, dom, dom);
+    let docView = new NodeViewDesc(void 0, doc3, outerDeco, innerDeco, dom, dom, dom, view, 0);
     if (docView.contentDOM)
       docView.updateChildren(view, 0);
     return docView;
@@ -7792,10 +7751,10 @@ var TiptapBundle = (() => {
     syncNodeSelection(view, sel);
     if (!editorOwnsSelection(view))
       return;
-    let mouseDown = view.input.mouseDown;
-    if (!force && chrome && mouseDown) {
+    if (!force && view.input.mouseDown && view.input.mouseDown.allowDefault && chrome) {
       let domSel = view.domSelectionRange(), curSel = view.domObserver.currentSelection;
-      if (domSel.anchorNode && curSel.anchorNode && isEquivalentPosition(domSel.anchorNode, domSel.anchorOffset, curSel.anchorNode, curSel.anchorOffset) && mouseDown.delaySelUpdate()) {
+      if (domSel.anchorNode && curSel.anchorNode && isEquivalentPosition(domSel.anchorNode, domSel.anchorOffset, curSel.anchorNode, curSel.anchorOffset)) {
+        view.input.mouseDown.delayedSelectionSync = true;
         view.domObserver.setCurSelection();
         return;
       }
@@ -8433,7 +8392,7 @@ var TiptapBundle = (() => {
     return slice2;
   }
   function detachedDoc() {
-    return document.implementation.createHTMLDocument("title");
+    return _detachedDoc || (_detachedDoc = document.implementation.createHTMLDocument("title"));
   }
   function maybeWrapTrusted(html) {
     let trustedTypes = window.trustedTypes;
@@ -8447,7 +8406,7 @@ var TiptapBundle = (() => {
     let metas = /^(\s*<meta [^>]*>)*/.exec(html);
     if (metas)
       html = html.slice(metas[0].length);
-    let doc3 = detachedDoc(), elt = doc3.body;
+    let elt = detachedDoc().createElement("div");
     let firstTag = /<([a-z][^>\s]+)/i.exec(html), wrap2;
     if (wrap2 = firstTag && wrapMap[firstTag[1].toLowerCase()])
       html = wrap2.map((n) => "<" + n + ">").join("") + html + wrap2.map((n) => "</" + n + ">").reverse().join("");
@@ -8455,17 +8414,6 @@ var TiptapBundle = (() => {
     if (wrap2)
       for (let i = 0; i < wrap2.length; i++)
         elt = elt.querySelector(wrap2[i]) || elt;
-    for (let i = 0; i < doc3.styleSheets.length; i++) {
-      let style2 = doc3.styleSheets[i];
-      for (let j = 0; j < style2.rules.length; j++) {
-        let rule = style2.rules[j];
-        if (rule instanceof CSSStyleRule) {
-          let matches2 = elt.querySelectorAll(rule.selectorText);
-          for (let k = 0; k < matches2.length; k++)
-            matches2[k].style.cssText += rule.style.cssText;
-        }
-      }
-    }
     return elt;
   }
   function restoreReplacedSpaces(dom) {
@@ -8513,8 +8461,6 @@ var TiptapBundle = (() => {
     view.input.lastSelectionTime = Date.now();
   }
   function destroyInput(view) {
-    if (view.input.mouseDown)
-      view.input.mouseDown.done();
     view.domObserver.stop();
     for (let type in view.input.eventHandlers)
       view.dom.removeEventListener(type, view.input.eventHandlers[type]);
@@ -8621,28 +8567,26 @@ var TiptapBundle = (() => {
   function defaultTripleClick(view, inside, event) {
     if (event.button != 0)
       return false;
-    let selection = selectionForTripleClick(view, inside, true), doc3 = view.state.doc;
-    if (!selection)
-      return false;
-    updateSelection(view, selection, "pointer");
-    if (selection instanceof TextSelection && doc3.eq(view.state.doc))
-      view.input.mouseDown = new TripleClickDrag(view, selection);
-    return true;
-  }
-  function selectionForTripleClick(view, inside, selectNodes) {
     let doc3 = view.state.doc;
-    if (inside == -1)
-      return doc3.inlineContent ? TextSelection.create(doc3, 0, doc3.content.size) : null;
+    if (inside == -1) {
+      if (doc3.inlineContent) {
+        updateSelection(view, TextSelection.create(doc3, 0, doc3.content.size), "pointer");
+        return true;
+      }
+      return false;
+    }
     let $pos = doc3.resolve(inside);
     for (let i = $pos.depth + 1; i > 0; i--) {
       let node = i > $pos.depth ? $pos.nodeAfter : $pos.node(i);
       let nodePos = $pos.before(i);
       if (node.inlineContent)
-        return TextSelection.create(doc3, nodePos + 1, nodePos + 1 + node.content.size);
-      else if (selectNodes && NodeSelection.isSelectable(node))
-        return NodeSelection.create(doc3, nodePos);
+        updateSelection(view, TextSelection.create(doc3, nodePos + 1, nodePos + 1 + node.content.size), "pointer");
+      else if (NodeSelection.isSelectable(node))
+        updateSelection(view, NodeSelection.create(doc3, nodePos), "pointer");
+      else
+        continue;
+      return true;
     }
-    return null;
   }
   function forceDOMFlush(view) {
     return endComposition(view);
@@ -8650,7 +8594,7 @@ var TiptapBundle = (() => {
   function inOrNearComposition(view, event) {
     if (view.composing)
       return true;
-    if (safari && Math.abs(Date.now() - view.input.compositionEndedAt) < 500) {
+    if (safari && Math.abs(event.timeStamp - view.input.compositionEndedAt) < 500) {
       view.input.compositionEndedAt = -2e8;
       return true;
     }
@@ -8671,7 +8615,7 @@ var TiptapBundle = (() => {
   function clearComposition(view) {
     if (view.composing) {
       view.input.composing = false;
-      view.input.compositionEndedAt = Date.now();
+      view.input.compositionEndedAt = timestampFromCustomEvent();
     }
     while (view.input.compositionNodes.length > 0)
       view.input.compositionNodes.pop().markParentsDirty();
@@ -8695,6 +8639,11 @@ var TiptapBundle = (() => {
       }
     }
     return textBefore || textAfter;
+  }
+  function timestampFromCustomEvent() {
+    let event = document.createEvent("Event");
+    event.initEvent("event", true, true);
+    return event.timeStamp;
   }
   function endComposition(view, restarting = false) {
     if (android && view.domObserver.flushingSoon >= 0)
@@ -8772,11 +8721,8 @@ var TiptapBundle = (() => {
     return uris ? uris.replace(/\r?\n/g, " ") : "";
   }
   function dragMoves(view, event) {
-    let copy2;
-    view.someProp("dragCopies", (test2) => {
-      copy2 = copy2 || test2(event);
-    });
-    return copy2 != null ? !copy2 : !event[dragCopyModifier];
+    let moves = view.someProp("dragCopies", (test2) => !test2(event));
+    return moves != null ? moves : !event[dragCopyModifier];
   }
   function handleDrop(view, event, dragging) {
     if (!event.dataTransfer)
@@ -9096,7 +9042,7 @@ var TiptapBundle = (() => {
       }
     }
   }
-  function parseBetween(view, from_, to_, addedNodes) {
+  function parseBetween(view, from_, to_) {
     let { node: parent, fromOffset, toOffset, from: from2, to } = view.docView.parseRange(from_, to_);
     let domSel = view.domSelectionRange();
     let find2;
@@ -9128,7 +9074,7 @@ var TiptapBundle = (() => {
       to: toOffset,
       preserveWhitespace: $from.parent.type.whitespace == "pre" ? "full" : true,
       findPositions: find2,
-      ruleFromNode: ruleFromNode(addedNodes),
+      ruleFromNode,
       context: $from
     });
     if (find2 && find2[0].pos != null) {
@@ -9138,6 +9084,23 @@ var TiptapBundle = (() => {
       sel = { anchor: anchor2 + from2, head: head + from2 };
     }
     return { doc: doc3, sel, from: from2, to };
+  }
+  function ruleFromNode(dom) {
+    let desc = dom.pmViewDesc;
+    if (desc) {
+      return desc.parseRule();
+    } else if (dom.nodeName == "BR" && dom.parentNode) {
+      if (safari && /^(ul|ol)$/i.test(dom.parentNode.nodeName)) {
+        let skip = document.createElement("div");
+        skip.appendChild(document.createElement("li"));
+        return { skip };
+      } else if (dom.parentNode.lastChild == dom || safari && /^(tr|table)$/i.test(dom.parentNode.nodeName)) {
+        return { ignore: true };
+      }
+    } else if (dom.nodeName == "IMG" && dom.getAttribute("mark-placeholder")) {
+      return { ignore: true };
+    }
+    return null;
   }
   function readDOMChange(view, from2, to, typeOver, addedNodes) {
     let compositionID = view.input.compositionPendingChanges || (view.composing ? view.input.compositionID : 0);
@@ -9164,7 +9127,7 @@ var TiptapBundle = (() => {
     from2 = $before.before(shared + 1);
     to = view.state.doc.resolve(to).after(shared + 1);
     let sel = view.state.selection;
-    let parse = parseBetween(view, from2, to, addedNodes);
+    let parse = parseBetween(view, from2, to);
     let doc3 = view.state.doc, compare = doc3.slice(parse.from, parse.to);
     let preferredPos, preferredSide;
     if (view.input.lastKeyCode === 8 && Date.now() - 100 < view.input.lastKeyCodeTime) {
@@ -9346,26 +9309,36 @@ var TiptapBundle = (() => {
     return end;
   }
   function findDiff(a, b, pos, preferredPos, preferredSide) {
-    let start = a.findDiffStart(b, pos), lenA = pos + a.size, lenB = pos + b.size;
+    let start = a.findDiffStart(b, pos);
     if (start == null)
       return null;
-    let { a: endA, b: endB } = a.findDiffEnd(b, lenA, lenB);
+    let { a: endA, b: endB } = a.findDiffEnd(b, pos + a.size, pos + b.size);
     if (preferredSide == "end") {
       let adjust = Math.max(0, start - Math.min(endA, endB));
       preferredPos -= endA + adjust - start;
     }
-    if (endA < start && lenA < lenB) {
+    if (endA < start && a.size < b.size) {
       let move = preferredPos <= start && preferredPos >= endA ? start - preferredPos : 0;
       start -= move;
+      if (start && start < b.size && isSurrogatePair(b.textBetween(start - 1, start + 1)))
+        start += move ? 1 : -1;
       endB = start + (endB - endA);
       endA = start;
     } else if (endB < start) {
       let move = preferredPos <= start && preferredPos >= endB ? start - preferredPos : 0;
       start -= move;
+      if (start && start < a.size && isSurrogatePair(a.textBetween(start - 1, start + 1)))
+        start += move ? 1 : -1;
       endA = start + (endA - endB);
       endB = start;
     }
     return { start, endA, endB };
+  }
+  function isSurrogatePair(str) {
+    if (str.length != 2)
+      return false;
+    let a = str.charCodeAt(0), b = str.charCodeAt(1);
+    return a >= 56320 && a <= 57343 && b >= 55296 && b <= 56319;
   }
   function computeDocDeco(view) {
     let attrs2 = /* @__PURE__ */ Object.create(null);
@@ -9432,7 +9405,7 @@ var TiptapBundle = (() => {
     if (plugin.spec.state || plugin.spec.filterTransaction || plugin.spec.appendTransaction)
       throw new RangeError("Plugins passed directly to the view must not have a state component");
   }
-  var domIndex, parentNode, reusedRange, textRange, clearReusedRange, isEquivalentPosition, atomElements, selectionCollapsed, nav, doc2, agent, ie_edge, ie_upto10, ie_11up, ie, ie_version, gecko, _chrome, chrome, chrome_version, safari, ios, mac2, windows, android, webkit, webkit_version, preventScrollSupported, BIDI, maybeRTL, cachedState, cachedDir, cachedResult, NOT_DIRTY, CHILD_DIRTY, CONTENT_DIRTY, NODE_DIRTY, ViewDesc, WidgetViewDesc, CompositionViewDesc, MarkViewDesc, NodeViewDesc, TextViewDesc, TrailingHackViewDesc, CustomNodeViewDesc, OuterDecoLevel, noDeco, ViewTreeUpdater, brokenSelectBetweenUneditable, inlineParents, wrapMap, _policy, handlers, editHandlers, passiveHandlers, InputState, selectNodeModifier, MouseDown, LeftMouseDown, TripleClickDrag, timeoutComposition, brokenClipboardAPI, Dragging, dragCopyModifier, WidgetType, InlineType, NodeType2, Decoration, none, noSpec, DecorationSet, empty, DecorationGroup, observeOptions, useCharData, SelectionState, DOMObserver, cssChecked, cssCheckWarned, ruleFromNode, isInline, EditorView;
+  var domIndex, parentNode, reusedRange, textRange, clearReusedRange, isEquivalentPosition, atomElements, selectionCollapsed, nav, doc2, agent, ie_edge, ie_upto10, ie_11up, ie, ie_version, gecko, _chrome, chrome, chrome_version, safari, ios, mac2, windows, android, webkit, webkit_version, preventScrollSupported, BIDI, maybeRTL, cachedState, cachedDir, cachedResult, NOT_DIRTY, CHILD_DIRTY, CONTENT_DIRTY, NODE_DIRTY, ViewDesc, WidgetViewDesc, CompositionViewDesc, MarkViewDesc, NodeViewDesc, TextViewDesc, TrailingHackViewDesc, CustomNodeViewDesc, OuterDecoLevel, noDeco, ViewTreeUpdater, brokenSelectBetweenUneditable, inlineParents, wrapMap, _detachedDoc, _policy, handlers, editHandlers, passiveHandlers, InputState, selectNodeModifier, MouseDown, timeoutComposition, brokenClipboardAPI, Dragging, dragCopyModifier, WidgetType, InlineType, NodeType2, Decoration, none, noSpec, DecorationSet, empty, DecorationGroup, observeOptions, useCharData, SelectionState, DOMObserver, cssChecked, cssCheckWarned, isInline, EditorView;
   var init_dist7 = __esm({
     "node_modules/prosemirror-view/dist/index.js"() {
       init_dist4();
@@ -9522,7 +9495,7 @@ var TiptapBundle = (() => {
         // When parsing in-editor content (in domchange.js), we allow
         // descriptions to determine the parse rules that should be used to
         // parse them.
-        parseRule(addedNodes) {
+        parseRule() {
           return null;
         }
         // Used by the editor's event handler to ignore events that come
@@ -10007,7 +9980,7 @@ var TiptapBundle = (() => {
         }
       };
       NodeViewDesc = class _NodeViewDesc extends ViewDesc {
-        constructor(parent, node, outerDeco, innerDeco, dom, contentDOM, nodeDOM) {
+        constructor(parent, node, outerDeco, innerDeco, dom, contentDOM, nodeDOM, view, pos) {
           super(parent, [], dom, contentDOM);
           this.node = node;
           this.outerDeco = outerDeco;
@@ -10050,13 +10023,13 @@ var TiptapBundle = (() => {
           let nodeDOM = dom;
           dom = applyOuterDeco(dom, outerDeco, node);
           if (spec)
-            return descObj = new CustomNodeViewDesc(parent, node, outerDeco, innerDeco, dom, contentDOM || null, nodeDOM, spec);
+            return descObj = new CustomNodeViewDesc(parent, node, outerDeco, innerDeco, dom, contentDOM || null, nodeDOM, spec, view, pos + 1);
           else if (node.isText)
-            return new TextViewDesc(parent, node, outerDeco, innerDeco, dom, nodeDOM);
+            return new TextViewDesc(parent, node, outerDeco, innerDeco, dom, nodeDOM, view);
           else
-            return new _NodeViewDesc(parent, node, outerDeco, innerDeco, dom, contentDOM || null, nodeDOM);
+            return new _NodeViewDesc(parent, node, outerDeco, innerDeco, dom, contentDOM || null, nodeDOM, view, pos + 1);
         }
-        parseRule(addedNodes) {
+        parseRule() {
           if (this.node.type.spec.reparseInView)
             return null;
           let rule = { node: this.node.type.name, attrs: this.node.attrs };
@@ -10074,13 +10047,8 @@ var TiptapBundle = (() => {
                 break;
               }
             }
-            if (!rule.contentElement) {
-              let found2 = addedNodes && addedNodes.find((n) => n.nodeType == 1 && addedNodes.indexOf(n.parentNode) < 0 && this.dom.contains(n));
-              if (found2)
-                rule.contentElement = found2;
-              else
-                rule.getContent = () => Fragment.empty;
-            }
+            if (!rule.contentElement)
+              rule.getContent = () => Fragment.empty;
           }
           return rule;
         }
@@ -10214,8 +10182,8 @@ var TiptapBundle = (() => {
         }
       };
       TextViewDesc = class _TextViewDesc extends NodeViewDesc {
-        constructor(parent, node, outerDeco, innerDeco, dom, nodeDOM) {
-          super(parent, node, outerDeco, innerDeco, dom, null, nodeDOM);
+        constructor(parent, node, outerDeco, innerDeco, dom, nodeDOM, view) {
+          super(parent, node, outerDeco, innerDeco, dom, null, nodeDOM, view, 0);
         }
         parseRule() {
           let skip = this.nodeDOM.parentNode;
@@ -10254,9 +10222,9 @@ var TiptapBundle = (() => {
         ignoreMutation(mutation) {
           return mutation.type != "characterData" && mutation.type != "selection";
         }
-        slice(from2, to, _view) {
+        slice(from2, to, view) {
           let node = this.node.cut(from2, to), dom = document.createTextNode(node.text);
-          return new _TextViewDesc(this.parent, node, this.outerDeco, this.innerDeco, dom, dom);
+          return new _TextViewDesc(this.parent, node, this.outerDeco, this.innerDeco, dom, dom, view);
         }
         markDirty(from2, to) {
           super.markDirty(from2, to);
@@ -10285,8 +10253,8 @@ var TiptapBundle = (() => {
         }
       };
       CustomNodeViewDesc = class extends NodeViewDesc {
-        constructor(parent, node, outerDeco, innerDeco, dom, contentDOM, nodeDOM, spec) {
-          super(parent, node, outerDeco, innerDeco, dom, contentDOM, nodeDOM);
+        constructor(parent, node, outerDeco, innerDeco, dom, contentDOM, nodeDOM, spec, view, pos) {
+          super(parent, node, outerDeco, innerDeco, dom, contentDOM, nodeDOM, view, pos);
           this.spec = spec;
         }
         // A custom `update` method gets to decide whether the update goes
@@ -10381,14 +10349,6 @@ var TiptapBundle = (() => {
               if (next.matchesMark(marks[depth]) && !this.isLocked(next.dom)) {
                 found2 = i;
                 break;
-              }
-            }
-            if (found2 < 0 && this.index < this.top.children.length) {
-              let cur = this.top.children[this.index];
-              if (cur instanceof MarkViewDesc && cur.dirty != NODE_DIRTY && cur.mark.type == marks[depth].type && cur.spec.update && !this.isLocked(cur.dom) && cur.spec.update(marks[depth])) {
-                cur.mark = marks[depth];
-                found2 = this.index;
-                this.changed = true;
               }
             }
             if (found2 > -1) {
@@ -10573,6 +10533,7 @@ var TiptapBundle = (() => {
         td: ["table", "tbody", "tr"],
         th: ["table", "tbody", "tr"]
       };
+      _detachedDoc = null;
       _policy = null;
       handlers = {};
       editHandlers = {};
@@ -10607,7 +10568,7 @@ var TiptapBundle = (() => {
       editHandlers.keydown = (view, _event) => {
         let event = _event;
         view.input.shiftKey = event.keyCode == 16 || event.shiftKey;
-        if (inOrNearComposition(view))
+        if (inOrNearComposition(view, event))
           return;
         view.input.lastKeyCode = event.keyCode;
         view.input.lastKeyCodeTime = Date.now();
@@ -10636,7 +10597,7 @@ var TiptapBundle = (() => {
       };
       editHandlers.keypress = (view, _event) => {
         let event = _event;
-        if (inOrNearComposition(view) || !event.charCode || event.ctrlKey && !event.altKey || mac2 && event.metaKey)
+        if (inOrNearComposition(view, event) || !event.charCode || event.ctrlKey && !event.altKey || mac2 && event.metaKey)
           return;
         if (view.someProp("handleKeyPress", (f) => f(view, event))) {
           event.preventDefault();
@@ -10664,13 +10625,13 @@ var TiptapBundle = (() => {
             type = "tripleClick";
         }
         view.input.lastClick = { time: now, x: event.clientX, y: event.clientY, type, button: event.button };
-        if (view.input.mouseDown)
-          view.input.mouseDown.done();
         let pos = view.posAtCoords(eventCoords(event));
         if (!pos)
           return;
         if (type == "singleClick") {
-          view.input.mouseDown = new LeftMouseDown(view, pos, event, !!flushed);
+          if (view.input.mouseDown)
+            view.input.mouseDown.done();
+          view.input.mouseDown = new MouseDown(view, pos, event, !!flushed);
         } else if ((type == "doubleClick" ? handleDoubleClick : handleTripleClick)(view, pos.pos, pos.inside, event)) {
           event.preventDefault();
         } else {
@@ -10678,36 +10639,13 @@ var TiptapBundle = (() => {
         }
       };
       MouseDown = class {
-        constructor(view) {
-          this.view = view;
-          this.mightDrag = null;
-          view.root.addEventListener("mouseup", this.up = this.up.bind(this));
-          view.root.addEventListener("mousemove", this.move = this.move.bind(this));
-        }
-        up(event) {
-          this.done();
-        }
-        move(event) {
-          if (event.buttons == 0)
-            this.done();
-        }
-        done() {
-          this.view.root.removeEventListener("mouseup", this.up);
-          this.view.root.removeEventListener("mousemove", this.move);
-          if (this.view.input.mouseDown == this)
-            this.view.input.mouseDown = null;
-        }
-        delaySelUpdate() {
-          return false;
-        }
-      };
-      LeftMouseDown = class extends MouseDown {
         constructor(view, pos, event, flushed) {
-          super(view);
+          this.view = view;
           this.pos = pos;
           this.event = event;
           this.flushed = flushed;
           this.delayedSelectionSync = false;
+          this.mightDrag = null;
           this.startDoc = view.state.doc;
           this.selectNode = !!event[selectNodeModifier];
           this.allowDefault = event.shiftKey;
@@ -10724,7 +10662,7 @@ var TiptapBundle = (() => {
           const targetDesc = target ? view.docView.nearestDesc(target, true) : null;
           this.target = targetDesc && targetDesc.nodeDOM.nodeType == 1 ? targetDesc.nodeDOM : null;
           let { selection } = view.state;
-          if (event.button == 0 && (targetNode.type.spec.draggable && targetNode.type.spec.selectable !== false || selection instanceof NodeSelection && selection.from <= targetPos && selection.to > targetPos))
+          if (event.button == 0 && targetNode.type.spec.draggable && targetNode.type.spec.selectable !== false || selection instanceof NodeSelection && selection.from <= targetPos && selection.to > targetPos)
             this.mightDrag = {
               node: targetNode,
               pos: targetPos,
@@ -10742,10 +10680,13 @@ var TiptapBundle = (() => {
               }, 20);
             this.view.domObserver.start();
           }
+          view.root.addEventListener("mouseup", this.up = this.up.bind(this));
+          view.root.addEventListener("mousemove", this.move = this.move.bind(this));
           setSelectionOrigin(view, "pointer");
         }
         done() {
-          super.done();
+          this.view.root.removeEventListener("mouseup", this.up);
+          this.view.root.removeEventListener("mousemove", this.move);
           if (this.mightDrag && this.target) {
             this.view.domObserver.stop();
             if (this.mightDrag.addAttr)
@@ -10755,10 +10696,8 @@ var TiptapBundle = (() => {
             this.view.domObserver.start();
           }
           if (this.delayedSelectionSync)
-            setTimeout(() => {
-              if (!this.view.isDestroyed)
-                selectionToDOM(this.view);
-            });
+            setTimeout(() => selectionToDOM(this.view));
+          this.view.input.mouseDown = null;
         }
         up(event) {
           this.done();
@@ -10790,39 +10729,12 @@ var TiptapBundle = (() => {
         move(event) {
           this.updateAllowDefault(event);
           setSelectionOrigin(this.view, "pointer");
-          super.move(event);
+          if (event.buttons == 0)
+            this.done();
         }
         updateAllowDefault(event) {
           if (!this.allowDefault && (Math.abs(this.event.x - event.clientX) > 4 || Math.abs(this.event.y - event.clientY) > 4))
             this.allowDefault = true;
-        }
-        delaySelUpdate() {
-          if (!this.allowDefault)
-            return false;
-          this.delayedSelectionSync = true;
-          return true;
-        }
-      };
-      TripleClickDrag = class extends MouseDown {
-        constructor(view, startSelection) {
-          super(view);
-          this.startSelection = startSelection;
-          this.startDoc = view.state.doc;
-        }
-        move(event) {
-          if (event.buttons == 0 || this.view.isDestroyed || !this.view.state.doc.eq(this.startDoc)) {
-            this.done();
-            return;
-          }
-          event.preventDefault();
-          setSelectionOrigin(this.view, "pointer");
-          let pos = this.view.posAtCoords(eventCoords(event));
-          let target = pos && selectionForTripleClick(this.view, pos.inside, false);
-          if (!target)
-            return;
-          let { doc: doc3 } = this.view.state, start = this.startSelection;
-          let [anchor, head] = target.from < start.from ? [start.to, target.from] : [start.from, target.to];
-          updateSelection(this.view, TextSelection.create(doc3, anchor, head), "pointer");
         }
       };
       handlers.touchstart = (view) => {
@@ -10871,7 +10783,7 @@ var TiptapBundle = (() => {
       editHandlers.compositionend = (view, event) => {
         if (view.composing) {
           view.input.composing = false;
-          view.input.compositionEndedAt = Date.now();
+          view.input.compositionEndedAt = event.timeStamp;
           view.input.compositionPendingChanges = view.domObserver.pendingRecords().length ? view.input.compositionID : 0;
           view.input.compositionNode = null;
           if (view.input.badSafariComposition)
@@ -10989,7 +10901,7 @@ var TiptapBundle = (() => {
       };
       handlers.beforeinput = (view, _event) => {
         let event = _event;
-        if (android && event.inputType == "deleteContentBackward") {
+        if (chrome && android && event.inputType == "deleteContentBackward") {
           view.domObserver.flushSoon();
           let { domChangeCount } = view.input;
           setTimeout(() => {
@@ -11607,17 +11519,12 @@ var TiptapBundle = (() => {
               }
             }
           }
-          if (added.some((n) => n.nodeName == "BR") && (view.input.lastKeyCode == 8 || view.input.lastKeyCode == 46 || chrome && (view.composing || view.input.compositionEndedAt > Date.now() - 50) && mutations.some((m) => m.type == "childList" && m.removedNodes.length))) {
+          if (added.some((n) => n.nodeName == "BR") && (view.input.lastKeyCode == 8 || view.input.lastKeyCode == 46)) {
             for (let node of added)
               if (node.nodeName == "BR" && node.parentNode) {
                 let after = node.nextSibling;
-                while (after && after.nodeType == 1) {
-                  if (after.contentEditable == "false") {
-                    node.parentNode.removeChild(node);
-                    break;
-                  }
-                  after = after.firstChild;
-                }
+                if (after && after.nodeType == 1 && after.contentEditable == "false")
+                  node.parentNode.removeChild(node);
               }
           } else if (gecko && added.length) {
             let brs = added.filter((n) => n.nodeName == "BR");
@@ -11710,23 +11617,6 @@ var TiptapBundle = (() => {
       };
       cssChecked = /* @__PURE__ */ new WeakMap();
       cssCheckWarned = false;
-      ruleFromNode = (added) => (dom) => {
-        let desc = dom.pmViewDesc;
-        if (desc) {
-          return desc.parseRule(added);
-        } else if (dom.nodeName == "BR" && dom.parentNode) {
-          if (safari && /^(ul|ol)$/i.test(dom.parentNode.nodeName)) {
-            let skip = document.createElement("div");
-            skip.appendChild(document.createElement("li"));
-            return { skip };
-          } else if (dom.parentNode.lastChild == dom || safari && /^(tr|table)$/i.test(dom.parentNode.nodeName)) {
-            return { ignore: true };
-          }
-        } else if (dom.nodeName == "IMG" && dom.getAttribute("mark-placeholder")) {
-          return { ignore: true };
-        }
-        return null;
-      };
       isInline = /^(a|abbr|acronym|b|bd[io]|big|br|button|cite|code|data(list)?|del|dfn|em|i|img|ins|kbd|label|map|mark|meter|output|q|ruby|s|samp|small|span|strong|su[bp]|time|u|tt|var)$/i;
       EditorView = class {
         /**
@@ -11871,8 +11761,7 @@ var TiptapBundle = (() => {
               if (chromeKludge && (!this.trackWrites || !this.dom.contains(this.trackWrites)))
                 forceSelUpdate = true;
             }
-            let mouseDown = this.input.mouseDown;
-            if (forceSelUpdate || !(mouseDown && this.domObserver.currentSelection.eq(this.domSelectionRange()) && anchorInRightPlace(this) && mouseDown.delaySelUpdate())) {
+            if (forceSelUpdate || !(this.input.mouseDown && this.domObserver.currentSelection.eq(this.domSelectionRange()) && anchorInRightPlace(this))) {
               selectionToDOM(this, forceSelUpdate);
             } else {
               syncNodeSelection(this, state.selection);
@@ -11936,11 +11825,11 @@ var TiptapBundle = (() => {
         }
         updateDraggedNode(dragging, prev) {
           let sel = dragging.node, found2 = -1;
-          if (sel.from < this.state.doc.content.size && this.state.doc.nodeAt(sel.from) == sel.node) {
+          if (this.state.doc.nodeAt(sel.from) == sel.node) {
             found2 = sel.from;
           } else {
             let movedPos = sel.from + (this.state.doc.content.size - prev.doc.content.size);
-            let moved = movedPos > 0 && movedPos < this.state.doc.content.size && this.state.doc.nodeAt(movedPos);
+            let moved = movedPos > 0 && this.state.doc.nodeAt(movedPos);
             if (moved == sel.node)
               found2 = movedPos;
           }
@@ -12419,9 +12308,7 @@ var TiptapBundle = (() => {
   function getNodeType(nameOrType, schema2) {
     if (typeof nameOrType === "string") {
       if (!schema2.nodes[nameOrType]) {
-        throw Error(
-          `There is no node type named '${nameOrType}'. Maybe you forgot to add the extension?`
-        );
+        throw Error(`There is no node type named '${nameOrType}'. Maybe you forgot to add the extension?`);
       }
       return schema2.nodes[nameOrType];
     }
@@ -12458,6 +12345,7 @@ var TiptapBundle = (() => {
     return !!findMarkInSet(marks, type, attributes);
   }
   function getMarkRange($pos, type, attributes) {
+    var _a2;
     if (!$pos || !type) {
       return;
     }
@@ -12468,12 +12356,7 @@ var TiptapBundle = (() => {
     if (!start.node || !start.node.marks.some((mark2) => mark2.type === type)) {
       return;
     }
-    if (!attributes) {
-      const firstMark = start.node.marks.find((mark2) => mark2.type === type);
-      if (firstMark) {
-        attributes = firstMark.attrs;
-      }
-    }
+    attributes = attributes || ((_a2 = start.node.marks[0]) == null ? void 0 : _a2.attrs);
     const mark = findMarkInSet([...start.node.marks], type, attributes);
     if (!mark) {
       return;
@@ -12498,9 +12381,7 @@ var TiptapBundle = (() => {
   function getMarkType(nameOrType, schema2) {
     if (typeof nameOrType === "string") {
       if (!schema2.marks[nameOrType]) {
-        throw Error(
-          `There is no mark type named '${nameOrType}'. Maybe you forgot to add the extension?`
-        );
+        throw Error(`There is no mark type named '${nameOrType}'. Maybe you forgot to add the extension?`);
       }
       return schema2.marks[nameOrType];
     }
@@ -12527,25 +12408,15 @@ var TiptapBundle = (() => {
     const minPos = selectionAtStart.from;
     const maxPos = selectionAtEnd.to;
     if (position === "all") {
-      return TextSelection.create(
-        doc3,
-        minMax(0, minPos, maxPos),
-        minMax(doc3.content.size, minPos, maxPos)
-      );
+      return TextSelection.create(doc3, minMax(0, minPos, maxPos), minMax(doc3.content.size, minPos, maxPos));
     }
-    return TextSelection.create(
-      doc3,
-      minMax(position, minPos, maxPos),
-      minMax(position, minPos, maxPos)
-    );
+    return TextSelection.create(doc3, minMax(position, minPos, maxPos), minMax(position, minPos, maxPos));
   }
   function isAndroid() {
-    return ["Android"].includes(navigator.platform) || /android/i.test(navigator.userAgent);
+    return navigator.platform === "Android" || /android/i.test(navigator.userAgent);
   }
   function isiOS() {
-    return ["iPad Simulator", "iPhone Simulator", "iPod Simulator", "iPad", "iPhone", "iPod"].includes(
-      navigator.platform
-    ) || // iPad on iOS 13 detection
+    return ["iPad Simulator", "iPhone Simulator", "iPod Simulator", "iPad", "iPhone", "iPod"].includes(navigator.platform) || // iPad on iOS 13 detection
     navigator.userAgent.includes("Mac") && "ontouchend" in document;
   }
   function isSafari() {
@@ -12553,9 +12424,7 @@ var TiptapBundle = (() => {
   }
   function elementFromString(value) {
     if (typeof window === "undefined") {
-      throw new Error(
-        "[tiptap error]: there is no window object available, so this function cannot be used"
-      );
+      throw new Error("[tiptap error]: there is no window object available, so this function cannot be used");
     }
     const wrappedValue = `<body>${value}</body>`;
     const html = new window.DOMParser().parseFromString(wrappedValue, "text/html").body;
@@ -12618,15 +12487,9 @@ var TiptapBundle = (() => {
           })
         });
         if (options.slice) {
-          DOMParser.fromSchema(contentCheckSchema).parseSlice(
-            elementFromString(content),
-            options.parseOptions
-          );
+          DOMParser.fromSchema(contentCheckSchema).parseSlice(elementFromString(content), options.parseOptions);
         } else {
-          DOMParser.fromSchema(contentCheckSchema).parse(
-            elementFromString(content),
-            options.parseOptions
-          );
+          DOMParser.fromSchema(contentCheckSchema).parse(elementFromString(content), options.parseOptions);
         }
         if (options.errorOnInvalidContent && hasInvalidContent) {
           throw new Error("[tiptap error]: Invalid HTML content", {
@@ -12659,15 +12522,6 @@ var TiptapBundle = (() => {
       }
     });
     tr2.setSelection(Selection.near(tr2.doc.resolve(end), bias));
-  }
-  function defaultBlockAt2(match2) {
-    for (let i = 0; i < match2.edgeCount; i += 1) {
-      const { type } = match2.edge(i);
-      if (type.isTextblock && !type.hasRequiredAttrs()) {
-        return type;
-      }
-    }
-    return null;
   }
   function isMacOS() {
     return typeof navigator !== "undefined" ? /Mac/.test(navigator.platform) : false;
@@ -12799,6 +12653,15 @@ var TiptapBundle = (() => {
     });
     return transform;
   }
+  function defaultBlockAt2(match2) {
+    for (let i = 0; i < match2.edgeCount; i += 1) {
+      const { type } = match2.edge(i);
+      if (type.isTextblock && !type.hasRequiredAttrs()) {
+        return type;
+      }
+    }
+    return null;
+  }
   function findChildrenInRange(node, range, predicate) {
     const nodesWithPos = [];
     node.nodesBetween(range.from, range.to, (child, pos) => {
@@ -12847,11 +12710,7 @@ var TiptapBundle = (() => {
         options: extension.options,
         storage: extension.storage
       };
-      const addExtensions = getExtensionField(
-        extension,
-        "addExtensions",
-        context
-      );
+      const addExtensions = getExtensionField(extension, "addExtensions", context);
       if (addExtensions) {
         return [extension, ...flattenExtensions(addExtensions())];
       }
@@ -12881,9 +12740,7 @@ var TiptapBundle = (() => {
     return Object.keys(value).length === 0 && value.constructor === Object;
   }
   function splitExtensions(extensions) {
-    const baseExtensions = extensions.filter(
-      (extension) => extension.type === "extension"
-    );
+    const baseExtensions = extensions.filter((extension) => extension.type === "extension");
     const nodeExtensions = extensions.filter((extension) => extension.type === "node");
     const markExtensions = extensions.filter((extension) => extension.type === "mark");
     return {
@@ -12957,7 +12814,11 @@ var TiptapBundle = (() => {
         options: extension.options,
         storage: extension.storage
       };
-      const addAttributes = getExtensionField(extension, "addAttributes", context);
+      const addAttributes = getExtensionField(
+        extension,
+        "addAttributes",
+        context
+      );
       if (!addAttributes) {
         return;
       }
@@ -12982,67 +12843,6 @@ var TiptapBundle = (() => {
     });
     return extensionAttributes;
   }
-  function splitStyleDeclarations(styles) {
-    const result = [];
-    let current = "";
-    let inSingleQuote = false;
-    let inDoubleQuote = false;
-    let parenDepth = 0;
-    const length = styles.length;
-    for (let i = 0; i < length; i += 1) {
-      const char = styles[i];
-      if (char === "'" && !inDoubleQuote) {
-        inSingleQuote = !inSingleQuote;
-        current += char;
-        continue;
-      }
-      if (char === '"' && !inSingleQuote) {
-        inDoubleQuote = !inDoubleQuote;
-        current += char;
-        continue;
-      }
-      if (!inSingleQuote && !inDoubleQuote) {
-        if (char === "(") {
-          parenDepth += 1;
-          current += char;
-          continue;
-        }
-        if (char === ")" && parenDepth > 0) {
-          parenDepth -= 1;
-          current += char;
-          continue;
-        }
-        if (char === ";" && parenDepth === 0) {
-          result.push(current);
-          current = "";
-          continue;
-        }
-      }
-      current += char;
-    }
-    if (current) {
-      result.push(current);
-    }
-    return result;
-  }
-  function parseStyleEntries(styles) {
-    const pairs = [];
-    const declarations = splitStyleDeclarations(styles || "");
-    const numDeclarations = declarations.length;
-    for (let i = 0; i < numDeclarations; i += 1) {
-      const declaration2 = declarations[i];
-      const firstColonIndex = declaration2.indexOf(":");
-      if (firstColonIndex === -1) {
-        continue;
-      }
-      const property = declaration2.slice(0, firstColonIndex).trim();
-      const value = declaration2.slice(firstColonIndex + 1).trim();
-      if (property && value) {
-        pairs.push([property, value]);
-      }
-    }
-    return pairs;
-  }
   function mergeAttributes(...objects) {
     return objects.filter((item) => !!item).reduce((items, item) => {
       const mergedAttributes = { ...items };
@@ -13055,15 +12855,20 @@ var TiptapBundle = (() => {
         if (key === "class") {
           const valueClasses = value ? String(value).split(" ") : [];
           const existingClasses = mergedAttributes[key] ? mergedAttributes[key].split(" ") : [];
-          const insertClasses = valueClasses.filter(
-            (valueClass) => !existingClasses.includes(valueClass)
-          );
+          const insertClasses = valueClasses.filter((valueClass) => !existingClasses.includes(valueClass));
           mergedAttributes[key] = [...existingClasses, ...insertClasses].join(" ");
         } else if (key === "style") {
-          const styleMap = new Map([
-            ...parseStyleEntries(mergedAttributes[key]),
-            ...parseStyleEntries(value)
-          ]);
+          const newStyles = value ? value.split(";").map((style2) => style2.trim()).filter(Boolean) : [];
+          const existingStyles = mergedAttributes[key] ? mergedAttributes[key].split(";").map((style2) => style2.trim()).filter(Boolean) : [];
+          const styleMap = /* @__PURE__ */ new Map();
+          existingStyles.forEach((style2) => {
+            const [property, val] = style2.split(":").map((part) => part.trim());
+            styleMap.set(property, val);
+          });
+          newStyles.forEach((style2) => {
+            const [property, val] = style2.split(":").map((part) => part.trim());
+            styleMap.set(property, val);
+          });
           mergedAttributes[key] = Array.from(styleMap.entries()).map(([property, val]) => `${property}: ${val}`).join("; ");
         } else {
           mergedAttributes[key] = value;
@@ -13151,9 +12956,7 @@ var TiptapBundle = (() => {
     const topNode = (_a2 = nodeExtensions.find((extension) => getExtensionField(extension, "topNode"))) == null ? void 0 : _a2.name;
     const nodes = Object.fromEntries(
       nodeExtensions.map((extension) => {
-        const extensionAttributes = allAttributes.filter(
-          (attribute2) => attribute2.type === extension.name
-        );
+        const extensionAttributes = allAttributes.filter((attribute2) => attribute2.type === extension.name);
         const context = {
           name: extension.name,
           options: extension.options,
@@ -13161,11 +12964,7 @@ var TiptapBundle = (() => {
           editor
         };
         const extraNodeFields = extensions.reduce((fields, e) => {
-          const extendNodeSchema = getExtensionField(
-            e,
-            "extendNodeSchema",
-            context
-          );
+          const extendNodeSchema = getExtensionField(e, "extendNodeSchema", context);
           return {
             ...fields,
             ...extendNodeSchema ? extendNodeSchema(extension) : {}
@@ -13173,62 +12972,36 @@ var TiptapBundle = (() => {
         }, {});
         const schema2 = cleanUpSchemaItem({
           ...extraNodeFields,
-          content: callOrReturn(
-            getExtensionField(extension, "content", context)
-          ),
+          content: callOrReturn(getExtensionField(extension, "content", context)),
           marks: callOrReturn(getExtensionField(extension, "marks", context)),
           group: callOrReturn(getExtensionField(extension, "group", context)),
           inline: callOrReturn(getExtensionField(extension, "inline", context)),
           atom: callOrReturn(getExtensionField(extension, "atom", context)),
-          selectable: callOrReturn(
-            getExtensionField(extension, "selectable", context)
-          ),
-          draggable: callOrReturn(
-            getExtensionField(extension, "draggable", context)
-          ),
+          selectable: callOrReturn(getExtensionField(extension, "selectable", context)),
+          draggable: callOrReturn(getExtensionField(extension, "draggable", context)),
           code: callOrReturn(getExtensionField(extension, "code", context)),
-          whitespace: callOrReturn(
-            getExtensionField(extension, "whitespace", context)
-          ),
+          whitespace: callOrReturn(getExtensionField(extension, "whitespace", context)),
           linebreakReplacement: callOrReturn(
-            getExtensionField(
-              extension,
-              "linebreakReplacement",
-              context
-            )
+            getExtensionField(extension, "linebreakReplacement", context)
           ),
-          defining: callOrReturn(
-            getExtensionField(extension, "defining", context)
-          ),
-          isolating: callOrReturn(
-            getExtensionField(extension, "isolating", context)
-          ),
+          defining: callOrReturn(getExtensionField(extension, "defining", context)),
+          isolating: callOrReturn(getExtensionField(extension, "isolating", context)),
           attrs: Object.fromEntries(extensionAttributes.map(buildAttributeSpec))
         });
-        const parseHTML = callOrReturn(
-          getExtensionField(extension, "parseHTML", context)
-        );
+        const parseHTML = callOrReturn(getExtensionField(extension, "parseHTML", context));
         if (parseHTML) {
           schema2.parseDOM = parseHTML.map(
             (parseRule) => injectExtensionAttributesToParseRule(parseRule, extensionAttributes)
           );
         }
-        const renderHTML = getExtensionField(
-          extension,
-          "renderHTML",
-          context
-        );
+        const renderHTML = getExtensionField(extension, "renderHTML", context);
         if (renderHTML) {
           schema2.toDOM = (node) => renderHTML({
             node,
             HTMLAttributes: getRenderedAttributes(node, extensionAttributes)
           });
         }
-        const renderText = getExtensionField(
-          extension,
-          "renderText",
-          context
-        );
+        const renderText = getExtensionField(extension, "renderText", context);
         if (renderText) {
           schema2.toText = renderText;
         }
@@ -13237,9 +13010,7 @@ var TiptapBundle = (() => {
     );
     const marks = Object.fromEntries(
       markExtensions.map((extension) => {
-        const extensionAttributes = allAttributes.filter(
-          (attribute2) => attribute2.type === extension.name
-        );
+        const extensionAttributes = allAttributes.filter((attribute2) => attribute2.type === extension.name);
         const context = {
           name: extension.name,
           options: extension.options,
@@ -13247,11 +13018,7 @@ var TiptapBundle = (() => {
           editor
         };
         const extraMarkFields = extensions.reduce((fields, e) => {
-          const extendMarkSchema = getExtensionField(
-            e,
-            "extendMarkSchema",
-            context
-          );
+          const extendMarkSchema = getExtensionField(e, "extendMarkSchema", context);
           return {
             ...fields,
             ...extendMarkSchema ? extendMarkSchema(extension) : {}
@@ -13259,32 +13026,20 @@ var TiptapBundle = (() => {
         }, {});
         const schema2 = cleanUpSchemaItem({
           ...extraMarkFields,
-          inclusive: callOrReturn(
-            getExtensionField(extension, "inclusive", context)
-          ),
-          excludes: callOrReturn(
-            getExtensionField(extension, "excludes", context)
-          ),
+          inclusive: callOrReturn(getExtensionField(extension, "inclusive", context)),
+          excludes: callOrReturn(getExtensionField(extension, "excludes", context)),
           group: callOrReturn(getExtensionField(extension, "group", context)),
-          spanning: callOrReturn(
-            getExtensionField(extension, "spanning", context)
-          ),
+          spanning: callOrReturn(getExtensionField(extension, "spanning", context)),
           code: callOrReturn(getExtensionField(extension, "code", context)),
           attrs: Object.fromEntries(extensionAttributes.map(buildAttributeSpec))
         });
-        const parseHTML = callOrReturn(
-          getExtensionField(extension, "parseHTML", context)
-        );
+        const parseHTML = callOrReturn(getExtensionField(extension, "parseHTML", context));
         if (parseHTML) {
           schema2.parseDOM = parseHTML.map(
             (parseRule) => injectExtensionAttributesToParseRule(parseRule, extensionAttributes)
           );
         }
-        const renderHTML = getExtensionField(
-          extension,
-          "renderHTML",
-          context
-        );
+        const renderHTML = getExtensionField(extension, "renderHTML", context);
         if (renderHTML) {
           schema2.toDOM = (mark) => renderHTML({
             mark,
@@ -13594,7 +13349,7 @@ var TiptapBundle = (() => {
         return true;
       }
       if (node.isText) {
-        return !/\S/.test((_a2 = node.text) != null ? _a2 : "");
+        return /^\s*$/m.test((_a2 = node.text) != null ? _a2 : "");
       }
     }
     if (node.isText) {
@@ -13669,21 +13424,518 @@ var TiptapBundle = (() => {
       state.tr.ensureMarks(filteredMarks);
     }
   }
-  function normalizeListType(type) {
-    return !type || type === "1" ? null : type;
-  }
-  function areListTypesCompatible(typeA, typeB) {
-    return normalizeListType(typeA) === normalizeListType(typeB);
-  }
-  function createInnerSelectionForWholeDocList(tr2) {
-    const doc3 = tr2.doc;
-    const list2 = doc3.firstChild;
-    if (!list2) {
-      return null;
+  function run(config2) {
+    var _a2;
+    const { editor, from: from2, to, text: text2, rules, plugin } = config2;
+    const { view } = editor;
+    if (view.composing) {
+      return false;
     }
-    const $start = doc3.resolve(1);
-    const $end = doc3.resolve(list2.nodeSize - 1);
-    return TextSelection.between($start, $end);
+    const $from = view.state.doc.resolve(from2);
+    if (
+      // check for code node
+      $from.parent.type.spec.code || // check for code mark
+      !!((_a2 = $from.nodeBefore || $from.nodeAfter) == null ? void 0 : _a2.marks.find((mark) => mark.type.spec.code))
+    ) {
+      return false;
+    }
+    let matched = false;
+    const textBefore = getTextContentFromNodes($from) + text2;
+    rules.forEach((rule) => {
+      if (matched) {
+        return;
+      }
+      const match2 = inputRuleMatcherHandler(textBefore, rule.find);
+      if (!match2) {
+        return;
+      }
+      const tr2 = view.state.tr;
+      const state = createChainableState({
+        state: view.state,
+        transaction: tr2
+      });
+      const range = {
+        from: from2 - (match2[0].length - text2.length),
+        to
+      };
+      const { commands, chain, can } = new CommandManager({
+        editor,
+        state
+      });
+      const handler = rule.handler({
+        state,
+        range,
+        match: match2,
+        commands,
+        chain,
+        can
+      });
+      if (handler === null || !tr2.steps.length) {
+        return;
+      }
+      if (rule.undoable) {
+        tr2.setMeta(plugin, {
+          transform: tr2,
+          from: from2,
+          to,
+          text: text2
+        });
+      }
+      view.dispatch(tr2);
+      matched = true;
+    });
+    return matched;
+  }
+  function inputRulesPlugin(props) {
+    const { editor, rules } = props;
+    const plugin = new Plugin({
+      state: {
+        init() {
+          return null;
+        },
+        apply(tr2, prev, state) {
+          const stored = tr2.getMeta(plugin);
+          if (stored) {
+            return stored;
+          }
+          const simulatedInputMeta = tr2.getMeta("applyInputRules");
+          const isSimulatedInput = !!simulatedInputMeta;
+          if (isSimulatedInput) {
+            setTimeout(() => {
+              let { text: text2 } = simulatedInputMeta;
+              if (typeof text2 === "string") {
+                text2 = text2;
+              } else {
+                text2 = getHTMLFromFragment(Fragment.from(text2), state.schema);
+              }
+              const { from: from2 } = simulatedInputMeta;
+              const to = from2 + text2.length;
+              run({
+                editor,
+                from: from2,
+                to,
+                text: text2,
+                rules,
+                plugin
+              });
+            });
+          }
+          return tr2.selectionSet || tr2.docChanged ? null : prev;
+        }
+      },
+      props: {
+        handleTextInput(view, from2, to, text2) {
+          return run({
+            editor,
+            from: from2,
+            to,
+            text: text2,
+            rules,
+            plugin
+          });
+        },
+        handleDOMEvents: {
+          compositionend: (view) => {
+            setTimeout(() => {
+              const { $cursor } = view.state.selection;
+              if ($cursor) {
+                run({
+                  editor,
+                  from: $cursor.pos,
+                  to: $cursor.pos,
+                  text: "",
+                  rules,
+                  plugin
+                });
+              }
+            });
+            return false;
+          }
+        },
+        // add support for input rules to trigger on enter
+        // this is useful for example for code blocks
+        handleKeyDown(view, event) {
+          if (event.key !== "Enter") {
+            return false;
+          }
+          const { $cursor } = view.state.selection;
+          if ($cursor) {
+            return run({
+              editor,
+              from: $cursor.pos,
+              to: $cursor.pos,
+              text: "\n",
+              rules,
+              plugin
+            });
+          }
+          return false;
+        }
+      },
+      // @ts-ignore
+      isInputRules: true
+    });
+    return plugin;
+  }
+  function getType(value) {
+    return Object.prototype.toString.call(value).slice(8, -1);
+  }
+  function isPlainObject(value) {
+    if (getType(value) !== "Object") {
+      return false;
+    }
+    return value.constructor === Object && Object.getPrototypeOf(value) === Object.prototype;
+  }
+  function mergeDeep(target, source) {
+    const output = { ...target };
+    if (isPlainObject(target) && isPlainObject(source)) {
+      Object.keys(source).forEach((key) => {
+        if (isPlainObject(source[key]) && isPlainObject(target[key])) {
+          output[key] = mergeDeep(target[key], source[key]);
+        } else {
+          output[key] = source[key];
+        }
+      });
+    }
+    return output;
+  }
+  function isNumber(value) {
+    return typeof value === "number";
+  }
+  function run2(config2) {
+    const { editor, state, from: from2, to, rule, pasteEvent, dropEvent } = config2;
+    const { commands, chain, can } = new CommandManager({
+      editor,
+      state
+    });
+    const handlers2 = [];
+    state.doc.nodesBetween(from2, to, (node, pos) => {
+      var _a2, _b, _c, _d, _e;
+      if (((_b = (_a2 = node.type) == null ? void 0 : _a2.spec) == null ? void 0 : _b.code) || !(node.isText || node.isTextblock || node.isInline)) {
+        return;
+      }
+      const contentSize = (_e = (_d = (_c = node.content) == null ? void 0 : _c.size) != null ? _d : node.nodeSize) != null ? _e : 0;
+      const resolvedFrom = Math.max(from2, pos);
+      const resolvedTo = Math.min(to, pos + contentSize);
+      if (resolvedFrom >= resolvedTo) {
+        return;
+      }
+      const textToMatch = node.isText ? node.text || "" : node.textBetween(resolvedFrom - pos, resolvedTo - pos, void 0, "\uFFFC");
+      const matches2 = pasteRuleMatcherHandler(textToMatch, rule.find, pasteEvent);
+      matches2.forEach((match2) => {
+        if (match2.index === void 0) {
+          return;
+        }
+        const start = resolvedFrom + match2.index + 1;
+        const end = start + match2[0].length;
+        const range = {
+          from: state.tr.mapping.map(start),
+          to: state.tr.mapping.map(end)
+        };
+        const handler = rule.handler({
+          state,
+          range,
+          match: match2,
+          commands,
+          chain,
+          can,
+          pasteEvent,
+          dropEvent
+        });
+        handlers2.push(handler);
+      });
+    });
+    const success = handlers2.every((handler) => handler !== null);
+    return success;
+  }
+  function pasteRulesPlugin(props) {
+    const { editor, rules } = props;
+    let dragSourceElement = null;
+    let isPastedFromProseMirror = false;
+    let isDroppedFromProseMirror = false;
+    let pasteEvent = typeof ClipboardEvent !== "undefined" ? new ClipboardEvent("paste") : null;
+    let dropEvent;
+    try {
+      dropEvent = typeof DragEvent !== "undefined" ? new DragEvent("drop") : null;
+    } catch {
+      dropEvent = null;
+    }
+    const processEvent = ({
+      state,
+      from: from2,
+      to,
+      rule,
+      pasteEvt
+    }) => {
+      const tr2 = state.tr;
+      const chainableState = createChainableState({
+        state,
+        transaction: tr2
+      });
+      const handler = run2({
+        editor,
+        state: chainableState,
+        from: Math.max(from2 - 1, 0),
+        to: to.b - 1,
+        rule,
+        pasteEvent: pasteEvt,
+        dropEvent
+      });
+      if (!handler || !tr2.steps.length) {
+        return;
+      }
+      try {
+        dropEvent = typeof DragEvent !== "undefined" ? new DragEvent("drop") : null;
+      } catch {
+        dropEvent = null;
+      }
+      pasteEvent = typeof ClipboardEvent !== "undefined" ? new ClipboardEvent("paste") : null;
+      return tr2;
+    };
+    const plugins = rules.map((rule) => {
+      return new Plugin({
+        // we register a global drag handler to track the current drag source element
+        view(view) {
+          const handleDragstart = (event) => {
+            var _a2;
+            dragSourceElement = ((_a2 = view.dom.parentElement) == null ? void 0 : _a2.contains(event.target)) ? view.dom.parentElement : null;
+            if (dragSourceElement) {
+              tiptapDragFromOtherEditor = editor;
+            }
+          };
+          const handleDragend = () => {
+            if (tiptapDragFromOtherEditor) {
+              tiptapDragFromOtherEditor = null;
+            }
+          };
+          window.addEventListener("dragstart", handleDragstart);
+          window.addEventListener("dragend", handleDragend);
+          return {
+            destroy() {
+              window.removeEventListener("dragstart", handleDragstart);
+              window.removeEventListener("dragend", handleDragend);
+            }
+          };
+        },
+        props: {
+          handleDOMEvents: {
+            drop: (view, event) => {
+              isDroppedFromProseMirror = dragSourceElement === view.dom.parentElement;
+              dropEvent = event;
+              if (!isDroppedFromProseMirror) {
+                const dragFromOtherEditor = tiptapDragFromOtherEditor;
+                if (dragFromOtherEditor == null ? void 0 : dragFromOtherEditor.isEditable) {
+                  setTimeout(() => {
+                    const selection = dragFromOtherEditor.state.selection;
+                    if (selection) {
+                      dragFromOtherEditor.commands.deleteRange({ from: selection.from, to: selection.to });
+                    }
+                  }, 10);
+                }
+              }
+              return false;
+            },
+            paste: (_view, event) => {
+              var _a2;
+              const html = (_a2 = event.clipboardData) == null ? void 0 : _a2.getData("text/html");
+              pasteEvent = event;
+              isPastedFromProseMirror = !!(html == null ? void 0 : html.includes("data-pm-slice"));
+              return false;
+            }
+          }
+        },
+        appendTransaction: (transactions, oldState, state) => {
+          const transaction = transactions[0];
+          const isPaste = transaction.getMeta("uiEvent") === "paste" && !isPastedFromProseMirror;
+          const isDrop = transaction.getMeta("uiEvent") === "drop" && !isDroppedFromProseMirror;
+          const simulatedPasteMeta = transaction.getMeta("applyPasteRules");
+          const isSimulatedPaste = !!simulatedPasteMeta;
+          if (!isPaste && !isDrop && !isSimulatedPaste) {
+            return;
+          }
+          if (isSimulatedPaste) {
+            let { text: text2 } = simulatedPasteMeta;
+            if (typeof text2 === "string") {
+              text2 = text2;
+            } else {
+              text2 = getHTMLFromFragment(Fragment.from(text2), state.schema);
+            }
+            const { from: from22 } = simulatedPasteMeta;
+            const to2 = from22 + text2.length;
+            const pasteEvt = createClipboardPasteEvent(text2);
+            return processEvent({
+              rule,
+              state,
+              from: from22,
+              to: { b: to2 },
+              pasteEvt
+            });
+          }
+          const from2 = oldState.doc.content.findDiffStart(state.doc.content);
+          const to = oldState.doc.content.findDiffEnd(state.doc.content);
+          if (!isNumber(from2) || !to || from2 === to.b) {
+            return;
+          }
+          return processEvent({
+            rule,
+            state,
+            from: from2,
+            to,
+            pasteEvt: pasteEvent
+          });
+        }
+      });
+    });
+    return plugins;
+  }
+  function createStyleTag(style2, nonce, suffix) {
+    const tiptapStyleTag = document.querySelector(`style[data-tiptap-style${suffix ? `-${suffix}` : ""}]`);
+    if (tiptapStyleTag !== null) {
+      return tiptapStyleTag;
+    }
+    const styleNode = document.createElement("style");
+    if (nonce) {
+      styleNode.setAttribute("nonce", nonce);
+    }
+    styleNode.setAttribute(`data-tiptap-style${suffix ? `-${suffix}` : ""}`, "");
+    styleNode.innerHTML = style2;
+    document.getElementsByTagName("head")[0].appendChild(styleNode);
+    return styleNode;
+  }
+  function markInputRule(config2) {
+    return new InputRule({
+      find: config2.find,
+      handler: ({ state, range, match: match2 }) => {
+        const attributes = callOrReturn(config2.getAttributes, void 0, match2);
+        if (attributes === false || attributes === null) {
+          return null;
+        }
+        const { tr: tr2 } = state;
+        const captureGroup = match2[match2.length - 1];
+        const fullMatch = match2[0];
+        if (captureGroup) {
+          const startSpaces = fullMatch.search(/\S/);
+          const textStart = range.from + fullMatch.indexOf(captureGroup);
+          const textEnd = textStart + captureGroup.length;
+          const excludedMarks = getMarksBetween(range.from, range.to, state.doc).filter((item) => {
+            const excluded = item.mark.type.excluded;
+            return excluded.find((type) => type === config2.type && type !== item.mark.type);
+          }).filter((item) => item.to > textStart);
+          if (excludedMarks.length) {
+            return null;
+          }
+          if (textEnd < range.to) {
+            tr2.delete(textEnd, range.to);
+          }
+          if (textStart > range.from) {
+            tr2.delete(range.from + startSpaces, textStart);
+          }
+          const markEnd = range.from + startSpaces + captureGroup.length;
+          tr2.addMark(range.from + startSpaces, markEnd, config2.type.create(attributes || {}));
+          tr2.removeStoredMark(config2.type);
+        }
+      },
+      undoable: config2.undoable
+    });
+  }
+  function nodeInputRule(config2) {
+    return new InputRule({
+      find: config2.find,
+      handler: ({ state, range, match: match2 }) => {
+        const attributes = callOrReturn(config2.getAttributes, void 0, match2) || {};
+        const { tr: tr2 } = state;
+        const start = range.from;
+        let end = range.to;
+        const newNode = config2.type.create(attributes);
+        if (match2[1]) {
+          const offset = match2[0].lastIndexOf(match2[1]);
+          let matchStart = start + offset;
+          if (matchStart > end) {
+            matchStart = end;
+          } else {
+            end = matchStart + match2[1].length;
+          }
+          const lastChar = match2[0][match2[0].length - 1];
+          tr2.insertText(lastChar, start + match2[0].length - 1);
+          tr2.replaceWith(matchStart, end, newNode);
+        } else if (match2[0]) {
+          const insertionStart = config2.type.isInline ? start : start - 1;
+          tr2.insert(insertionStart, config2.type.create(attributes)).delete(tr2.mapping.map(start), tr2.mapping.map(end));
+        }
+        tr2.scrollIntoView();
+      },
+      undoable: config2.undoable
+    });
+  }
+  function textblockTypeInputRule(config2) {
+    return new InputRule({
+      find: config2.find,
+      handler: ({ state, range, match: match2 }) => {
+        const $start = state.doc.resolve(range.from);
+        const attributes = callOrReturn(config2.getAttributes, void 0, match2) || {};
+        if (!$start.node(-1).canReplaceWith($start.index(-1), $start.indexAfter(-1), config2.type)) {
+          return null;
+        }
+        state.tr.delete(range.from, range.to).setBlockType(range.from, range.from, config2.type, attributes);
+      },
+      undoable: config2.undoable
+    });
+  }
+  function textInputRule(config2) {
+    return new InputRule({
+      find: config2.find,
+      handler: ({ state, range, match: match2 }) => {
+        let insert = config2.replace;
+        let start = range.from;
+        const end = range.to;
+        if (match2[1]) {
+          const offset = match2[0].lastIndexOf(match2[1]);
+          insert += match2[0].slice(offset + match2[1].length);
+          start += offset;
+          const cutOff = start - end;
+          if (cutOff > 0) {
+            insert = match2[0].slice(offset - cutOff, offset) + insert;
+            start = end;
+          }
+        }
+        state.tr.insertText(insert, start, end);
+      },
+      undoable: config2.undoable
+    });
+  }
+  function wrappingInputRule(config2) {
+    return new InputRule({
+      find: config2.find,
+      handler: ({ state, range, match: match2, chain }) => {
+        const attributes = callOrReturn(config2.getAttributes, void 0, match2) || {};
+        const tr2 = state.tr.delete(range.from, range.to);
+        const $start = tr2.doc.resolve(range.from);
+        const blockRange = $start.blockRange();
+        const wrapping = blockRange && findWrapping(blockRange, config2.type, attributes);
+        if (!wrapping) {
+          return null;
+        }
+        tr2.wrap(blockRange, wrapping);
+        if (config2.keepMarks && config2.editor) {
+          const { selection, storedMarks } = state;
+          const { splittableMarks } = config2.editor.extensionManager;
+          const marks = storedMarks || selection.$to.parentOffset && selection.$from.marks();
+          if (marks) {
+            const filteredMarks = marks.filter((mark) => splittableMarks.includes(mark.type.name));
+            tr2.ensureMarks(filteredMarks);
+          }
+        }
+        if (config2.keepAttributes) {
+          const nodeType = config2.type.name === "bulletList" || config2.type.name === "orderedList" ? "listItem" : "taskList";
+          chain().updateAttributes(nodeType, attributes).run();
+        }
+        const before = tr2.doc.resolve(range.from - 1).nodeBefore;
+        if (before && before.type === config2.type && canJoin(tr2.doc, range.from - 1) && (!config2.joinPredicate || config2.joinPredicate(match2, before))) {
+          tr2.join(range.from - 1);
+        }
+      },
+      undoable: config2.undoable
+    });
   }
   function canInsertNode(state, nodeType) {
     const { selection } = state;
@@ -13705,52 +13957,6 @@ var TiptapBundle = (() => {
     }
     return false;
   }
-  function createStyleTag(style2, nonce, suffix) {
-    const tiptapStyleTag = document.querySelector(`style[data-tiptap-style${suffix ? `-${suffix}` : ""}]`);
-    if (tiptapStyleTag !== null) {
-      return tiptapStyleTag;
-    }
-    const styleNode = document.createElement("style");
-    if (nonce) {
-      styleNode.setAttribute("nonce", nonce);
-    }
-    styleNode.setAttribute(`data-tiptap-style${suffix ? `-${suffix}` : ""}`, "");
-    styleNode.innerHTML = style2;
-    document.getElementsByTagName("head")[0].appendChild(styleNode);
-    return styleNode;
-  }
-  function getStyleProperty(element, propertyName) {
-    const styleAttr = element.getAttribute("style");
-    if (!styleAttr) {
-      return null;
-    }
-    const decls = styleAttr.split(";").map((decl) => decl.trim()).filter(Boolean);
-    const target = propertyName.toLowerCase();
-    for (let i = decls.length - 1; i >= 0; i -= 1) {
-      const decl = decls[i];
-      const colonIndex = decl.indexOf(":");
-      if (colonIndex === -1) {
-        continue;
-      }
-      const prop = decl.slice(0, colonIndex).trim().toLowerCase();
-      if (prop === target) {
-        return decl.slice(colonIndex + 1).trim();
-      }
-    }
-    return null;
-  }
-  function isNumber(value) {
-    return typeof value === "number";
-  }
-  function getType(value) {
-    return Object.prototype.toString.call(value).slice(8, -1);
-  }
-  function isPlainObject(value) {
-    if (getType(value) !== "Object") {
-      return false;
-    }
-    return value.constructor === Object && Object.getPrototypeOf(value) === Object.prototype;
-  }
   function parseAttributes(attrString) {
     if (!(attrString == null ? void 0 : attrString.trim())) {
       return {};
@@ -13761,12 +13967,12 @@ var TiptapBundle = (() => {
       quotedStrings.push(match2);
       return `__QUOTED_${quotedStrings.length - 1}__`;
     });
-    const classMatches = tempString.match(/(?:^|\s)\.([\w-]+)/g);
+    const classMatches = tempString.match(/(?:^|\s)\.([a-zA-Z][\w-]*)/g);
     if (classMatches) {
       const classes = classMatches.map((match2) => match2.trim().slice(1));
       attributes.class = classes.join(" ");
     }
-    const idMatch = tempString.match(/(?:^|\s)#([\w-]+)/);
+    const idMatch = tempString.match(/(?:^|\s)#([a-zA-Z][\w-]*)/);
     if (idMatch) {
       attributes.id = idMatch[1];
     }
@@ -13780,7 +13986,7 @@ var TiptapBundle = (() => {
         attributes[key] = quotedValue.slice(1, -1);
       }
     });
-    const cleanString = tempString.replace(/(?:^|\s)\.([\w-]+)/g, "").replace(/(?:^|\s)#([\w-]+)/g, "").replace(/([a-zA-Z][\w-]*)\s*=\s*__QUOTED_\d+__/g, "").trim();
+    const cleanString = tempString.replace(/(?:^|\s)\.([a-zA-Z][\w-]*)/g, "").replace(/(?:^|\s)#([a-zA-Z][\w-]*)/g, "").replace(/([a-zA-Z][\w-]*)\s*=\s*__QUOTED_\d+__/g, "").trim();
     if (cleanString) {
       const booleanAttrs = cleanString.split(/\s+/).filter(Boolean);
       booleanAttrs.forEach((attr) => {
@@ -14076,9 +14282,7 @@ ${renderedContent}
           return index !== void 0 ? index : -1;
         },
         tokenize(src, _tokens, _lexer) {
-          const tokenPattern = selfClosing ? new RegExp(`^\\[${escapedShortcode}\\s*([^\\]]*)\\]`) : new RegExp(
-            `^\\[${escapedShortcode}\\s*([^\\]]*)\\]([\\s\\S]*?)\\[\\/${escapedShortcode}\\]`
-          );
+          const tokenPattern = selfClosing ? new RegExp(`^\\[${escapedShortcode}\\s*([^\\]]*)\\]`) : new RegExp(`^\\[${escapedShortcode}\\s*([^\\]]*)\\]([\\s\\S]*?)\\[\\/${escapedShortcode}\\]`);
           const match2 = src.match(tokenPattern);
           if (!match2) {
             return void 0;
@@ -14206,34 +14410,17 @@ ${renderedContent}
     const prefix = typeof prefixOrGenerator === "function" ? prefixOrGenerator(ctx) : prefixOrGenerator;
     const [content, ...children] = node.content;
     const mainContent = h2.renderChildren([content]);
-    let output = `${prefix}${mainContent}`;
+    const output = [`${prefix}${mainContent}`];
     if (children && children.length > 0) {
-      children.forEach((child, index) => {
-        var _a2, _b;
-        const childContent = (_b = (_a2 = h2.renderChild) == null ? void 0 : _a2.call(h2, child, index + 1)) != null ? _b : h2.renderChildren([child]);
-        if (childContent !== void 0 && childContent !== null) {
-          const indentedChild = childContent.split("\n").map((line) => line ? h2.indent(line) : h2.indent("")).join("\n");
-          output += child.type === "paragraph" ? `
-
-${indentedChild}` : `
-${indentedChild}`;
+      children.forEach((child) => {
+        const childContent = h2.renderChildren([child]);
+        if (childContent) {
+          const indentedChild = childContent.split("\n").map((line) => line ? h2.indent(line) : "").join("\n");
+          output.push(indentedChild);
         }
       });
     }
-    return output;
-  }
-  function mergeDeep(target, source) {
-    const output = { ...target };
-    if (isPlainObject(target) && isPlainObject(source)) {
-      Object.keys(source).forEach((key) => {
-        if (isPlainObject(source[key]) && isPlainObject(target[key])) {
-          output[key] = mergeDeep(target[key], source[key]);
-        } else {
-          output[key] = source[key];
-        }
-      });
-    }
-    return output;
+    return output.join("\n");
   }
   function updateMarkViewAttributes(checkMark, editor, attrs2 = {}) {
     const { state } = editor;
@@ -14271,493 +14458,6 @@ ${indentedChild}`;
       editor.view.dispatch(tr2);
     }
   }
-  function run(config2) {
-    var _a2;
-    const { editor, from: from2, to, text: text2, rules, plugin } = config2;
-    const { view } = editor;
-    if (view.composing) {
-      return false;
-    }
-    const $from = view.state.doc.resolve(from2);
-    if (
-      // check for code node
-      $from.parent.type.spec.code || // check for code mark
-      !!((_a2 = $from.nodeBefore || $from.nodeAfter) == null ? void 0 : _a2.marks.find((mark) => mark.type.spec.code))
-    ) {
-      return false;
-    }
-    let matched = false;
-    const textBefore = getTextContentFromNodes($from) + text2;
-    rules.forEach((rule) => {
-      if (matched) {
-        return;
-      }
-      const match2 = inputRuleMatcherHandler(textBefore, rule.find);
-      if (!match2) {
-        return;
-      }
-      const matchedDocLength = match2[0].length - text2.length;
-      if (matchedDocLength > 0) {
-        const matchStartOffset = $from.parentOffset - matchedDocLength;
-        if (matchStartOffset < 0 || $from.parent.textBetween(matchStartOffset, $from.parentOffset) !== match2[0].slice(0, matchedDocLength)) {
-          return;
-        }
-      }
-      const tr2 = view.state.tr;
-      const state = createChainableState({
-        state: view.state,
-        transaction: tr2
-      });
-      const range = {
-        from: from2 - (match2[0].length - text2.length),
-        to
-      };
-      const { commands, chain, can } = new CommandManager({
-        editor,
-        state
-      });
-      const handler = rule.handler({
-        state,
-        range,
-        match: match2,
-        commands,
-        chain,
-        can
-      });
-      if (handler === null || !tr2.steps.length) {
-        return;
-      }
-      if (rule.undoable) {
-        tr2.setMeta(plugin, {
-          transform: tr2,
-          from: from2,
-          to,
-          text: text2
-        });
-      }
-      view.dispatch(tr2);
-      matched = true;
-    });
-    return matched;
-  }
-  function inputRulesPlugin(props) {
-    const { editor, rules } = props;
-    const plugin = new Plugin({
-      state: {
-        init() {
-          return null;
-        },
-        apply(tr2, prev, state) {
-          const stored = tr2.getMeta(plugin);
-          if (stored) {
-            return stored;
-          }
-          const simulatedInputMeta = tr2.getMeta("applyInputRules");
-          const isSimulatedInput = !!simulatedInputMeta;
-          if (isSimulatedInput) {
-            setTimeout(() => {
-              let { text: text2 } = simulatedInputMeta;
-              if (typeof text2 === "string") {
-                text2 = text2;
-              } else {
-                text2 = getHTMLFromFragment(Fragment.from(text2), state.schema);
-              }
-              const { from: from2 } = simulatedInputMeta;
-              const to = from2 + text2.length;
-              run({
-                editor,
-                from: from2,
-                to,
-                text: text2,
-                rules,
-                plugin
-              });
-            });
-          }
-          return tr2.selectionSet || tr2.docChanged ? null : prev;
-        }
-      },
-      props: {
-        handleTextInput(view, from2, to, text2) {
-          return run({
-            editor,
-            from: from2,
-            to,
-            text: text2,
-            rules,
-            plugin
-          });
-        },
-        handleDOMEvents: {
-          compositionend: (view) => {
-            setTimeout(() => {
-              const { $cursor } = view.state.selection;
-              if ($cursor) {
-                run({
-                  editor,
-                  from: $cursor.pos,
-                  to: $cursor.pos,
-                  text: "",
-                  rules,
-                  plugin
-                });
-              }
-            });
-            return false;
-          }
-        },
-        // add support for input rules to trigger on enter
-        // this is useful for example for code blocks
-        handleKeyDown(view, event) {
-          if (event.key !== "Enter") {
-            return false;
-          }
-          const { $cursor } = view.state.selection;
-          if ($cursor) {
-            return run({
-              editor,
-              from: $cursor.pos,
-              to: $cursor.pos,
-              text: "\n",
-              rules,
-              plugin
-            });
-          }
-          return false;
-        }
-      },
-      // @ts-ignore
-      isInputRules: true
-    });
-    return plugin;
-  }
-  function run2(config2) {
-    const { editor, state, from: from2, to, rule, pasteEvent, dropEvent } = config2;
-    const { commands, chain, can } = new CommandManager({
-      editor,
-      state
-    });
-    const handlers2 = [];
-    state.doc.nodesBetween(from2, to, (node, pos) => {
-      var _a2, _b, _c, _d, _e;
-      if (((_b = (_a2 = node.type) == null ? void 0 : _a2.spec) == null ? void 0 : _b.code) || !(node.isText || node.isTextblock || node.isInline)) {
-        return;
-      }
-      const contentSize = (_e = (_d = (_c = node.content) == null ? void 0 : _c.size) != null ? _d : node.nodeSize) != null ? _e : 0;
-      const resolvedFrom = Math.max(from2, pos);
-      const resolvedTo = Math.min(to, pos + contentSize);
-      if (resolvedFrom >= resolvedTo) {
-        return;
-      }
-      const textToMatch = node.isText ? node.text || "" : node.textBetween(resolvedFrom - pos, resolvedTo - pos, void 0, "\uFFFC");
-      const matches2 = pasteRuleMatcherHandler(textToMatch, rule.find, pasteEvent);
-      matches2.forEach((match2) => {
-        if (match2.index === void 0) {
-          return;
-        }
-        const start = resolvedFrom + match2.index + 1;
-        const end = start + match2[0].length;
-        const range = {
-          from: state.tr.mapping.map(start),
-          to: state.tr.mapping.map(end)
-        };
-        const handler = rule.handler({
-          state,
-          range,
-          match: match2,
-          commands,
-          chain,
-          can,
-          pasteEvent,
-          dropEvent
-        });
-        handlers2.push(handler);
-      });
-    });
-    const success = handlers2.every((handler) => handler !== null);
-    return success;
-  }
-  function pasteRulesPlugin(props) {
-    const { editor, rules } = props;
-    let dragSourceElement = null;
-    let isPastedFromProseMirror = false;
-    let isDroppedFromProseMirror = false;
-    let pasteEvent = typeof ClipboardEvent !== "undefined" ? new ClipboardEvent("paste") : null;
-    let dropEvent;
-    try {
-      dropEvent = typeof DragEvent !== "undefined" ? new DragEvent("drop") : null;
-    } catch {
-      dropEvent = null;
-    }
-    const processEvent = ({
-      state,
-      from: from2,
-      to,
-      rule,
-      pasteEvt
-    }) => {
-      const tr2 = state.tr;
-      const chainableState = createChainableState({
-        state,
-        transaction: tr2
-      });
-      const handler = run2({
-        editor,
-        state: chainableState,
-        from: Math.max(from2 - 1, 0),
-        to: to.b - 1,
-        rule,
-        pasteEvent: pasteEvt,
-        dropEvent
-      });
-      if (!handler || !tr2.steps.length) {
-        return;
-      }
-      try {
-        dropEvent = typeof DragEvent !== "undefined" ? new DragEvent("drop") : null;
-      } catch {
-        dropEvent = null;
-      }
-      pasteEvent = typeof ClipboardEvent !== "undefined" ? new ClipboardEvent("paste") : null;
-      return tr2;
-    };
-    const plugins = rules.map((rule) => {
-      return new Plugin({
-        // we register a global drag handler to track the current drag source element
-        view(view) {
-          const handleDragstart = (event) => {
-            var _a2;
-            dragSourceElement = ((_a2 = view.dom.parentElement) == null ? void 0 : _a2.contains(event.target)) ? view.dom.parentElement : null;
-            if (dragSourceElement) {
-              tiptapDragFromOtherEditor = editor;
-            }
-          };
-          const handleDragend = () => {
-            if (tiptapDragFromOtherEditor) {
-              tiptapDragFromOtherEditor = null;
-            }
-          };
-          window.addEventListener("dragstart", handleDragstart);
-          window.addEventListener("dragend", handleDragend);
-          return {
-            destroy() {
-              window.removeEventListener("dragstart", handleDragstart);
-              window.removeEventListener("dragend", handleDragend);
-            }
-          };
-        },
-        props: {
-          handleDOMEvents: {
-            drop: (view, event) => {
-              isDroppedFromProseMirror = dragSourceElement === view.dom.parentElement;
-              dropEvent = event;
-              if (!isDroppedFromProseMirror) {
-                const dragFromOtherEditor = tiptapDragFromOtherEditor;
-                if (dragFromOtherEditor == null ? void 0 : dragFromOtherEditor.isEditable) {
-                  setTimeout(() => {
-                    const selection = dragFromOtherEditor.state.selection;
-                    if (selection) {
-                      dragFromOtherEditor.commands.deleteRange({
-                        from: selection.from,
-                        to: selection.to
-                      });
-                    }
-                  }, 10);
-                }
-              }
-              return false;
-            },
-            paste: (_view, event) => {
-              var _a2;
-              const html = (_a2 = event.clipboardData) == null ? void 0 : _a2.getData("text/html");
-              pasteEvent = event;
-              isPastedFromProseMirror = !!(html == null ? void 0 : html.includes("data-pm-slice"));
-              return false;
-            }
-          }
-        },
-        appendTransaction: (transactions, oldState, state) => {
-          const transaction = transactions[0];
-          const isPaste = transaction.getMeta("uiEvent") === "paste" && !isPastedFromProseMirror;
-          const isDrop = transaction.getMeta("uiEvent") === "drop" && !isDroppedFromProseMirror;
-          const simulatedPasteMeta = transaction.getMeta("applyPasteRules");
-          const isSimulatedPaste = !!simulatedPasteMeta;
-          if (!isPaste && !isDrop && !isSimulatedPaste) {
-            return;
-          }
-          if (isSimulatedPaste) {
-            let { text: text2 } = simulatedPasteMeta;
-            if (typeof text2 === "string") {
-              text2 = text2;
-            } else {
-              text2 = getHTMLFromFragment(Fragment.from(text2), state.schema);
-            }
-            const { from: from22 } = simulatedPasteMeta;
-            const to2 = from22 + text2.length;
-            const pasteEvt = createClipboardPasteEvent(text2);
-            return processEvent({
-              rule,
-              state,
-              from: from22,
-              to: { b: to2 },
-              pasteEvt
-            });
-          }
-          const from2 = oldState.doc.content.findDiffStart(state.doc.content);
-          const to = oldState.doc.content.findDiffEnd(state.doc.content);
-          if (!isNumber(from2) || !to || from2 === to.b) {
-            return;
-          }
-          return processEvent({
-            rule,
-            state,
-            from: from2,
-            to,
-            pasteEvt: pasteEvent
-          });
-        }
-      });
-    });
-    return plugins;
-  }
-  function markInputRule(config2) {
-    return new InputRule({
-      find: config2.find,
-      handler: ({ state, range, match: match2 }) => {
-        const attributes = callOrReturn(config2.getAttributes, void 0, match2);
-        if (attributes === false || attributes === null) {
-          return null;
-        }
-        const { tr: tr2 } = state;
-        const captureGroup = match2[match2.length - 1];
-        const fullMatch = match2[0];
-        if (captureGroup) {
-          const startSpaces = fullMatch.search(/\S/);
-          const textStart = range.from + fullMatch.indexOf(captureGroup);
-          const textEnd = textStart + captureGroup.length;
-          const excludedMarks = getMarksBetween(range.from, range.to, state.doc).filter((item) => {
-            const excluded = item.mark.type.excluded;
-            return excluded.find((type) => type === config2.type && type !== item.mark.type);
-          }).filter((item) => item.to > textStart);
-          if (excludedMarks.length) {
-            return null;
-          }
-          if (textEnd < range.to) {
-            tr2.delete(textEnd, range.to);
-          }
-          if (textStart > range.from) {
-            tr2.delete(range.from + startSpaces, textStart);
-          }
-          const markEnd = range.from + startSpaces + captureGroup.length;
-          tr2.addMark(range.from + startSpaces, markEnd, config2.type.create(attributes || {}));
-          tr2.removeStoredMark(config2.type);
-        }
-      },
-      undoable: config2.undoable
-    });
-  }
-  function nodeInputRule(config2) {
-    return new InputRule({
-      find: config2.find,
-      handler: ({ state, range, match: match2 }) => {
-        const attributes = callOrReturn(config2.getAttributes, void 0, match2) || {};
-        const { tr: tr2 } = state;
-        const start = range.from;
-        let end = range.to;
-        const newNode = config2.type.create(attributes);
-        if (match2[1]) {
-          const offset = match2[0].lastIndexOf(match2[1]);
-          let matchStart = start + offset;
-          if (matchStart > end) {
-            matchStart = end;
-          } else {
-            end = matchStart + match2[1].length;
-          }
-          const lastChar = match2[0][match2[0].length - 1];
-          tr2.insertText(lastChar, start + match2[0].length - 1);
-          tr2.replaceWith(matchStart, end, newNode);
-        } else if (match2[0]) {
-          const insertionStart = config2.type.isInline ? start : start - 1;
-          tr2.insert(insertionStart, config2.type.create(attributes)).delete(
-            tr2.mapping.map(start),
-            tr2.mapping.map(end)
-          );
-        }
-        tr2.scrollIntoView();
-      },
-      undoable: config2.undoable
-    });
-  }
-  function textblockTypeInputRule(config2) {
-    return new InputRule({
-      find: config2.find,
-      handler: ({ state, range, match: match2 }) => {
-        const $start = state.doc.resolve(range.from);
-        const attributes = callOrReturn(config2.getAttributes, void 0, match2) || {};
-        if (!$start.node(-1).canReplaceWith($start.index(-1), $start.indexAfter(-1), config2.type)) {
-          return null;
-        }
-        state.tr.delete(range.from, range.to).setBlockType(range.from, range.from, config2.type, attributes);
-      },
-      undoable: config2.undoable
-    });
-  }
-  function textInputRule(config2) {
-    return new InputRule({
-      find: config2.find,
-      handler: ({ state, range, match: match2 }) => {
-        let insert = config2.replace;
-        let start = range.from;
-        const end = range.to;
-        if (match2[1]) {
-          const offset = match2[0].lastIndexOf(match2[1]);
-          insert += match2[0].slice(offset + match2[1].length);
-          start += offset;
-          const cutOff = start - end;
-          if (cutOff > 0) {
-            insert = match2[0].slice(offset - cutOff, offset) + insert;
-            start = end;
-          }
-        }
-        state.tr.insertText(insert, start, end);
-      },
-      undoable: config2.undoable
-    });
-  }
-  function wrappingInputRule(config2) {
-    return new InputRule({
-      find: config2.find,
-      handler: ({ state, range, match: match2, chain }) => {
-        const attributes = callOrReturn(config2.getAttributes, void 0, match2) || {};
-        const tr2 = state.tr.delete(range.from, range.to);
-        const $start = tr2.doc.resolve(range.from);
-        const blockRange = $start.blockRange();
-        const wrapping = blockRange && findWrapping(blockRange, config2.type, attributes);
-        if (!wrapping) {
-          return null;
-        }
-        tr2.wrap(blockRange, wrapping);
-        if (config2.keepMarks && config2.editor) {
-          const { selection, storedMarks } = state;
-          const { splittableMarks } = config2.editor.extensionManager;
-          const marks = storedMarks || selection.$to.parentOffset && selection.$from.marks();
-          if (marks) {
-            const filteredMarks = marks.filter((mark) => splittableMarks.includes(mark.type.name));
-            tr2.ensureMarks(filteredMarks);
-          }
-        }
-        if (config2.keepAttributes) {
-          const nodeType = config2.type.name === "bulletList" || config2.type.name === "orderedList" ? "listItem" : "taskList";
-          chain().updateAttributes(nodeType, attributes).run();
-        }
-        const before = tr2.doc.resolve(range.from - 1).nodeBefore;
-        if (before && before.type === config2.type && canJoin(tr2.doc, range.from - 1) && (!config2.joinPredicate || config2.joinPredicate(match2, before))) {
-          tr2.join(range.from - 1);
-        }
-      },
-      undoable: config2.undoable
-    });
-  }
   function markPasteRule(config2) {
     return new PasteRule({
       find: config2.find,
@@ -14789,21 +14489,18 @@ ${indentedChild}`;
           }
           markEnd = range.from + startSpaces + captureGroup.length;
           tr2.addMark(range.from + startSpaces, markEnd, config2.type.create(attributes || {}));
-          const isMatchAtEndOfText = match2.index !== void 0 && match2.input !== void 0 && match2.index + match2[0].length >= match2.input.length;
-          if (!isMatchAtEndOfText) {
-            tr2.removeStoredMark(config2.type);
-          }
+          tr2.removeStoredMark(config2.type);
         }
       }
     });
   }
-  var __defProp2, __export2, CommandManager, commands_exports, blur, clearContent, clearNodes, command, createParagraphNear2, cut, deleteCurrentNode, deleteNode, deleteRange2, hasTextContent, expandSelectionForSide, expandSelectionForInlineText, deleteSelection2, enter, exitCode2, extendMarkRange, first, focus, forEach, insertContent, removeWhitespaces, isFragment, insertContentAt, insertDefaultBlock, joinUp2, joinDown2, joinBackward2, joinForward2, joinItemBackward, joinItemForward, joinTextblockBackward2, joinTextblockForward2, keyboardShortcut, lift3, liftEmptyBlock2, liftListItem2, newlineInCode2, resetAttributes, scrollIntoView, selectAll2, selectNodeBackward2, selectNodeForward2, selectParentNode2, selectTextblockEnd2, selectTextblockStart2, setContent, getNodeAtPosition, getTextContentFromNodes, isAtEndOfNode, isAtStartOfNode, MappablePosition, setMark, setMeta, setNode, setNodeSelection, setTextDirection, setTextSelection, sinkListItem2, splitBlock2, splitListItem, joinListBackwards, joinListForwards, toggleList, toggleMark, toggleNode, toggleWrap, undoInputRule, unsetAllMarks, unsetMark, unsetTextDirection, updateAttributes, wrapIn2, wrapInList2, EventEmitter, markdown_exports, InputRule, inputRuleMatcherHandler, Extendable, Mark2, PasteRule, pasteRuleMatcherHandler, tiptapDragFromOtherEditor, createClipboardPasteEvent, ExtensionManager, extensions_exports, Extension, ClipboardTextSerializer, Commands, Delete, Drop, Editable, focusEventsPluginKey, FocusEvents, Keymap, Paste, Tabindex, TextDirection, NodePos, style, Editor, Node3;
+  var __defProp2, __export2, CommandManager, commands_exports, blur, clearContent, clearNodes, command, createParagraphNear2, cut, deleteCurrentNode, deleteNode, deleteRange2, deleteSelection2, enter, exitCode2, extendMarkRange, first, focus, forEach, insertContent, removeWhitespaces, isFragment, insertContentAt, joinUp2, joinDown2, joinBackward2, joinForward2, joinItemBackward, joinItemForward, joinTextblockBackward2, joinTextblockForward2, keyboardShortcut, lift3, liftEmptyBlock2, liftListItem2, newlineInCode2, resetAttributes, scrollIntoView, selectAll2, selectNodeBackward2, selectNodeForward2, selectParentNode2, selectTextblockEnd2, selectTextblockStart2, setContent, getNodeAtPosition, getTextContentFromNodes, isAtEndOfNode, isAtStartOfNode, MappablePosition, setMark, setMeta, setNode, setNodeSelection, setTextDirection, setTextSelection, sinkListItem2, splitBlock2, splitListItem, joinListBackwards, joinListForwards, toggleList, toggleMark, toggleNode, toggleWrap, undoInputRule, unsetAllMarks, unsetMark, unsetTextDirection, updateAttributes, wrapIn2, wrapInList2, EventEmitter, InputRule, inputRuleMatcherHandler, Extendable, Mark2, PasteRule, pasteRuleMatcherHandler, tiptapDragFromOtherEditor, createClipboardPasteEvent, ExtensionManager, extensions_exports, Extension, ClipboardTextSerializer, Commands, Delete, Drop, Editable, focusEventsPluginKey, FocusEvents, Keymap, Paste, Tabindex, TextDirection, NodePos, style, Editor, markdown_exports, Node3;
   var init_dist9 = __esm({
     "node_modules/@tiptap/core/dist/index.js"() {
       init_transform();
       init_commands();
       init_state();
-      init_state();
+      init_commands();
       init_commands();
       init_state();
       init_state();
@@ -14843,14 +14540,12 @@ ${indentedChild}`;
       init_model();
       init_state();
       init_transform();
-      init_state();
       init_transform();
       init_commands();
       init_schema_list();
       init_state();
       init_view();
       init_keymap();
-      init_state();
       init_model();
       init_state();
       init_model();
@@ -14865,6 +14560,7 @@ ${indentedChild}`;
       init_state();
       init_state();
       init_transform();
+      init_state();
       init_state();
       __defProp2 = Object.defineProperty;
       __export2 = (target, all) => {
@@ -14995,7 +14691,6 @@ ${indentedChild}`;
         forEach: () => forEach,
         insertContent: () => insertContent,
         insertContentAt: () => insertContentAt,
-        insertDefaultBlock: () => insertDefaultBlock,
         joinBackward: () => joinBackward2,
         joinDown: () => joinDown2,
         joinForward: () => joinForward2,
@@ -15141,53 +14836,8 @@ ${indentedChild}`;
         }
         return true;
       };
-      hasTextContent = (nodeSpec) => {
-        if (!nodeSpec.content) {
-          return false;
-        }
-        const textRegex = /^text(\*|\+)/;
-        return textRegex.test(nodeSpec.content);
-      };
-      expandSelectionForSide = ($pos, schema2, side) => {
-        if (!$pos.parent.isInline) {
-          return $pos.pos;
-        }
-        if (side === "left" && $pos.pos > $pos.start() || side === "right" && $pos.pos < $pos.end()) {
-          return $pos.pos;
-        }
-        const parentContent = schema2.nodes[$pos.parent.type.name].spec;
-        if (!hasTextContent(parentContent)) {
-          return $pos.pos;
-        }
-        return side === "left" ? $pos.start() - 1 : $pos.end() + 1;
-      };
-      expandSelectionForInlineText = ($from, $to, schema2) => {
-        const from2 = expandSelectionForSide($from, schema2, "left");
-        const to = expandSelectionForSide($to, schema2, "right");
-        return { from: from2, to };
-      };
       deleteSelection2 = () => ({ state, dispatch }) => {
-        if (state.selection.empty) {
-          return false;
-        }
-        if (dispatch) {
-          const tr2 = state.tr;
-          const { ranges } = state.selection;
-          const mapFrom = tr2.steps.length;
-          ranges.forEach((range) => {
-            const mapping = tr2.mapping.slice(mapFrom);
-            const $from = tr2.doc.resolve(mapping.map(range.$from.pos));
-            const $to = tr2.doc.resolve(mapping.map(range.$to.pos));
-            const { from: from2, to } = expandSelectionForInlineText($from, $to, state.schema);
-            tr2.deleteRange(from2, to);
-          });
-          if (!tr2.selection.empty) {
-            tr2.setSelection(TextSelection.near(tr2.doc.resolve(tr2.selection.from)));
-          }
-          tr2.scrollIntoView();
-          dispatch(tr2);
-        }
-        return true;
+        return deleteSelection(state, dispatch);
       };
       enter = () => ({ commands }) => {
         return commands.keyboardShortcut("Enter");
@@ -15195,7 +14845,7 @@ ${indentedChild}`;
       exitCode2 = () => ({ state, dispatch }) => {
         return exitCode(state, dispatch);
       };
-      extendMarkRange = (typeOrName, attributes) => ({ tr: tr2, state, dispatch }) => {
+      extendMarkRange = (typeOrName, attributes = {}) => ({ tr: tr2, state, dispatch }) => {
         const type = getMarkType(typeOrName, state.schema);
         const { doc: doc3, selection } = tr2;
         const { $from, from: from2, to } = selection;
@@ -15268,11 +14918,7 @@ ${indentedChild}`;
         return items.every((item, index) => fn(item, { ...props, index }));
       };
       insertContent = (value, options) => ({ tr: tr2, commands }) => {
-        return commands.insertContentAt(
-          { from: tr2.selection.from, to: tr2.selection.to },
-          value,
-          options
-        );
+        return commands.insertContentAt({ from: tr2.selection.from, to: tr2.selection.to }, value, options);
       };
       removeWhitespaces = (node) => {
         const children = node.childNodes;
@@ -15377,7 +15023,7 @@ ${indentedChild}`;
             const fromSelectionAtStart = $from.parentOffset === 0;
             const isTextSelection2 = $fromNode.isText || $fromNode.isTextblock;
             const hasContent = $fromNode.content.size > 0;
-            if (fromSelectionAtStart && isTextSelection2 && hasContent && isOnlyBlockContent) {
+            if (fromSelectionAtStart && isTextSelection2 && hasContent) {
               from2 = Math.max(0, from2 - 1);
             }
             tr2.replaceWith(from2, to, newContent);
@@ -15390,40 +15036,6 @@ ${indentedChild}`;
           }
           if (options.applyPasteRules) {
             tr2.setMeta("applyPasteRules", { from: from2, text: newContent });
-          }
-        }
-        return true;
-      };
-      insertDefaultBlock = (options = {}) => ({ tr: tr2, dispatch, editor }) => {
-        const { pos, attrs: attrs2, content, updateSelection: updateSelection2 = true } = options;
-        let $pos;
-        if (typeof pos === "number") {
-          $pos = tr2.doc.resolve(pos);
-        } else if (pos) {
-          $pos = pos;
-        } else {
-          $pos = tr2.selection.$from;
-        }
-        const defaultType = defaultBlockAt2($pos.parent.contentMatchAt($pos.index()));
-        if (!defaultType) {
-          return false;
-        }
-        const validAttrKeys = Object.keys(defaultType.spec.attrs || {});
-        const filteredAttrs = attrs2 ? Object.fromEntries(Object.entries(attrs2).filter(([key]) => validAttrKeys.includes(key))) : {};
-        let node;
-        if (content) {
-          const parsed = createNodeFromContent(content, editor.schema);
-          node = defaultType.createAndFill(filteredAttrs, parsed);
-        } else {
-          node = defaultType.createAndFill(filteredAttrs);
-        }
-        if (!node) {
-          return false;
-        }
-        if (dispatch) {
-          tr2.insert($pos.pos, node);
-          if (updateSelection2) {
-            selectionToInsertionEnd2(tr2, tr2.steps.length - 1, -1);
           }
         }
         return true;
@@ -15547,11 +15159,7 @@ ${indentedChild}`;
                 if (markType === mark.type) {
                   canReset = true;
                   if (dispatch) {
-                    tr2.addMark(
-                      pos,
-                      pos + node.nodeSize,
-                      markType.create(deleteProps(mark.attrs, attributes))
-                    );
+                    tr2.addMark(pos, pos + node.nodeSize, markType.create(deleteProps(mark.attrs, attributes)));
                   }
                 }
               });
@@ -15624,20 +15232,16 @@ ${indentedChild}`;
       getTextContentFromNodes = ($from, maxMatch = 500) => {
         let textBefore = "";
         const sliceEndPos = $from.parentOffset;
-        $from.parent.nodesBetween(
-          Math.max(0, sliceEndPos - maxMatch),
-          sliceEndPos,
-          (node, pos, parent, index) => {
-            var _a2, _b;
-            const chunk = ((_b = (_a2 = node.type.spec).toText) == null ? void 0 : _b.call(_a2, {
-              node,
-              pos,
-              parent,
-              index
-            })) || node.textContent || "%leaf%";
-            textBefore += node.isAtom && !node.isText ? chunk : chunk.slice(0, Math.max(0, sliceEndPos - pos));
-          }
-        );
+        $from.parent.nodesBetween(Math.max(0, sliceEndPos - maxMatch), sliceEndPos, (node, pos, parent, index) => {
+          var _a2, _b;
+          const chunk = ((_b = (_a2 = node.type.spec).toText) == null ? void 0 : _b.call(_a2, {
+            node,
+            pos,
+            parent,
+            index
+          })) || node.textContent || "%leaf%";
+          textBefore += node.isAtom && !node.isText ? chunk : chunk.slice(0, Math.max(0, sliceEndPos - pos));
+        });
         return textBefore;
       };
       isAtEndOfNode = (state, nodeType) => {
@@ -15808,11 +15412,7 @@ ${indentedChild}`;
         const { selection, doc: doc3 } = tr2;
         const { $from, $to } = selection;
         const extensionAttributes = editor.extensionManager.attributes;
-        const newAttributes = getSplittedAttributes(
-          extensionAttributes,
-          $from.node().type.name,
-          $from.node().attrs
-        );
+        const newAttributes = getSplittedAttributes(extensionAttributes, $from.node().type.name, $from.node().attrs);
         if (selection instanceof NodeSelection && selection.node.isBlock) {
           if (!$from.parentOffset || !canSplit(doc3, $from.pos)) {
             return false;
@@ -15891,7 +15491,7 @@ ${indentedChild}`;
               wrap2 = Fragment.from($from.node(d).copy(wrap2));
             }
             const depthAfter = (
-              // oxlint-disable-next-line no-nested-ternary
+              // eslint-disable-next-line no-nested-ternary
               $from.indexAfter(-1) < $from.node(-2).childCount ? 1 : $from.indexAfter(-2) < $from.node(-3).childCount ? 2 : 3
             );
             const newNextTypeAttributes2 = {
@@ -15962,9 +15562,6 @@ ${indentedChild}`;
         if (!canJoinBackwards) {
           return true;
         }
-        if (!areListTypesCompatible(list2.node.attrs.type, nodeBefore == null ? void 0 : nodeBefore.attrs.type)) {
-          return true;
-        }
         tr2.join(list2.pos);
         return true;
       };
@@ -15982,9 +15579,6 @@ ${indentedChild}`;
         if (!canJoinForwards) {
           return true;
         }
-        if (!areListTypesCompatible(list2.node.attrs.type, nodeAfter == null ? void 0 : nodeAfter.attrs.type)) {
-          return true;
-        }
         tr2.join(after);
         return true;
       };
@@ -16000,37 +15594,13 @@ ${indentedChild}`;
           return false;
         }
         const parentList = findParentNode((node) => isList(node.type.name, extensions))(selection);
-        const isAllSelection = selection.from === 0 && selection.to === state.doc.content.size;
-        const topLevelNodes = state.doc.content.content;
-        const soleTopLevelNode = topLevelNodes.length === 1 ? topLevelNodes[0] : null;
-        const allSelectionList = isAllSelection && soleTopLevelNode && isList(soleTopLevelNode.type.name, extensions) ? {
-          node: soleTopLevelNode,
-          pos: 0,
-          depth: 0
-        } : null;
-        const currentList = parentList != null ? parentList : allSelectionList;
-        const isInsideExistingList = !!parentList && range.depth >= 1 && range.depth - parentList.depth <= 1;
-        const hasWholeDocSelectedList = !!allSelectionList;
-        if ((isInsideExistingList || hasWholeDocSelectedList) && currentList) {
-          if (currentList.node.type === listType) {
-            if (isAllSelection && hasWholeDocSelectedList) {
-              return chain().command(({ tr: trx, dispatch: disp }) => {
-                const nextSelection = createInnerSelectionForWholeDocList(trx);
-                if (!nextSelection) {
-                  return false;
-                }
-                trx.setSelection(nextSelection);
-                if (disp) {
-                  disp(trx);
-                }
-                return true;
-              }).liftListItem(itemType).run();
-            }
+        if (range.depth >= 1 && parentList && range.depth - parentList.depth <= 1) {
+          if (parentList.node.type === listType) {
             return commands.liftListItem(itemType);
           }
-          if (isList(currentList.node.type.name, extensions) && listType.validContent(currentList.node.content)) {
+          if (isList(parentList.node.type.name, extensions) && listType.validContent(parentList.node.content) && dispatch) {
             return chain().command(() => {
-              tr2.setNodeMarkup(currentList.pos, listType);
+              tr2.setNodeMarkup(parentList.pos, listType);
               return true;
             }).command(() => joinListBackwards(tr2, listType)).command(() => joinListForwards(tr2, listType)).run();
           }
@@ -16108,22 +15678,15 @@ ${indentedChild}`;
         }
         return false;
       };
-      unsetAllMarks = (options = {}) => ({ tr: tr2, dispatch, editor }) => {
-        const { ignoreClearable = false } = options;
+      unsetAllMarks = () => ({ tr: tr2, dispatch }) => {
         const { selection } = tr2;
         const { empty: empty2, ranges } = selection;
         if (empty2) {
           return true;
         }
-        const { nonClearableMarks } = editor.extensionManager;
         if (dispatch) {
-          const clearableMarkTypes = Object.values(editor.schema.marks).filter(
-            (markType) => ignoreClearable || !nonClearableMarks.includes(markType.name)
-          );
           ranges.forEach((range) => {
-            for (const markType of clearableMarkTypes) {
-              tr2.removeMark(range.$from.pos, range.$to.pos, markType);
-            }
+            tr2.removeMark(range.$from.pos, range.$to.pos);
           });
         }
         return true;
@@ -16328,16 +15891,6 @@ ${indentedChild}`;
           this.callbacks = {};
         }
       };
-      markdown_exports = {};
-      __export2(markdown_exports, {
-        createAtomBlockMarkdownSpec: () => createAtomBlockMarkdownSpec,
-        createBlockMarkdownSpec: () => createBlockMarkdownSpec,
-        createInlineMarkdownSpec: () => createInlineMarkdownSpec,
-        parseAttributes: () => parseAttributes,
-        parseIndentedBlocks: () => parseIndentedBlocks,
-        renderNestedMarkdownContent: () => renderNestedMarkdownContent,
-        serializeAttributes: () => serializeAttributes
-      });
       InputRule = class {
         constructor(config2) {
           var _a2;
@@ -16360,9 +15913,7 @@ ${indentedChild}`;
         result.data = inputRuleMatch.data;
         if (inputRuleMatch.replaceWith) {
           if (!inputRuleMatch.text.includes(inputRuleMatch.replaceWith)) {
-            console.warn(
-              '[tiptap warn]: "inputRuleMatch.replaceWith" must be part of "inputRuleMatch.text".'
-            );
+            console.warn('[tiptap warn]: "inputRuleMatch.replaceWith" must be part of "inputRuleMatch.text".');
           }
           result.push(inputRuleMatch.replaceWith);
         }
@@ -16389,7 +15940,7 @@ ${indentedChild}`;
               getExtensionField(this, "addOptions", {
                 name: this.name
               })
-            )
+            ) || {}
           };
         }
         get storage() {
@@ -16399,7 +15950,7 @@ ${indentedChild}`;
                 name: this.name,
                 options: this.options
               })
-            )
+            ) || {}
           };
         }
         configure(options = {}) {
@@ -16411,7 +15962,6 @@ ${indentedChild}`;
           });
           extension.name = this.name;
           extension.parent = this.parent;
-          this.child = null;
           return extension;
         }
         extend(extendedConfig = {}) {
@@ -16484,9 +16034,7 @@ ${indentedChild}`;
           result.data = pasteRuleMatch.data;
           if (pasteRuleMatch.replaceWith) {
             if (!pasteRuleMatch.text.includes(pasteRuleMatch.replaceWith)) {
-              console.warn(
-                '[tiptap warn]: "pasteRuleMatch.replaceWith" must be part of "pasteRuleMatch.text".'
-              );
+              console.warn('[tiptap warn]: "pasteRuleMatch.replaceWith" must be part of "pasteRuleMatch.text".');
             }
             result.push(pasteRuleMatch.replaceWith);
           }
@@ -16505,7 +16053,6 @@ ${indentedChild}`;
       ExtensionManager = class {
         constructor(extensions, editor) {
           this.splittableMarks = [];
-          this.nonClearableMarks = [];
           this.editor = editor;
           this.baseExtensions = extensions;
           this.extensions = resolveExtensions(extensions);
@@ -16525,11 +16072,7 @@ ${indentedChild}`;
               editor: this.editor,
               type: getSchemaTypeByName(extension.name, this.schema)
             };
-            const addCommands = getExtensionField(
-              extension,
-              "addCommands",
-              context
-            );
+            const addCommands = getExtensionField(extension, "addCommands", context);
             if (!addCommands) {
               return commands;
             }
@@ -16574,11 +16117,7 @@ ${indentedChild}`;
             }
             const keyMapPlugin = keymap(defaultBindings);
             plugins.push(keyMapPlugin);
-            const addInputRules = getExtensionField(
-              extension,
-              "addInputRules",
-              context
-            );
+            const addInputRules = getExtensionField(extension, "addInputRules", context);
             if (isExtensionRulesEnabled(extension, editor.options.enableInputRules) && addInputRules) {
               const rules = addInputRules();
               if (rules && rules.length) {
@@ -16590,11 +16129,7 @@ ${indentedChild}`;
                 plugins.push(...inputPlugins);
               }
             }
-            const addPasteRules = getExtensionField(
-              extension,
-              "addPasteRules",
-              context
-            );
+            const addPasteRules = getExtensionField(extension, "addPasteRules", context);
             if (isExtensionRulesEnabled(extension, editor.options.enablePasteRules) && addPasteRules) {
               const rules = addPasteRules();
               if (rules && rules.length) {
@@ -16631,9 +16166,7 @@ ${indentedChild}`;
           const { nodeExtensions } = splitExtensions(this.extensions);
           return Object.fromEntries(
             nodeExtensions.filter((extension) => !!getExtensionField(extension, "addNodeView")).map((extension) => {
-              const extensionAttributes = this.attributes.filter(
-                (attribute2) => attribute2.type === extension.name
-              );
+              const extensionAttributes = this.attributes.filter((attribute2) => attribute2.type === extension.name);
               const context = {
                 name: extension.name,
                 options: extension.options,
@@ -16641,11 +16174,7 @@ ${indentedChild}`;
                 editor,
                 type: getNodeType(extension.name, this.schema)
               };
-              const addNodeView = getExtensionField(
-                extension,
-                "addNodeView",
-                context
-              );
+              const addNodeView = getExtensionField(extension, "addNodeView", context);
               if (!addNodeView) {
                 return [];
               }
@@ -16739,9 +16268,7 @@ ${indentedChild}`;
           const { markExtensions } = splitExtensions(this.extensions);
           return Object.fromEntries(
             markExtensions.filter((extension) => !!getExtensionField(extension, "addMarkView")).map((extension) => {
-              const extensionAttributes = this.attributes.filter(
-                (attribute2) => attribute2.type === extension.name
-              );
+              const extensionAttributes = this.attributes.filter((attribute2) => attribute2.type === extension.name);
               const context = {
                 name: extension.name,
                 options: extension.options,
@@ -16749,11 +16276,7 @@ ${indentedChild}`;
                 editor,
                 type: getMarkType(extension.name, this.schema)
               };
-              const addMarkView = getExtensionField(
-                extension,
-                "addMarkView",
-                context
-              );
+              const addMarkView = getExtensionField(extension, "addMarkView", context);
               if (!addMarkView) {
                 return [];
               }
@@ -16778,36 +16301,6 @@ ${indentedChild}`;
           );
         }
         /**
-         * Destroy the extension manager and clean up all extension references
-         * to prevent memory leaks through parent/child extension chains.
-         *
-         * Walks each extension's full parent chain and nulls every forward
-         * `parent.child → current` link where the parent still points to the
-         * current node. This breaks the retention path from module-scope
-         * singleton roots through deep extend() chains.
-         *
-         * Only ancestor `.child` links matching the current chain are cleared.
-         * The `.parent` pointer on ancestors is never touched — extensions
-         * may be shared across live editors, so their own backward references
-         * and non-matching forward links must remain intact.
-         */
-        destroy() {
-          this.extensions.forEach((extension) => {
-            let current = extension;
-            while (current.parent) {
-              const parent = current.parent;
-              if (parent.child === current) {
-                parent.child = null;
-              }
-              current = parent;
-            }
-          });
-          this.extensions = [];
-          this.baseExtensions = [];
-          this.schema = null;
-          this.editor = null;
-        }
-        /**
          * Go through all extensions, create extension storages & setup marks
          * & bind editor event listener.
          */
@@ -16817,7 +16310,7 @@ ${indentedChild}`;
             extensions.map((extension) => [extension.name, extension.storage])
           );
           extensions.forEach((extension) => {
-            var _a2, _b;
+            var _a2;
             const context = {
               name: extension.name,
               options: extension.options,
@@ -16830,18 +16323,8 @@ ${indentedChild}`;
               if (keepOnSplit) {
                 this.splittableMarks.push(extension.name);
               }
-              const clearable = (_b = callOrReturn(
-                getExtensionField(extension, "clearable", context)
-              )) != null ? _b : true;
-              if (!clearable) {
-                this.nonClearableMarks.push(extension.name);
-              }
             }
-            const onBeforeCreate = getExtensionField(
-              extension,
-              "onBeforeCreate",
-              context
-            );
+            const onBeforeCreate = getExtensionField(extension, "onBeforeCreate", context);
             const onCreate = getExtensionField(extension, "onCreate", context);
             const onUpdate = getExtensionField(extension, "onUpdate", context);
             const onSelectionUpdate = getExtensionField(
@@ -16849,11 +16332,7 @@ ${indentedChild}`;
               "onSelectionUpdate",
               context
             );
-            const onTransaction = getExtensionField(
-              extension,
-              "onTransaction",
-              context
-            );
+            const onTransaction = getExtensionField(extension, "onTransaction", context);
             const onFocus = getExtensionField(extension, "onFocus", context);
             const onBlur = getExtensionField(extension, "onBlur", context);
             const onDestroy = getExtensionField(extension, "onDestroy", context);
@@ -16938,16 +16417,15 @@ ${indentedChild}`;
                   const { editor } = this;
                   const { state, schema: schema2 } = editor;
                   const { doc: doc3, selection } = state;
+                  const { ranges } = selection;
+                  const from2 = Math.min(...ranges.map((range2) => range2.$from.pos));
+                  const to = Math.max(...ranges.map((range2) => range2.$to.pos));
                   const textSerializers = getTextSerializersFromSchema(schema2);
-                  const { blockSeparator } = this.options;
-                  const options = {
-                    ...blockSeparator !== void 0 ? { blockSeparator } : {},
+                  const range = { from: from2, to };
+                  return getTextBetween(doc3, range, {
+                    ...this.options.blockSeparator !== void 0 ? { blockSeparator: this.options.blockSeparator } : {},
                     textSerializers
-                  };
-                  const sortedRanges = [...selection.ranges].sort((a, b) => a.$from.pos - b.$from.pos);
-                  return sortedRanges.map(
-                    ({ $from, $to }) => getTextBetween(doc3, { from: $from.pos, to: $to.pos }, options)
-                  ).join(blockSeparator != null ? blockSeparator : "\n\n");
+                  });
                 }
               }
             })
@@ -16971,35 +16449,28 @@ ${indentedChild}`;
             if ((_d = (_c2 = (_b2 = (_a22 = this.editor.options.coreExtensionOptions) == null ? void 0 : _a22.delete) == null ? void 0 : _b2.filterTransaction) == null ? void 0 : _c2.call(_b2, transaction)) != null ? _d : transaction.getMeta("y-sync$")) {
               return;
             }
-            const nextTransaction = combineTransactionSteps(transaction.before, [
-              transaction,
-              ...appendedTransactions
-            ]);
+            const nextTransaction = combineTransactionSteps(transaction.before, [transaction, ...appendedTransactions]);
             const changes = getChangedRanges(nextTransaction);
             changes.forEach((change) => {
               if (nextTransaction.mapping.mapResult(change.oldRange.from).deletedAfter && nextTransaction.mapping.mapResult(change.oldRange.to).deletedBefore) {
-                nextTransaction.before.nodesBetween(
-                  change.oldRange.from,
-                  change.oldRange.to,
-                  (node, from2) => {
-                    const to = from2 + node.nodeSize - 2;
-                    const isFullyWithinRange = change.oldRange.from <= from2 && to <= change.oldRange.to;
-                    this.editor.emit("delete", {
-                      type: "node",
-                      node,
-                      from: from2,
-                      to,
-                      newFrom: nextTransaction.mapping.map(from2),
-                      newTo: nextTransaction.mapping.map(to),
-                      deletedRange: change.oldRange,
-                      newRange: change.newRange,
-                      partial: !isFullyWithinRange,
-                      editor: this.editor,
-                      transaction,
-                      combinedTransform: nextTransaction
-                    });
-                  }
-                );
+                nextTransaction.before.nodesBetween(change.oldRange.from, change.oldRange.to, (node, from2) => {
+                  const to = from2 + node.nodeSize - 2;
+                  const isFullyWithinRange = change.oldRange.from <= from2 && to <= change.oldRange.to;
+                  this.editor.emit("delete", {
+                    type: "node",
+                    node,
+                    from: from2,
+                    to,
+                    newFrom: nextTransaction.mapping.map(from2),
+                    newTo: nextTransaction.mapping.map(to),
+                    deletedRange: change.oldRange,
+                    newRange: change.newRange,
+                    partial: !isFullyWithinRange,
+                    editor: this.editor,
+                    transaction,
+                    combinedTransform: nextTransaction
+                  });
+                });
               }
             });
             const mapping = nextTransaction.mapping;
@@ -17010,7 +16481,7 @@ ${indentedChild}`;
                 const newEnd = mapping.slice(index).map(step.to);
                 const oldStart = mapping.invert().map(newStart, -1);
                 const oldEnd = mapping.invert().map(newEnd);
-                const foundBeforeMark = newStart > 0 ? (_a3 = nextTransaction.doc.nodeAt(newStart - 1)) == null ? void 0 : _a3.marks.some((mark) => mark.eq(step.mark)) : false;
+                const foundBeforeMark = (_a3 = nextTransaction.doc.nodeAt(newStart - 1)) == null ? void 0 : _a3.marks.some((mark) => mark.eq(step.mark));
                 const foundAfterMark = (_b3 = nextTransaction.doc.nodeAt(newEnd)) == null ? void 0 : _b3.marks.some((mark) => mark.eq(step.mark));
                 this.editor.emit("delete", {
                   type: "mark",
@@ -17179,9 +16650,7 @@ ${indentedChild}`;
                   return;
                 }
                 const docChanges = transactions.some((transaction) => transaction.docChanged) && !oldState.doc.eq(newState.doc);
-                const ignoreTr = transactions.some(
-                  (transaction) => transaction.getMeta("preventClearDocument")
-                );
+                const ignoreTr = transactions.some((transaction) => transaction.getMeta("preventClearDocument"));
                 if (!docChanges || ignoreTr) {
                   return;
                 }
@@ -17236,23 +16705,12 @@ ${indentedChild}`;
       });
       Tabindex = Extension.create({
         name: "tabindex",
-        addOptions() {
-          return {
-            value: void 0
-          };
-        },
         addProseMirrorPlugins() {
           return [
             new Plugin({
               key: new PluginKey("tabindex"),
               props: {
-                attributes: () => {
-                  var _a2;
-                  if (!this.editor.isEditable && this.options.value === void 0) {
-                    return {};
-                  }
-                  return { tabindex: (_a2 = this.options.value) != null ? _a2 : "0" };
-                }
+                attributes: () => this.editor.isEditable ? { tabindex: "0" } : {}
               }
             })
           ];
@@ -17348,9 +16806,7 @@ ${indentedChild}`;
           let to = this.to;
           if (this.isBlock) {
             if (this.content.size === 0) {
-              console.error(
-                `You can\u2019t set content on a block node. Tried to set content on ${this.name} at ${this.pos}`
-              );
+              console.error(`You can\u2019t set content on a block node. Tried to set content on ${this.name} at ${this.pos}`);
               return;
             }
             from2 = this.from + 1;
@@ -17421,12 +16877,7 @@ ${indentedChild}`;
             if (!isBlock && !isInline2 && $pos.depth <= this.depth) {
               return;
             }
-            const childNodePos = new _NodePos(
-              $pos,
-              this.editor,
-              isBlock,
-              isBlock || isInline2 ? node : null
-            );
+            const childNodePos = new _NodePos($pos, this.editor, isBlock, isBlock || isInline2 ? node : null);
             if (isBlock) {
               childNodePos.actualDepth = this.depth + 1;
             }
@@ -17477,9 +16928,7 @@ ${indentedChild}`;
               return;
             }
             if (childPos.node.type.name === selector) {
-              const doesAllAttributesMatch = attrKeys.every(
-                (key) => attributes[key] === childPos.node.attrs[key]
-              );
+              const doesAllAttributesMatch = attrKeys.every((key) => attributes[key] === childPos.node.attrs[key]);
               if (doesAllAttributesMatch) {
                 nodes.push(childPos);
               }
@@ -17578,7 +17027,6 @@ img.ProseMirror-separator {
           this.className = "tiptap";
           this.editorView = null;
           this.isFocused = false;
-          this.destroyed = false;
           this.isInitialized = false;
           this.extensionStorage = {};
           this.instanceId = Math.random().toString(36).slice(2, 9);
@@ -17643,14 +17091,12 @@ img.ProseMirror-separator {
           this.on("paste", ({ event, slice: slice2 }) => this.options.onPaste(event, slice2));
           this.on("delete", this.options.onDelete);
           const initialDoc = this.createDoc();
-          if (!this.editorState) {
-            const selection = resolveFocusPosition(initialDoc, this.options.autofocus);
-            this.editorState = EditorState.create({
-              doc: initialDoc,
-              schema: this.schema,
-              selection: selection || void 0
-            });
-          }
+          const selection = resolveFocusPosition(initialDoc, this.options.autofocus);
+          this.editorState = EditorState.create({
+            doc: initialDoc,
+            schema: this.schema,
+            selection: selection || void 0
+          });
           if (this.options.element) {
             this.mount(this.options.element);
           }
@@ -17863,7 +17309,7 @@ img.ProseMirror-separator {
          * Creates an extension manager.
          */
         createExtensionManager() {
-          var _a2, _b, _c, _d;
+          var _a2, _b;
           const coreExtensions = this.options.enableCoreExtensions ? [
             Editable,
             ClipboardTextSerializer.configure({
@@ -17872,9 +17318,7 @@ img.ProseMirror-separator {
             Commands,
             FocusEvents,
             Keymap,
-            Tabindex.configure({
-              value: (_d = (_c = this.options.coreExtensionOptions) == null ? void 0 : _c.tabindex) == null ? void 0 : _d.value
-            }),
+            Tabindex,
             Drop,
             Paste,
             Delete,
@@ -17916,24 +17360,9 @@ img.ProseMirror-separator {
               errorOnInvalidContent: this.options.enableContentCheck
             });
           } catch (e) {
-            if (!(e instanceof Error) || !["[tiptap error]: Invalid JSON content", "[tiptap error]: Invalid HTML content"].includes(
-              e.message
-            )) {
+            if (!(e instanceof Error) || !["[tiptap error]: Invalid JSON content", "[tiptap error]: Invalid HTML content"].includes(e.message)) {
               throw e;
             }
-            const fallbackDoc = createDocument(
-              this.options.content,
-              this.schema,
-              this.options.parseOptions,
-              {
-                errorOnInvalidContent: false
-              }
-            );
-            this.editorState = EditorState.create({
-              doc: fallbackDoc,
-              schema: this.schema,
-              selection: resolveFocusPosition(fallbackDoc, this.options.autofocus) || void 0
-            });
             this.emit("contentError", {
               editor: this,
               error: e,
@@ -17942,13 +17371,13 @@ img.ProseMirror-separator {
                   ;
                   this.storage.collaboration.isDisabled = true;
                 }
-                this.options.extensions = this.options.extensions.filter(
-                  (extension) => extension.name !== "collaboration"
-                );
+                this.options.extensions = this.options.extensions.filter((extension) => extension.name !== "collaboration");
                 this.createExtensionManager();
               }
             });
-            return this.editorState.doc;
+            doc3 = createDocument(this.options.content, this.schema, this.options.parseOptions, {
+              errorOnInvalidContent: false
+            });
           }
           return doc3;
         }
@@ -18060,7 +17489,7 @@ img.ProseMirror-separator {
             this.emit("focus", {
               editor: this,
               event: focus2.event,
-              // oxlint-disable-next-lineno-non-null-assertion
+              // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
               transaction: mostRecentFocusTr
             });
           }
@@ -18068,7 +17497,7 @@ img.ProseMirror-separator {
             this.emit("blur", {
               editor: this,
               event: blur2.event,
-              // oxlint-disable-next-lineno-non-null-assertion
+              // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
               transaction: mostRecentFocusTr
             });
           }
@@ -18127,18 +17556,9 @@ img.ProseMirror-separator {
          * Destroy the editor.
          */
         destroy() {
-          if (this.destroyed) {
-            return;
-          }
-          this.destroyed = true;
           this.emit("destroy");
           this.unmount();
           this.removeAllListeners();
-          this.extensionManager.destroy();
-          this.extensionManager = null;
-          this.schema = null;
-          this.commandManager = null;
-          this.extensionStorage = {};
         }
         /**
          * Check if the editor is already destroyed.
@@ -18157,13 +17577,22 @@ img.ProseMirror-separator {
         }
         $pos(pos) {
           const $pos = this.state.doc.resolve(pos);
-          const node = pos > 0 && $pos.nodeAfter && !$pos.nodeAfter.isText && $pos.nodeAfter.isAtom ? $pos.nodeAfter : null;
-          return new NodePos($pos, this, false, node);
+          return new NodePos($pos, this);
         }
         get $doc() {
           return this.$pos(0);
         }
       };
+      markdown_exports = {};
+      __export2(markdown_exports, {
+        createAtomBlockMarkdownSpec: () => createAtomBlockMarkdownSpec,
+        createBlockMarkdownSpec: () => createBlockMarkdownSpec,
+        createInlineMarkdownSpec: () => createInlineMarkdownSpec,
+        parseAttributes: () => parseAttributes,
+        parseIndentedBlocks: () => parseIndentedBlocks,
+        renderNestedMarkdownContent: () => renderNestedMarkdownContent,
+        serializeAttributes: () => serializeAttributes
+      });
       Node3 = class _Node extends Extendable {
         constructor() {
           super(...arguments);
@@ -18201,9 +17630,7 @@ img.ProseMirror-separator {
         }
         const { children, ...rest } = attributes != null ? attributes : {};
         if (tag === "svg") {
-          throw new Error(
-            "SVG elements are not supported in the JSX syntax, use the array syntax instead"
-          );
+          throw new Error("SVG elements are not supported in the JSX syntax, use the array syntax instead");
         }
         return [tag, rest, children];
       };
@@ -22285,7 +21712,7 @@ ${nextLine.slice(indentLevel + 2)}`;
         */
         static valid($pos) {
           let parent = $pos.parent;
-          if (parent.inlineContent || !closedBefore($pos) || !closedAfter($pos))
+          if (parent.isTextblock || !closedBefore($pos) || !closedAfter($pos))
             return false;
           let override = parent.type.spec.allowGapCursor;
           if (override != null)
@@ -23602,347 +23029,6 @@ ${nextLine.slice(indentLevel + 2)}`;
         }
       });
       index_default3 = Typography;
-    }
-  });
-
-  // node_modules/@tiptap/extension-text-style/dist/index.js
-  var MAX_FIND_CHILD_SPAN_DEPTH, findChildSpans, mergeNestedSpanStyles, TextStyle, BackgroundColor, Color, FontFamily, FontSize, LineHeight, TextStyleKit;
-  var init_dist33 = __esm({
-    "node_modules/@tiptap/extension-text-style/dist/index.js"() {
-      init_dist9();
-      init_dist9();
-      init_dist9();
-      init_dist9();
-      init_dist9();
-      init_dist9();
-      init_dist9();
-      MAX_FIND_CHILD_SPAN_DEPTH = 20;
-      findChildSpans = (element, depth = 0) => {
-        const childSpans = [];
-        if (!element.children.length || depth > MAX_FIND_CHILD_SPAN_DEPTH) {
-          return childSpans;
-        }
-        Array.from(element.children).forEach((child) => {
-          if (child.tagName === "SPAN") {
-            childSpans.push(child);
-          } else if (child.children.length) {
-            childSpans.push(...findChildSpans(child, depth + 1));
-          }
-        });
-        return childSpans;
-      };
-      mergeNestedSpanStyles = (element) => {
-        if (!element.children.length) {
-          return;
-        }
-        const childSpans = findChildSpans(element);
-        if (!childSpans) {
-          return;
-        }
-        childSpans.forEach((childSpan) => {
-          var _a2, _b;
-          const childStyle = childSpan.getAttribute("style");
-          const closestParentSpanStyleOfChild = (_b = (_a2 = childSpan.parentElement) == null ? void 0 : _a2.closest("span")) == null ? void 0 : _b.getAttribute("style");
-          childSpan.setAttribute("style", `${closestParentSpanStyleOfChild};${childStyle}`);
-        });
-      };
-      TextStyle = Mark2.create({
-        name: "textStyle",
-        priority: 101,
-        addOptions() {
-          return {
-            HTMLAttributes: {},
-            mergeNestedSpanStyles: true
-          };
-        },
-        parseHTML() {
-          return [
-            {
-              tag: "span",
-              consuming: false,
-              getAttrs: (element) => {
-                const hasStyles = element.hasAttribute("style");
-                if (!hasStyles) {
-                  return false;
-                }
-                if (this.options.mergeNestedSpanStyles) {
-                  mergeNestedSpanStyles(element);
-                }
-                return {};
-              }
-            }
-          ];
-        },
-        renderHTML({ HTMLAttributes }) {
-          return ["span", mergeAttributes(this.options.HTMLAttributes, HTMLAttributes), 0];
-        },
-        addCommands() {
-          return {
-            toggleTextStyle: (attributes) => ({ commands }) => {
-              return commands.toggleMark(this.name, attributes);
-            },
-            removeEmptyTextStyle: () => ({ tr: tr2 }) => {
-              const { selection } = tr2;
-              tr2.doc.nodesBetween(selection.from, selection.to, (node, pos) => {
-                if (node.isTextblock) {
-                  return true;
-                }
-                if (!node.marks.filter((mark) => mark.type === this.type).some((mark) => Object.values(mark.attrs).some((value) => !!value))) {
-                  tr2.removeMark(pos, pos + node.nodeSize, this.type);
-                }
-              });
-              return true;
-            }
-          };
-        }
-      });
-      BackgroundColor = Extension.create({
-        name: "backgroundColor",
-        addOptions() {
-          return {
-            types: ["textStyle"]
-          };
-        },
-        addGlobalAttributes() {
-          return [
-            {
-              types: this.options.types,
-              attributes: {
-                backgroundColor: {
-                  default: null,
-                  parseHTML: (element) => {
-                    var _a2;
-                    const value = (_a2 = getStyleProperty(element, "background-color")) != null ? _a2 : element.style.backgroundColor;
-                    return value == null ? void 0 : value.replace(/['"]+/g, "");
-                  },
-                  renderHTML: (attributes) => {
-                    if (!attributes.backgroundColor) {
-                      return {};
-                    }
-                    return {
-                      style: `background-color: ${attributes.backgroundColor}`
-                    };
-                  }
-                }
-              }
-            }
-          ];
-        },
-        addCommands() {
-          return {
-            setBackgroundColor: (backgroundColor) => ({ chain }) => {
-              return chain().setMark("textStyle", { backgroundColor }).run();
-            },
-            unsetBackgroundColor: () => ({ chain }) => {
-              return chain().setMark("textStyle", { backgroundColor: null }).removeEmptyTextStyle().run();
-            }
-          };
-        }
-      });
-      Color = Extension.create({
-        name: "color",
-        addOptions() {
-          return {
-            types: ["textStyle"]
-          };
-        },
-        addGlobalAttributes() {
-          return [
-            {
-              types: this.options.types,
-              attributes: {
-                color: {
-                  default: null,
-                  parseHTML: (element) => {
-                    var _a2;
-                    const value = (_a2 = getStyleProperty(element, "color")) != null ? _a2 : element.style.color;
-                    return value == null ? void 0 : value.replace(/['"]+/g, "");
-                  },
-                  renderHTML: (attributes) => {
-                    if (!attributes.color) {
-                      return {};
-                    }
-                    return {
-                      style: `color: ${attributes.color}`
-                    };
-                  }
-                }
-              }
-            }
-          ];
-        },
-        addCommands() {
-          return {
-            setColor: (color) => ({ chain }) => {
-              return chain().setMark("textStyle", { color }).run();
-            },
-            unsetColor: () => ({ chain }) => {
-              return chain().setMark("textStyle", { color: null }).removeEmptyTextStyle().run();
-            }
-          };
-        }
-      });
-      FontFamily = Extension.create({
-        name: "fontFamily",
-        addOptions() {
-          return {
-            types: ["textStyle"]
-          };
-        },
-        addGlobalAttributes() {
-          return [
-            {
-              types: this.options.types,
-              attributes: {
-                fontFamily: {
-                  default: null,
-                  // Prefer the raw inline `style` attribute so unquoted or
-                  // single-quoted multi-word names are preserved instead of being
-                  // canonicalized by `element.style.fontFamily`, which forces double
-                  // quotes that then get HTML-encoded to `&quot;` on serialization.
-                  parseHTML: (element) => {
-                    var _a2;
-                    return (_a2 = getStyleProperty(element, "font-family")) != null ? _a2 : element.style.fontFamily;
-                  },
-                  renderHTML: (attributes) => {
-                    if (!attributes.fontFamily) {
-                      return {};
-                    }
-                    return {
-                      style: `font-family: ${attributes.fontFamily}`
-                    };
-                  }
-                }
-              }
-            }
-          ];
-        },
-        addCommands() {
-          return {
-            setFontFamily: (fontFamily) => ({ chain }) => {
-              return chain().setMark("textStyle", { fontFamily }).run();
-            },
-            unsetFontFamily: () => ({ chain }) => {
-              return chain().setMark("textStyle", { fontFamily: null }).removeEmptyTextStyle().run();
-            }
-          };
-        }
-      });
-      FontSize = Extension.create({
-        name: "fontSize",
-        addOptions() {
-          return {
-            types: ["textStyle"]
-          };
-        },
-        addGlobalAttributes() {
-          return [
-            {
-              types: this.options.types,
-              attributes: {
-                fontSize: {
-                  default: null,
-                  // Prefer the raw inline `style` attribute so the original format
-                  // is preserved instead of the canonicalized value returned by
-                  // `element.style.fontSize`.
-                  parseHTML: (element) => {
-                    var _a2;
-                    return (_a2 = getStyleProperty(element, "font-size")) != null ? _a2 : element.style.fontSize;
-                  },
-                  renderHTML: (attributes) => {
-                    if (!attributes.fontSize) {
-                      return {};
-                    }
-                    return {
-                      style: `font-size: ${attributes.fontSize}`
-                    };
-                  }
-                }
-              }
-            }
-          ];
-        },
-        addCommands() {
-          return {
-            setFontSize: (fontSize) => ({ chain }) => {
-              return chain().setMark("textStyle", { fontSize }).run();
-            },
-            unsetFontSize: () => ({ chain }) => {
-              return chain().setMark("textStyle", { fontSize: null }).removeEmptyTextStyle().run();
-            }
-          };
-        }
-      });
-      LineHeight = Extension.create({
-        name: "lineHeight",
-        addOptions() {
-          return {
-            types: ["textStyle"]
-          };
-        },
-        addGlobalAttributes() {
-          return [
-            {
-              types: this.options.types,
-              attributes: {
-                lineHeight: {
-                  default: null,
-                  // Prefer the raw inline `style` attribute so the original format
-                  // is preserved instead of the canonicalized value returned by
-                  // `element.style.lineHeight`.
-                  parseHTML: (element) => {
-                    var _a2;
-                    return (_a2 = getStyleProperty(element, "line-height")) != null ? _a2 : element.style.lineHeight;
-                  },
-                  renderHTML: (attributes) => {
-                    if (!attributes.lineHeight) {
-                      return {};
-                    }
-                    return {
-                      style: `line-height: ${attributes.lineHeight}`
-                    };
-                  }
-                }
-              }
-            }
-          ];
-        },
-        addCommands() {
-          return {
-            setLineHeight: (lineHeight) => ({ chain }) => {
-              return chain().setMark("textStyle", { lineHeight }).run();
-            },
-            unsetLineHeight: () => ({ chain }) => {
-              return chain().setMark("textStyle", { lineHeight: null }).removeEmptyTextStyle().run();
-            }
-          };
-        }
-      });
-      TextStyleKit = Extension.create({
-        name: "textStyleKit",
-        addExtensions() {
-          const extensions = [];
-          if (this.options.backgroundColor !== false) {
-            extensions.push(BackgroundColor.configure(this.options.backgroundColor));
-          }
-          if (this.options.color !== false) {
-            extensions.push(Color.configure(this.options.color));
-          }
-          if (this.options.fontFamily !== false) {
-            extensions.push(FontFamily.configure(this.options.fontFamily));
-          }
-          if (this.options.fontSize !== false) {
-            extensions.push(FontSize.configure(this.options.fontSize));
-          }
-          if (this.options.lineHeight !== false) {
-            extensions.push(LineHeight.configure(this.options.lineHeight));
-          }
-          if (this.options.textStyle !== false) {
-            extensions.push(TextStyle.configure(this.options.textStyle));
-          }
-          return extensions;
-        }
-      });
     }
   });
 
@@ -29891,7 +28977,7 @@ ${nextLine.slice(indentLevel + 2)}`;
     return index == parent.childCount - 1 || !link2.isInSet(parent.child(index + 1).marks);
   }
   var schema, MarkdownParseState, MarkdownParser, defaultMarkdownParser, blankMark, MarkdownSerializer, defaultMarkdownSerializer, MarkdownSerializerState;
-  var init_dist34 = __esm({
+  var init_dist33 = __esm({
     "node_modules/prosemirror-markdown/dist/index.js"() {
       init_dist2();
       init_markdown_it();
@@ -30851,7 +29937,7 @@ ${element.innerHTML}
   var init_tiptap_markdown_es = __esm({
     "node_modules/tiptap-markdown/dist/tiptap-markdown.es.js"() {
       init_dist9();
-      init_dist34();
+      init_dist33();
       init_markdown_it();
       init_model();
       import_markdown_it_task_lists = __toESM(require_markdown_it_task_lists(), 1);
@@ -31720,15 +30806,11 @@ ${element.innerHTML}
       init_dist30();
       init_dist31();
       init_dist32();
-      init_dist33();
       init_tiptap_markdown_es();
       window.TiptapEditor = Editor;
       window.TiptapStarterKit = index_default;
       window.TiptapPlaceholder = index_default2;
       window.TiptapTypography = index_default3;
-      window.TiptapTextStyle = TextStyle;
-      window.TiptapColor = Color;
-      window.TiptapBackgroundColor = BackgroundColor;
       window.TiptapMarkdown = Markdown;
     }
   });

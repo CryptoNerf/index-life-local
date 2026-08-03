@@ -25,15 +25,8 @@ function initTiptapEditor(options) {
         placeholder: placeholderText,
       }),
       window.TiptapTypography,
-      // Цвет текста и заливка — атрибуты TextStyle, то есть один <span style>.
-      window.TiptapTextStyle,
-      window.TiptapColor,
-      window.TiptapBackgroundColor,
       window.TiptapMarkdown.configure({
-        // true, иначе цвет и заливка не переживают сохранение: заметка
-        // хранится как Markdown, а span'ы для него — инлайновый HTML.
-        // При false такой span экранируется и превращается в текст.
-        html: true,
+        html: false,               // Не разрешать сырой HTML в Markdown
         tightLists: true,
         bulletListMarker: '-',
         linkify: true,
@@ -132,29 +125,9 @@ function setupToolbarButtons(editor, toolbarElement) {
         case 'hr':
           editor.chain().focus().setHorizontalRule().run();
           break;
-        case 'clear-color':
-          editor.chain().focus().unsetColor().unsetBackgroundColor().run();
-          break;
       }
     });
   });
-
-  // Colour + fill: native pickers rather than a palette popup, so the whole
-  // range is available and there is no menu to style. `focus()` first —
-  // opening the picker moves focus out of the editor, but the selection is
-  // still there and the mark must land on it.
-  const colorInput = toolbarElement.querySelector('[data-format="color"]');
-  const fillInput = toolbarElement.querySelector('[data-format="fill"]');
-  if (colorInput) {
-    colorInput.addEventListener('input', () => {
-      editor.chain().focus().setColor(colorInput.value).run();
-    });
-  }
-  if (fillInput) {
-    fillInput.addEventListener('input', () => {
-      editor.chain().focus().setBackgroundColor(fillInput.value).run();
-    });
-  }
 
   editor.on('selectionUpdate', () => updateToolbarState(editor, buttons));
   editor.on('update', () => updateToolbarState(editor, buttons));
