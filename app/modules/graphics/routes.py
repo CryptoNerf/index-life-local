@@ -168,6 +168,13 @@ def _mood_by_numeric(corr):
     yhi = math.ceil(max(moods) / step) * step
     if yhi - ylo < step:
         yhi = ylo + step
+    # An extreme value landing exactly on a round tick (mood 7.0 with a 0.5
+    # step) put its marker on the frame, where the 4.5px dot and the round
+    # line cap hang outside the chart. Give it another step of air.
+    if max(moods) > yhi - step * 0.12:
+        yhi += step
+    if min(moods) < ylo + step * 0.12:
+        ylo -= step
     yvals, v = [], ylo
     while v <= yhi + 1e-9:
         yvals.append(round(v, 4))
@@ -177,8 +184,16 @@ def _mood_by_numeric(corr):
     pad_l, pad_r, pad_t, pad_b = 92, 28, 58, 66
     plot_w, plot_h = w - pad_l - pad_r, h - pad_t - pad_b
 
+    # Same on the horizontal axis: the coldest and warmest bins would sit on
+    # the left and right spines, so the domain is the bins' own extent —
+    # each bin covers half a width either side of its label temperature.
+    # (A bin's centre can sit up to half a width beyond the raw min/max,
+    # which is why this measures the bins and not the source readings.)
+    xlo = bins[0]['temp'] - bin_w / 2
+    xhi = bins[-1]['temp'] + bin_w / 2
+
     def x_of(t):
-        return pad_l + (t - tmin) / (tmax - tmin) * plot_w
+        return pad_l + (t - xlo) / (xhi - xlo) * plot_w
 
     def y_of(m):
         return pad_t + (yhi - m) / (yhi - ylo) * plot_h
