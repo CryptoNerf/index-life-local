@@ -4,7 +4,10 @@
   "type": "commonjs",
   "devDependencies": {
     "@tiptap/core": "^3.20.0",
+    "@tiptap/extension-color": "^3.29.2",
+    "@tiptap/extension-highlight": "^3.29.2",
     "@tiptap/extension-placeholder": "^3.20.0",
+    "@tiptap/extension-text-style": "^3.29.2",
     "@tiptap/extension-typography": "^3.20.0",
     "@tiptap/starter-kit": "^3.20.0",
     "esbuild": "^0.27.3",
@@ -15,7 +18,8 @@
   "scripts": {
     "test:formatting": "node --test tests/formatting_utils.test.js",
     "test:dom": "node --test tests/formatting_dom.test.js",
-    "test:all": "node --test tests/formatting_utils.test.js tests/formatting_dom.test.js",
-    "build:tiptap": "esbuild tiptap-bundle-entry.js --bundle --outfile=app/static/js/tiptap-bundle.js --format=iife --global-name=TiptapBundle"
+    "test:all": "node --test tests/formatting_utils.test.js tests/formatting_dom.test.js tests/tiptap_color.test.js",
+    "build:tiptap": "esbuild tiptap-bundle-entry.js --bundle --outfile=app/static/js/tiptap-bundle.js --format=iife --global-name=TiptapBundle",
+    "test:tiptap": "node --test tests/tiptap_color.test.js"
   }
 }
