@@ -62,6 +62,8 @@ _COLOR_KEYS = {
     'bg-color', 'text-color', 'text-muted', 'heading-color', 'brand-color',
     'cube-filled-color', 'cube-empty-color', 'cube-border-color',
     'cube-today-color',
+    # Stops of the "colour the day by its rating" scale.
+    'cube-scale-low', 'cube-scale-mid', 'cube-scale-high',
     'chart-color', 'chart-grid-color',
     'neural-node-color', 'neural-node-active-color',
     'neural-edge-color', 'neural-glow-color', 'neural-canvas-bg',
@@ -177,6 +179,7 @@ _VALIDATORS.update({
     'custom-font-filename': _is_valid_font_filename,
     'notes-use-body-font': _is_valid_bool_str,
     'auto-invert-text':    _is_valid_bool_str,
+    'cube-scale-enabled':     _is_valid_bool_str,
     'mosaic-enabled':         _is_valid_bool_str,
     'mosaic-filled-filename': _is_valid_filename,
     'mosaic-empty-mode':      _is_valid_mosaic_mode,
@@ -228,6 +231,7 @@ _SECTION_KEYS = {
     'sec-calendar': {
         'cube-filled-color', 'cube-empty-color',
         'cube-border-color', 'cube-today-color',
+        'cube-scale-enabled', 'cube-scale-low', 'cube-scale-mid', 'cube-scale-high',
     },
     'sec-charts-global': {
         'chart-color', 'chart-grid-color',

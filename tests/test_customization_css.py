@@ -275,3 +275,47 @@ def test_avatar_validators_reject_obvious_garbage():
     assert _VALIDATORS['avatar-color']('not-a-color') is False
     assert _VALIDATORS['avatar-gradient-angle']('180deg') is True
     assert _VALIDATORS['avatar-gradient-angle']('180') is False
+
+
+# ── Colour the day by its rating ────────────────────────────────────
+# The scale needs three things to line up: the API must accept the keys,
+# the context processor must emit the .cube.rN rules, and the calendar must
+# put the rating on the cube. The first of those silently rejected the keys
+# when the feature shipped, so the mode did nothing at all.
+
+def test_scale_keys_are_accepted_by_the_save_api():
+    from app.modules.customization import routes as cz_routes
+    for key in ('cube-scale-enabled', 'cube-scale-low', 'cube-scale-mid', 'cube-scale-high'):
+        assert key in cz_routes._ALLOWED_KEYS, f'{key} would be rejected by /api/save'
+
+
+def test_scale_keys_belong_to_the_calendar_section():
+    """So "reset this section" clears them along with the other cube colours."""
+    from app.modules.customization import routes as cz_routes
+    section = cz_routes._SECTION_KEYS['sec-calendar']
+    assert {'cube-scale-enabled', 'cube-scale-low',
+            'cube-scale-mid', 'cube-scale-high'} <= section
+
+
+def test_scale_emits_nothing_while_switched_off():
+    assert cp._cube_scale_rules({}) == ''
+    assert cp._cube_scale_rules({'cube-scale-enabled': 'false'}) == ''
+
+
+def test_scale_interpolates_between_the_three_stops():
+    css = cp._cube_scale_rules({
+        'cube-scale-enabled': 'true',
+        'cube-scale-low': '#000000',
+        'cube-scale-mid': '#808080',
+        'cube-scale-high': '#ffffff',
+    })
+    assert css.count('.cube.filled.r') == 10
+    assert '.cube.filled.r1 { background: rgb(0, 0, 0); }' in css
+    assert '.cube.filled.r10 { background: rgb(255, 255, 255); }' in css
+
+    # The middle stop sits at 5.5, i.e. between the two middle ratings, and
+    # the ramp rises monotonically from one end to the other.
+    import re
+    values = [int(m) for m in re.findall(r'background: rgb\((\d+),', css)]
+    assert values == sorted(values)
+    assert values[4] < 128 < values[5]
