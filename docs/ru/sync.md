@@ -165,13 +165,27 @@ Cloud**, что и веб-клиент телефонного приложени
 console.cloud.google.com → APIs & Services → Credentials → Create
 Credentials → OAuth client ID → Desktop app. Затем при сборке/запуске:
 
-```bash
-export GOOGLE_DESKTOP_CLIENT_ID="…apps.googleusercontent.com"
-export GOOGLE_DESKTOP_CLIENT_SECRET="…"
-```
+Скачанный из консоли JSON положите в корень проекта под именем
+**`google_client.json`** — сборка (`build.spec` / `build_macos.spec`)
+подхватит его сама, а пользователю останется один клик «Войти в Google».
+Файл в репозиторий не коммитится (он в `.gitignore`): GitHub блокирует
+пуш с ключами, а форк должен использовать свой клиент.
 
-Для установленных (desktop) приложений Google считает client secret
-неконфиденциальным — включать его в сборку допустимо по правилам Google.
+Приложение ищет клиент в таком порядке:
+
+1. переменные окружения — удобно для ротации без пересборки:
+   ```bash
+   export GOOGLE_DESKTOP_CLIENT_ID="…apps.googleusercontent.com"
+   export GOOGLE_DESKTOP_CLIENT_SECRET="…"
+   ```
+2. `google_client.json` в папке данных приложения — если свой клиент хочет
+   подставить сам пользователь;
+3. `google_client.json` внутри сборки — тот, что вы вшили.
+
+Если клиента нет нигде, режим «Google Drive (напрямую)» честно пишет, что
+он недоступен, вместо обрыва посреди входа. Для установленных (desktop)
+приложений Google считает client secret неконфиденциальным — вшивать его
+в сборку допустимо по правилам Google.
 </details>
 
 ### Яндекс.Диск

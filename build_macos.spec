@@ -66,6 +66,17 @@ _m = re.search(r"APP_VERSION\s*=\s*['\"]([^'\"]+)['\"]", _cfg_text)
 APP_VERSION = _m.group(1) if _m else '0.0.0'
 
 
+def google_client_data():
+    """Ship the Desktop-app OAuth client if the builder has one.
+
+    google_client.json is untracked (see .gitignore) — a build made without
+    it simply has no built-in Google mode, and the sync page says so instead
+    of failing halfway through the OAuth flow.
+    """
+    client = root_dir / 'google_client.json'
+    return [(str(client), '.')] if client.is_file() else []
+
+
 def module_datas():
     datas = []
     modules_root = root_dir / 'app' / 'modules'
@@ -103,7 +114,7 @@ a = Analysis(
         ('Install Modules.command', '.'),
         ('tools/install_modules.py', 'tools'),
         ('app/static/images/icon.icns', 'Resources'),  # Explicitly copy icon to Resources folder
-    ] + module_datas() + _nacl_datas + _pm_datas,
+    ] + google_client_data() + module_datas() + _nacl_datas + _pm_datas,
     hiddenimports=[
         'flask',
         'flask_sqlalchemy',

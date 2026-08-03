@@ -57,6 +57,17 @@ for _pm_pkg in ('pymorphy3', 'pymorphy3_dicts_ru', 'dawg_python'):
         pass
 
 
+def google_client_data():
+    """Ship the Desktop-app OAuth client if the builder has one.
+
+    google_client.json is untracked (see .gitignore) — a build made without
+    it simply has no built-in Google mode, and the sync page says so instead
+    of failing halfway through the OAuth flow.
+    """
+    client = root_dir / 'google_client.json'
+    return [(str(client), '.')] if client.is_file() else []
+
+
 def module_datas():
     datas = []
     modules_root = root_dir / 'app' / 'modules'
@@ -93,7 +104,7 @@ a = Analysis(
         ('install_modules.bat', '.'),
         ('install_modules.sh', '.'),
         ('tools/install_modules.py', 'tools'),
-    ] + module_datas() + _wv_datas + _nacl_datas + _pm_datas,
+    ] + google_client_data() + module_datas() + _wv_datas + _nacl_datas + _pm_datas,
     hiddenimports=[
         'flask',
         'flask_sqlalchemy',

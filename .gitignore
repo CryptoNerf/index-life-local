@@ -127,3 +127,9 @@ app/modules/*/models/**
 tmp/
 
 .VSCodeCounter
+
+# Google Desktop OAuth client shipped with the build (Google Cloud → Credentials
+# → Desktop app). Kept out of the repo: GitHub blocks pushes containing it, and
+# a fork should use its own client. app/google_drive.py reads it at runtime, the
+# build bundles it, and GOOGLE_DESKTOP_CLIENT_ID/_SECRET override it.
+google_client.json

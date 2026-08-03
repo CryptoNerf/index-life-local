@@ -163,13 +163,27 @@ the two sides see each other's files): console.cloud.google.com → APIs &
 Services → Credentials → Create Credentials → OAuth client ID → Desktop
 app. Then at build/run time:
 
-```bash
-export GOOGLE_DESKTOP_CLIENT_ID="…apps.googleusercontent.com"
-export GOOGLE_DESKTOP_CLIENT_SECRET="…"
-```
+Drop the JSON the console gives you into the project root as
+**`google_client.json`** — both spec files pick it up, and your users get
+the one-click "Sign in to Google". The file is not committed (it is in
+`.gitignore`): GitHub blocks pushes containing OAuth credentials, and a
+fork should use its own client anyway.
 
-Google treats the client secret of installed (desktop) apps as
-non-confidential — shipping it in a build is within Google's guidelines.
+The app looks for a client in this order:
+
+1. environment variables — handy for rotating without a rebuild:
+   ```bash
+   export GOOGLE_DESKTOP_CLIENT_ID="…apps.googleusercontent.com"
+   export GOOGLE_DESKTOP_CLIENT_SECRET="…"
+   ```
+2. `google_client.json` in the app's data directory — for a user who wants
+   to bring their own client;
+3. `google_client.json` inside the build — the one you shipped.
+
+With no client anywhere, "Google Drive (direct)" simply reports itself as
+unavailable instead of breaking mid-sign-in. Google treats the client secret
+of installed (desktop) apps as non-confidential — shipping it in a build is
+within Google's guidelines.
 </details>
 
 ### Yandex.Disk

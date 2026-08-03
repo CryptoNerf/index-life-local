@@ -45,20 +45,58 @@ def test_gdrive_mode_configured_only_when_connected(app):
     assert sync.is_sync_configured() is True
 
 
-def test_credentials_ship_built_in_with_env_override(monkeypatch):
-    """The build carries a working Desktop-app OAuth pair (project
-    index-life — same project as the PWA, which is what makes drive.file
-    files mutually visible); env vars override for forks/rotation."""
-    monkeypatch.delenv('GOOGLE_DESKTOP_CLIENT_ID', raising=False)
-    monkeypatch.delenv('GOOGLE_DESKTOP_CLIENT_SECRET', raising=False)
-    assert google_drive.is_available() is True
-    cid, csec = google_drive.client_credentials()
-    assert cid.endswith('.apps.googleusercontent.com')
-    assert csec
-
+def test_env_credentials_win_over_everything(monkeypatch):
     monkeypatch.setenv('GOOGLE_DESKTOP_CLIENT_ID', 'fork-id')
     monkeypatch.setenv('GOOGLE_DESKTOP_CLIENT_SECRET', 'fork-secret')
     assert google_drive.client_credentials() == ('fork-id', 'fork-secret')
+    assert google_drive.is_available() is True
+
+
+def test_credentials_come_from_the_client_file(monkeypatch, tmp_path):
+    """The OAuth client ships as google_client.json — the file Google Cloud
+    hands you, unchanged — instead of being hard-coded in the source."""
+    monkeypatch.delenv('GOOGLE_DESKTOP_CLIENT_ID', raising=False)
+    monkeypatch.delenv('GOOGLE_DESKTOP_CLIENT_SECRET', raising=False)
+    client = tmp_path / 'google_client.json'
+    client.write_text(json.dumps({'installed': {
+        'client_id': 'file-id.apps.googleusercontent.com',
+        'client_secret': 'file-secret',
+    }}), encoding='utf-8')
+    monkeypatch.setattr(google_drive, '_client_file_candidates', lambda: [client])
+
+    assert google_drive.client_credentials() == (
+        'file-id.apps.googleusercontent.com', 'file-secret')
+    assert google_drive.is_available() is True
+
+
+def test_flat_client_file_is_accepted(monkeypatch, tmp_path):
+    monkeypatch.delenv('GOOGLE_DESKTOP_CLIENT_ID', raising=False)
+    monkeypatch.delenv('GOOGLE_DESKTOP_CLIENT_SECRET', raising=False)
+    client = tmp_path / 'google_client.json'
+    client.write_text(json.dumps({'client_id': 'flat-id', 'client_secret': 'flat-secret'}),
+                      encoding='utf-8')
+    monkeypatch.setattr(google_drive, '_client_file_candidates', lambda: [client])
+    assert google_drive.client_credentials() == ('flat-id', 'flat-secret')
+
+
+def test_without_a_client_the_mode_reports_itself_unavailable(monkeypatch, tmp_path):
+    """A build made without the file must say so on the sync page rather than
+    start an OAuth flow that cannot finish."""
+    monkeypatch.delenv('GOOGLE_DESKTOP_CLIENT_ID', raising=False)
+    monkeypatch.delenv('GOOGLE_DESKTOP_CLIENT_SECRET', raising=False)
+    monkeypatch.setattr(google_drive, '_client_file_candidates',
+                        lambda: [tmp_path / 'nope.json'])
+    assert google_drive.client_credentials() == ('', '')
+    assert google_drive.is_available() is False
+
+
+def test_a_broken_client_file_does_not_raise(monkeypatch, tmp_path):
+    monkeypatch.delenv('GOOGLE_DESKTOP_CLIENT_ID', raising=False)
+    monkeypatch.delenv('GOOGLE_DESKTOP_CLIENT_SECRET', raising=False)
+    broken = tmp_path / 'google_client.json'
+    broken.write_text('{ not json', encoding='utf-8')
+    monkeypatch.setattr(google_drive, '_client_file_candidates', lambda: [broken])
+    assert google_drive.is_available() is False
 
 
 def test_disconnect_forgets_token_and_folder(app):

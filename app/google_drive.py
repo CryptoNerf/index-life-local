@@ -25,8 +25,8 @@ Auth is the standard installed-app loopback flow (no extra dependencies:
 stdlib http.server + urllib). The refresh token persists in sync_meta and
 is scrubbed from backups like the other secrets. The client id/secret pair
 must be a "Desktop app" OAuth client FROM THE SAME PROJECT as the PWA's web
-client (see docs/ru/sync.md); for installed apps Google treats the
-"secret" as non-confidential, so shipping it in a build is per guidelines.
+client (see docs/ru/sync.md). It is read at runtime from google_client.json
+or the environment — never checked into the repository.
 """
 from __future__ import annotations
 
@@ -35,12 +35,14 @@ import json
 import logging
 import os
 import secrets as _secrets
+import sys
 import threading
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 import webbrowser
+from pathlib import Path
 
 from app import db
 from app.models import SyncMeta
@@ -94,31 +96,69 @@ def _meta_del(key: str) -> None:
 
 # ── client credentials ────────────────────────────────────────────────
 
-# Built-in Desktop-app OAuth client (project "index-life" — the SAME
-# project as the PWA's web client, which is what makes drive.file files
-# mutually visible). Per Google's docs the client secret of an installed
-# app "is obviously not treated as a secret" — shipping it in an
-# open-source build is standard practice (rclone, gcloud do the same).
-# If it ever gets abused, rotate it in console.cloud.google.com and the
-# env vars below override without a rebuild.
-# The client pair is not stored in the repository — see google_client.json
-# and GOOGLE_DESKTOP_CLIENT_ID / _SECRET.
-_DEFAULT_CLIENT_ID = ''
-_DEFAULT_CLIENT_SECRET = ''
+# The Desktop-app OAuth client must come from the SAME Google Cloud project
+# as the PWA's web client — that is what makes drive.file files mutually
+# visible. It is NOT hard-coded here: a build ships it in google_client.json
+# (the file Google Cloud hands you, unchanged), which is deliberately not in
+# the repository. Anyone building a fork points at their own client instead.
+#
+# Lookup order, first hit wins:
+#   1. GOOGLE_DESKTOP_CLIENT_ID / _SECRET   — rotate without touching files
+#   2. <user data dir>/google_client.json   — a user's own client
+#   3. the bundled file (PyInstaller) or the project root — the shipped one
+_CLIENT_FILE = 'google_client.json'
+
+
+def _client_file_candidates() -> list[Path]:
+    paths: list[Path] = []
+    try:
+        from paths import user_data_dir
+        paths.append(Path(user_data_dir()) / _CLIENT_FILE)
+    except Exception:
+        pass
+    bundled = getattr(sys, '_MEIPASS', None)     # PyInstaller build
+    if bundled:
+        paths.append(Path(bundled) / _CLIENT_FILE)
+    paths.append(Path(__file__).resolve().parent.parent / _CLIENT_FILE)
+    return paths
+
+
+def _credentials_from_file() -> tuple[str, str]:
+    """Read the id/secret out of google_client.json, or ('', '').
+
+    Accepts the file exactly as Google Cloud exports it ({"installed": {...}})
+    as well as a flat {"client_id": ..., "client_secret": ...}.
+    """
+    for path in _client_file_candidates():
+        try:
+            if not path.is_file():
+                continue
+            data = json.loads(path.read_text(encoding='utf-8'))
+        except Exception as exc:
+            log.warning('google: cannot read %s (%s)', path, exc)
+            continue
+        node = data.get('installed') or data.get('web') or data
+        if not isinstance(node, dict):
+            continue
+        cid = str(node.get('client_id') or '').strip()
+        csec = str(node.get('client_secret') or '').strip()
+        if cid and csec:
+            return cid, csec
+    return '', ''
 
 
 def client_credentials() -> tuple[str, str]:
     """(client_id, client_secret) of the Desktop-app OAuth client.
 
-    Environment variables override the built-in pair (useful for forks and
-    for rotating a compromised client without rebuilding).
+    Empty strings when neither the environment nor a client file provides
+    them — `is_available()` then reports the mode as unconfigured and the
+    sync page explains what to do instead of failing mid-OAuth.
     """
-    return (
-        (os.environ.get('GOOGLE_DESKTOP_CLIENT_ID') or '').strip()
-        or _DEFAULT_CLIENT_ID,
-        (os.environ.get('GOOGLE_DESKTOP_CLIENT_SECRET') or '').strip()
-        or _DEFAULT_CLIENT_SECRET,
-    )
+    cid = (os.environ.get('GOOGLE_DESKTOP_CLIENT_ID') or '').strip()
+    csec = (os.environ.get('GOOGLE_DESKTOP_CLIENT_SECRET') or '').strip()
+    if cid and csec:
+        return cid, csec
+    return _credentials_from_file()
 
 
 def is_available() -> bool:
