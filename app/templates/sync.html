@@ -29,6 +29,84 @@
     </nav>
   </header>
 
+  {# ══ The full transport settings form — used once per render: inside the
+     wizard's "all methods" fold (unconfigured) or inside "Settings"
+     (configured). Kept as ONE macro so the goal cards are a guidance layer
+     over a single form instance (unique element ids for the JS). ══ #}
+  {% macro settings_form() %}
+    <form method="post" action="{{ url_for('sync.sync_settings') }}" class="sync-form" id="sync-settings-form">
+      <div class="sync-row sync-mode-row">
+        <label class="sync-mode-opt">
+          <input type="radio" name="sync_mode" value="gdrive" {% if sync_mode == 'gdrive' %}checked{% endif %}>
+          {{ t('sync.mode_gdrive') }}
+        </label>
+        <label class="sync-mode-opt">
+          <input type="radio" name="sync_mode" value="local" {% if sync_mode not in ('webdav', 'gdrive') %}checked{% endif %}>
+          {{ t('sync.mode_local') }}
+        </label>
+        <label class="sync-mode-opt">
+          <input type="radio" name="sync_mode" value="webdav" {% if sync_mode == 'webdav' %}checked{% endif %}>
+          {{ t('sync.mode_webdav') }}
+        </label>
+      </div>
+
+      <!-- Google Drive (direct API) pane — the only Google mode the phone
+           can see: files uploaded by the Google Drive desktop client are
+           invisible to the PWA's drive.file scope. -->
+      <div class="sync-pane" data-pane="gdrive" {% if sync_mode != 'gdrive' %}style="display:none"{% endif %}>
+        {% if not gdrive_available %}
+          <p class="sync-hint">{{ t('sync.gdrive_setup_hint') }}</p>
+        {% elif gdrive_connected %}
+          <p class="sync-hint">✓ {{ t('sync.gdrive_connected_hint') }}</p>
+        {% else %}
+          <p class="sync-hint">{{ t('sync.gdrive_why') }}</p>
+          <button class="sync-btn sync-btn-primary" type="submit"
+                  formaction="{{ url_for('sync.google_connect') }}" formmethod="post">
+            {{ t('sync.gdrive_connect_btn') }}
+          </button>
+        {% endif %}
+      </div>
+
+      <!-- Local folder pane -->
+      <div class="sync-pane" data-pane="local" {% if sync_mode in ('webdav', 'gdrive') %}style="display:none"{% endif %}>
+        <label>{{ t('sync.folder_label') }}</label>
+        <input type="text" name="sync_folder" value="{{ sync_folder }}"
+               placeholder="/Users/you/Dropbox/index-life-sync" class="sync-input">
+        <div class="sync-row" style="margin-top:8px">
+          <button type="button" class="sync-btn" id="sync-discover-btn">{{ t('sync.discover_btn') }}</button>
+          <button type="button" class="sync-btn" id="sync-pick-folder-btn" style="display:none">{{ t('sync.pick_folder') }}</button>
+        </div>
+        <div id="sync-discover-results" class="discover-results"></div>
+        <p class="sync-hint">{{ t('sync.local_hint') }}</p>
+        <p class="sync-hint">⚠️ {{ t('sync.local_no_phone_hint') }}</p>
+      </div>
+
+      <!-- WebDAV pane -->
+      <div class="sync-pane" data-pane="webdav" {% if sync_mode != 'webdav' %}style="display:none"{% endif %}>
+        <label>{{ t('sync.webdav_url_label') }}</label>
+        <input type="text" name="webdav_url" value="{{ webdav_url }}"
+               placeholder="https://dav.example.com/remote.php/dav/files/me/diary/" class="sync-input">
+        <span class="sync-creds-label">{{ t('sync.webdav_creds_label') }}</span>
+        <div class="sync-row">
+          <input type="text" name="webdav_user" value="{{ webdav_user }}"
+                 placeholder="{{ t('sync.webdav_user') }}" class="sync-input" autocomplete="username">
+          {# Never pre-fill the stored password — empty means "keep it". #}
+          <input type="password" name="webdav_pass" value=""
+                 placeholder="{{ t('sync.webdav_pass_saved') if webdav_pass_set else t('sync.webdav_pass') }}"
+                 class="sync-input" autocomplete="current-password">
+        </div>
+        <p class="sync-hint">{{ t('sync.webdav_hint') }}</p>
+        <p class="sync-hint">{{ t('sync.webdav_creds_hint') }}</p>
+      </div>
+
+      <div class="sync-row" style="margin-top:12px">
+        <button type="submit" class="sync-btn sync-btn-primary">{{ t('sync.save') }}</button>
+        <button type="button" class="sync-btn" id="sync-test-btn">{{ t('sync.test') }}</button>
+        <span id="sync-test-result" class="sync-meta"></span>
+      </div>
+    </form>
+  {% endmacro %}
+
   <div class="sync-page">
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
@@ -38,244 +116,293 @@
       {% endif %}
     {% endwith %}
 
-    <!-- Sync Section -->
-    <section class="sync-section">
-      <h2>{{ t('sync.heading') }}</h2>
-      <div class="sync-meta">{{ t('sync.device_id') }}: <code>{{ device_id[:8] }}…</code></div>
-      {% if last_sync %}
-        <div class="sync-meta">{{ t('sync.last_sync') }}: {{ last_sync.strftime('%Y-%m-%d %H:%M') }}</div>
-      {% endif %}
-
-      {# Outcome of the last (possibly background) sync cycle: a stuck peer
-         snapshot or a failed push must never hide behind a fresh
-         "last sync" time. #}
-      {% if sync_report and (sync_report.errors or sync_report.push_ok == false) %}
-        <div class="flash-msg flash-warning">
-          {% if sync_report.locked %}
-            {# The actionable case: a peer (the phone) writes encrypted
-               snapshots and this device has no vault key yet. #}
-            🔒 {{ t('sync.report_locked') }}
-          {% endif %}
-          {% if sync_report.errors and sync_report.errors > (sync_report.locked or 0) %}
-            ⚠️ {{ t('sync.report_errors', count=sync_report.errors) }}
-            {% if sync_report.error_files %}
-              (<code>{{ sync_report.error_files|join(', ') }}</code>)
-            {% endif %}
-          {% endif %}
-          {% if sync_report.push_ok == false %}
-            ⚠️ {{ t('sync.report_push_failed') }}
-          {% endif %}
-          {{ t('sync.report_see_log') }}
-        </div>
-      {% endif %}
-
-      {% if sync_configured %}
-        <div class="sync-devices" id="sync-devices" data-self="{{ device_id }}">
-          <div class="sync-devices-title">{{ t('sync.devices_heading') }}</div>
-          <div id="sync-devices-list" class="sync-meta">…</div>
-        </div>
-        {% if not encryption.unlocked %}
-          {# The next step toward connecting a phone: the PWA only syncs
-             encrypted, so a vault must exist and be unlocked first. #}
-          <p class="sync-hint">📱 {{ t('sync.next_step_encrypt') }}</p>
-        {% endif %}
-      {% endif %}
-
-      <form method="post" action="{{ url_for('sync.sync_settings') }}" class="sync-form" id="sync-settings-form">
-        <div class="sync-row sync-mode-row">
-          <label class="sync-mode-opt">
-            <input type="radio" name="sync_mode" value="local" {% if sync_mode != 'webdav' %}checked{% endif %}>
-            {{ t('sync.mode_local') }}
-          </label>
-          <label class="sync-mode-opt">
-            <input type="radio" name="sync_mode" value="webdav" {% if sync_mode == 'webdav' %}checked{% endif %}>
-            {{ t('sync.mode_webdav') }}
-          </label>
-        </div>
-
-        <!-- Local folder pane -->
-        <div class="sync-pane" data-pane="local" {% if sync_mode == 'webdav' %}style="display:none"{% endif %}>
-          <label>{{ t('sync.folder_label') }}</label>
-          <input type="text" name="sync_folder" value="{{ sync_folder }}"
-                 placeholder="/Users/you/Dropbox/index-life-sync" class="sync-input">
-          <div class="sync-row" style="margin-top:8px">
-            <button type="button" class="sync-btn" id="sync-discover-btn">{{ t('sync.discover_btn') }}</button>
-            <button type="button" class="sync-btn" id="sync-pick-folder-btn" style="display:none">{{ t('sync.pick_folder') }}</button>
-          </div>
-          <div id="sync-discover-results" class="discover-results"></div>
-          <p class="sync-hint">{{ t('sync.local_hint') }}</p>
-        </div>
-
-        <!-- WebDAV pane -->
-        <div class="sync-pane" data-pane="webdav" {% if sync_mode != 'webdav' %}style="display:none"{% endif %}>
-          <label>{{ t('sync.webdav_url_label') }}</label>
-          <input type="text" name="webdav_url" value="{{ webdav_url }}"
-                 placeholder="https://dav.example.com/remote.php/dav/files/me/diary/" class="sync-input">
-          <span class="sync-creds-label">{{ t('sync.webdav_creds_label') }}</span>
-          <div class="sync-row">
-            <input type="text" name="webdav_user" value="{{ webdav_user }}"
-                   placeholder="{{ t('sync.webdav_user') }}" class="sync-input" autocomplete="username">
-            {# Never pre-fill the stored password — empty means "keep it". #}
-            <input type="password" name="webdav_pass" value=""
-                   placeholder="{{ t('sync.webdav_pass_saved') if webdav_pass_set else t('sync.webdav_pass') }}"
-                   class="sync-input" autocomplete="current-password">
-          </div>
-          <p class="sync-hint">{{ t('sync.webdav_hint') }}</p>
-          <p class="sync-hint">{{ t('sync.webdav_creds_hint') }}</p>
-        </div>
-
-        <div class="sync-row" style="margin-top:12px">
-          <button type="submit" class="sync-btn sync-btn-primary">{{ t('sync.save') }}</button>
-          <button type="button" class="sync-btn" id="sync-test-btn">{{ t('sync.test') }}</button>
-          <span id="sync-test-result" class="sync-meta"></span>
-        </div>
-      </form>
-
-      {% if (sync_mode == 'webdav' and webdav_url) or (sync_mode != 'webdav' and sync_folder) %}
-        <div class="sync-actions">
-          <form method="post" action="{{ url_for('sync.sync_now') }}" style="display:inline">
-            <button class="sync-btn sync-btn-primary">{{ t('sync.sync_now') }}</button>
-          </form>
-          <form method="post" action="{{ url_for('sync.sync_export') }}" style="display:inline">
-            <button class="sync-btn">{{ t('sync.export') }}</button>
-          </form>
-          <form method="post" action="{{ url_for('sync.sync_import') }}" style="display:inline">
-            <button class="sync-btn">{{ t('sync.import') }}</button>
-          </form>
-          <form method="post" action="{{ url_for('sync.sync_disconnect') }}" style="display:inline"
-                onsubmit="return confirm({{ t('sync.disconnect_confirm')|tojson }})">
-            <button class="sync-btn">{{ t('sync.disconnect') }}</button>
-          </form>
-        </div>
-      {% endif %}
-    </section>
-
-    <!-- Encryption Section -->
-    <section class="sync-section">
-      <h2>{{ t('sync.enc_heading') }}</h2>
-
-      {% if not sync_configured %}
-        <p class="sync-hint">{{ t('sync.enc_need_sync') }}</p>
-
-      {% elif new_recovery_key %}
+    {# ── One-time recovery key display beats everything else on the page ── #}
+    {% if new_recovery_key %}
+      <section class="sync-section">
         <div class="enc-recovery">
           <div class="enc-recovery-title">🔑 {{ t('sync.enc_recovery_title') }}</div>
           <code class="enc-recovery-key">{{ new_recovery_key }}</code>
           <p class="sync-hint">{{ t('sync.enc_recovery_hint') }}</p>
           <a href="{{ url_for('sync.sync_page') }}" class="sync-btn sync-btn-primary">{{ t('sync.enc_recovery_done') }}</a>
         </div>
-
-      {% elif encryption.unlocked %}
-        <div class="enc-status enc-on">🔒 {{ t('sync.enc_on') }}</div>
-        <p class="sync-hint">{{ t('sync.enc_on_hint') }}</p>
-
-        {% if pairing_payload %}
-          <details class="pair-block" id="pair-block">
-            <summary>📱 {{ t('sync.pair_show') }}</summary>
-            <p class="sync-hint">{{ t('sync.pair_hint') }}</p>
-            <div id="pair-qr" class="pair-qr" data-payload="{{ pairing_payload }}"></div>
-            <code class="enc-recovery-key">{{ pairing_code }}</code>
-            <p class="sync-hint">⚠️ {{ t('sync.pair_warning') }}</p>
-          </details>
-        {% endif %}
-
-        <form method="post" action="{{ url_for('sync.encryption_lock') }}"
-              onsubmit="return confirm({{ t('sync.enc_lock_confirm')|tojson }})">
-          <button class="sync-btn">{{ t('sync.enc_lock') }}</button>
-        </form>
-
-      {% elif encryption.enabled or encryption.vault_in_folder %}
-        <!-- Encrypted vault exists (this device locked, or a peer set it up) -->
-        <div class="enc-status enc-locked">🔒 {{ t('sync.enc_locked') }}</div>
-        <p class="sync-hint">
-          {{ t('sync.enc_locked_hint') if encryption.enabled else t('sync.enc_join_hint') }}
-        </p>
-        <form method="post" action="{{ url_for('sync.encryption_unlock') }}" class="enc-form">
-          <input type="password" name="passphrase" class="sync-input"
-                 placeholder="{{ t('sync.enc_passphrase') }}" autocomplete="current-password" autofocus>
-          <button class="sync-btn sync-btn-primary">{{ t('sync.enc_unlock') }}</button>
-        </form>
-        <details class="enc-recovery-toggle">
-          <summary>{{ t('sync.enc_use_recovery') }}</summary>
-          <form method="post" action="{{ url_for('sync.encryption_unlock') }}" class="enc-form">
-            <input type="text" name="recovery_key" class="sync-input"
-                   placeholder="{{ t('sync.enc_recovery_key') }}" autocomplete="off">
-            <button class="sync-btn">{{ t('sync.enc_unlock') }}</button>
-          </form>
-        </details>
-        <details class="enc-recovery-toggle">
-          <summary>{{ t('sync.pair_use_code') }}</summary>
-          <p class="sync-hint">{{ t('sync.pair_use_code_hint') }}</p>
-          <form method="post" action="{{ url_for('sync.encryption_pair') }}" class="enc-form">
-            <input type="text" name="pairing_code" class="sync-input"
-                   placeholder="{{ t('sync.pair_code_placeholder') }}" autocomplete="off">
-            <button class="sync-btn">{{ t('sync.pair_join') }}</button>
-          </form>
-        </details>
-
-      {% else %}
-        <!-- No vault yet: enable a brand-new one -->
-        <p class="sync-hint">{{ t('sync.enc_intro') }}</p>
-        <form method="post" action="{{ url_for('sync.encryption_enable') }}" class="enc-form">
-          <input type="password" name="passphrase" class="sync-input"
-                 placeholder="{{ t('sync.enc_passphrase') }}" autocomplete="new-password">
-          <input type="password" name="passphrase_confirm" class="sync-input"
-                 placeholder="{{ t('sync.enc_passphrase_confirm') }}" autocomplete="new-password">
-          <button class="sync-btn sync-btn-primary">{{ t('sync.enc_enable') }}</button>
-        </form>
-      {% endif %}
-    </section>
-
-    <!-- Conflicts -->
-    {% if conflicts %}
-    <section class="sync-section">
-      <h2>{{ t('sync.conflicts_heading') }}</h2>
-      <div class="conflict-list">
-        {% for c in conflicts %}
-          <div class="conflict-item">
-            <span class="conflict-date">{{ c.entry_date.strftime('%Y-%m-%d') }}</span>
-            <span class="conflict-winner">{{ t('sync.conflict_winner_kept', winner=c.winner) }}</span>
-            <span class="conflict-time">{{ c.resolved_at.strftime('%Y-%m-%d %H:%M') }}</span>
-          </div>
-        {% endfor %}
-      </div>
-    </section>
+      </section>
     {% endif %}
 
-    <!-- Backup Section -->
-    <section class="sync-section">
-      <h2>{{ t('sync.backups_heading') }}</h2>
-      <form method="post" action="{{ url_for('sync.backup_create') }}" style="display:inline">
-        <button class="sync-btn">{{ t('sync.create_backup') }}</button>
-      </form>
+    {% if not sync_configured %}
+      {# ════════════════ SETUP WIZARD (nothing configured yet) ════════════════
+         Goal-first: the user picks WHAT they want, not a transport acronym. #}
+      <section class="sync-section">
+        <h2>{{ t('sync.heading') }}</h2>
+        <p class="sync-hint">{{ t('sync.intro') }}</p>
 
-      {% if backups %}
-        <div class="backup-list">
-          {% for b in backups %}
-            <div class="backup-item">
-              <span class="backup-name">{{ b.filename }}</span>
-              <span class="backup-size">{{ b.size_kb }} KB</span>
-              <span class="backup-date">{{ b.created.strftime('%Y-%m-%d %H:%M') }}</span>
-              <form method="post" action="{{ url_for('sync.backup_restore') }}" style="display:inline"
-                    onsubmit="return confirm({{ t('sync.restore_confirm')|tojson }})">
-                <input type="hidden" name="backup_path" value="{{ b.path }}">
-                <button class="sync-btn sync-btn-small">{{ t('sync.restore') }}</button>
-              </form>
-            </div>
-          {% endfor %}
+        <div class="goal-title">{{ t('sync.goal_title') }}</div>
+        <div class="goal-cards">
+          <button type="button" class="goal-card" data-goal="phone">
+            <span class="goal-ico">📱💻</span>
+            <span class="goal-name">{{ t('sync.goal_phone') }}</span>
+            <span class="goal-desc">{{ t('sync.goal_phone_desc') }}</span>
+          </button>
+          <button type="button" class="goal-card" data-goal="computers">
+            <span class="goal-ico">💻💻</span>
+            <span class="goal-name">{{ t('sync.goal_computers') }}</span>
+            <span class="goal-desc">{{ t('sync.goal_computers_desc') }}</span>
+          </button>
+          <button type="button" class="goal-card" data-goal="backup">
+            <span class="goal-ico">☁️</span>
+            <span class="goal-name">{{ t('sync.goal_backup') }}</span>
+            <span class="goal-desc">{{ t('sync.goal_backup_desc') }}</span>
+          </button>
         </div>
-      {% else %}
-        <div class="sync-meta" style="margin-top:12px">{{ t('sync.no_backups') }}</div>
-      {% endif %}
+
+        <!-- Goal: phone + computer -->
+        <div class="goal-panel" data-goal-panel="phone" style="display:none">
+          <p>{{ t('sync.goal_phone_google') }}</p>
+          {% if gdrive_available %}
+            <form method="post" action="{{ url_for('sync.google_connect') }}" style="display:inline">
+              <button class="sync-btn sync-btn-primary">{{ t('sync.gdrive_connect_btn') }}</button>
+            </form>
+          {% else %}
+            <p class="sync-hint">{{ t('sync.gdrive_setup_hint') }}</p>
+          {% endif %}
+          <p class="sync-hint">{{ t('sync.goal_phone_after') }}</p>
+          <details class="goal-alt">
+            <summary>{{ t('sync.goal_yandex_summary') }}</summary>
+            <p class="sync-hint">{{ t('sync.goal_yandex_steps') }}</p>
+            <button type="button" class="sync-btn" data-open-advanced="local">{{ t('sync.goal_open_folder_setup') }}</button>
+          </details>
+        </div>
+
+        <!-- Goal: two computers -->
+        <div class="goal-panel" data-goal-panel="computers" style="display:none">
+          <p class="sync-hint">{{ t('sync.goal_computers_hint') }}</p>
+          <button type="button" class="sync-btn sync-btn-primary" data-open-advanced="local">
+            {{ t('sync.goal_open_folder_setup') }}
+          </button>
+        </div>
+
+        <!-- Goal: backup only -->
+        <div class="goal-panel" data-goal-panel="backup" style="display:none">
+          <p class="sync-hint">{{ t('sync.goal_backup_hint') }}</p>
+          {% if gdrive_available %}
+            <form method="post" action="{{ url_for('sync.google_connect') }}" style="display:inline">
+              <button class="sync-btn sync-btn-primary">{{ t('sync.gdrive_connect_btn') }}</button>
+            </form>
+          {% endif %}
+          <button type="button" class="sync-btn" data-open-advanced="local">{{ t('sync.goal_open_folder_setup') }}</button>
+        </div>
+
+        <details class="sync-fold" id="advanced-setup">
+          <summary>{{ t('sync.advanced_setup') }}</summary>
+          {{ settings_form() }}
+        </details>
+      </section>
+
+    {% else %}
+      {# ════════════════ STATUS VIEW (sync is configured) ════════════════ #}
+      <section class="sync-section">
+        <h2>{{ t('sync.heading') }}</h2>
+
+        {% set provider_label = t('sync.mode_gdrive') if sync_mode == 'gdrive'
+             else (webdav_url if sync_mode == 'webdav' else sync_folder) %}
+        <div class="status-card">
+          <div class="status-main">
+            ✅ {{ t('sync.status_on') }} · <code class="status-target">{{ provider_label }}</code>
+          </div>
+          <div class="sync-meta">
+            {% if last_sync %}{{ t('sync.last_sync') }}: {{ last_sync.strftime('%Y-%m-%d %H:%M') }} · {% endif %}
+            {% if encryption.unlocked %}🔒 {{ t('sync.status_encrypted') }}
+            {% elif encryption.enabled or encryption.vault_in_folder %}⚠️ {{ t('sync.status_locked_short') }}
+            {% else %}⚪ {{ t('sync.status_no_encryption') }}{% endif %}
+            · {{ t('sync.device_id') }} <code>{{ device_id[:8] }}…</code>
+          </div>
+        </div>
+
+        {# Problems of the last (possibly background) cycle — never hidden
+           behind a fresh "last sync" time. #}
+        {% if sync_report and (sync_report.errors or sync_report.push_ok == false) %}
+          <div class="flash-msg flash-warning">
+            {% if sync_report.locked %}🔒 {{ t('sync.report_locked') }}{% endif %}
+            {% if sync_report.errors and sync_report.errors > (sync_report.locked or 0) %}
+              ⚠️ {{ t('sync.report_errors', count=sync_report.errors) }}
+              {% if sync_report.error_files %}(<code>{{ sync_report.error_files|join(', ') }}</code>){% endif %}
+            {% endif %}
+            {% if sync_report.push_ok == false %}⚠️ {{ t('sync.report_push_failed') }}{% endif %}
+            {{ t('sync.report_see_log') }}
+          </div>
+        {% endif %}
+
+        {# ── Next step / action cards, in priority order ── #}
+        {% if encryption.unlocked %}
+          {% if pairing_payload %}
+            <details class="pair-block step-card" id="pair-block">
+              <summary>📱 {{ t('sync.pair_show') }}</summary>
+              <p class="sync-hint">{{ t('sync.pair_hint') }}</p>
+              <div id="pair-qr" class="pair-qr" data-payload="{{ pairing_payload }}"></div>
+              <code class="enc-recovery-key">{{ pairing_code }}</code>
+              <p class="sync-hint">⚠️ {{ t('sync.pair_warning') }}</p>
+            </details>
+          {% endif %}
+
+        {% elif encryption.enabled or encryption.vault_in_folder %}
+          <div class="step-card step-warn">
+            <div class="step-title">🔒 {{ t('sync.step_unlock_title') }}</div>
+            <p class="sync-hint">
+              {{ t('sync.enc_locked_hint') if encryption.enabled else t('sync.enc_join_hint') }}
+            </p>
+            <form method="post" action="{{ url_for('sync.encryption_unlock') }}" class="enc-form">
+              <input type="password" name="passphrase" class="sync-input"
+                     placeholder="{{ t('sync.enc_passphrase') }}" autocomplete="current-password" autofocus>
+              <button class="sync-btn sync-btn-primary">{{ t('sync.enc_unlock') }}</button>
+            </form>
+            <details class="enc-recovery-toggle">
+              <summary>{{ t('sync.enc_use_recovery') }}</summary>
+              <form method="post" action="{{ url_for('sync.encryption_unlock') }}" class="enc-form">
+                <input type="text" name="recovery_key" class="sync-input"
+                       placeholder="{{ t('sync.enc_recovery_key') }}" autocomplete="off">
+                <button class="sync-btn">{{ t('sync.enc_unlock') }}</button>
+              </form>
+            </details>
+            <details class="enc-recovery-toggle">
+              <summary>{{ t('sync.pair_use_code') }}</summary>
+              <p class="sync-hint">{{ t('sync.pair_use_code_hint') }}</p>
+              <form method="post" action="{{ url_for('sync.encryption_pair') }}" class="enc-form">
+                <input type="text" name="pairing_code" class="sync-input"
+                       placeholder="{{ t('sync.pair_code_placeholder') }}" autocomplete="off">
+                <button class="sync-btn">{{ t('sync.pair_join') }}</button>
+              </form>
+            </details>
+          </div>
+
+        {% else %}
+          <div class="step-card">
+            <div class="step-title">🔐 {{ t('sync.step_protect_title') }}</div>
+            <p class="sync-hint">{{ t('sync.step_protect_hint') }}</p>
+            <form method="post" action="{{ url_for('sync.encryption_enable') }}" class="enc-form">
+              <input type="password" name="passphrase" class="sync-input"
+                     placeholder="{{ t('sync.enc_passphrase') }}" autocomplete="new-password">
+              <input type="password" name="passphrase_confirm" class="sync-input"
+                     placeholder="{{ t('sync.enc_passphrase_confirm') }}" autocomplete="new-password">
+              <button class="sync-btn sync-btn-primary">{{ t('sync.enc_enable') }}</button>
+            </form>
+          </div>
+        {% endif %}
+
+        <div class="sync-devices" id="sync-devices" data-self="{{ device_id }}">
+          <div class="sync-devices-title">{{ t('sync.devices_heading') }}</div>
+          <div id="sync-devices-list" class="sync-meta">…</div>
+        </div>
+
+        <div class="sync-actions">
+          <form method="post" action="{{ url_for('sync.sync_now') }}" style="display:inline">
+            <button class="sync-btn sync-btn-primary">{{ t('sync.sync_now') }}</button>
+          </form>
+        </div>
+
+        {# ── Folded: full settings ── #}
+        <details class="sync-fold" id="advanced-setup">
+          <summary>{{ t('sync.settings_heading') }}</summary>
+          {{ settings_form() }}
+          <div class="sync-actions">
+            <form method="post" action="{{ url_for('sync.sync_export') }}" style="display:inline">
+              <button class="sync-btn">{{ t('sync.export') }}</button>
+            </form>
+            <form method="post" action="{{ url_for('sync.sync_import') }}" style="display:inline">
+              <button class="sync-btn">{{ t('sync.import') }}</button>
+            </form>
+            {% if encryption.unlocked %}
+              <form method="post" action="{{ url_for('sync.encryption_lock') }}" style="display:inline"
+                    onsubmit="return confirm({{ t('sync.enc_lock_confirm')|tojson }})">
+                <button class="sync-btn">{{ t('sync.enc_lock') }}</button>
+              </form>
+            {% endif %}
+            <form method="post" action="{{ url_for('sync.sync_disconnect') }}" style="display:inline"
+                  onsubmit="return confirm({{ t('sync.disconnect_confirm')|tojson }})">
+              <button class="sync-btn">{{ t('sync.disconnect') }}</button>
+            </form>
+          </div>
+        </details>
+      </section>
+    {% endif %}
+
+    {# ── Changes applied from other devices (former "Conflicts") ── #}
+    {% if conflicts %}
+      <section class="sync-section">
+        <details class="sync-fold">
+          <summary>{{ t('sync.changes_heading') }} ({{ conflicts|length }})</summary>
+          <p class="sync-hint">{{ t('sync.changes_hint') }}</p>
+          <div class="conflict-list">
+            {% for c in conflicts %}
+              <div class="conflict-item">
+                {{ t('sync.change_line',
+                     date=c.entry_date.strftime('%d.%m.%Y'),
+                     device=(peer_names.get(c.remote_device) or (c.remote_device or '?')[:8] ~ '…'),
+                     when=c.resolved_at.strftime('%d.%m %H:%M')) }}
+              </div>
+            {% endfor %}
+          </div>
+        </details>
+      </section>
+    {% endif %}
+
+    <!-- Backups -->
+    <section class="sync-section">
+      <details class="sync-fold">
+        <summary>{{ t('sync.backups_heading') }}{% if backups %} ({{ backups|length }}){% endif %}</summary>
+        <form method="post" action="{{ url_for('sync.backup_create') }}" style="display:inline">
+          <button class="sync-btn">{{ t('sync.create_backup') }}</button>
+        </form>
+        {% if backups %}
+          <div class="backup-list">
+            {% for b in backups %}
+              <div class="backup-item">
+                <span class="backup-name">{{ b.filename }}</span>
+                <span class="backup-size">{{ b.size_kb }} KB</span>
+                <span class="backup-date">{{ b.created.strftime('%Y-%m-%d %H:%M') }}</span>
+                <form method="post" action="{{ url_for('sync.backup_restore') }}" style="display:inline"
+                      onsubmit="return confirm({{ t('sync.restore_confirm')|tojson }})">
+                  <input type="hidden" name="backup_path" value="{{ b.path }}">
+                  <button class="sync-btn sync-btn-small">{{ t('sync.restore') }}</button>
+                </form>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="sync-meta" style="margin-top:12px">{{ t('sync.no_backups') }}</div>
+        {% endif %}
+      </details>
     </section>
   </div>
 
   <script>
     (function () {
+      // ── Setup wizard: goal cards reveal their panel; some open the form ──
+      var goalCards = document.querySelectorAll('.goal-card');
+      goalCards.forEach(function (card) {
+        card.addEventListener('click', function () {
+          goalCards.forEach(function (c) { c.classList.remove('goal-picked'); });
+          card.classList.add('goal-picked');
+          var goal = card.getAttribute('data-goal');
+          document.querySelectorAll('.goal-panel').forEach(function (p) {
+            p.style.display = (p.getAttribute('data-goal-panel') === goal) ? '' : 'none';
+          });
+        });
+      });
+      document.querySelectorAll('[data-open-advanced]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var adv = document.getElementById('advanced-setup');
+          if (!adv) return;
+          adv.open = true;
+          var mode = btn.getAttribute('data-open-advanced') || 'local';
+          var radio = adv.querySelector('input[name="sync_mode"][value="' + mode + '"]');
+          if (radio) { radio.checked = true; radio.dispatchEvent(new Event('change')); }
+          adv.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+      });
+
       var form = document.getElementById('sync-settings-form');
       if (!form) return;
 
-      // Toggle local/webdav panes based on the selected mode.
+      // Toggle transport panes based on the selected mode.
       function applyMode() {
         var mode = (form.querySelector('input[name="sync_mode"]:checked') || {}).value || 'local';
         form.querySelectorAll('.sync-pane').forEach(function (pane) {

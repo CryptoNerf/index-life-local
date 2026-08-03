@@ -335,3 +335,67 @@ header { width: 100%; }
 .pair-block summary { cursor: pointer; font-weight: 600; }
 .pair-qr { margin: 10px 0; }
 .pair-qr svg { display: block; }
+
+/* ── Scenario-first setup wizard ────────────────────────────── */
+
+.goal-title { font-weight: 600; margin: 16px 0 8px; }
+.goal-cards { display: flex; gap: 10px; flex-wrap: wrap; }
+.goal-card {
+  flex: 1 1 160px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+  text-align: left;
+  padding: 14px;
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  background: #fafafa;
+  cursor: pointer;
+  font: inherit;
+}
+.goal-card:hover { border-color: #999; }
+.goal-card.goal-picked { border-color: #111; background: #fff; }
+.goal-ico { font-size: 20px; }
+.goal-name { font-weight: 600; }
+.goal-desc { font-size: 13px; color: #777; }
+.goal-panel {
+  margin: 14px 0;
+  padding: 14px;
+  border: 1px solid #e5e5e5;
+  border-radius: 12px;
+}
+.goal-alt { margin-top: 10px; }
+.goal-alt summary { cursor: pointer; }
+
+/* ── Status view ────────────────────────────────────────────── */
+
+.status-card {
+  padding: 14px;
+  border: 1px solid #d7e8d7;
+  background: #f3faf3;
+  border-radius: 12px;
+  margin: 10px 0 14px;
+}
+.status-main { font-weight: 600; margin-bottom: 4px; }
+.status-target { word-break: break-all; }
+
+.step-card {
+  margin: 12px 0;
+  padding: 14px;
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  background: #fafafa;
+}
+.step-card.step-warn { border-color: #e0c14a; background: #fdf6e3; }
+.step-title { font-weight: 600; margin-bottom: 6px; }
+.step-card.pair-block summary { font-weight: 600; cursor: pointer; }
+
+/* ── Folded sections ────────────────────────────────────────── */
+
+.sync-fold { margin: 14px 0 4px; }
+.sync-fold > summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 6px 0;
+}

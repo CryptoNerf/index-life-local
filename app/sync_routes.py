@@ -7,7 +7,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from datetime import date
 from pathlib import Path
 
-from app.models import SyncConflict
+from app.models import SyncConflict, SyncMeta
 from app.backup import list_backups, backup_and_rotate, restore_backup
 from app.sync import (
     get_device_id, get_sync_config, set_sync_config, is_sync_configured,
@@ -83,6 +83,11 @@ def _render_sync(**extra):
         pairing_code=sync_vault.pairing_code() if configured else None,
         gdrive_available=_gdrive_available(),
         gdrive_connected=_gdrive_connected(),
+        # device_id -> human name, for the "changes from other devices" list
+        peer_names={
+            r.key[len('peer_name:'):]: r.value
+            for r in SyncMeta.query.filter(SyncMeta.key.like('peer_name:%')).all()
+        },
     )
     ctx.update(extra)
     return render_template('sync.html', **ctx)
