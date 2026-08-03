@@ -728,6 +728,5 @@
   "sync.devices_encrypted": "encrypted",
   "edit_day.dictation_title": "macOS dictation",
   "edit_day.dictation_listening": "listening…",
-  "edit_day.dictation_shortcut": "macOS dictation: press Fn twice and start speaking — the text lands in the note.",
-  "edit_day.dictation_failed": "Couldn't start dictation. Press Fn twice to use the system one."
+  "edit_day.dictation_shortcut": "macOS dictation: press the microphone key (F5) or Fn twice — whichever is set in System Settings → Keyboard → Dictation. The cursor is already in the note, so the text lands here."
 }

@@ -728,6 +728,5 @@
   "sync.devices_encrypted": "зашифровано",
   "edit_day.dictation_title": "Диктовка macOS",
   "edit_day.dictation_listening": "слушаю…",
-  "edit_day.dictation_shortcut": "Диктовка macOS: нажмите Fn дважды и говорите — текст пойдёт прямо в заметку.",
-  "edit_day.dictation_failed": "Не получилось включить диктовку. Нажмите Fn дважды — сработает системная."
+  "edit_day.dictation_shortcut": "Диктовка macOS: нажмите клавишу микрофона (F5) или дважды Fn — смотря что задано в Системных настройках → Клавиатура → Диктовка. Курсор уже в заметке, текст будет печататься сюда."
 }
