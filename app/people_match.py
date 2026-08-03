@@ -114,6 +114,41 @@ def matching_entry_ids(person, entries) -> list:
     return [e.id for e in entries if wanted & entry_lemmas(e)]
 
 
+def mention_spans(person, text) -> list:
+    """(start, end) offsets of every word in `text` that counts as a mention.
+
+    Same lemma test as `matching_entry_ids`, so what gets highlighted in a note
+    is exactly what made the note match in the first place — including declined
+    forms ("с Машей" for Маша) and aliases, minus the excluded words.
+    """
+    wanted = match_lemmas(person)
+    if not wanted or not text:
+        return []
+    return [(m.start(), m.end()) for m in _WORD_RE.finditer(text)
+            if _lemma(m.group(0).lower()) in wanted]
+
+
+def highlight_segments(person, text) -> list:
+    """`text` split into {'text': str, 'hit': bool} pieces for templates.
+
+    Returning segments rather than HTML keeps the note escaped by Jinja: a
+    diary entry may contain anything, and it is rendered as plain text.
+    """
+    text = text or ''
+    spans = mention_spans(person, text)
+    if not spans:
+        return [{'text': text, 'hit': False}] if text else []
+    out, pos = [], 0
+    for start, end in spans:
+        if start > pos:
+            out.append({'text': text[pos:start], 'hit': False})
+        out.append({'text': text[start:end], 'hit': True})
+        pos = end
+    if pos < len(text):
+        out.append({'text': text[pos:], 'hit': False})
+    return out
+
+
 def mention_count(person, entries) -> int:
     return len(matching_entry_ids(person, entries))
 

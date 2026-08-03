@@ -1621,7 +1621,7 @@ def people_detail():
             'date': e.date,
             'rating': e.rating,
             'tones': tones,
-            'note': e.note or '',
+            'note': plain_text(e.note),
         })
 
     total = sum(counts.values())
@@ -1833,13 +1833,17 @@ def my_people_add():
 @bp.route('/graphics/my-people/<int:person_id>')
 def my_people_detail(person_id):
     from app.models import UserPerson
-    from app.people_match import matching_entry_ids, name_forms
+    from app.people_match import matching_entry_ids, name_forms, highlight_segments
+    from app.note_text import plain_text
     person = db.session.get(UserPerson, person_id)
     if person is None:
         return redirect(url_for('graphics.my_people'))
     entries = _entries_with_notes()
     ids = set(matching_entry_ids(person, entries))
-    matched = [e for e in entries if e.id in ids]
+    # Carry the note pre-split into plain/mention pieces so a long entry shows
+    # at a glance where the person actually comes up.
+    matched = [{'date': e.date, 'segments': highlight_segments(person, plain_text(e.note))}
+               for e in entries if e.id in ids]
     return render_template('graphics/graphics_my_people_detail.html',
         person=person, entries=matched,
         aliases=json.loads(person.aliases) if person.aliases else [],

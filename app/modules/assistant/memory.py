@@ -29,6 +29,7 @@ from pathlib import Path
 
 import numpy as np
 from app import db
+from app.note_text import plain_text
 from app.models import (
     MoodEntry, EntrySummary, PeriodSummary,
     EntryEmbedding, UserPsychProfile, ChatMessage, EntryPerson, EntryActivity,
@@ -510,7 +511,7 @@ def generate_entry_summary(entry: MoodEntry, llm) -> EntrySummary | None:
     entry_id = entry.id
     entry_date = entry.date
     entry_rating = entry.rating
-    note = (entry.note or '').strip()
+    note = plain_text(entry.note).strip()
     has_existing = existing is not None
 
     # Release DB connection before the LLM call (may take 5-30s)
@@ -857,7 +858,7 @@ def extract_people_mentions(entry: MoodEntry, llm) -> list[EntryPerson]:
     entry_id = entry.id
     entry_date = entry.date
     entry_rating = entry.rating
-    note = (entry.note or '').strip()
+    note = plain_text(entry.note).strip()
 
     # DELETE in its own short transaction, then release the connection before
     # the LLM call — otherwise SQLite holds the write lock for the entire
@@ -951,7 +952,7 @@ def extract_activities(entry: MoodEntry, llm) -> list[EntryActivity]:
     entry_id = entry.id
     entry_date = entry.date
     entry_rating = entry.rating
-    note = (entry.note or '').strip()
+    note = plain_text(entry.note).strip()
 
     # See extract_people_mentions: commit DELETE then release connection before
     # LLM call so the write lock isn't held during the multi-second LLM latency.
@@ -1055,7 +1056,7 @@ def extract_entry_combined(entry: MoodEntry, llm) -> bool:
     entry_id = entry.id
     entry_date = entry.date
     entry_rating = entry.rating
-    note = (entry.note or '').strip()
+    note = plain_text(entry.note).strip()
     has_summary = existing_summary is not None
     db.session.remove()  # release connection before the LLM call
 
@@ -1139,7 +1140,7 @@ def generate_month_summary(year: int, month: int, llm) -> PeriodSummary | None:
             safe_summary = _strip_think(s.summary or '')
             lines.append(f'[{e.date.isoformat()}] {e.rating}/10. {safe_summary}')
         else:
-            note = (e.note or '').strip()[:300]
+            note = plain_text(e.note).strip()[:300]
             lines.append(f'[{e.date.isoformat()}] {e.rating}/10. {note}')
     entries_text = '\n'.join(lines)
 
@@ -1574,7 +1575,7 @@ def assemble_context(user_message: str, max_system_tokens: int = 0) -> str:
             rel_lines = []
             max_semantic_chars = 400
             for entry in all_relevant:
-                note = (entry.note or '').strip().replace('\n', ' ')
+                note = plain_text(entry.note).strip().replace('\n', ' ')
                 # Date-extracted entries get full text; semantic results truncated
                 if entry.id not in date_ids and len(note) > max_semantic_chars:
                     note = note[:max_semantic_chars] + '...'
@@ -1599,7 +1600,7 @@ def assemble_context(user_message: str, max_system_tokens: int = 0) -> str:
     if recent:
         rec_lines = []
         for e in recent:
-            note = (e.note or '').strip()
+            note = plain_text(e.note).strip()
             rec_lines.append(f'[{e.date.isoformat()}] {e.rating}/10. {note}')
         recent_section = RECENT_SECTION.format(entries_text='\n'.join(rec_lines))
     else:

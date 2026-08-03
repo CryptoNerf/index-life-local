@@ -30,7 +30,8 @@ log = logging.getLogger(__name__)
 
 def _format_entry_line(entry: MoodEntry, extra: str = '', max_note: int = 280) -> str:
     """One-line representation of an entry suitable for LLM context."""
-    note = (entry.note or '').strip()
+    from app.note_text import plain_text
+    note = plain_text(entry.note).strip()
     if len(note) > max_note:
         note = note[:max_note].rstrip() + '...'
     suffix = f' [{extra}]' if extra else ''
