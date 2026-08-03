@@ -1,8 +1,24 @@
+@import url("_tokens.css");
+
+/* index.life — sync page.
+
+   Built on the shared role tokens: no raw px for text size or spacing, no
+   border-radius (the product has square corners — the day cube is the brand),
+   no shadows, no gradients. Separation is hairlines and space.
+
+   Everything themable stays `var(--token, <fallback>)` so the customization
+   module (colours, fonts, dark mode, photo backgrounds, auto-invert) keeps
+   working. Fixed colours appear only where a surface must stay readable no
+   matter what the theme does (the recovery key, the pairing code) and for the
+   semantic amber/green/red tints. */
+
 /* ========== Base ========== */
 body {
   font-family: var(--font-body, 'Times New Roman', Times, serif);
   background-color: var(--bg-color, #fff);
   color: var(--text-color, #000);
+  font-size: var(--il-text-body);
+  line-height: var(--il-leading-normal);
   margin: 0;
   padding: 0;
   min-height: 100vh;
@@ -15,8 +31,8 @@ header { width: 100%; }
 .main-header { width: 100%; }
 .top-menu {
   display: flex;
-  gap: 24px;
-  font-size: 20px;
+  gap: var(--il-block);
+  font-size: var(--il-text-nav);
   margin-top: 60px;
   margin-left: 70px;
 }
@@ -27,8 +43,7 @@ header { width: 100%; }
     margin-top: 40px;
     margin-left: 0;
     justify-content: center;
-    font-size: 22px;
-    gap: 20px;
+    gap: var(--il-block);
   }
 }
 
@@ -44,215 +59,337 @@ header { width: 100%; }
 /* ========== Page ========== */
 .sync-page {
   flex: 1;
-  max-width: 640px;
+  /* <body> is a flex column, so this is a flex item: without min-width the
+     item refuses to shrink below its longest unbreakable child (a cloud path
+     is ~800px) and the whole page scrolls sideways on a phone. */
+  min-width: 0;
+  max-width: var(--il-content-width);
   width: 100%;
   margin: 0 auto;
-  padding: 40px 20px 60px;
+  padding: var(--il-section) var(--il-block) var(--il-page-bottom);
   box-sizing: border-box;
 }
 
-.sync-section {
-  margin-bottom: 40px;
-  padding-bottom: 24px;
-  border-bottom: 1px solid #e0e0e0;
+.sync-title {
+  font-size: var(--il-text-page-title);
+  font-weight: normal;
+  line-height: var(--il-leading-tight);
+  font-family: var(--font-heading, 'Times New Roman', Times, serif);
+  color: var(--heading-color, #222);
+  margin: 0 0 var(--il-field);
 }
-.sync-section:last-child { border-bottom: none; }
+
+.sync-lead {
+  color: var(--text-muted, #666);
+  line-height: var(--il-leading-relaxed);
+  max-width: 52ch;
+  margin: 0 0 var(--il-section);
+}
+
+/* Sections are separated by space. Hairlines are reserved for things that
+   are actually lists or folds — stacking a section rule on top of a list rule
+   and a fold rule drew three parallel lines in a row. */
+.sync-section { margin-bottom: var(--il-block); }
 
 .sync-section h2 {
-  font-size: 20px;
+  font-size: var(--il-text-section-title);
   font-weight: normal;
-  margin: 0 0 16px;
+  line-height: var(--il-leading-tight);
+  color: var(--heading-color, #222);
+  margin: 0 0 var(--il-row);
 }
 
 .sync-meta {
-  font-size: 14px;
+  font-size: var(--il-text-ui);
   color: var(--text-muted, #888);
-  margin-bottom: 8px;
 }
-.sync-meta code {
+.sync-meta code,
+.status-target {
   background: #f5f5f5;
   color: #1a1a1a;  /* fixed light chip — stay readable under auto-invert */
   padding: 2px 6px;
   font-family: 'Courier New', monospace;
-  font-size: 13px;
+  font-size: var(--il-text-hint);
+}
+.status-target {
+  display: inline-block;
+  max-width: 100%;
+  word-break: break-all;
+  overflow-wrap: anywhere;
 }
 
-/* ========== Form ========== */
-.sync-form {
-  margin: 16px 0;
+.sync-hint {
+  font-size: var(--il-text-hint);
+  color: var(--text-muted, #888);
+  line-height: var(--il-leading-relaxed);
+  margin: var(--il-inline) 0 0;
 }
+.sync-hint-strong { color: #b8860b; }
+
+/* ========== The square marker ==========
+   The page's only glyph, and not a new shape: it is the day cube from the
+   calendar at marker size. It replaces the phone / laptop / lock / warning
+   emoji, and never carries meaning without a text label next to it. */
+.mark {
+  display: inline-block;
+  width: var(--il-marker);
+  height: var(--il-marker);
+  flex: none;
+  box-sizing: border-box;
+  background: var(--cube-empty-color, #fff);
+  border: var(--il-hairline) solid var(--cube-border-color, #000);
+}
+.mark-on { background: var(--cube-filled-color, #000); }
+.mark-attention { background: #e0c14a; border-color: #b8860b; }
+.mark-active { border: 2px solid var(--cube-today-color, #0080ff); }
+.mark-lg { width: 12px; height: 12px; }
+
+/* ========== Status block (sync configured) ========== */
+.status-card {
+  border: var(--il-hairline) solid #ddd;
+  padding: var(--il-row);
+  margin-bottom: var(--il-block);
+}
+.status-main {
+  display: flex;
+  align-items: center;
+  gap: var(--il-field);
+  font-size: var(--il-text-subhead);
+  margin-bottom: var(--il-inline);
+}
+/* The target can be a long filesystem path: give it its own line so it can
+   wrap without dragging the marker into the middle of a three-line block. */
+.status-where { margin-bottom: var(--il-tight); }
+
+/* ========== Scenario picker (nothing configured yet) ========== */
+.goal-title {
+  font-size: var(--il-text-section-title);
+  margin: 0 0 var(--il-row);
+}
+.goal-cards { border-top: var(--il-hairline) solid var(--il-line); }
+.goal-card {
+  display: flex;
+  width: 100%;
+  gap: var(--il-field);
+  align-items: flex-start;
+  text-align: left;
+  padding: var(--il-row) 0;
+  border: none;
+  border-bottom: var(--il-hairline) solid var(--il-line);
+  border-radius: var(--il-radius);
+  background: transparent;
+  color: var(--text-color, #000);
+  font: inherit;
+  font-size: var(--il-text-body);
+  cursor: pointer;
+}
+.goal-card .mark { margin-top: 5px; }
+.goal-card:hover .goal-name { text-decoration: underline; }
+.goal-name { display: block; }
+.goal-card.goal-picked .goal-name { font-weight: 600; text-decoration: none; }
+.goal-card.goal-picked .mark { background: var(--cube-filled-color, #000); }
+.goal-desc {
+  display: block;
+  font-size: var(--il-text-ui);
+  color: var(--text-muted, #888);
+  margin-top: var(--il-tight);
+}
+.goal-panel { margin: var(--il-block) 0 0; }
+.goal-alt { margin-top: var(--il-row); }
+.goal-alt > summary {
+  cursor: pointer;
+  font-size: var(--il-text-ui);
+  color: var(--text-muted, #666);
+}
+.goal-alt > summary:hover { text-decoration: underline; }
+
+/* ========== Step blocks (guided setup, and the one next step) ========== */
+.step-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--il-field);
+}
+.step-card {
+  display: flex;
+  gap: var(--il-row);
+  padding: var(--il-row);
+  margin: var(--il-field) 0;
+  border: var(--il-hairline) solid #ddd;
+  border-radius: var(--il-radius);
+  background: var(--bg-color, #fff);
+}
+.step-card.step-warn { border-color: #e0c14a; background: #fdf6e3; }
+.step-num {
+  font-size: var(--il-text-subhead);
+  color: var(--text-muted, #888);
+  min-width: 20px;
+  line-height: var(--il-leading-tight);
+}
+.step-body { flex: 1; min-width: 0; }
+.step-title {
+  display: flex;
+  align-items: center;
+  gap: var(--il-field);
+  font-weight: 600;
+  margin-bottom: var(--il-inline);
+}
+.step-text { margin: 0; color: var(--text-muted, #666); }
+/* The pairing block is a <details> card: its summary is the title row. */
+.step-card.pair-block { display: block; }
+.step-card.pair-block > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--il-field);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* ========== Forms ========== */
+.sync-form { margin: var(--il-row) 0; }
 .sync-form label {
   display: block;
-  font-size: 15px;
+  font-size: var(--il-text-ui);
   color: var(--text-muted, #444);
-  margin-bottom: 8px;
+  margin-bottom: var(--il-inline);
 }
 .sync-row {
   display: flex;
-  gap: 8px;
+  gap: var(--il-inline);
+  flex-wrap: wrap;
+  align-items: center;
 }
 .sync-input {
-  flex: 1;
+  flex: 1 1 200px;
+  min-width: 0;
   font-family: var(--font-body, 'Times New Roman', Times, serif);
-  font-size: 15px;
-  padding: 8px 12px;
-  border: 1px solid #ccc;
+  font-size: var(--il-text-body);
+  padding: var(--il-inline) var(--il-field);
+  border: var(--il-hairline) solid var(--il-line-strong);
+  border-radius: var(--il-radius);
+  background: var(--bg-color, #fff);
+  color: var(--text-color, #000);
   outline: none;
 }
-.sync-input:focus { border-color: #222; }
+.sync-input:focus { border-color: var(--brand-color, #009AFA); }
+.sync-input:disabled { opacity: 0.5; cursor: not-allowed; }
 
-/* Sync mode (local / webdav) selector + panes */
-.sync-mode-row { gap: 24px; margin-bottom: 14px; }
+/* Transport selector + panes */
+.sync-mode-row { gap: var(--il-block); margin-bottom: var(--il-row); }
 .sync-mode-opt {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   cursor: pointer;
   font-family: var(--font-body, 'Times New Roman', Times, serif);
-  font-size: 15px;
+  font-size: var(--il-text-body);
 }
-.sync-pane > label {
-  display: block;
-  margin-bottom: 6px;
-}
+.sync-pane > label { display: block; margin-bottom: var(--il-inline); }
 /* The single full-width URL/folder input needs its own bottom gap so it
    doesn't visually collide with the credentials row beneath it. */
 .sync-pane > .sync-input {
   display: block;
   width: 100%;
   box-sizing: border-box;
-  margin-bottom: 10px;
+  margin-bottom: var(--il-field);
 }
-.sync-pane .sync-row { margin-bottom: 6px; }
+.sync-pane .sync-row { margin-bottom: var(--il-inline); }
 .sync-creds-label {
   display: block;
-  font-size: 14px;
+  font-size: var(--il-text-ui);
   color: var(--text-muted, #444);
-  margin: 4px 0 6px;
-}
-.sync-hint {
-  font-size: 13px;
-  color: var(--text-muted, #888);
-  margin: 6px 0 0;
-  line-height: 1.45;
+  margin: var(--il-tight) 0 var(--il-inline);
 }
 
-/* ========== Buttons ========== */
+/* ========== Buttons ==========
+   Primary is black-filled, like every other primary action in the app
+   (save a day, install a module, save the account). Brand blue stays what it
+   is everywhere else: the active nav link, focus, and today's cube. */
+.sync-btn,
+.sync-btn-primary {
+  font-family: var(--font-body, 'Times New Roman', Times, serif);
+  font-size: var(--il-text-body);
+  line-height: var(--il-leading-tight);
+  padding: var(--il-inline) var(--il-block);
+  border-radius: var(--il-radius);
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
 .sync-btn {
+  background: transparent;
+  color: var(--text-color, #222);
+  border: var(--il-hairline) solid var(--text-color, #222);
+  text-decoration: none;
+  display: inline-block;
+}
+.sync-btn:hover { background: var(--text-color, #222); color: var(--bg-color, #fff); }
+.sync-btn-primary {
   background: #000;
   color: #fff;
-  border: none;
-  padding: 8px 18px;
-  font-family: var(--font-body, 'Times New Roman', Times, serif);
-  font-size: 15px;
-  cursor: pointer;
-  transition: background 0.2s;
+  border: var(--il-hairline) solid #000;
 }
-.sync-btn:hover { background: #333; }
-.sync-btn-primary { background: #009AFA; }
-.sync-btn-primary:hover { background: #007acc; }
+.sync-btn-primary:hover { background: #333; border-color: #333; color: #fff; }
+.sync-btn:disabled,
+.sync-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 .sync-btn-small {
-  padding: 4px 12px;
-  font-size: 13px;
+  padding: var(--il-tight) var(--il-field);
+  font-size: var(--il-text-ui);
 }
-
 .sync-actions {
   display: flex;
-  gap: 8px;
-  margin-top: 16px;
+  gap: var(--il-inline);
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: var(--il-row);
 }
 
 /* ========== Flash messages ========== */
 .flash-msg {
-  padding: 10px 14px;
-  margin-bottom: 16px;
-  font-size: 15px;
+  padding: var(--il-field) var(--il-row);
+  margin-bottom: var(--il-row);
+  border: var(--il-hairline) solid #ddd;
+  border-radius: var(--il-radius);
+  font-size: var(--il-text-body);
 }
-.flash-success { background: #d4edda; color: #155724; }
-.flash-error { background: #f8d7da; color: #721c24; }
-.flash-warning { background: #fff3cd; color: #856404; }
+.flash-success { background: #f3faf3; border-color: #d7e8d7; color: #1e7d34; }
+.flash-error   { background: #f8d7da; border-color: #f0b8bd; color: #721c24; }
+.flash-warning { background: #fdf6e3; border-color: #e0c14a; color: #6a5d2a; }
 
-/* ========== Conflicts ========== */
-.conflict-list { margin-top: 12px; }
+/* ========== Changes from other devices (former "conflicts") ========== */
+.conflict-list { border-top: var(--il-hairline) solid var(--il-line-faint); }
 .conflict-item {
-  display: flex;
-  gap: 16px;
-  padding: 8px 0;
-  border-bottom: 1px solid #f0f0f0;
-  font-size: 14px;
+  padding: var(--il-field) 0;
+  border-bottom: var(--il-hairline) solid var(--il-line-faint);
+  font-size: var(--il-text-ui);
   color: var(--text-muted, #444);
+  line-height: var(--il-leading-normal);
 }
-.conflict-date { font-weight: bold; }
-.conflict-winner { color: var(--text-muted, #888); }
-.conflict-time { color: var(--text-muted, #aaa); margin-left: auto; }
 
 /* ========== Backups ========== */
-.backup-list { margin-top: 16px; }
+.backup-list {
+  margin-top: var(--il-row);
+  border-top: var(--il-hairline) solid var(--il-line-faint);
+}
 .backup-item {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 8px 0;
-  border-bottom: 1px solid #f0f0f0;
-  font-size: 14px;
+  gap: var(--il-row);
+  padding: var(--il-field) 0;
+  border-bottom: var(--il-hairline) solid var(--il-line-faint);
+  font-size: var(--il-text-ui);
 }
 .backup-name {
   font-family: 'Courier New', monospace;
-  font-size: 13px;
+  font-size: var(--il-text-hint);
   color: var(--text-muted, #444);
 }
 .backup-size { color: var(--text-muted, #888); }
 .backup-date { color: var(--text-muted, #aaa); margin-left: auto; }
 
-/* ========== Footer ========== */
-.main-footer {
-  width: 100%;
-  text-align: center;
-  color: #222;
-  font-size: 16px;
-  background: #fff;
-  padding: 10px 0;
-  flex-shrink: 0;
-}
-.footer-link {
-  color: var(--text-muted, #666);
-  text-decoration: none;
-  font-size: 14px;
-}
-.footer-link:hover { text-decoration: underline; }
-
-/* ========== Mobile ========== */
-@media (max-width: 768px) {
-  .top-menu {
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    margin-left: 0;
-    margin-top: 30px;
-    gap: 24px;
-    padding: 0 20px;
-  }
-  .sync-page { padding: 24px 16px 40px; }
-  .sync-row { flex-direction: column; }
-  .sync-actions { flex-wrap: wrap; }
-  .backup-item { flex-wrap: wrap; gap: 8px; }
-  .backup-date { margin-left: 0; }
-}
-
-@media (max-width: 480px) {
-  .top-menu {
-    margin-top: 20px;
-    gap: 24px;
-    padding: 0 15px;
-  }
-}
-
-/* ========== Encrypted sync ========== */
-
+/* ========== Encryption ========== */
 .enc-status {
   display: inline-block;
   font-weight: 600;
-  margin-bottom: 6px;
+  margin-bottom: var(--il-inline);
 }
 .enc-status.enc-on { color: #1e7d34; }       /* fixed greens/ambers so they */
 .enc-status.enc-locked { color: #b8860b; }   /* read under auto-invert too  */
@@ -260,142 +397,164 @@ header { width: 100%; }
 .enc-form {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--il-inline);
   align-items: center;
-  margin-top: 10px;
+  margin-top: var(--il-field);
 }
 .enc-form .sync-input { flex: 1 1 220px; max-width: 360px; }
 
-.enc-recovery-toggle {
-  margin-top: 10px;
-}
+.enc-recovery-toggle { margin-top: var(--il-field); }
 .enc-recovery-toggle > summary {
   cursor: pointer;
   color: var(--text-muted, #888);
-  font-size: 14px;
+  font-size: var(--il-text-ui);
 }
+.enc-recovery-toggle > summary:hover { text-decoration: underline; }
 
 /* One-time recovery-key reveal — deliberately loud so it isn't missed. */
 .enc-recovery {
   border: 2px solid #b8860b;
   background: #fffaf0;
   color: #1a1a1a;            /* fixed light surface — stay readable inverted */
-  border-radius: 8px;
-  padding: 16px;
-  margin-top: 8px;
+  border-radius: var(--il-radius);
+  padding: var(--il-row);
+  margin-top: var(--il-inline);
 }
 .enc-recovery-title {
-  font-weight: 700;
-  margin-bottom: 10px;
+  font-weight: 600;
+  margin-bottom: var(--il-field);
 }
 .enc-recovery-key {
   display: block;
   font-family: 'Courier New', monospace;
-  font-size: 18px;
+  font-size: var(--il-text-subhead);
   letter-spacing: 1px;
   word-break: break-all;
   background: #fff;
-  border: 1px solid #e0c98a;
-  border-radius: 4px;
-  padding: 12px;
-  margin-bottom: 10px;
+  color: #1a1a1a;
+  border: var(--il-hairline) solid #e0c98a;
+  border-radius: var(--il-radius);
+  padding: var(--il-field);
+  margin-bottom: var(--il-field);
   user-select: all;          /* one tap/click selects the whole key */
 }
 
-/* ── Cloud-folder discovery ─────────────────────────────────── */
-
-.discover-results { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+/* ========== Cloud-folder discovery ========== */
+.discover-results {
+  margin-top: var(--il-field);
+  border-top: var(--il-hairline) solid var(--il-line-faint);
+}
 .discover-row {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  width: 100%;
   text-align: left;
-  padding: 8px 12px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  background: #fafafa;
+  padding: var(--il-field) 0;
+  border: none;
+  border-bottom: var(--il-hairline) solid var(--il-line-faint);
+  border-radius: var(--il-radius);
+  background: transparent;
+  color: var(--text-color, #000);
   cursor: pointer;
   font: inherit;
 }
-.discover-row:hover { border-color: #999; }
-.discover-existing { border-color: #2a8f2a; }
-.discover-picked { outline: 2px solid #2a8f2a; }
-.discover-title { font-weight: 600; font-size: 13px; }
-.discover-path { font-size: 12px; color: #777; word-break: break-all; }
+.discover-row:hover .discover-title { text-decoration: underline; }
+.discover-title { font-size: var(--il-text-ui); }
+.discover-existing .discover-title { font-weight: 600; }
+.discover-picked .discover-title { font-weight: 600; text-decoration: none; }
+.discover-picked { background: #f5f5f5; }
+.discover-path {
+  font-size: var(--il-text-hint);
+  color: var(--text-muted, #777);
+  word-break: break-all;
+}
 
-/* ── Devices panel ──────────────────────────────────────────── */
-
-.sync-devices { margin: 14px 0 4px; }
-.sync-devices-title { font-weight: 600; font-size: 14px; margin-bottom: 6px; }
-.device-row { font-size: 13px; color: #555; padding: 3px 0; }
-
-/* ── Phone pairing (QR) ─────────────────────────────────────── */
-
-.pair-block { margin: 12px 0; }
-.pair-block summary { cursor: pointer; font-weight: 600; }
-.pair-qr { margin: 10px 0; }
-.pair-qr svg { display: block; }
-
-/* ── Scenario-first setup wizard ────────────────────────────── */
-
-.goal-title { font-weight: 600; margin: 16px 0 8px; }
-.goal-cards { display: flex; gap: 10px; flex-wrap: wrap; }
-.goal-card {
-  flex: 1 1 160px;
+/* ========== Devices ========== */
+.sync-devices { margin-top: var(--il-block); }
+.sync-devices-title {
+  font-size: var(--il-text-section-title);
+  margin-bottom: var(--il-field);
+}
+.device-list { border-top: var(--il-hairline) solid var(--il-line-faint); }
+.device-row {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  align-items: flex-start;
-  text-align: left;
-  padding: 14px;
-  border: 1px solid #ddd;
-  border-radius: 12px;
-  background: #fafafa;
-  cursor: pointer;
-  font: inherit;
+  align-items: baseline;
+  gap: var(--il-field);
+  padding: var(--il-field) 0;
+  border-bottom: var(--il-hairline) solid var(--il-line-faint);
+  font-size: var(--il-text-ui);
+  color: var(--text-color, #222);
 }
-.goal-card:hover { border-color: #999; }
-.goal-card.goal-picked { border-color: #111; background: #fff; }
-.goal-ico { font-size: 20px; }
-.goal-name { font-weight: 600; }
-.goal-desc { font-size: 13px; color: #777; }
-.goal-panel {
-  margin: 14px 0;
-  padding: 14px;
-  border: 1px solid #e5e5e5;
-  border-radius: 12px;
+.device-row .mark { align-self: center; }
+.device-name { flex: 1; min-width: 0; }
+.device-note,
+.device-when { color: var(--text-muted, #888); }
+
+/* ========== Pairing (QR + code) ========== */
+.pair-block { margin: var(--il-field) 0; }
+.pair-qr {
+  width: 148px;
+  height: 148px;
+  padding: var(--il-inline);
+  border: var(--il-hairline) solid #ddd;
+  background: #fff;
+  margin: var(--il-field) 0;
 }
-.goal-alt { margin-top: 10px; }
-.goal-alt summary { cursor: pointer; }
+.pair-qr svg { display: block; width: 100%; height: 100%; }
 
-/* ── Status view ────────────────────────────────────────────── */
-
-.status-card {
-  padding: 14px;
-  border: 1px solid #d7e8d7;
-  background: #f3faf3;
-  border-radius: 12px;
-  margin: 10px 0 14px;
-}
-.status-main { font-weight: 600; margin-bottom: 4px; }
-.status-target { word-break: break-all; }
-
-.step-card {
-  margin: 12px 0;
-  padding: 14px;
-  border: 1px solid #ddd;
-  border-radius: 12px;
-  background: #fafafa;
-}
-.step-card.step-warn { border-color: #e0c14a; background: #fdf6e3; }
-.step-title { font-weight: 600; margin-bottom: 6px; }
-.step-card.pair-block summary { font-weight: 600; cursor: pointer; }
-
-/* ── Folded sections ────────────────────────────────────────── */
-
-.sync-fold { margin: 14px 0 4px; }
+/* ========== Folded sections ==========
+   The rule goes UNDER the summary, not above it: consecutive folds then read
+   as one list, and a fold following another hairline block doesn't leave a
+   line floating in the middle of the gap. */
+.sync-fold { border-bottom: var(--il-hairline) solid var(--il-line); }
 .sync-fold > summary {
   cursor: pointer;
-  font-weight: 600;
-  padding: 6px 0;
+  padding: var(--il-field) 0;
+  color: var(--text-color, #000);
+}
+.sync-fold > summary:hover { text-decoration: underline; }
+
+/* ========== Footer ========== */
+.main-footer {
+  width: 100%;
+  text-align: center;
+  color: var(--text-color, #222);
+  font-size: var(--il-text-ui);
+  background: transparent;
+  padding: var(--il-field) 0;
+  flex-shrink: 0;
+}
+.footer-link {
+  color: var(--text-muted, #666);
+  text-decoration: none;
+  font-size: var(--il-text-ui);
+}
+.footer-link:hover { text-decoration: underline; }
+
+/* ========== Mobile & 200% zoom ========== */
+@media (max-width: 768px) {
+  .top-menu {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    margin-left: 0;
+    margin-top: 30px;
+    gap: var(--il-block);
+    padding: 0 var(--il-block);
+  }
+  .sync-page { padding: var(--il-block) var(--il-row) var(--il-section); }
+  .sync-row { flex-direction: column; align-items: stretch; }
+  .sync-actions { flex-wrap: wrap; }
+  .backup-item { flex-wrap: wrap; gap: var(--il-inline); }
+  .backup-date { margin-left: 0; }
+  .step-card { flex-direction: column; gap: var(--il-inline); }
+}
+
+@media (max-width: 480px) {
+  .top-menu {
+    margin-top: 20px;
+    gap: var(--il-block);
+    padding: 0 var(--il-row);
+  }
 }

@@ -78,7 +78,7 @@
         </div>
         <div id="sync-discover-results" class="discover-results"></div>
         <p class="sync-hint">{{ t('sync.local_hint') }}</p>
-        <p class="sync-hint">⚠️ {{ t('sync.local_no_phone_hint') }}</p>
+        <p class="sync-hint sync-hint-strong">{{ t('sync.local_no_phone_hint') }}</p>
       </div>
 
       <!-- WebDAV pane -->
@@ -120,7 +120,7 @@
     {% if new_recovery_key %}
       <section class="sync-section">
         <div class="enc-recovery">
-          <div class="enc-recovery-title">🔑 {{ t('sync.enc_recovery_title') }}</div>
+          <div class="enc-recovery-title">{{ t('sync.enc_recovery_title') }}</div>
           <code class="enc-recovery-key">{{ new_recovery_key }}</code>
           <p class="sync-hint">{{ t('sync.enc_recovery_hint') }}</p>
           <a href="{{ url_for('sync.sync_page') }}" class="sync-btn sync-btn-primary">{{ t('sync.enc_recovery_done') }}</a>
@@ -128,92 +128,127 @@
       </section>
     {% endif %}
 
+    <h1 class="sync-title">{{ t('sync.heading') }}</h1>
+
     {% if not sync_configured %}
       {# ════════════════ SETUP WIZARD (nothing configured yet) ════════════════
          Goal-first: the user picks WHAT they want, not a transport acronym. #}
-      <section class="sync-section">
-        <h2>{{ t('sync.heading') }}</h2>
-        <p class="sync-hint">{{ t('sync.intro') }}</p>
+      <p class="sync-lead">{{ t('sync.intro') }}</p>
 
-        <div class="goal-title">{{ t('sync.goal_title') }}</div>
+      <section class="sync-section">
+        <h2>{{ t('sync.goal_title') }}</h2>
         <div class="goal-cards">
-          <button type="button" class="goal-card" data-goal="phone">
-            <span class="goal-ico">📱💻</span>
-            <span class="goal-name">{{ t('sync.goal_phone') }}</span>
-            <span class="goal-desc">{{ t('sync.goal_phone_desc') }}</span>
-          </button>
-          <button type="button" class="goal-card" data-goal="computers">
-            <span class="goal-ico">💻💻</span>
-            <span class="goal-name">{{ t('sync.goal_computers') }}</span>
-            <span class="goal-desc">{{ t('sync.goal_computers_desc') }}</span>
-          </button>
-          <button type="button" class="goal-card" data-goal="backup">
-            <span class="goal-ico">☁️</span>
-            <span class="goal-name">{{ t('sync.goal_backup') }}</span>
-            <span class="goal-desc">{{ t('sync.goal_backup_desc') }}</span>
-          </button>
+          {% for goal in ['phone', 'computers', 'backup'] %}
+            <button type="button" class="goal-card" data-goal="{{ goal }}">
+              <span class="mark"></span>
+              <span>
+                <span class="goal-name">{{ t('sync.goal_' ~ goal) }}</span>
+                <span class="goal-desc">{{ t('sync.goal_' ~ goal ~ '_desc') }}</span>
+              </span>
+            </button>
+          {% endfor %}
         </div>
 
-        <!-- Goal: phone + computer -->
-        <div class="goal-panel" data-goal-panel="phone" style="display:none">
-          <p>{{ t('sync.goal_phone_google') }}</p>
-          {% if gdrive_available %}
-            <form method="post" action="{{ url_for('sync.google_connect') }}" style="display:inline">
-              <button class="sync-btn sync-btn-primary">{{ t('sync.gdrive_connect_btn') }}</button>
-            </form>
-          {% else %}
-            <p class="sync-hint">{{ t('sync.gdrive_setup_hint') }}</p>
-          {% endif %}
-          <p class="sync-hint">{{ t('sync.goal_phone_after') }}</p>
-          <details class="goal-alt">
-            <summary>{{ t('sync.goal_yandex_summary') }}</summary>
-            <p class="sync-hint">{{ t('sync.goal_yandex_steps') }}</p>
-            <button type="button" class="sync-btn" data-open-advanced="local">{{ t('sync.goal_open_folder_setup') }}</button>
-          </details>
+        <!-- Goal: phone + computer — three real steps, in order -->
+        <div class="goal-panel step-list" data-goal-panel="phone" style="display:none">
+          <div class="step-card">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <div class="step-title">{{ t('sync.step_phone_1_title') }}</div>
+              <p class="step-text">{{ t('sync.goal_phone_google') }}</p>
+              {% if gdrive_available %}
+                <div class="sync-actions">
+                  <form method="post" action="{{ url_for('sync.google_connect') }}">
+                    <button class="sync-btn sync-btn-primary">{{ t('sync.gdrive_connect_btn') }}</button>
+                  </form>
+                </div>
+              {% else %}
+                <p class="sync-hint">{{ t('sync.gdrive_setup_hint') }}</p>
+              {% endif %}
+              <details class="goal-alt">
+                <summary>{{ t('sync.goal_yandex_summary') }}</summary>
+                <p class="sync-hint">{{ t('sync.goal_yandex_steps') }}</p>
+                <div class="sync-actions">
+                  <button type="button" class="sync-btn sync-btn-small" data-open-advanced="local">{{ t('sync.goal_open_folder_setup') }}</button>
+                </div>
+              </details>
+            </div>
+          </div>
+          <div class="step-card">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <div class="step-title">{{ t('sync.step_phone_2_title') }}</div>
+              <p class="step-text">{{ t('sync.step_phone_2_text') }}</p>
+            </div>
+          </div>
+          <div class="step-card">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <div class="step-title">{{ t('sync.step_phone_3_title') }}</div>
+              <p class="step-text">{{ t('sync.goal_phone_after') }}</p>
+            </div>
+          </div>
         </div>
 
         <!-- Goal: two computers -->
         <div class="goal-panel" data-goal-panel="computers" style="display:none">
-          <p class="sync-hint">{{ t('sync.goal_computers_hint') }}</p>
-          <button type="button" class="sync-btn sync-btn-primary" data-open-advanced="local">
-            {{ t('sync.goal_open_folder_setup') }}
-          </button>
+          <div class="step-card">
+            <div class="step-body">
+              <p class="step-text">{{ t('sync.goal_computers_hint') }}</p>
+              <div class="sync-actions">
+                <button type="button" class="sync-btn sync-btn-primary" data-open-advanced="local">
+                  {{ t('sync.goal_open_folder_setup') }}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Goal: backup only -->
         <div class="goal-panel" data-goal-panel="backup" style="display:none">
-          <p class="sync-hint">{{ t('sync.goal_backup_hint') }}</p>
-          {% if gdrive_available %}
-            <form method="post" action="{{ url_for('sync.google_connect') }}" style="display:inline">
-              <button class="sync-btn sync-btn-primary">{{ t('sync.gdrive_connect_btn') }}</button>
-            </form>
-          {% endif %}
-          <button type="button" class="sync-btn" data-open-advanced="local">{{ t('sync.goal_open_folder_setup') }}</button>
+          <div class="step-card">
+            <div class="step-body">
+              <p class="step-text">{{ t('sync.goal_backup_hint') }}</p>
+              <div class="sync-actions">
+                {% if gdrive_available %}
+                  <form method="post" action="{{ url_for('sync.google_connect') }}">
+                    <button class="sync-btn sync-btn-primary">{{ t('sync.gdrive_connect_btn') }}</button>
+                  </form>
+                {% endif %}
+                <button type="button" class="sync-btn" data-open-advanced="local">{{ t('sync.goal_open_folder_setup') }}</button>
+              </div>
+            </div>
+          </div>
         </div>
-
-        <details class="sync-fold" id="advanced-setup">
-          <summary>{{ t('sync.advanced_setup') }}</summary>
-          {{ settings_form() }}
-        </details>
       </section>
+
+      <details class="sync-fold" id="advanced-setup">
+        <summary>{{ t('sync.advanced_setup') }}</summary>
+        {{ settings_form() }}
+      </details>
 
     {% else %}
       {# ════════════════ STATUS VIEW (sync is configured) ════════════════ #}
       <section class="sync-section">
-        <h2>{{ t('sync.heading') }}</h2>
-
         {% set provider_label = t('sync.mode_gdrive') if sync_mode == 'gdrive'
              else (webdav_url if sync_mode == 'webdav' else sync_folder) %}
         <div class="status-card">
           <div class="status-main">
-            ✅ {{ t('sync.status_on') }} · <code class="status-target">{{ provider_label }}</code>
+            <span class="mark mark-on mark-lg"></span>
+            <span>{{ t('sync.status_on') }}</span>
           </div>
+          <div class="sync-meta status-where"><code class="status-target">{{ provider_label }}</code></div>
           <div class="sync-meta">
             {% if last_sync %}{{ t('sync.last_sync') }}: {{ last_sync.strftime('%Y-%m-%d %H:%M') }} · {% endif %}
-            {% if encryption.unlocked %}🔒 {{ t('sync.status_encrypted') }}
-            {% elif encryption.enabled or encryption.vault_in_folder %}⚠️ {{ t('sync.status_locked_short') }}
-            {% else %}⚪ {{ t('sync.status_no_encryption') }}{% endif %}
+            {% if encryption.unlocked %}{{ t('sync.status_encrypted') }}
+            {% elif encryption.enabled or encryption.vault_in_folder %}{{ t('sync.status_locked_short') }}
+            {% else %}{{ t('sync.status_no_encryption') }}{% endif %}
             · {{ t('sync.device_id') }} <code>{{ device_id[:8] }}…</code>
+          </div>
+          <div class="sync-actions">
+            <form method="post" action="{{ url_for('sync.sync_now') }}">
+              <button class="sync-btn sync-btn-primary">{{ t('sync.sync_now') }}</button>
+            </form>
           </div>
         </div>
 
@@ -221,12 +256,12 @@
            behind a fresh "last sync" time. #}
         {% if sync_report and (sync_report.errors or sync_report.push_ok == false) %}
           <div class="flash-msg flash-warning">
-            {% if sync_report.locked %}🔒 {{ t('sync.report_locked') }}{% endif %}
+            {% if sync_report.locked %}{{ t('sync.report_locked') }}{% endif %}
             {% if sync_report.errors and sync_report.errors > (sync_report.locked or 0) %}
-              ⚠️ {{ t('sync.report_errors', count=sync_report.errors) }}
+              {{ t('sync.report_errors', count=sync_report.errors) }}
               {% if sync_report.error_files %}(<code>{{ sync_report.error_files|join(', ') }}</code>){% endif %}
             {% endif %}
-            {% if sync_report.push_ok == false %}⚠️ {{ t('sync.report_push_failed') }}{% endif %}
+            {% if sync_report.push_ok == false %}{{ t('sync.report_push_failed') }}{% endif %}
             {{ t('sync.report_see_log') }}
           </div>
         {% endif %}
@@ -235,71 +270,76 @@
         {% if encryption.unlocked %}
           {% if pairing_payload %}
             <details class="pair-block step-card" id="pair-block">
-              <summary>📱 {{ t('sync.pair_show') }}</summary>
-              <p class="sync-hint">{{ t('sync.pair_hint') }}</p>
+              <summary><span class="mark"></span> {{ t('sync.pair_show') }}</summary>
+              <p class="step-text">{{ t('sync.pair_hint') }}</p>
               <div id="pair-qr" class="pair-qr" data-payload="{{ pairing_payload }}"></div>
               <code class="enc-recovery-key">{{ pairing_code }}</code>
-              <p class="sync-hint">⚠️ {{ t('sync.pair_warning') }}</p>
+              <p class="sync-hint sync-hint-strong">{{ t('sync.pair_warning') }}</p>
             </details>
           {% endif %}
 
         {% elif encryption.enabled or encryption.vault_in_folder %}
           <div class="step-card step-warn">
-            <div class="step-title">🔒 {{ t('sync.step_unlock_title') }}</div>
-            <p class="sync-hint">
-              {{ t('sync.enc_locked_hint') if encryption.enabled else t('sync.enc_join_hint') }}
-            </p>
-            <form method="post" action="{{ url_for('sync.encryption_unlock') }}" class="enc-form">
-              <input type="password" name="passphrase" class="sync-input"
-                     placeholder="{{ t('sync.enc_passphrase') }}" autocomplete="current-password" autofocus>
-              <button class="sync-btn sync-btn-primary">{{ t('sync.enc_unlock') }}</button>
-            </form>
-            <details class="enc-recovery-toggle">
-              <summary>{{ t('sync.enc_use_recovery') }}</summary>
+            <div class="step-body">
+              <div class="step-title">
+                <span class="mark mark-attention"></span> {{ t('sync.step_unlock_title') }}
+              </div>
+              <p class="step-text">
+                {{ t('sync.enc_locked_hint') if encryption.enabled else t('sync.enc_join_hint') }}
+              </p>
               <form method="post" action="{{ url_for('sync.encryption_unlock') }}" class="enc-form">
-                <input type="text" name="recovery_key" class="sync-input"
-                       placeholder="{{ t('sync.enc_recovery_key') }}" autocomplete="off">
-                <button class="sync-btn">{{ t('sync.enc_unlock') }}</button>
+                <input type="password" name="passphrase" class="sync-input"
+                       placeholder="{{ t('sync.enc_passphrase') }}" autocomplete="current-password" autofocus>
+                <button class="sync-btn sync-btn-primary">{{ t('sync.enc_unlock') }}</button>
               </form>
-            </details>
-            <details class="enc-recovery-toggle">
-              <summary>{{ t('sync.pair_use_code') }}</summary>
-              <p class="sync-hint">{{ t('sync.pair_use_code_hint') }}</p>
-              <form method="post" action="{{ url_for('sync.encryption_pair') }}" class="enc-form">
-                <input type="text" name="pairing_code" class="sync-input"
-                       placeholder="{{ t('sync.pair_code_placeholder') }}" autocomplete="off">
-                <button class="sync-btn">{{ t('sync.pair_join') }}</button>
-              </form>
-            </details>
+              <details class="enc-recovery-toggle">
+                <summary>{{ t('sync.enc_use_recovery') }}</summary>
+                <form method="post" action="{{ url_for('sync.encryption_unlock') }}" class="enc-form">
+                  <input type="text" name="recovery_key" class="sync-input"
+                         placeholder="{{ t('sync.enc_recovery_key') }}" autocomplete="off">
+                  <button class="sync-btn">{{ t('sync.enc_unlock') }}</button>
+                </form>
+              </details>
+              <details class="enc-recovery-toggle">
+                <summary>{{ t('sync.pair_use_code') }}</summary>
+                <p class="sync-hint">{{ t('sync.pair_use_code_hint') }}</p>
+                <form method="post" action="{{ url_for('sync.encryption_pair') }}" class="enc-form">
+                  <input type="text" name="pairing_code" class="sync-input"
+                         placeholder="{{ t('sync.pair_code_placeholder') }}" autocomplete="off">
+                  <button class="sync-btn">{{ t('sync.pair_join') }}</button>
+                </form>
+              </details>
+            </div>
           </div>
 
         {% else %}
           <div class="step-card">
-            <div class="step-title">🔐 {{ t('sync.step_protect_title') }}</div>
-            <p class="sync-hint">{{ t('sync.step_protect_hint') }}</p>
-            <form method="post" action="{{ url_for('sync.encryption_enable') }}" class="enc-form">
-              <input type="password" name="passphrase" class="sync-input"
-                     placeholder="{{ t('sync.enc_passphrase') }}" autocomplete="new-password">
-              <input type="password" name="passphrase_confirm" class="sync-input"
-                     placeholder="{{ t('sync.enc_passphrase_confirm') }}" autocomplete="new-password">
-              <button class="sync-btn sync-btn-primary">{{ t('sync.enc_enable') }}</button>
-            </form>
+            <div class="step-body">
+              <div class="step-title">
+                <span class="mark"></span> {{ t('sync.step_protect_title') }}
+              </div>
+              <p class="step-text">{{ t('sync.step_protect_hint') }}</p>
+              <form method="post" action="{{ url_for('sync.encryption_enable') }}" class="enc-form">
+                <input type="password" name="passphrase" class="sync-input"
+                       placeholder="{{ t('sync.enc_passphrase') }}" autocomplete="new-password">
+                <input type="password" name="passphrase_confirm" class="sync-input"
+                       placeholder="{{ t('sync.enc_passphrase_confirm') }}" autocomplete="new-password">
+                <button class="sync-btn sync-btn-primary">{{ t('sync.enc_enable') }}</button>
+              </form>
+            </div>
           </div>
         {% endif %}
 
         <div class="sync-devices" id="sync-devices" data-self="{{ device_id }}">
           <div class="sync-devices-title">{{ t('sync.devices_heading') }}</div>
-          <div id="sync-devices-list" class="sync-meta">…</div>
+          <div id="sync-devices-list" class="device-list">…</div>
         </div>
 
-        <div class="sync-actions">
-          <form method="post" action="{{ url_for('sync.sync_now') }}" style="display:inline">
-            <button class="sync-btn sync-btn-primary">{{ t('sync.sync_now') }}</button>
-          </form>
-        </div>
+      </section>
 
-        {# ── Folded: full settings ── #}
-        <details class="sync-fold" id="advanced-setup">
+      {# ── Folded: full settings. Sibling of the other folds so the three
+         disclosures read as one list at the foot of the page. ── #}
+      <details class="sync-fold" id="advanced-setup">
           <summary>{{ t('sync.settings_heading') }}</summary>
           {{ settings_form() }}
           <div class="sync-actions">
@@ -320,33 +360,31 @@
               <button class="sync-btn">{{ t('sync.disconnect') }}</button>
             </form>
           </div>
-        </details>
-      </section>
+      </details>
     {% endif %}
 
-    {# ── Changes applied from other devices (former "Conflicts") ── #}
+    {# ── Changes applied from other devices (former "Conflicts") ──
+       Folds stack directly on each other: each draws its own top hairline,
+       so wrapping them in spaced sections just punched holes in the page. #}
     {% if conflicts %}
-      <section class="sync-section">
-        <details class="sync-fold">
-          <summary>{{ t('sync.changes_heading') }} ({{ conflicts|length }})</summary>
-          <p class="sync-hint">{{ t('sync.changes_hint') }}</p>
-          <div class="conflict-list">
-            {% for c in conflicts %}
-              <div class="conflict-item">
-                {{ t('sync.change_line',
-                     date=c.entry_date.strftime('%d.%m.%Y'),
-                     device=(peer_names.get(c.remote_device) or (c.remote_device or '?')[:8] ~ '…'),
-                     when=c.resolved_at.strftime('%d.%m %H:%M')) }}
-              </div>
-            {% endfor %}
-          </div>
-        </details>
-      </section>
+      <details class="sync-fold">
+        <summary>{{ t('sync.changes_heading') }} ({{ conflicts|length }})</summary>
+        <p class="sync-hint">{{ t('sync.changes_hint') }}</p>
+        <div class="conflict-list">
+          {% for c in conflicts %}
+            <div class="conflict-item">
+              {{ t('sync.change_line',
+                   date=c.entry_date.strftime('%d.%m.%Y'),
+                   device=(peer_names.get(c.remote_device) or (c.remote_device or '?')[:8] ~ '…'),
+                   when=c.resolved_at.strftime('%d.%m %H:%M')) }}
+            </div>
+          {% endfor %}
+        </div>
+      </details>
     {% endif %}
 
     <!-- Backups -->
-    <section class="sync-section">
-      <details class="sync-fold">
+    <details class="sync-fold">
         <summary>{{ t('sync.backups_heading') }}{% if backups %} ({{ backups|length }}){% endif %}</summary>
         <form method="post" action="{{ url_for('sync.backup_create') }}" style="display:inline">
           <button class="sync-btn">{{ t('sync.create_backup') }}</button>
@@ -366,11 +404,10 @@
               </div>
             {% endfor %}
           </div>
-        {% else %}
-          <div class="sync-meta" style="margin-top:12px">{{ t('sync.no_backups') }}</div>
-        {% endif %}
-      </details>
-    </section>
+      {% else %}
+        <div class="sync-meta" style="margin-top:12px">{{ t('sync.no_backups') }}</div>
+      {% endif %}
+    </details>
   </div>
 
   <script>
@@ -434,7 +471,7 @@
                 // A successful connection can still be insecure (http) —
                 // surface the warning in amber rather than green.
                 if (data.warning) {
-                  result.textContent = '✓ ' + I18N.ok + ' — ⚠ ' + data.warning;
+                  result.textContent = '✓ ' + I18N.ok + ' — ' + data.warning;
                   result.style.color = '#b8860b';
                 } else {
                   result.textContent = '✓ ' + I18N.ok;
@@ -500,7 +537,7 @@
           row.className = 'discover-row' + (f.kind === 'existing' ? ' discover-existing' : '');
           var title = document.createElement('span');
           title.className = 'discover-title';
-          title.textContent = (f.kind === 'existing' ? '📱 ' : '＋ ') + f.provider +
+          title.textContent = f.provider +
             ' — ' + (f.kind === 'existing'
               ? DISCOVER_I18N.existing.replace('{n}', f.devices)
               : DISCOVER_I18N.suggested);
@@ -543,6 +580,7 @@
         none: {{ t('sync.devices_none')|tojson }},
         unreadable: {{ t('sync.devices_unreadable')|tojson }},
         never: {{ t('sync.devices_never')|tojson }},
+        encrypted: {{ t('sync.devices_encrypted')|tojson }},
         justNow: {{ t('sync.time_just_now')|tojson }},
         minAgo: {{ t('sync.time_min_ago')|tojson }},
         hAgo: {{ t('sync.time_h_ago')|tojson }},
@@ -568,28 +606,46 @@
         return DEV_I18N.dAgo.replace('{n}', Math.floor(h / 24));
       }
 
+      // One row per device: square marker (filled = this computer), name,
+      // then the relative time on the right. No emoji — the marker is the
+      // day cube at marker size, like everywhere else in the app.
       function renderDevices(devices) {
         if (!devicesBox) return;
         devicesBox.textContent = '';
         if (!devices.length) {
-          devicesBox.textContent = DEV_I18N.none;
+          var empty = document.createElement('div');
+          empty.className = 'sync-meta';
+          empty.textContent = DEV_I18N.none;
+          devicesBox.appendChild(empty);
           return;
         }
         devices.forEach(function (d) {
           var row = document.createElement('div');
           row.className = 'device-row';
-          var label;
+
+          var mark = document.createElement('span');
+          var name = document.createElement('span');
+          name.className = 'device-name';
+          var when = document.createElement('span');
+          when.className = 'device-when';
+
           if (d.unreadable) {
-            label = '⚠ ' + d.file + ' — ' + DEV_I18N.unreadable;
+            mark.className = 'mark mark-attention';
+            name.textContent = d.file + ' — ' + DEV_I18N.unreadable;
           } else {
-            var shortId = (d.device_id || '?').slice(0, 8);
+            mark.className = 'mark' + (d.is_self ? ' mark-on' : '');
             var who = d.name || (d.is_self ? DEV_I18N.self : DEV_I18N.device);
-            label = (d.is_self ? '💻 ' : '📱 ') + who +
-              (d.is_self && d.name ? ' (' + DEV_I18N.self + ')' : '') +
-              ' · ' + shortId + '… · ' + relTime(toMs(d.written_at)) +
-              (d.encrypted ? ' · 🔒' : '');
+            name.textContent = who + (d.is_self && d.name ? ' (' + DEV_I18N.self + ')' : '');
+            var note = document.createElement('span');
+            note.className = 'device-note';
+            note.textContent = ' · ' + (d.device_id || '?').slice(0, 8) + '…' +
+              (d.encrypted ? ' · ' + DEV_I18N.encrypted : '');
+            name.appendChild(note);
+            when.textContent = relTime(toMs(d.written_at));
           }
-          row.textContent = label;
+          row.appendChild(mark);
+          row.appendChild(name);
+          row.appendChild(when);
           devicesBox.appendChild(row);
         });
       }
