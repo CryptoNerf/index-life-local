@@ -96,6 +96,17 @@ DEFAULTS = {
     'cube-border-color': '#000000',
     'cube-today-color':  '#0080ff',
 
+    # ── Colour the day by its rating ────────────────────────
+    # Off by default: the calendar's own idea is a filled/empty square, and
+    # turning this on changes what the grid means. When on, a filled day is
+    # painted from a three-stop scale (rating 1 → 5.5 → 10) instead of the
+    # single filled colour, and `cube-filled-color` only applies to the
+    # rating-less cubes elsewhere in the app.
+    'cube-scale-enabled': 'false',
+    'cube-scale-low':     '#c0392b',   # rating 1
+    'cube-scale-mid':     '#e0c14a',   # the middle of the scale
+    'cube-scale-high':    '#2a8f2a',   # rating 10
+
     # ── Calendar mosaic (Stage 5) ───────────────────────────
     # When mosaic is active, each cube is treated as a tiny window into
     # one of two images stretched across the entire calendar grid:

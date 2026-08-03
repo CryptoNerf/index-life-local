@@ -476,6 +476,37 @@
             <input type="text" class="cz-hex" data-hex-for="cz-cube-today"
                    value="{{ current['cube-today-color'] }}">
           </div>
+
+          <div class="cz-row cz-toggle-row">
+            <label for="cz-cube-scale" class="cz-toggle-label">
+              <input type="checkbox" class="cz-toggle" id="cz-cube-scale"
+                     data-key="cube-scale-enabled"
+                     {% if current['cube-scale-enabled'] == 'true' %}checked{% endif %}>
+              <span>{{ t('cz.lbl.cube_scale') }}</span>
+            </label>
+          </div>
+          <p class="cz-section-desc" style="margin-top:-8px">{{ t('customization.cube_scale_desc') }}</p>
+          <div class="cz-row">
+            <label for="cz-cube-scale-low">{{ t('cz.lbl.cube_scale_low') }}</label>
+            <input type="color" class="cz-color" id="cz-cube-scale-low"
+                   data-key="cube-scale-low" value="{{ current['cube-scale-low'] }}">
+            <input type="text" class="cz-hex" data-hex-for="cz-cube-scale-low"
+                   value="{{ current['cube-scale-low'] }}">
+          </div>
+          <div class="cz-row">
+            <label for="cz-cube-scale-mid">{{ t('cz.lbl.cube_scale_mid') }}</label>
+            <input type="color" class="cz-color" id="cz-cube-scale-mid"
+                   data-key="cube-scale-mid" value="{{ current['cube-scale-mid'] }}">
+            <input type="text" class="cz-hex" data-hex-for="cz-cube-scale-mid"
+                   value="{{ current['cube-scale-mid'] }}">
+          </div>
+          <div class="cz-row">
+            <label for="cz-cube-scale-high">{{ t('cz.lbl.cube_scale_high') }}</label>
+            <input type="color" class="cz-color" id="cz-cube-scale-high"
+                   data-key="cube-scale-high" value="{{ current['cube-scale-high'] }}">
+            <input type="text" class="cz-hex" data-hex-for="cz-cube-scale-high"
+                   value="{{ current['cube-scale-high'] }}">
+          </div>
         </div>
       </div>
       <div class="cz-preview">

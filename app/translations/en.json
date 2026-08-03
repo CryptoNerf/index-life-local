@@ -728,5 +728,10 @@
   "sync.devices_encrypted": "encrypted",
   "edit_day.dictation_title": "macOS dictation",
   "edit_day.dictation_listening": "listening…",
-  "edit_day.dictation_shortcut": "macOS dictation: press the microphone key (F5) or Fn twice — whichever is set in System Settings → Keyboard → Dictation. The cursor is already in the note, so the text lands here."
+  "edit_day.dictation_shortcut": "macOS dictation: press the microphone key (F5) or Fn twice — whichever is set in System Settings → Keyboard → Dictation. The cursor is already in the note, so the text lands here.",
+  "cz.lbl.cube_scale": "Colour the day by its rating",
+  "cz.lbl.cube_scale_low": "Rating 1",
+  "cz.lbl.cube_scale_mid": "Middle of the scale",
+  "cz.lbl.cube_scale_high": "Rating 10",
+  "customization.cube_scale_desc": "A filled day takes its colour from its rating — from the colour of a 1, through the middle, to the colour of a 10. Empty days and the border stay as set above."
 }

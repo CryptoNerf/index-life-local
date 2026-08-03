@@ -84,7 +84,7 @@
           <div class="month-grid">
             {% for day in month.days %}
               <a href="{{ url_for('main.edit_day', day=day.date.strftime('%Y-%m-%d')) }}"
-                 class="cube{% if day.filled %} filled{% endif %}{% if day.date == today %} today{% endif %}"
+                 class="cube{% if day.filled %} filled{% if day.rating %} r{{ day.rating }}{% endif %}{% endif %}{% if day.date == today %} today{% endif %}"
                  title="{{ day.date.strftime('%Y-%m-%d') }}"></a>
             {% endfor %}
           </div>

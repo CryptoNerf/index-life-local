@@ -50,6 +50,8 @@ _METADATA_KEYS = {
     'avatar-type', 'avatar-gradient-shape', 'avatar-image-filename',
     # Mosaic settings — JS reads them via window.__CZ_MOSAIC__ rather
     # than CSS variables (per-cube positioning needs DOM measurement).
+    # Rating scale — emitted as .cube.rN rules, not as a single variable.
+    'cube-scale-enabled', 'cube-scale-low', 'cube-scale-mid', 'cube-scale-high',
     'mosaic-enabled', 'mosaic-filled-filename',
     'mosaic-empty-mode', 'mosaic-empty-filename',
     'mosaic-empty-grad-from', 'mosaic-empty-grad-to', 'mosaic-empty-grad-angle',
@@ -337,6 +339,35 @@ _CHART_OVERRIDE_MAP: dict[str, tuple[str, str]] = {
 }
 
 
+def _mix_rgb(a, b, k):
+    """Linear blend between two (r, g, b) tuples, k in 0..1."""
+    return tuple(round(a[i] + (b[i] - a[i]) * k) for i in range(3))
+
+
+def _cube_scale_rules(settings: dict) -> str:
+    """`.cube.rN` rules painting each day by its 1–10 rating.
+
+    Emitted as explicit rules rather than variables for the same reasons as
+    the chart overrides: ten interpolated colours don't fit one variable, and
+    inline rules can't be served stale from the browser's CSS cache.
+    """
+    if settings.get('cube-scale-enabled') != 'true':
+        return ''
+    low = _hex_to_rgb(settings.get('cube-scale-low') or DEFAULTS['cube-scale-low'])
+    mid = _hex_to_rgb(settings.get('cube-scale-mid') or DEFAULTS['cube-scale-mid'])
+    high = _hex_to_rgb(settings.get('cube-scale-high') or DEFAULTS['cube-scale-high'])
+    rules = []
+    for rating in range(1, 11):
+        # 1 → low, 5.5 → mid, 10 → high
+        pos = (rating - 1) / 9
+        if pos <= 0.5:
+            rgb = _mix_rgb(low, mid, pos * 2)
+        else:
+            rgb = _mix_rgb(mid, high, (pos - 0.5) * 2)
+        rules.append('.cube.filled.r%d { background: rgb(%d, %d, %d); }' % (rating, *rgb))
+    return '\n'.join(rules)
+
+
 def _chart_overrides(settings: dict) -> str:
     """Emit explicit CSS rules for chart classes when the user has
     customized chart appearance — both the global `chart-color` /
@@ -523,6 +554,7 @@ def _emit_css_block(settings: dict) -> str:
     # insights.css and add line-width / area-opacity / today-color
     # options that don't fit cleanly into a single CSS variable.
     chart_block = _chart_overrides(settings)
+    cube_scale_block = _cube_scale_rules(settings)
 
     # Mosaic emission must be considered before short-circuiting:
     # mosaic uses metadata-only keys, so a mosaic-only configuration
@@ -573,6 +605,8 @@ def _emit_css_block(settings: dict) -> str:
 
     if chart_block:
         parts.append(chart_block)
+    if cube_scale_block:
+        parts.append(cube_scale_block)
 
     body = '\n'.join(parts)
     style_block = f'<style id="customization-vars">\n{body}\n</style>'

@@ -150,6 +150,9 @@ def mood_grid(year=None):
 
     # Create set of filled days for quick lookup
     filled_days = {e.date for e in entries}
+    # …and the rating itself, for the optional "colour the day by its rating"
+    # mode in the customization module (plain filled/empty ignores it).
+    ratings = {e.date: e.rating for e in entries}
 
     # Build calendar data for all 12 months
     months = []
@@ -160,7 +163,8 @@ def mood_grid(year=None):
             d = date(year, month_num, day)
             days.append({
                 'date': d,
-                'filled': d in filled_days
+                'filled': d in filled_days,
+                'rating': ratings.get(d),
             })
         months.append({
             'number': month_num,

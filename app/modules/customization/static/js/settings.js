@@ -1177,6 +1177,36 @@
   });
 
   // ── Mini-calendar preview ────────────────────────────────────
+  function scaleOn() {
+    var cb = document.getElementById('cz-cube-scale');
+    return !!(cb && cb.checked);
+  }
+
+  function hexToRgb(hex) {
+    var v = String(hex || '').trim().replace('#', '');
+    if (v.length === 3) v = v[0] + v[0] + v[1] + v[1] + v[2] + v[2];
+    if (v.length !== 6) return [0, 0, 0];
+    return [parseInt(v.slice(0, 2), 16), parseInt(v.slice(2, 4), 16), parseInt(v.slice(4, 6), 16)];
+  }
+
+  // Mirrors _cube_scale_rules() in context_processor.py: 1 → low,
+  // 5.5 → mid, 10 → high.
+  function scaleColor(rating) {
+    var pick = function (id, fallback) {
+      var el = document.getElementById(id);
+      return hexToRgb(el ? el.value : fallback);
+    };
+    var low = pick('cz-cube-scale-low', '#c0392b');
+    var mid = pick('cz-cube-scale-mid', '#e0c14a');
+    var high = pick('cz-cube-scale-high', '#2a8f2a');
+    var pos = (rating - 1) / 9;
+    var a = pos <= 0.5 ? low : mid;
+    var b = pos <= 0.5 ? mid : high;
+    var k = pos <= 0.5 ? pos * 2 : (pos - 0.5) * 2;
+    var c = [0, 1, 2].map(function (i) { return Math.round(a[i] + (b[i] - a[i]) * k); });
+    return 'rgb(' + c[0] + ', ' + c[1] + ', ' + c[2] + ')';
+  }
+
   function renderCalendar() {
     var box = document.getElementById('preview-calendar');
     if (!box) return;
@@ -1196,7 +1226,17 @@
         // Stable hash for (m, d): no reshuffle on rerender
         var h = Math.sin(m * 31 + d * 7) * 1000;
         h = h - Math.floor(h);
-        if (h < threshold) cube.classList.add('filled');
+        if (h < threshold) {
+          cube.classList.add('filled');
+          // "Colour by rating" is emitted server-side as .cube.rN rules, so
+          // the preview paints its own cubes: same three-stop scale, with a
+          // stable pseudo-rating per cell.
+          if (scaleOn()) {
+            var rating = 1 + Math.floor((h / threshold) * 10);
+            if (rating > 10) rating = 10;
+            cube.style.background = scaleColor(rating);
+          }
+        }
         // Mark last filled day in month 1 as "today"
         if (m === 1 && d === 14) cube.classList.add('today');
         month.appendChild(cube);
