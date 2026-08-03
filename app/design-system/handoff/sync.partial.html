@@ -1,0 +1,203 @@
+{# index.life — redesigned sync page, markup reference.
+
+   RESTYLE, NOT RESTRUCTURE: every form action, input name, element id and
+   data-* hook below is unchanged from the current app/templates/sync.html,
+   so the existing JS (goal cards, pane switching, discovery, devices fetch,
+   QR rendering) and the tests keep working. What changed is the wrapper
+   markup, the class names on presentational elements, and the copy.
+
+   Two small JS changes are needed, both noted inline below:
+   1. renderDevices() should build a <span class="mark …"> + name/when spans
+      instead of one textContent line with emoji.
+   2. The emoji in static strings are gone — no JS change, just copy.
+#}
+
+<div class="sync-page">
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="flash-msg flash-{{ category }}">{{ message }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <h1 class="sync-title">{{ t('sync.heading') }}</h1>
+
+  {% if not sync_configured %}
+    {# ─────────── 1. Nothing configured — scenario chooser ─────────── #}
+    <p class="sync-lead">{{ t('sync.intro') }}</p>
+
+    <section class="sync-section">
+      <h2>{{ t('sync.goal_title') }}</h2>
+      <div class="goal-cards">
+        {% for key in ['phone', 'computers', 'backup'] %}
+          <button type="button" class="goal-card" data-goal="{{ key }}">
+            <span class="mark"></span>
+            <span>
+              <span class="goal-name">{{ t('sync.goal_' ~ key) }}</span>
+              <span class="goal-desc">{{ t('sync.goal_' ~ key ~ '_desc') }}</span>
+            </span>
+          </button>
+        {% endfor %}
+      </div>
+
+      {# One panel per goal — a numbered sequence, not a wall of options.
+         JS toggles these exactly as before (data-goal-panel). #}
+      <div class="goal-panel step-list" data-goal-panel="phone" style="display:none">
+        <div class="step-card">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <div class="step-title">{{ t('sync.step_phone_1_title') }}</div>
+            <p class="step-text">{{ t('sync.step_phone_1_text') }}</p>
+            <form method="post" action="{{ url_for('sync.google_connect') }}">
+              <button class="sync-btn-primary">{{ t('sync.gdrive_connect_btn') }}</button>
+            </form>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <div class="step-title">{{ t('sync.step_phone_2_title') }}</div>
+            <p class="step-text">{{ t('sync.step_phone_2_text') }}</p>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <div class="step-title">{{ t('sync.step_phone_3_title') }}</div>
+            <p class="step-text">{{ t('sync.step_phone_3_text') }}</p>
+          </div>
+        </div>
+      </div>
+      {# … same shape for data-goal-panel="computers" and "backup" … #}
+    </section>
+
+    <details class="sync-fold" id="advanced-setup">
+      <summary>{{ t('sync.advanced_setup') }}</summary>
+      <div class="sync-fold-body">{{ settings_form() }}</div>
+    </details>
+
+  {% elif encryption.enabled and not encryption.unlocked %}
+    {# ─────────── 3. Locked ─────────── #}
+    <div class="step-card step-warn">
+      <div class="step-body">
+        <div class="step-title"><span class="mark mark-attention mark-lg"></span> {{ t('sync.step_unlock_title') }}</div>
+        <p class="step-text">{{ t('sync.enc_locked_hint') }}</p>
+        <form method="post" action="{{ url_for('sync.encryption_unlock') }}" class="sync-row">
+          <input type="password" name="passphrase" class="sync-input"
+                 placeholder="{{ t('sync.enc_passphrase') }}" autocomplete="current-password" autofocus>
+          <button class="sync-btn-primary">{{ t('sync.enc_unlock') }}</button>
+        </form>
+      </div>
+    </div>
+    <details class="sync-fold">
+      <summary>{{ t('sync.enc_use_recovery') }}</summary>
+      <div class="sync-fold-body">
+        <form method="post" action="{{ url_for('sync.encryption_unlock') }}" class="sync-row">
+          <input type="text" name="recovery_key" class="sync-input" placeholder="{{ t('sync.enc_recovery_key') }}" autocomplete="off">
+          <button class="sync-btn">{{ t('sync.enc_unlock') }}</button>
+        </form>
+      </div>
+    </details>
+    <details class="sync-fold">
+      <summary>{{ t('sync.pair_use_code') }}</summary>
+      <div class="sync-fold-body">
+        <p class="sync-hint">{{ t('sync.pair_use_code_hint') }}</p>
+        <form method="post" action="{{ url_for('sync.encryption_pair') }}" class="sync-row">
+          <input type="text" name="pairing_code" class="sync-input" placeholder="{{ t('sync.pair_code_placeholder') }}" autocomplete="off">
+          <button class="sync-btn">{{ t('sync.pair_join') }}</button>
+        </form>
+      </div>
+    </details>
+
+  {% else %}
+    {# ─────────── 2. Configured ─────────── #}
+    <div class="sync-status">
+      <div class="sync-status-line">
+        <span class="mark mark-on mark-lg"></span>
+        <span>{{ t('sync.status_on') }} <span class="sync-status-via">· {{ provider_label }}</span></span>
+      </div>
+      <div class="sync-status-meta">
+        {% if last_sync %}{{ t('sync.last_sync') }} {{ last_sync.strftime('%H:%M') }}{% endif %}
+        {% if encryption.unlocked %} · {{ t('sync.status_encrypted') }}{% endif %}
+      </div>
+      <div class="sync-actions">
+        <form method="post" action="{{ url_for('sync.sync_now') }}">
+          <button class="sync-btn-primary">{{ t('sync.sync_now') }}</button>
+        </form>
+      </div>
+    </div>
+
+    {% if pairing_payload %}
+      <section class="sync-section">
+        <h2>{{ t('sync.next_step_heading') }}</h2>
+        <div class="step-card" id="pair-block">
+          <div class="step-body">
+            <div class="step-title">{{ t('sync.pair_show') }}</div>
+            <p class="step-text">{{ t('sync.pair_hint') }}</p>
+            <div class="pair-block">
+              <div id="pair-qr" class="pair-qr" data-payload="{{ pairing_payload }}"></div>
+              <code class="pair-code">{{ pairing_code }}</code>
+            </div>
+            <p class="sync-hint sync-hint-strong">{{ t('sync.pair_warning') }}</p>
+          </div>
+        </div>
+      </section>
+    {% endif %}
+
+    <section class="sync-section">
+      <h2>{{ t('sync.devices_heading') }}</h2>
+      {# JS note: renderDevices() should emit, per device —
+         <div class="device-row">
+           <span class="mark {{ 'mark-on' if is_self }}"></span>
+           <span class="device-name">NAME<span class="device-note"> · protected</span></span>
+           <span class="device-when">2 h ago</span>
+         </div>
+         …instead of the old single emoji + textContent line. #}
+      <div class="device-list" id="sync-devices" data-self="{{ device_id }}">
+        <div id="sync-devices-list"></div>
+      </div>
+    </section>
+
+    {% if conflicts %}
+      <details class="sync-fold">
+        <summary>{{ t('sync.changes_heading') }} ({{ conflicts|length }})</summary>
+        <div class="sync-fold-body">
+          <p class="sync-hint">{{ t('sync.changes_hint') }}</p>
+          {% for c in conflicts %}
+            <div class="change-row">
+              <span class="change-date">{{ c.entry_date.strftime('%d.%m.%Y') }}</span>
+              <span class="change-what">{{ t('sync.change_kept', device=peer_names.get(c.remote_device, t('sync.devices_device'))) }}</span>
+              <span class="change-when">{{ c.resolved_at.strftime('%d.%m %H:%M') }}</span>
+            </div>
+          {% endfor %}
+        </div>
+      </details>
+    {% endif %}
+
+    <details class="sync-fold" id="advanced-setup">
+      <summary>{{ t('sync.settings_heading') }}</summary>
+      <div class="sync-fold-body">
+        {{ settings_form() }}
+        <div class="sync-actions">
+          <form method="post" action="{{ url_for('sync.sync_export') }}"><button class="sync-btn sync-btn-small">{{ t('sync.export') }}</button></form>
+          <form method="post" action="{{ url_for('sync.sync_import') }}"><button class="sync-btn sync-btn-small">{{ t('sync.import') }}</button></form>
+          <form method="post" action="{{ url_for('sync.sync_disconnect') }}"
+                onsubmit="return confirm({{ t('sync.disconnect_confirm')|tojson }})">
+            <button class="sync-btn sync-btn-small sync-btn-danger">{{ t('sync.disconnect') }}</button>
+          </form>
+        </div>
+      </div>
+    </details>
+
+    <details class="sync-fold">
+      <summary>{{ t('sync.backups_heading') }}{% if backups %} ({{ backups|length }}){% endif %}</summary>
+      <div class="sync-fold-body">
+        <form method="post" action="{{ url_for('sync.backup_create') }}">
+          <button class="sync-btn sync-btn-small">{{ t('sync.create_backup') }}</button>
+        </form>
+        {% if not backups %}<div class="sync-empty">{{ t('sync.no_backups') }}</div>{% endif %}
+      </div>
+    </details>
+  {% endif %}
+
+</div>

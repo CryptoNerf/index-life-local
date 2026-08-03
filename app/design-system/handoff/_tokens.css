@@ -1,0 +1,50 @@
+/* index.life — shared design tokens.
+   Put this file at app/static/css/_tokens.css and import it FIRST from every
+   page stylesheet:
+
+       @import url("_tokens.css");
+
+   Why a separate file: right now every page hard-codes its own font sizes and
+   margins, which is why headings are 20px on one screen and 24px on another.
+   After this file exists, a page stylesheet should contain layout only — no
+   raw px for text size or spacing.
+
+   Naming: the --il-* prefix keeps these apart from the --bg-color /
+   --brand-color / --font-body variables the customization module writes at
+   runtime. Those stay exactly as they are: always used as
+   var(--name, <fallback>), never replaced by these tokens. */
+
+:root {
+  /* ── Type roles. Seven sizes exist; use the ROLE, never the number. ── */
+  --il-text-page-title: 24px;     /* the one <h1> per page                  */
+  --il-text-section-title: 20px;  /* every <h2> section heading, every page */
+  --il-text-subhead: 18px;        /* status lines, card titles, reading copy*/
+  --il-text-body: 16px;           /* body text, buttons, inputs             */
+  --il-text-ui: 14px;             /* meta, list rows, small buttons         */
+  --il-text-hint: 13px;           /* hints, captions                        */
+  --il-text-nav: 20px;            /* the top menu                           */
+  --il-text-display: 28px;        /* printed "life in weeks" sheet only     */
+
+  --il-leading-tight: 1.25;       /* headings          */
+  --il-leading-normal: 1.5;       /* UI text           */
+  --il-leading-relaxed: 1.6;      /* paragraphs, notes */
+  --il-weight-emphasis: 600;      /* headings stay normal weight            */
+
+  /* ── Spacing roles. Eight steps; use the ROLE. ── */
+  --il-inline: 8px;         /* between buttons on one line        */
+  --il-field: 12px;         /* label → input, marker → text       */
+  --il-row: 16px;           /* between form rows, padding in cards*/
+  --il-block: 24px;         /* between blocks inside a section    */
+  --il-section: 48px;       /* between sections; page top padding */
+  --il-page-bottom: 64px;   /* bottom of the content column       */
+
+  --il-content-width: 640px;   /* text pages: sync, account, modules      */
+
+  /* ── Shape. The product has square corners. ── */
+  --il-radius: 0;
+  --il-hairline: 1px;
+
+  /* ── The day cube, used by the calendar, the day editor and the marker ── */
+  --il-cube: 15px;
+  --il-marker: 10px;
+}
