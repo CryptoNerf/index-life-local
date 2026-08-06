@@ -90,9 +90,28 @@ async function getToken(interactive) {
       callback: () => {}
     });
   }
+  // GIS calls back on success and on an explicit error, but says nothing at
+  // all if the user closes the Google window — without the timeout the
+  // connect button would spin until the app is restarted.
   return new Promise((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(new Error('Вход в Google не завершён — попробуйте ещё раз'));
+    }, 3 * 60 * 1000);
+
     tokenClient.callback = (resp) => {
-      if (resp.error) return reject(new Error(resp.error));
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (resp.error) {
+        return reject(new Error(
+          resp.error === 'popup_closed_by_user' || resp.error === 'popup_failed_to_open'
+            ? 'Окно входа Google закрыто — вход не завершён'
+            : resp.error
+        ));
+      }
       saveToken(resp.access_token, resp.expires_in);
       resolve(accessToken);
     };
@@ -101,6 +120,8 @@ async function getToken(interactive) {
       // grant Google can hand one back without a second consent screen.
       tokenClient.requestAccessToken({ prompt: loadToken() ? '' : 'consent' });
     } catch (e) {
+      settled = true;
+      clearTimeout(timer);
       reject(e);
     }
   });

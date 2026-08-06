@@ -35,26 +35,94 @@ export function clearToken() {
   localStorage.removeItem(TOKEN_KEY);
 }
 
-// Interactive sign-in: open Yandex OAuth in a popup; the callback page posts
-// the token back. Must be called from a user gesture (popups).
+// Where the callback page leaves the result when it cannot postMessage.
+const RESULT_KEY = 'indexlife:yandex-oauth-result';
+// Long enough for a password plus two-factor, short enough that a dead flow
+// does not leave the button spinning forever.
+const AUTH_TIMEOUT_MS = 3 * 60 * 1000;
+const POLL_MS = 400;
+
+function takeStoredResult(startedAt) {
+  try {
+    const raw = localStorage.getItem(RESULT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    localStorage.removeItem(RESULT_KEY);
+    // Ignore a leftover from an earlier attempt.
+    if (!parsed || !parsed.at || parsed.at < startedAt) return null;
+    return parsed.msg || null;
+  } catch {
+    return null;
+  }
+}
+
+// Interactive sign-in: open Yandex OAuth in a popup; the callback page hands
+// the token back by postMessage, or through localStorage when it has no
+// opener to talk to. Must be called from a user gesture (popups).
+//
+// Every ending settles the promise. It used to have exactly one: the message
+// arriving. A closed popup, a browser that gives the callback no opener, or
+// simply walking away left it pending forever — the connect button stayed on
+// "Подключение…" with no way out but restarting the app.
 function authorize() {
   return new Promise((resolve, reject) => {
+    const startedAt = Date.now();
+    try { localStorage.removeItem(RESULT_KEY); } catch { /* ignore */ }
+
     const redirect = `${location.origin}/yandex-callback.html`;
     const url = 'https://oauth.yandex.ru/authorize?response_type=token'
       + `&client_id=${YANDEX_CLIENT_ID}`
       + `&redirect_uri=${encodeURIComponent(redirect)}`;
     const popup = window.open(url, 'yandex-oauth', 'width=640,height=720');
-    if (!popup) return reject(new Error('Браузер заблокировал окно входа Яндекса'));
+    if (!popup) {
+      return reject(new Error(
+        'Браузер заблокировал окно входа Яндекса — разрешите всплывающие окна и попробуйте снова'
+      ));
+    }
+
+    let settled = false;
+    function finish(fn, arg) {
+      if (settled) return;
+      settled = true;
+      clearInterval(poll);
+      clearTimeout(timer);
+      window.removeEventListener('message', onMessage);
+      try { popup.close(); } catch { /* already gone */ }
+      fn(arg);
+    }
+
+    function accept(msg) {
+      if (msg?.error) return finish(reject, new Error(msg.error));
+      if (!msg?.access_token) {
+        return finish(reject, new Error('Яндекс не вернул токен — попробуйте ещё раз'));
+      }
+      saveToken(msg.access_token, msg.expires_in);
+      finish(resolve, msg.access_token);
+    }
 
     function onMessage(e) {
       if (e.origin !== location.origin || e.data?.source !== 'yandex-oauth') return;
-      window.removeEventListener('message', onMessage);
-      try { popup.close(); } catch {}
-      if (e.data.error) return reject(new Error(e.data.error));
-      saveToken(e.data.access_token, e.data.expires_in);
-      resolve(e.data.access_token);
+      accept(e.data);
     }
     window.addEventListener('message', onMessage);
+
+    const poll = setInterval(() => {
+      const stored = takeStoredResult(startedAt);
+      if (stored) return accept(stored);
+      if (popup.closed) {
+        // Give the callback a moment to write its result before deciding the
+        // user simply closed the window.
+        setTimeout(() => {
+          const late = takeStoredResult(startedAt);
+          if (late) accept(late);
+          else finish(reject, new Error('Окно входа закрыто — вход не завершён'));
+        }, 600);
+      }
+    }, POLL_MS);
+
+    const timer = setTimeout(() => {
+      finish(reject, new Error('Вход в Яндекс не завершён — попробуйте ещё раз'));
+    }, AUTH_TIMEOUT_MS);
   });
 }
 

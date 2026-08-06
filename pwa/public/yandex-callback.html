@@ -10,8 +10,13 @@
       Готово, можно вернуться в приложение.
     </p>
     <script>
-      // Yandex implicit OAuth returns the token in the URL fragment. Hand it to
-      // the app window that opened this popup, then close.
+      // Yandex implicit OAuth returns the token in the URL fragment. Hand it
+      // back through TWO channels, because one of them can be missing:
+      // postMessage needs window.opener, which some browsers (a standalone
+      // PWA opening the popup as a separate context) do not provide. Both
+      // sides are same-origin, so localStorage is a reliable second path —
+      // and without it the app used to wait forever on a promise that could
+      // never settle.
       (function () {
         var params = new URLSearchParams(location.hash.replace(/^#/, ''));
         var msg = params.get('error')
@@ -21,9 +26,16 @@
               access_token: params.get('access_token'),
               expires_in: params.get('expires_in')
             };
+        try {
+          localStorage.setItem('indexlife:yandex-oauth-result',
+                               JSON.stringify({ at: Date.now(), msg: msg }));
+        } catch (e) { /* storage blocked — postMessage may still work */ }
         if (window.opener) {
-          window.opener.postMessage(msg, location.origin);
+          try { window.opener.postMessage(msg, location.origin); } catch (e) {}
           window.close();
+        } else {
+          document.querySelector('p').textContent =
+            'Готово. Вернитесь в приложение — вход завершён.';
         }
       })();
     </script>
