@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import * as vault from '../lib/vault.js';
   import PairScan from './PairScan.svelte';
+  import ReplacedLog from './ReplacedLog.svelte';
   import { listDevices } from '../lib/app-sync.js';
   import { getProvider, setProvider, signOutCloud, getTransport, runSync, reconnectAndSync, syncState } from '../lib/sync-state.svelte.js';
   import { timeAgo } from '../lib/mood.js';
@@ -162,6 +163,7 @@
         {:else}Последняя синхронизация: {timeAgo(syncState.lastSyncedAt)}{/if}
       </p>
     {/if}
+    <ReplacedLog />
     {#if syncState.lastLocked}
       <p class="hint">
         ⚠ Не удалось расшифровать данные {syncState.lastLocked} устройств(а) —

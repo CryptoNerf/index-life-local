@@ -6,6 +6,7 @@
 import { allEntries, putEntries } from './db.js';
 import { getDeviceId, getDeviceName, getVaultKey, isEncryptionEnabled } from './vault.js';
 import { fullSync } from './sync.js';
+import { recordConflicts } from './conflicts.js';
 
 // Peers' display names, cached from their (decrypted) snapshots — envelope
 // headers are name-free, so a peer's name is only learnable on merge.
@@ -50,10 +51,16 @@ export async function syncWith(transport) {
                                 getDeviceName());
   await putEntries(merged);
   cachePeerNames(stats.names);
+  // Keep whatever this merge overwrote — a losing edit must be recoverable,
+  // not gone (see lib/conflicts.js).
+  const replaced = recordConflicts(stats.losers);
 
   // locked/errors — peers whose data could NOT be read (key mismatch /
   // junk blob); the UI surfaces them so a broken link never looks "ok".
-  return { entries: merged.length, locked: stats.locked, errors: stats.errors };
+  return {
+    entries: merged.length, locked: stats.locked, errors: stats.errors,
+    replaced
+  };
 }
 
 // ── Devices panel ────────────────────────────────────────────────────

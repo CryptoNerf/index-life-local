@@ -80,7 +80,12 @@ function inserted(p) {
 // Merge a peer's mood_entries into the local set. Pure: returns a new array,
 // does not mutate inputs. Identity is the date; a peer simply lacking a day is
 // NOT a delete — only a `deleted:true` row with a newer updated_at removes one.
-export function mergeMoodEntries(localEntries, peerEntries) {
+//
+// `losers`, when given, collects the local versions this merge replaced —
+// same rule as the desktop's conflict log: the peer won, the content actually
+// differed, and the local row was a live entry (not a tombstone). Without it
+// a losing edit disappears with nothing to show the user.
+export function mergeMoodEntries(localEntries, peerEntries, losers = null) {
   const byDate = new Map();
   for (const e of localEntries) byDate.set(e.date, e);
 
@@ -95,6 +100,17 @@ export function mergeMoodEntries(localEntries, peerEntries) {
     const lUpd = ms(local.updated_at);
     // keep local unless the peer is STRICTLY newer (ties keep local)
     if (Number.isNaN(pUpd) || (!Number.isNaN(lUpd) && pUpd <= lUpd)) continue;
+
+    if (losers && !local.deleted
+        && (local.note !== (p.note ?? null) || local.rating !== p.rating)) {
+      losers.push({
+        date: local.date,
+        rating: local.rating,
+        note: local.note ?? null,
+        updated_at: local.updated_at ?? null,
+        peerDevice: p.device_id ?? null
+      });
+    }
 
     if (p.deleted) {
       byDate.set(p.date, { ...local, deleted: true, updated_at: p.updated_at, device_id: p.device_id ?? null });
@@ -114,8 +130,8 @@ export function mergeMoodEntries(localEntries, peerEntries) {
 
 // Merge a whole peer snapshot into local entries. A device never merges its
 // own snapshot (matched by device_id, as on the desktop).
-export function applySnapshot(localEntries, snapshot, ownDeviceId) {
+export function applySnapshot(localEntries, snapshot, ownDeviceId, losers = null) {
   if (!snapshot || typeof snapshot !== 'object') return localEntries;
   if (snapshot.device_id && snapshot.device_id === ownDeviceId) return localEntries;
-  return mergeMoodEntries(localEntries, snapshot.mood_entries);
+  return mergeMoodEntries(localEntries, snapshot.mood_entries, losers);
 }

@@ -38,7 +38,7 @@
 
 <div class="app">
   {#if screen !== 'settings'}
-    <SyncBanner />
+    <SyncBanner onreview={() => navigate('settings')} />
     <DurabilityBanner onfix={() => navigate('settings')} />
   {/if}
 

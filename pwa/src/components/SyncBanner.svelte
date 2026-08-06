@@ -7,16 +7,22 @@
   // syncs are silent by design, and the settings screen still read
   // "encrypted · Google Drive". The phone quietly drifted out of sync.
   import { syncState, reconnectAndSync, syncIsStale } from '../lib/sync-state.svelte.js';
+  import { unseenCount } from '../lib/conflicts.js';
   import { timeAgo } from '../lib/mood.js';
+
+  let { onreview } = $props();
 
   let busy = $state(false);
   let dismissed = $state(false); // session-only: comes back next open if still broken
 
   const expired = $derived(syncState.status === 'auth');
+  // Recomputed after every sync (lastSyncedAt is reactive) — that is the only
+  // moment a replacement can appear.
+  const replaced = $derived(syncState.lastSyncedAt >= 0 ? unseenCount() : 0);
   // Staleness is re-evaluated whenever a sync finishes (lastSyncedAt is
   // reactive), which is the only moment it can change in practice.
   const stale = $derived(syncState.lastSyncedAt >= 0 && syncIsStale());
-  const show = $derived((expired || stale) && !dismissed);
+  const show = $derived((expired || stale || replaced > 0) && !dismissed);
 
   async function fix() {
     busy = true;
@@ -29,18 +35,27 @@
 </script>
 
 {#if show}
-  <div class="sync-banner" class:warn={expired}>
+  <div class="sync-banner" class:warn={expired} class:replaced={replaced > 0 && !expired}>
     <span>
       {#if expired}
         Сессия облака истекла — записи с телефона пока не уходят.
+      {:else if replaced > 0}
+        {replaced === 1 ? 'Одна ваша запись заменена' : `Ваших записей заменено: ${replaced}`}
+        версией с другого устройства.
       {:else}
         Последняя синхронизация: {timeAgo(syncState.lastSyncedAt)}.
       {/if}
     </span>
     <div class="sync-banner-actions">
-      <button class="sync-banner-btn" onclick={fix} disabled={busy}>
-        {busy ? 'Минуту…' : expired ? 'Войти' : 'Обновить'}
-      </button>
+      {#if replaced > 0 && !expired}
+        <button class="sync-banner-btn" onclick={() => { dismissed = true; onreview?.(); }}>
+          Посмотреть
+        </button>
+      {:else}
+        <button class="sync-banner-btn" onclick={fix} disabled={busy}>
+          {busy ? 'Минуту…' : expired ? 'Войти' : 'Обновить'}
+        </button>
+      {/if}
       <button class="sync-banner-x" onclick={() => (dismissed = true)} aria-label="Скрыть">×</button>
     </div>
   </div>
@@ -58,6 +73,7 @@
     color: var(--text, #222);
     border-bottom: 1px solid var(--line, #e0e0e0);
   }
+  .sync-banner.replaced { background: #fdf6e3; color: #6a5d2a; border-bottom-color: #e0c14a; }
   .sync-banner.warn {
     background: #fdf6e3;
     color: #6a5d2a;

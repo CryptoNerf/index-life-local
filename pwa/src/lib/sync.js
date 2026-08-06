@@ -61,7 +61,10 @@ export async function pullPeers(transport, ownDeviceId, localEntries, vk, stats 
     }
 
     if (snapshot && Array.isArray(snapshot.mood_entries)) {
-      entries = mergeMoodEntries(entries, snapshot.mood_entries);
+      // `losers` collects local versions this merge replaces, so the app can
+      // show the user what was overwritten instead of losing it silently.
+      entries = mergeMoodEntries(entries, snapshot.mood_entries,
+                                 stats ? (stats.losers || (stats.losers = [])) : null);
       // Collect peers' display names for the devices panel (the caller
       // caches them — envelope headers stay name-free, so a peer's name is
       // only known after a successful decrypt+merge).
