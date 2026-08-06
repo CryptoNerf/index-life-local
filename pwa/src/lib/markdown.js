@@ -42,3 +42,33 @@ export async function exportMarkdown() {
   a.click();
   URL.revokeObjectURL(url);
 }
+
+// ── Feed preview ─────────────────────────────────────────────────────
+// Notes are written on the desktop in a Markdown editor, and the feed shows
+// the first couple of lines of one. Printing the source put `## Заголовок`,
+// `**жирный**` and `- пункт` in front of the reader as literal syntax.
+//
+// The preview STRIPS the markup rather than rendering it: the row is a
+// two-line clamp, where a heading or a list cannot look like anything useful
+// anyway. Editing still shows the real source, which is what you edit.
+export function notePreview(note, limit = 240) {
+  if (!note) return '';
+  let text = String(note);
+
+  text = text
+    .replace(/```[\s\S]*?```/g, ' ')             // fenced code blocks
+    .replace(/^\s{0,3}(?:[-*_]\s*){3,}$/gm, ' ')  // horizontal rules
+    .replace(/^\s{0,3}#{1,6}\s+/gm, '')          // heading markers
+    .replace(/^\s{0,3}>\s?/gm, '')               // quote markers
+    .replace(/^\s{0,3}(?:[-*+]|\d+[.)])\s+/gm, '') // list markers
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')     // images → alt text
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')      // links → their text
+    .replace(/(\*\*|__)(.*?)\1/g, '$2')          // bold
+    .replace(/(^|\W)([*_])(?=\S)(.*?\S)\2/g, '$1$3') // italic, not mid-word
+    .replace(/~~(.*?)~~/g, '$1')                 // strikethrough
+    .replace(/`([^`]*)`/g, '$1')                 // inline code
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return text.length > limit ? text.slice(0, limit).trimEnd() + '…' : text;
+}

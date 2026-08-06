@@ -2,6 +2,7 @@
   import MoodFace from '../components/MoodFace.svelte';
   import { moodStore, refreshEntries } from '../lib/store.svelte.js';
   import { prettyDate } from '../lib/mood.js';
+  import { notePreview } from '../lib/markdown.js';
 
   let { onopen } = $props();
 
@@ -25,7 +26,7 @@
         <MoodFace rating={e.rating} size={40} />
         <span class="feed-date">{prettyDate(e.date)}</span>
         <span class="feed-rating">{e.rating}/10</span>
-        {#if e.note}<span class="feed-note">{e.note}</span>{/if}
+        {#if e.note}<span class="feed-note">{notePreview(e.note)}</span>{/if}
       </button>
     {/each}
   {/if}

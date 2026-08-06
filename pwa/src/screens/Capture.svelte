@@ -3,10 +3,11 @@
   import MoodFace from '../components/MoodFace.svelte';
   import { getEntry } from '../lib/db.js';
   import { moodStore, saveEntry } from '../lib/store.svelte.js';
-  import { scheduleSync } from '../lib/sync-state.svelte.js';
+  import { scheduleSync, syncState } from '../lib/sync-state.svelte.js';
+  import { isUnlocked } from '../lib/vault.js';
   import { loadDraft, saveDraft, clearDraft, editorStateFor } from '../lib/drafts.js';
   import { currentStreak } from '../lib/stats.js';
-  import { todayISO, prettyDate, isToday, addDays, pluralDays } from '../lib/mood.js';
+  import { todayISO, prettyDate, isToday, addDays, pluralDays, timeAgo } from '../lib/mood.js';
 
   // Bindable so date navigation here propagates to the app (and "День" in the
   // nav resets it to today). Any past day can be opened to backfill it.
@@ -21,6 +22,21 @@
   // would show content the user deliberately deleted — and any save would
   // push it back to the desktop, resurrecting it.
   let deletedElsewhere = $state(false);
+
+  // Where the entry stands with the cloud, said on the screen where writing
+  // happens. Until now the only sync status lived three blocks down the
+  // settings screen, so after tapping Save there was no way to tell whether
+  // the day had left the phone. Silent when cloud sync isn't set up — the
+  // durability banner already owns that case.
+  const cloudOn = $derived(syncState.lastSyncedAt >= 0 && isUnlocked());
+  const cloudNote = $derived(
+    !cloudOn ? ''
+      : syncState.status === 'syncing' ? 'отправляю в облако…'
+      : syncState.status === 'auth' ? 'не отправлено — нужен вход в облако'
+      : syncState.status === 'error' ? 'не отправлено — попробую позже'
+      : syncState.lastSyncedAt ? `в облаке · ${timeAgo(syncState.lastSyncedAt)}`
+      : ''
+  );
 
   const TODAY = todayISO();
   function step(n) {
@@ -101,4 +117,6 @@
   <button class="save-btn" class:is-saved={saved} disabled={!rating} onclick={save}>
     {saved ? 'Сохранено ✓' : 'Сохранить'}
   </button>
+
+  {#if cloudNote}<p class="cap-cloud">{cloudNote}</p>{/if}
 </section>
