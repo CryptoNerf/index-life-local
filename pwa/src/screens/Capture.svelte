@@ -4,7 +4,7 @@
   import { getEntry } from '../lib/db.js';
   import { moodStore, saveEntry } from '../lib/store.svelte.js';
   import { scheduleSync } from '../lib/sync-state.svelte.js';
-  import { loadDraft, saveDraft, clearDraft, draftIsFresh } from '../lib/drafts.js';
+  import { loadDraft, saveDraft, clearDraft, editorStateFor } from '../lib/drafts.js';
   import { currentStreak } from '../lib/stats.js';
   import { todayISO, prettyDate, isToday, addDays, pluralDays } from '../lib/mood.js';
 
@@ -15,6 +15,12 @@
   let rating = $state(0);
   let note = $state('');
   let saved = $state(false);
+  // The day exists here only as a tombstone: it was deleted on another
+  // device. A tombstone keeps its old text (that is how the deletion travels
+  // to devices that still hold the entry), so loading it into the editor
+  // would show content the user deliberately deleted — and any save would
+  // push it back to the desktop, resurrecting it.
+  let deletedElsewhere = $state(false);
 
   const TODAY = todayISO();
   function step(n) {
@@ -34,10 +40,10 @@
   $effect(() => {
     const d = date;
     getEntry(d).then((e) => {
-      let draft = loadDraft(d);
-      if (!draftIsFresh(draft, e)) draft = null;
-      rating = draft?.rating ?? e?.rating ?? 0;
-      note = draft?.note ?? e?.note ?? '';
+      const view = editorStateFor(e, loadDraft(d));
+      rating = view.rating;
+      note = view.note;
+      deletedElsewhere = view.deletedElsewhere;
     });
   });
 
@@ -48,6 +54,7 @@
 
   function setRating(v) {
     rating = v;
+    deletedElsewhere = false;   // writing again is a deliberate revival
     touch();
   }
 
@@ -79,9 +86,16 @@
     <MoodFace {rating} size={92} />
   </header>
 
+  {#if deletedElsewhere}
+    <p class="cap-deleted">
+      Эта запись удалена на другом устройстве. Поставьте оценку, чтобы завести
+      день заново.
+    </p>
+  {/if}
+
   <RatingCubes value={rating} onchange={setRating} />
 
-  <textarea class="note" bind:value={note} oninput={touch}
+  <textarea class="note" bind:value={note} oninput={() => { deletedElsewhere = false; touch(); }}
             placeholder="Как прошёл день?"></textarea>
 
   <button class="save-btn" class:is-saved={saved} disabled={!rating} onclick={save}>

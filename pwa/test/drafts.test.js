@@ -42,3 +42,50 @@ describe('draftIsFresh', () => {
     expect(draftIsFresh(draft, { rating: 5, note: 'x', updated_at: null })).toBe(true);
   });
 });
+
+// ── What the editor shows for a day ─────────────────────────────────
+// A tombstone keeps its old text so the deletion can travel to peers that
+// still hold the entry. Feeding that text to the editor showed content the
+// user had deliberately deleted on another device — and saving pushed it
+// back, resurrecting the entry.
+
+import { editorStateFor } from '../src/lib/drafts.js';
+
+describe('editorStateFor', () => {
+  const entry = (over = {}) => ({
+    date: '2026-07-01', rating: 7, note: 'текст записи',
+    updated_at: '2026-07-01T10:00:00.000Z', deleted: false, ...over
+  });
+
+  it('shows a live entry', () => {
+    expect(editorStateFor(entry(), null)).toEqual({
+      rating: 7, note: 'текст записи', deletedElsewhere: false
+    });
+  });
+
+  it('shows an empty form for a day deleted on another device', () => {
+    expect(editorStateFor(entry({ deleted: true }), null)).toEqual({
+      rating: 0, note: '', deletedElsewhere: true
+    });
+  });
+
+  it('keeps an unsaved draft even when the day was deleted elsewhere', () => {
+    const draft = { rating: 5, note: 'пишу прямо сейчас', at: Date.parse('2026-07-02T10:00:00Z') };
+    expect(editorStateFor(entry({ deleted: true }), draft)).toEqual({
+      rating: 5, note: 'пишу прямо сейчас', deletedElsewhere: false
+    });
+  });
+
+  it('ignores a stale draft', () => {
+    const stale = { rating: 2, note: 'старый черновик', at: Date.parse('2026-06-01T10:00:00Z') };
+    expect(editorStateFor(entry(), stale)).toEqual({
+      rating: 7, note: 'текст записи', deletedElsewhere: false
+    });
+  });
+
+  it('shows an empty form for a day with nothing at all', () => {
+    expect(editorStateFor(null, null)).toEqual({
+      rating: 0, note: '', deletedElsewhere: false
+    });
+  });
+});

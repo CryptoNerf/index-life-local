@@ -37,6 +37,24 @@ export function draftIsFresh(draft, entry) {
   return (draft.at ?? 0) >= entryAt;
 }
 
+// What the day editor should show for a date, given the stored entry and any
+// draft. Lives here rather than in the screen so the rules are testable.
+//
+// The tombstone case is the subtle one: a deleted day keeps its old text (the
+// deletion travels to peers that still hold the entry), so feeding it to the
+// editor would show content the user deliberately deleted on another device —
+// and saving would push it back, resurrecting it. A draft still wins: text
+// typed here and never saved is the user's own, whatever the sync says.
+export function editorStateFor(entry, draft) {
+  const fresh = draftIsFresh(draft, entry) ? draft : null;
+  const live = entry && !entry.deleted ? entry : null;
+  return {
+    rating: fresh?.rating ?? live?.rating ?? 0,
+    note: fresh?.note ?? live?.note ?? '',
+    deletedElsewhere: !!entry?.deleted && !fresh
+  };
+}
+
 export function clearDraft(date) {
   try {
     localStorage.removeItem(PREFIX + date);
