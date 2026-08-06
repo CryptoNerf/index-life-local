@@ -109,8 +109,9 @@ ciphertext. Connecting takes a couple of minutes:
    code appears.
 4. **Phone.** Settings → Sync → pick the same cloud (Google Drive /
    Yandex.Disk) → sign in → **"Scan the code from the computer"** → point the
-   camera at the QR. No passphrase needed. If the scanner isn't supported
-   (iOS Safari), type the code from the desktop screen instead.
+   camera at the QR. No passphrase needed. The scanner works on both Android
+   and iPhone; if the camera is unavailable, type the code from the desktop
+   screen instead.
 5. Check: "Devices in this folder" (both sides) now lists two devices with
    their last-sync times.
 

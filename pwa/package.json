@@ -21,6 +21,7 @@
     "vitest": "^4.1.9"
   },
   "dependencies": {
+    "jsqr": "^1.4.0",
     "libsodium-wrappers-sumo": "^0.8.4"
   }
 }
