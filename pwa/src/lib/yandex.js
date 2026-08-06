@@ -88,12 +88,21 @@ export class YandexDiskTransport {
   }
 
   async list() {
+    return (await this.listMeta()).map((i) => i.name);
+  }
+
+  // md5 (and modified as a fallback) ride along in the same listing, so the
+  // engine can skip peer blobs it has already merged.
+  async listMeta() {
     try {
+      const fields = '_embedded.items.name,_embedded.items.md5,_embedded.items.modified';
       const data = await (await api(
         `/resources?path=${encodeURIComponent(APP)}&limit=1000`
-        + `&fields=${encodeURIComponent('_embedded.items.name')}`
+        + `&fields=${encodeURIComponent(fields)}`
       )).json();
-      return (data._embedded?.items || []).map((i) => i.name);
+      return (data._embedded?.items || []).map((i) => ({
+        name: i.name, tag: i.md5 || i.modified || null
+      }));
     } catch (e) {
       if (is404(e)) return []; // app folder not created yet
       throw e;

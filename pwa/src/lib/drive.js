@@ -113,6 +113,7 @@ export function clearToken() {
   tokenExpiry = 0;
   folderId = null;
   index = null;
+  tags = null;
   try {
     localStorage.removeItem(TOKEN_KEY);
   } catch {
@@ -166,13 +167,19 @@ async function getFolderId() {
 }
 
 let index = null; // name -> fileId
+let tags = null;  // name -> change tag (md5, else modifiedTime)
 async function refreshIndex() {
   const fid = await getFolderId();
   const q = encodeURIComponent(`'${escapeQ(fid)}' in parents and trashed=false`);
+  // md5Checksum and modifiedTime cost nothing extra here and let the engine
+  // skip downloading blobs it has already merged.
   const data = await (await api(
-    `drive/v3/files?q=${q}&fields=files(id,name)&spaces=drive&pageSize=1000`
+    `drive/v3/files?q=${q}&fields=files(id,name,md5Checksum,modifiedTime)`
+    + '&spaces=drive&pageSize=1000'
   )).json();
-  index = new Map((data.files || []).map((f) => [f.name, f.id]));
+  const files = data.files || [];
+  index = new Map(files.map((f) => [f.name, f.id]));
+  tags = new Map(files.map((f) => [f.name, f.md5Checksum || f.modifiedTime || null]));
   return index;
 }
 
@@ -191,6 +198,11 @@ export class GoogleDriveTransport {
   async list() {
     await refreshIndex();
     return [...index.keys()];
+  }
+
+  async listMeta() {
+    await refreshIndex();
+    return [...index.keys()].map((name) => ({ name, tag: tags.get(name) || null }));
   }
 
   async get(name) {

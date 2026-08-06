@@ -3,7 +3,7 @@
   import * as vault from '../lib/vault.js';
   import PairScan from './PairScan.svelte';
   import ReplacedLog from './ReplacedLog.svelte';
-  import { listDevices } from '../lib/app-sync.js';
+  import { listDevices, resetSyncMarks } from '../lib/app-sync.js';
   import { getProvider, setProvider, signOutCloud, getTransport, runSync, reconnectAndSync, syncState } from '../lib/sync-state.svelte.js';
   import { timeAgo } from '../lib/mood.js';
 
@@ -76,6 +76,7 @@
     if (pass.length < 8) throw new Error('Пароль-фраза минимум 8 символов');
     if (pass !== pass2) throw new Error('Пароль-фразы не совпадают');
     const r = await vault.enableEncryption(getTransport(), pass);
+    resetSyncMarks();     // a new key: nothing we merged before still applies
     recoveryShown = r.recoveryKey;
     pass = '';
     pass2 = '';
@@ -100,6 +101,7 @@
   // wrong cloud/account fails loudly instead of silently never syncing).
   const adoptPair = (text) => run(async () => {
     await vault.adoptPairingCode(text, getTransport());
+    resetSyncMarks();     // a new key: re-read the folder from scratch
     scanning = false;
     pairInput = '';
     await runSync({ silent: true });   // desktop entries appear immediately

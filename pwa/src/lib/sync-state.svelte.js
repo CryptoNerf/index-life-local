@@ -3,7 +3,7 @@
 // singleton Google Drive transport (drive.js caches the token/folder at module
 // level, so all callers share one authenticated session).
 
-import { syncWith } from './app-sync.js';
+import { syncWith, resetSyncMarks } from './app-sync.js';
 import { refreshEntries } from './store.svelte.js';
 import { GoogleDriveTransport, clearToken as clearGoogleToken } from './drive.js';
 import { YandexDiskTransport, clearToken as clearYandexToken } from './yandex.js';
@@ -28,6 +28,9 @@ export function setProvider(name) {
 export function signOutCloud() {
   try { clearYandexToken(); } catch { /* best-effort */ }
   try { clearGoogleToken(); } catch { /* best-effort */ }
+  // A different account means a different folder: what we merged before says
+  // nothing about what is in the new one.
+  resetSyncMarks();
   setProvider(null);
   syncState.status = 'idle';
   syncState.error = '';

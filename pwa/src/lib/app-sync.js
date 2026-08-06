@@ -8,6 +8,60 @@ import { getDeviceId, getDeviceName, getVaultKey, isEncryptionEnabled } from './
 import { fullSync } from './sync.js';
 import { recordConflicts } from './conflicts.js';
 
+// ── Change marks ─────────────────────────────────────────────────────
+// What we already merged from each peer blob, and what we last published.
+// Without them the phone re-downloaded every peer's whole diary and
+// re-uploaded its own on every cycle — hundreds of kilobytes per sync, on
+// mobile data, usually with nothing changed at all.
+const SEEN_TAGS_KEY = 'indexlife:peer-tags';
+const PUSH_HASH_KEY = 'indexlife:push-hash';
+
+function loadSeenTags() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(SEEN_TAGS_KEY) || '{}');
+    return raw && typeof raw === 'object' ? raw : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveSeenTags(fresh) {
+  if (!fresh) return;
+  try {
+    localStorage.setItem(SEEN_TAGS_KEY,
+                         JSON.stringify({ ...loadSeenTags(), ...fresh }));
+  } catch {
+    /* best-effort: without the marks we just re-download next time */
+  }
+}
+
+function loadPushHash() {
+  try {
+    return localStorage.getItem(PUSH_HASH_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function savePushHash(hash) {
+  try {
+    localStorage.setItem(PUSH_HASH_KEY, hash);
+  } catch {
+    /* best-effort */
+  }
+}
+
+// Forget every change mark — used when the folder or the key changes and
+// what we merged before says nothing about what is there now.
+export function resetSyncMarks() {
+  try {
+    localStorage.removeItem(SEEN_TAGS_KEY);
+    localStorage.removeItem(PUSH_HASH_KEY);
+  } catch {
+    /* best-effort */
+  }
+}
+
 // Peers' display names, cached from their (decrypted) snapshots — envelope
 // headers are name-free, so a peer's name is only learnable on merge.
 const PEER_NAME_PREFIX = 'indexlife:peer-name:';
@@ -48,9 +102,15 @@ export async function syncWith(transport) {
   const local = await allEntries();
   const stats = { locked: 0, errors: 0 };
   const merged = await fullSync(transport, deviceId, local, vk, stats,
-                                getDeviceName());
+                                getDeviceName(),
+                                { seen: loadSeenTags(), lastHash: loadPushHash() });
   await putEntries(merged);
   cachePeerNames(stats.names);
+  // Change marks are committed only now — after the merged result is stored.
+  // Recording them earlier would let a failed save make the next cycle skip a
+  // peer whose data we never actually kept.
+  saveSeenTags(stats.tags);
+  if (stats.pushHash) savePushHash(stats.pushHash);
   // Keep whatever this merge overwrote — a losing edit must be recoverable,
   // not gone (see lib/conflicts.js).
   const replaced = recordConflicts(stats.losers);
@@ -59,7 +119,7 @@ export async function syncWith(transport) {
   // junk blob); the UI surfaces them so a broken link never looks "ok".
   return {
     entries: merged.length, locked: stats.locked, errors: stats.errors,
-    replaced
+    replaced, skipped: stats.skipped || 0
   };
 }
 
