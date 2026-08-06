@@ -267,6 +267,7 @@ Even without sync the entries are protected by three layers:
 | Phone: "The code doesn't fit this cloud's data" | The phone is connected to a different cloud or account than the computer. Check the account and rescan. |
 | Phone: "⚠ Couldn't decrypt N device(s)" | Some device uses a different key (e.g. it created its own vault in another folder). Re-pair it with a code from a working device. |
 | A device never appears in "Devices in this folder" | The devices look at different folders. On the PC check the path ("Find cloud folders" shows where the phone's data lives); give the cloud client time to mirror. |
+| Old phones / reinstall leftovers linger in the device list | "remove inactive" next to a device deletes its file from the folder. That is cleanup, not revocation: a live device writes itself back. Fully cutting a device off requires changing the passphrase (and the cloud account's own password). |
 | Phone: "Cloud session expired" | The OAuth token lapsed. Tap "Sign in again" — no data is affected. |
 | "Last sync" updates but no entries arrive | Read the banner above it: it names the file that can't be read and why. Details in index-life.log on the PC. |
 | Forgot the passphrase | Enter the recovery key (shown once when encryption was enabled). If that is lost too, the cloud data is unreadable; local entries on devices are intact — disable encryption and set it up again. |
