@@ -92,6 +92,33 @@ export async function runSync({ silent = false } = {}) {
   }
 }
 
+// Connect (interactive — must be called from a click) and then sync. The one
+// path back from an expired cloud session: a Google access token lives about
+// an hour and a browser PWA cannot refresh it without a user gesture, so the
+// honest recovery is one tap, offered here and on the settings screen.
+export async function reconnectAndSync() {
+  const t = getTransport();
+  try {
+    if (!t.isConnected()) await t.connect();
+  } catch (e) {
+    syncState.status = 'error';
+    syncState.error = e?.message || 'Не удалось подключить облако';
+    return false;
+  }
+  return runSync();
+}
+
+// How long a configured sync may stay silent before the main screen says so.
+// Long enough that a day off the grid isn't nagging, short enough that a
+// broken link is noticed within a day.
+export const STALE_AFTER_MS = 24 * 60 * 60 * 1000;
+
+export function syncIsStale() {
+  if (!isUnlocked()) return false;            // not set up — nothing to say
+  if (!syncState.lastSyncedAt) return false;  // never synced — the durability banner owns that
+  return Date.now() - syncState.lastSyncedAt > STALE_AFTER_MS;
+}
+
 // Debounced background sync — called after each save so new entries reach the
 // cloud promptly without a sync per keystroke.
 let debounce = null;

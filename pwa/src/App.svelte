@@ -6,6 +6,7 @@
   import Settings from './screens/Settings.svelte';
   import BottomNav from './components/BottomNav.svelte';
   import DurabilityBanner from './components/DurabilityBanner.svelte';
+  import SyncBanner from './components/SyncBanner.svelte';
   import { todayISO } from './lib/mood.js';
   import { refreshEntries } from './lib/store.svelte.js';
   import { runSync, initAutoSync } from './lib/sync-state.svelte.js';
@@ -37,6 +38,7 @@
 
 <div class="app">
   {#if screen !== 'settings'}
+    <SyncBanner />
     <DurabilityBanner onfix={() => navigate('settings')} />
   {/if}
 

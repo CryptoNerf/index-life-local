@@ -33,13 +33,56 @@ let tokenClient = null;
 let accessToken = null;
 let tokenExpiry = 0;
 
-// Get a valid access token. `interactive` triggers the consent popup (must be
-// called from a user gesture the first time); otherwise it refreshes silently.
-async function getToken(interactive) {
-  await loadGIS();
-  if (!interactive && accessToken && Date.now() < tokenExpiry - 60000) {
-    return accessToken;
+// The token OUTLIVES the page. It used to live only in this module, so every
+// reload — and iOS unloads a backgrounded PWA readily — left the phone
+// signed out. The background sync that runs on open then asked GIS for a
+// token without a user gesture, the browser blocked the popup, and the
+// failure was swallowed because background syncs are silent: the app looked
+// connected and quietly stopped receiving the desktop's entries.
+// Google access tokens are short-lived (~1h) and scoped to drive.file, so
+// localStorage is the right home for them — same as the Yandex transport.
+const TOKEN_KEY = 'indexlife:google-token';
+
+function loadToken() {
+  try {
+    const t = JSON.parse(localStorage.getItem(TOKEN_KEY) || 'null');
+    if (!t || !t.token || !(Date.now() < t.expiry)) return null;
+    accessToken = t.token;
+    tokenExpiry = t.expiry;
+    return t.token;
+  } catch {
+    return null;
   }
+}
+
+function saveToken(token, expiresIn) {
+  accessToken = token;
+  tokenExpiry = Date.now() + (Number(expiresIn) || 3600) * 1000;
+  try {
+    localStorage.setItem(TOKEN_KEY, JSON.stringify({ token, expiry: tokenExpiry }));
+  } catch {
+    /* private mode / quota — the in-memory copy still serves this session */
+  }
+}
+
+// A live token with a minute of headroom, from memory or from storage.
+function cachedToken() {
+  if (accessToken && Date.now() < tokenExpiry - 60000) return accessToken;
+  const stored = loadToken();
+  return stored && Date.now() < tokenExpiry - 60000 ? stored : null;
+}
+
+// Get a valid access token. `interactive` triggers the consent popup (must be
+// called from a user gesture). Without a gesture we never ask GIS — a
+// blocked popup would surface as an opaque failure; 'auth-expired' lets the
+// UI say "sign in again" instead.
+async function getToken(interactive) {
+  if (!interactive) {
+    const token = cachedToken();
+    if (token) return token;
+    throw new Error('auth-expired');
+  }
+  await loadGIS();
   if (!tokenClient) {
     tokenClient = globalThis.google.accounts.oauth2.initTokenClient({
       client_id: GOOGLE_CLIENT_ID,
@@ -50,25 +93,31 @@ async function getToken(interactive) {
   return new Promise((resolve, reject) => {
     tokenClient.callback = (resp) => {
       if (resp.error) return reject(new Error(resp.error));
-      accessToken = resp.access_token;
-      tokenExpiry = Date.now() + (resp.expires_in || 3600) * 1000;
+      saveToken(resp.access_token, resp.expires_in);
       resolve(accessToken);
     };
     try {
-      tokenClient.requestAccessToken({ prompt: interactive ? 'consent' : '' });
+      // 'consent' only when we have never had a token: with an existing
+      // grant Google can hand one back without a second consent screen.
+      tokenClient.requestAccessToken({ prompt: loadToken() ? '' : 'consent' });
     } catch (e) {
       reject(e);
     }
   });
 }
 
-// Sign out on this device: drop the cached access token (and the folder
-// index tied to the account) so the next connect() asks Google again.
+// Sign out on this device: drop the token (stored and cached) and the folder
+// index tied to the account so the next connect() asks Google again.
 export function clearToken() {
   accessToken = null;
   tokenExpiry = 0;
   folderId = null;
   index = null;
+  try {
+    localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* best-effort */
+  }
 }
 
 // ── Drive REST helper ────────────────────────────────────────────────
@@ -136,7 +185,7 @@ export class GoogleDriveTransport {
   }
 
   isConnected() {
-    return accessToken != null && Date.now() < tokenExpiry;
+    return cachedToken() != null;
   }
 
   async list() {

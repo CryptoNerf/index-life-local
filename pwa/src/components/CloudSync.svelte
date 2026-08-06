@@ -3,7 +3,7 @@
   import * as vault from '../lib/vault.js';
   import PairScan from './PairScan.svelte';
   import { listDevices } from '../lib/app-sync.js';
-  import { getProvider, setProvider, signOutCloud, getTransport, runSync, syncState } from '../lib/sync-state.svelte.js';
+  import { getProvider, setProvider, signOutCloud, getTransport, runSync, reconnectAndSync, syncState } from '../lib/sync-state.svelte.js';
   import { timeAgo } from '../lib/mood.js';
 
   let provider = $state(getProvider()); // 'yandex' | 'google' | null
@@ -107,17 +107,12 @@
 
   async function doSync() {
     error = '';
-    const t = getTransport();
-    if (!t.isConnected()) {
-      try {
-        await t.connect();
-        connected = true;
-      } catch (e) {
-        error = e?.message || 'Не удалось подключить облако';
-        return;
-      }
-    }
-    await runSync();
+    // One shared path with the main-screen banner: connect if the cloud
+    // session has lapsed (a tap is the only way to renew a Google token in
+    // a browser), then sync.
+    await reconnectAndSync();
+    connected = getTransport().isConnected();
+    if (syncState.status === 'error' && syncState.error) error = syncState.error;
     await refresh();   // the devices panel picks up the fresh snapshots
   }
 
