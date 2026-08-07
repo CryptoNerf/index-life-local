@@ -183,7 +183,22 @@ Credentials → OAuth client ID → Desktop app. Затем при сборке/
 3. `google_client.json` внутри сборки — тот, что вы вшили.
 
 Если клиента нет нигде, режим «Google Drive (напрямую)» честно пишет, что
-он недоступен, вместо обрыва посреди входа. Для установленных (desktop)
+он недоступен, вместо обрыва посреди входа. Именно это увидит любой, кто
+собрал приложение из одного репозитория: файла там нет и быть не должно.
+
+**Релизы с GitHub Actions.** Сборка берёт ключи из секретов репозитория:
+добавьте `GOOGLE_DESKTOP_CLIENT_ID` и `GOOGLE_DESKTOP_CLIENT_SECRET` в
+Settings → Secrets and variables → Actions, и workflow сам создаст
+`google_client.json` перед сборкой. Без секретов сборка проходит, но без
+встроенного режима Google — в логе будет предупреждение.
+
+**Уже скачанная сборка без ключей.** Пересобирать не обязательно: положите
+`google_client.json` в папку данных приложения, приложение проверяет её
+первой.
+
+- macOS: `~/Library/Application Support/index.life/`
+- Windows: рядом с `.exe` (или `%APPDATA%\index.life\`)
+- Linux: `~/.index-life/` Для установленных (desktop)
 приложений Google считает client secret неконфиденциальным — вшивать его
 в сборку допустимо по правилам Google.
 </details>

@@ -32,6 +32,26 @@ jobs:
           pip install pythonnet
           pip install pyinstaller
 
+      # The Desktop-app OAuth client is not in the repository (GitHub blocks
+      # pushes containing it, and a fork should use its own). Without it a
+      # release ships with no built-in "Google Drive (direct)" mode — which is
+      # the one mode that can sync with the phone — and the sync page says so.
+      # Add GOOGLE_DESKTOP_CLIENT_ID / _SECRET as repository secrets to have
+      # releases carry it; builds without them still succeed.
+      - name: Write the Google OAuth client
+        shell: bash
+        env:
+          CLIENT_ID: ${{ secrets.GOOGLE_DESKTOP_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.GOOGLE_DESKTOP_CLIENT_SECRET }}
+        run: |
+          if [ -n "$CLIENT_ID" ] && [ -n "$CLIENT_SECRET" ]; then
+            python -c "import json,os,sys; json.dump({'installed': {'client_id': os.environ['CLIENT_ID'], 'client_secret': os.environ['CLIENT_SECRET']}}, open('google_client.json','w'))" \
+              || python3 -c "import json,os; json.dump({'installed': {'client_id': os.environ['CLIENT_ID'], 'client_secret': os.environ['CLIENT_SECRET']}}, open('google_client.json','w'))"
+            echo "google_client.json written — the build will include the direct Google mode"
+          else
+            echo "::warning::GOOGLE_DESKTOP_CLIENT_ID/_SECRET are not set; this build ships without the direct Google Drive mode (phone sync via Google will be unavailable)"
+          fi
+
       - name: Build Windows executable
         run: |
           python -m PyInstaller build.spec --clean
@@ -90,6 +110,26 @@ jobs:
           python3 -m pip install --upgrade pip
           pip3 install -r requirements.txt
           pip3 install pyinstaller
+
+      # The Desktop-app OAuth client is not in the repository (GitHub blocks
+      # pushes containing it, and a fork should use its own). Without it a
+      # release ships with no built-in "Google Drive (direct)" mode — which is
+      # the one mode that can sync with the phone — and the sync page says so.
+      # Add GOOGLE_DESKTOP_CLIENT_ID / _SECRET as repository secrets to have
+      # releases carry it; builds without them still succeed.
+      - name: Write the Google OAuth client
+        shell: bash
+        env:
+          CLIENT_ID: ${{ secrets.GOOGLE_DESKTOP_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.GOOGLE_DESKTOP_CLIENT_SECRET }}
+        run: |
+          if [ -n "$CLIENT_ID" ] && [ -n "$CLIENT_SECRET" ]; then
+            python -c "import json,os,sys; json.dump({'installed': {'client_id': os.environ['CLIENT_ID'], 'client_secret': os.environ['CLIENT_SECRET']}}, open('google_client.json','w'))" \
+              || python3 -c "import json,os; json.dump({'installed': {'client_id': os.environ['CLIENT_ID'], 'client_secret': os.environ['CLIENT_SECRET']}}, open('google_client.json','w'))"
+            echo "google_client.json written — the build will include the direct Google mode"
+          else
+            echo "::warning::GOOGLE_DESKTOP_CLIENT_ID/_SECRET are not set; this build ships without the direct Google Drive mode (phone sync via Google will be unavailable)"
+          fi
 
       - name: Build macOS .app bundle
         run: |
@@ -154,6 +194,26 @@ jobs:
           python3 -m pip install --upgrade pip
           pip3 install -r requirements.txt
           pip3 install pyinstaller
+
+      # The Desktop-app OAuth client is not in the repository (GitHub blocks
+      # pushes containing it, and a fork should use its own). Without it a
+      # release ships with no built-in "Google Drive (direct)" mode — which is
+      # the one mode that can sync with the phone — and the sync page says so.
+      # Add GOOGLE_DESKTOP_CLIENT_ID / _SECRET as repository secrets to have
+      # releases carry it; builds without them still succeed.
+      - name: Write the Google OAuth client
+        shell: bash
+        env:
+          CLIENT_ID: ${{ secrets.GOOGLE_DESKTOP_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.GOOGLE_DESKTOP_CLIENT_SECRET }}
+        run: |
+          if [ -n "$CLIENT_ID" ] && [ -n "$CLIENT_SECRET" ]; then
+            python -c "import json,os,sys; json.dump({'installed': {'client_id': os.environ['CLIENT_ID'], 'client_secret': os.environ['CLIENT_SECRET']}}, open('google_client.json','w'))" \
+              || python3 -c "import json,os; json.dump({'installed': {'client_id': os.environ['CLIENT_ID'], 'client_secret': os.environ['CLIENT_SECRET']}}, open('google_client.json','w'))"
+            echo "google_client.json written — the build will include the direct Google mode"
+          else
+            echo "::warning::GOOGLE_DESKTOP_CLIENT_ID/_SECRET are not set; this build ships without the direct Google Drive mode (phone sync via Google will be unavailable)"
+          fi
 
       - name: Build Linux executable
         run: |

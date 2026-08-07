@@ -182,7 +182,22 @@ The app looks for a client in this order:
 3. `google_client.json` inside the build — the one you shipped.
 
 With no client anywhere, "Google Drive (direct)" simply reports itself as
-unavailable instead of breaking mid-sign-in. Google treats the client secret
+unavailable instead of breaking mid-sign-in. That is what anyone who builds
+from the repository alone will see: the file isn't there, and shouldn't be.
+
+**GitHub Actions releases.** The build takes the pair from repository
+secrets: add `GOOGLE_DESKTOP_CLIENT_ID` and `GOOGLE_DESKTOP_CLIENT_SECRET`
+under Settings → Secrets and variables → Actions and the workflow writes
+`google_client.json` before building. Without them the build still succeeds,
+just without the built-in Google mode — the log carries a warning.
+
+**A build you already downloaded.** No rebuild needed: drop
+`google_client.json` into the app's data directory, which is the first place
+the app looks.
+
+- macOS: `~/Library/Application Support/index.life/`
+- Windows: next to the `.exe` (or `%APPDATA%\index.life\`)
+- Linux: `~/.index-life/` Google treats the client secret
 of installed (desktop) apps as non-confidential — shipping it in a build is
 within Google's guidelines.
 </details>
