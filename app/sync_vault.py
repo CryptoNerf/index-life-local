@@ -282,11 +282,18 @@ def adopt_pairing_code(backend, text: str) -> str:
     vk = parse_pairing_code(text)
     verified = False
     if backend is not None:
+        own = _meta_get('device_id')
         try:
             names = backend.list_files()
         except Exception as exc:
             log.warning('pairing: cannot list folder (%s) — adopting unverified', exc)
             names = []
+        # Judge on the PEERS' snapshots, and on the whole set. Testing our own
+        # blob could only ever fail — it is sealed with the key we are about to
+        # replace — and treating the first failure as fatal meant one stale
+        # blob rejected a perfectly good code. With both devices already in the
+        # folder that deadlocked pairing in either direction.
+        saw_peer = False
         for name in names:
             if name == VAULT_FILENAME:
                 continue
@@ -301,14 +308,17 @@ def adopt_pairing_code(backend, text: str) -> str:
                 continue
             if not is_envelope(obj):
                 continue
+            if obj.get('device') == own:
+                continue
+            saw_peer = True
             try:
                 sync_crypto.open_envelope(blob, vk)
                 verified = True
                 break
-            except Exception as exc:
-                raise ValueError(
-                    "the pairing code does not match this folder's data"
-                ) from exc
+            except Exception:
+                continue        # another device's stale key — keep looking
+        if saw_peer and not verified:
+            raise ValueError("the pairing code does not match this folder's data")
     _cache_vault_key(vk)
     _meta_set(_ENABLED_KEY, 'true')
     log.info('Encrypted sync joined via pairing code (%s)',

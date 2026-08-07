@@ -147,3 +147,80 @@ def test_paired_device_merges_the_peer_snapshot(app, tmp_path):
     assert stats['inserted'] == 1
     from app.models import MoodEntry
     assert MoodEntry.query.first().note == 'from phone'
+
+
+# ── Pairing when both devices are already in the folder ──────────────
+# The case that deadlocked a real setup: a phone and a computer each set up
+# encryption for the same cloud folder separately, so each holds a key the
+# other cannot read. Verification used to test whatever blob came first —
+# including our own, sealed with the very key we are replacing — and treat
+# one failure as proof of a bad code. Neither side could adopt the other's
+# code, and the app said "the code is wrong" about a perfectly good code.
+
+def _envelope_for(vk, device):
+    snapshot = {'snapshot_version': 4, 'device_id': device,
+                'generated_at': '2026-08-07T14:25:05.492Z', 'mood_entries': []}
+    return sync_crypto.seal_envelope(snapshot, vk, device=device,
+                                     snapshot_version=4,
+                                     written_at=snapshot['generated_at'])
+
+
+def test_our_own_stale_blob_does_not_reject_a_good_code(app, tmp_path):
+    """Our blob is sealed with the key being replaced; it can only fail."""
+    _set_device('dev-desktop')
+    backend, folder = _backend(tmp_path)
+    ours, theirs = b'\x02' * 32, b'\x01' * 32
+    sync_vault._cache_vault_key(ours)
+    # sorts before the peer's file, so it is checked first
+    (folder / 'device_dev-desktop.json').write_text(
+        _envelope_for(ours, 'dev-desktop'), encoding='utf-8')
+    (folder / 'device_dev-phone.json').write_text(
+        _envelope_for(theirs, 'dev-phone'), encoding='utf-8')
+
+    result = sync_vault.adopt_pairing_code(
+        backend, sync_crypto.encode_recovery_key(theirs))
+
+    assert result == 'verified'
+    assert sync_vault.get_vault_key() == theirs
+
+
+def test_a_third_devices_stale_blob_does_not_reject_it_either(app, tmp_path):
+    _set_device('dev-desktop')
+    backend, folder = _backend(tmp_path)
+    theirs, orphan = b'\x01' * 32, b'\x09' * 32
+    (folder / 'device_aaa-orphan.json').write_text(
+        _envelope_for(orphan, 'dev-orphan'), encoding='utf-8')
+    (folder / 'device_dev-phone.json').write_text(
+        _envelope_for(theirs, 'dev-phone'), encoding='utf-8')
+
+    assert sync_vault.adopt_pairing_code(
+        backend, sync_crypto.encode_recovery_key(theirs)) == 'verified'
+
+
+def test_a_code_matching_nothing_is_still_rejected(app, tmp_path):
+    _set_device('dev-desktop')
+    backend, folder = _backend(tmp_path)
+    (folder / 'device_dev-phone.json').write_text(
+        _envelope_for(b'\x01' * 32, 'dev-phone'), encoding='utf-8')
+
+    with pytest.raises(ValueError):
+        sync_vault.adopt_pairing_code(
+            backend, sync_crypto.encode_recovery_key(b'\x07' * 32))
+
+
+def test_a_folder_holding_only_our_own_blob_cannot_reject_the_code(app, tmp_path):
+    """The phone-alone case: it has pushed under its old key, the computer
+    has not pushed yet. There is nothing to verify against, so the code must
+    be adopted (unverified) rather than refused."""
+    _set_device('dev-phone')
+    backend, folder = _backend(tmp_path)
+    ours, theirs = b'\x02' * 32, b'\x01' * 32
+    sync_vault._cache_vault_key(ours)
+    (folder / 'device_dev-phone.json').write_text(
+        _envelope_for(ours, 'dev-phone'), encoding='utf-8')
+
+    result = sync_vault.adopt_pairing_code(
+        backend, sync_crypto.encode_recovery_key(theirs))
+
+    assert result == 'unverified'
+    assert sync_vault.get_vault_key() == theirs

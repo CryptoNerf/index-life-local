@@ -154,3 +154,65 @@ describe('peer name collection on pull', () => {
     expect(stats.names).toEqual({ 'pc-1': 'MacBook-Pro' });
   });
 });
+
+// ── Pairing when both devices are already in the folder ──────────────
+// The case that deadlocked a real setup: the phone and the computer had each
+// set up encryption for the same cloud folder separately, so each held a key
+// the other could not read. Verification tested whatever blob came first —
+// including the phone's own, sealed with the very key being replaced — and
+// treated one failure as proof of a bad code. Scanning a perfectly good QR
+// answered "the code is wrong", in both directions.
+
+describe('adopting a code while stale blobs sit in the folder', () => {
+  const OURS = new Uint8Array(32).fill(2);
+  const THEIRS = new Uint8Array(32).fill(1);
+
+  const sealed = (vk, device) => crypto.sealEnvelope(
+    { snapshot_version: 4, device_id: device,
+      generated_at: '2026-08-07T14:25:05.492Z', mood_entries: [] },
+    vk, { device, snapshotVersion: 4, writtenAt: '2026-08-07T14:25:05.492Z' });
+
+  it('ignores our own snapshot, which can only fail', async () => {
+    await crypto.ready;
+    const own = vault.getDeviceId();
+    vault.cacheVaultKey?.(OURS);
+    const t = new MemoryTransport({
+      [`device_${own}.json`]: sealed(OURS, own),
+      'device_dev-desktop.json': sealed(THEIRS, 'dev-desktop')
+    });
+
+    await vault.adoptPairingCode(crypto.encodeRecoveryKey(THEIRS), t);
+    expect(vault.getVaultKey()).toEqual(THEIRS);
+  });
+
+  it('keeps looking past a third device left on an old key', async () => {
+    await crypto.ready;
+    const t = new MemoryTransport({
+      'device_aaa-orphan.json': sealed(new Uint8Array(32).fill(9), 'dev-orphan'),
+      'device_dev-desktop.json': sealed(THEIRS, 'dev-desktop')
+    });
+
+    await vault.adoptPairingCode(crypto.encodeRecoveryKey(THEIRS), t);
+    expect(vault.getVaultKey()).toEqual(THEIRS);
+  });
+
+  it('adopts unverified when only our own snapshot is there', async () => {
+    await crypto.ready;
+    const own = vault.getDeviceId();
+    const t = new MemoryTransport({ [`device_${own}.json`]: sealed(OURS, own) });
+
+    await vault.adoptPairingCode(crypto.encodeRecoveryKey(THEIRS), t);
+    expect(vault.getVaultKey()).toEqual(THEIRS);
+  });
+
+  it('still refuses a code that opens nothing in the folder', async () => {
+    await crypto.ready;
+    const t = new MemoryTransport({
+      'device_dev-desktop.json': sealed(THEIRS, 'dev-desktop')
+    });
+
+    await expect(
+      vault.adoptPairingCode(crypto.encodeRecoveryKey(new Uint8Array(32).fill(7)), t)
+    ).rejects.toThrow(/не подходит/i);
+  });
+});

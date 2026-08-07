@@ -149,6 +149,15 @@ export async function adoptPairingCode(text, transport = null) {
     } catch {
       /* folder unreachable — adopt unverified; the devices panel will tell */
     }
+    // Check the code against the PEERS' snapshots, and judge only on the
+    // whole set. Two things went wrong before: our own blob was tested (it
+    // is sealed with the key we are about to replace, so it can only fail),
+    // and the first failure was fatal — so a folder holding one stale blob
+    // rejected a perfectly good code. With both devices already in the
+    // folder that deadlocked pairing in either direction.
+    const own = getDeviceId();
+    let sawPeer = false;
+    let opened = false;
     for (const name of names) {
       if (!name.startsWith('device_') || !name.endsWith('.json')) continue;
       const blob = await transport.get(name);
@@ -160,15 +169,21 @@ export async function adoptPairingCode(text, transport = null) {
         continue;
       }
       if (!isEnvelope(obj)) continue;
+      if (obj.device === own) continue;   // ours: proves nothing either way
+      sawPeer = true;
       try {
         crypto.openEnvelope(blob, vk);
+        opened = true;
+        break;
       } catch {
-        throw new Error(
-          'Код не подходит к данным этого облака — проверьте, что выбраны ' +
-          'то же облако и тот же аккаунт, что на компьютере'
-        );
+        /* another device's stale key — keep looking */
       }
-      break; // first envelope decrypted — the key is verified
+    }
+    if (sawPeer && !opened) {
+      throw new Error(
+        'Код не подходит к данным этого облака — проверьте, что выбраны ' +
+        'то же облако и тот же аккаунт, что на компьютере'
+      );
     }
   }
   cacheVaultKey(vk);
