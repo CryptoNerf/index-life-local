@@ -143,6 +143,20 @@ button {
 }
 .mood-face { color: var(--ink); display: block; }
 
+/* Deleting a day, and taking it back. Kept quiet and far from Save: this is
+   the one destructive action on the screen. */
+.cap-delete {
+  display: block;
+  margin: 26px auto 0;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+.cap-undo {
+  display: inline;
+  margin: 0 0 0 6px;
+  font-size: inherit;
+}
+
 /* Where the entry stands with the cloud, next to the save button. */
 .cap-cloud {
   font-size: 13px;

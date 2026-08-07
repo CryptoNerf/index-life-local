@@ -64,6 +64,25 @@ export async function putEntry({ date, rating, note }) {
   return rec;
 }
 
+// Delete a day the way the desktop does: a SOFT delete. The row stays with
+// `deleted: true` and a fresh updated_at, keeping its uuid, rating and note.
+//
+// Why not remove the record: a peer that still holds the entry would send it
+// back on the next merge and the day would return from the dead — the merge
+// only treats a *newer* `deleted: true` row as a deletion, and a missing row
+// means nothing. Keeping the content also makes the deletion undoable without
+// a second store to write to.
+//
+// Returns the tombstone, or null when there was nothing to delete.
+export async function deleteEntry(date) {
+  const existing = await getEntry(date);
+  if (!existing || existing.deleted) return null;
+  const rec = { ...existing, deleted: true, updated_at: new Date().toISOString() };
+  const s = await store('readwrite');
+  await asPromise(s.put(rec));
+  return rec;
+}
+
 // Persist a batch of entries (the result of a sync merge) in one transaction.
 // Each record is keyed by date, so this upserts the merged state as-is.
 export async function putEntries(entries) {

@@ -4,8 +4,8 @@
 // UI layer calls refreshEntries() after a sync.
 
 import {
-  allEntries, putEntry, mirrorEntries, restoreFromMirrorIfEmpty,
-  isPersisted, requestPersist,
+  allEntries, getEntry, putEntry, deleteEntry, mirrorEntries,
+  restoreFromMirrorIfEmpty, isPersisted, requestPersist,
 } from './db.js';
 
 export const moodStore = $state({ entries: [], loaded: false });
@@ -47,4 +47,21 @@ export async function saveEntry(entry) {
   await refreshEntries();
   autoPersist();
   return rec;
+}
+
+// Delete a day (soft — see db.deleteEntry). Returns the tombstone so the
+// caller can offer to undo, or null when there was nothing to delete.
+export async function removeEntry(date) {
+  const rec = await deleteEntry(date);
+  if (rec) await refreshEntries();
+  return rec;
+}
+
+// Bring a deleted day back. The tombstone still carries the rating and the
+// note, so this needs no separate copy of the text; saving stamps a fresh
+// updated_at, which is what makes the revival win on other devices too.
+export async function restoreEntry(date) {
+  const tomb = await getEntry(date);
+  if (!tomb || !tomb.deleted) return null;
+  return saveEntry({ date, rating: tomb.rating, note: tomb.note ?? '' });
 }

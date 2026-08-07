@@ -2,7 +2,7 @@
   import RatingCubes from '../components/RatingCubes.svelte';
   import MoodFace from '../components/MoodFace.svelte';
   import { getEntry } from '../lib/db.js';
-  import { moodStore, saveEntry } from '../lib/store.svelte.js';
+  import { moodStore, saveEntry, removeEntry, restoreEntry } from '../lib/store.svelte.js';
   import { scheduleSync, syncState } from '../lib/sync-state.svelte.js';
   import { isUnlocked } from '../lib/vault.js';
   import { loadDraft, saveDraft, clearDraft, editorStateFor } from '../lib/drafts.js';
@@ -22,6 +22,12 @@
   // would show content the user deliberately deleted — and any save would
   // push it back to the desktop, resurrecting it.
   let deletedElsewhere = $state(false);
+  // A saved (live) entry exists for this day — the only case where deleting
+  // means anything.
+  let hasEntry = $state(false);
+  // Deleted right here, a moment ago: worth a softer word and a plain undo
+  // rather than the "on another device" explanation.
+  let justDeleted = $state(false);
 
   // Where the entry stands with the cloud, said on the screen where writing
   // happens. Until now the only sync status lived three blocks down the
@@ -55,11 +61,20 @@
   // (see draftIsFresh).
   $effect(() => {
     const d = date;
+    // Also re-read when the stored entries change, not just when the date
+    // does: a sync landing a newer version of the day you are looking at, or
+    // a restore from the localStorage mirror after an eviction, used to leave
+    // this screen showing stale (or empty) content until you navigated away
+    // and back. Typing is safe — a draft being edited is always the freshest,
+    // and draftIsFresh keeps it on top.
+    moodStore.entries;
     getEntry(d).then((e) => {
       const view = editorStateFor(e, loadDraft(d));
       rating = view.rating;
       note = view.note;
       deletedElsewhere = view.deletedElsewhere;
+      hasEntry = !!e && !e.deleted;
+      justDeleted = false;   // a fresh day, whatever happened on the last one
     });
   });
 
@@ -71,7 +86,35 @@
   function setRating(v) {
     rating = v;
     deletedElsewhere = false;   // writing again is a deliberate revival
+    justDeleted = false;
     touch();
+  }
+
+  // Soft delete, like the desktop: the row stays as a tombstone so the
+  // deletion travels to the other devices instead of the day quietly coming
+  // back on the next merge. No modal — the undo below is the safety net, and
+  // a tombstone keeps the text, so nothing is actually lost either way.
+  async function remove() {
+    const tomb = await removeEntry(date);
+    if (!tomb) return;
+    clearDraft(date);
+    rating = 0;
+    note = '';
+    hasEntry = false;
+    justDeleted = true;
+    deletedElsewhere = false;
+    scheduleSync();
+  }
+
+  async function undoDelete() {
+    const rec = await restoreEntry(date);
+    if (!rec) return;
+    rating = rec.rating;
+    note = rec.note ?? '';
+    hasEntry = true;
+    justDeleted = false;
+    deletedElsewhere = false;
+    scheduleSync();
   }
 
   async function save() {
@@ -102,10 +145,15 @@
     <MoodFace {rating} size={92} />
   </header>
 
-  {#if deletedElsewhere}
+  {#if justDeleted}
     <p class="cap-deleted">
-      Эта запись удалена на другом устройстве. Поставьте оценку, чтобы завести
-      день заново.
+      Запись удалена.
+      <button class="link-btn cap-undo" onclick={undoDelete}>Вернуть</button>
+    </p>
+  {:else if deletedElsewhere}
+    <p class="cap-deleted">
+      Эта запись удалена на другом устройстве.
+      <button class="link-btn cap-undo" onclick={undoDelete}>Вернуть</button>
     </p>
   {/if}
 
@@ -119,4 +167,8 @@
   </button>
 
   {#if cloudNote}<p class="cap-cloud">{cloudNote}</p>{/if}
+
+  {#if hasEntry}
+    <button class="link-btn cap-delete" onclick={remove}>Удалить запись</button>
+  {/if}
 </section>
