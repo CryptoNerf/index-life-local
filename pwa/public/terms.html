@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Условия использования — index.life</title>
+<meta name="description" content="Условия использования index.life: бесплатное приложение с открытым исходным кодом под AGPL-3.0, без учётных записей и без сбора данных.">
+<link rel="icon" href="/icons/android-chrome-192x192.png">
+<style>
+  /* Same sheet as privacy.html — kept inline so each page stands alone. */
+  :root {
+    --ink: #111;
+    --muted: #666;
+    --line: #e0e0e0;
+    --bg: #fff;
+    --accent: #009afa;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --ink: #ececec; --muted: #9a9a9a; --line: #333; --bg: #141414; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 19px;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 56px 24px 96px; }
+  header { border-bottom: 1px solid var(--line); padding-bottom: 22px; margin-bottom: 40px; }
+  .home { color: var(--accent); text-decoration: none; font-size: 17px; }
+  .home:hover { text-decoration: underline; }
+  h1 { font-size: 30px; font-weight: normal; line-height: 1.25; margin: 18px 0 6px; }
+  .sub { color: var(--muted); font-size: 16px; margin: 0; }
+  h2 {
+    font-size: 22px; font-weight: normal; line-height: 1.3;
+    margin: 44px 0 12px; padding-top: 22px; border-top: 1px solid var(--line);
+  }
+  h2:first-of-type { border-top: none; padding-top: 0; }
+  h3 { font-size: 19px; font-weight: 600; margin: 26px 0 8px; }
+  p, li { margin: 0 0 14px; }
+  ul { padding-left: 22px; }
+  strong { font-weight: 600; }
+  a { color: var(--accent); }
+  code {
+    font-family: 'Courier New', monospace; font-size: 0.88em;
+    background: rgba(128,128,128,.14); padding: 1px 5px;
+  }
+  .lead {
+    font-size: 21px; line-height: 1.55;
+    border-left: 3px solid var(--ink); padding-left: 18px; margin: 0 0 34px;
+  }
+  .note { color: var(--muted); font-size: 16px; }
+  .en { border-top: 1px solid var(--line); margin-top: 64px; padding-top: 10px; }
+  footer { margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 16px; }
+  @media (max-width: 600px) {
+    body { font-size: 18px; }
+    .wrap { padding: 34px 18px 72px; }
+    h1 { font-size: 26px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <a class="home" href="/">← index.life</a>
+  <h1>Условия использования</h1>
+  <p class="sub">Обновлено 7 августа 2026 · версия приложения 3.0</p>
+</header>
+
+<p class="lead">
+  index.life бесплатен, открыт и работает на вашем устройстве. Учётной записи нет,
+  платежей нет, данные остаются у вас. Ниже — что это значит на практике и чего
+  ждать не стоит.
+</p>
+
+<h2>Что это такое</h2>
+<p>
+  index.life — приложение-дневник настроения для компьютера и телефона. Оно
+  создано и поддерживается частным лицом, Эмилем Алексаняном. Пользуясь
+  приложением, вы соглашаетесь с этими условиями; если что-то из написанного вам
+  не подходит — просто не пользуйтесь им.
+</p>
+
+<h2>Цена и лицензия</h2>
+<p>
+  Приложение бесплатно. Исходный код открыт под лицензией
+  <a href="https://www.gnu.org/licenses/agpl-3.0.html">GNU AGPL-3.0</a> с
+  дополнительными условиями по разделу 7, сохраняющими указание авторства:
+  производные работы должны сохранять упоминание автора оригинала и не могут
+  выдавать себя за оригинальный index.life. Полный текст —
+  <a href="https://github.com/CryptoNerf/index-life-local">в репозитории</a>.
+</p>
+<p>
+  Вы вправе изучать код, изменять его и распространять на условиях лицензии. Имя
+  автора нельзя использовать для рекламы производного продукта без разрешения.
+</p>
+
+<h2>Учётной записи нет</h2>
+<p>
+  Регистрация не требуется, и я не веду список пользователей. Приложением
+  распоряжаетесь вы сами: устанавливаете, пользуетесь и удаляете, ни у кого не
+  спрашивая. Отключить вас от приложения я технически не могу — как и узнать, что
+  вы им пользуетесь.
+</p>
+
+<h2>Ваши данные — ваша ответственность</h2>
+<p>
+  Записи хранятся на вашем устройстве, а при включённой синхронизации — в вашем
+  собственном облаке в зашифрованном виде. Ни копии, ни резервной копии у меня нет
+  и быть не может. Отсюда следует прямое следствие:
+</p>
+<ul>
+  <li>если устройство сломается или данные будут удалены, а синхронизация или
+      резервная копия не были настроены, восстановить дневник невозможно;</li>
+  <li>если вы забудете пароль-фразу и потеряете ключ восстановления, зашифрованную
+      копию в облаке не расшифрует никто, включая меня;</li>
+  <li>сохранность вашего облачного аккаунта — тоже на вашей стороне.</li>
+</ul>
+<p>
+  Поэтому в приложении есть экспорт в Markdown-файл и резервные копии. Пользуйтесь
+  ими: это единственная защита от потери, которую я могу предложить.
+</p>
+
+<h2>Приемлемое использование</h2>
+<p>
+  Приложение предназначено для ведения личного дневника. Не используйте его для
+  незаконных действий и не пытайтесь через него нарушать работу чужих сервисов —
+  например, использовать чужие облачные аккаунты без разрешения.
+</p>
+
+<h2>Сторонние сервисы</h2>
+<p>
+  Синхронизация, погода и проверка обновлений задействуют сторонние сервисы —
+  Google Drive, Яндекс.Диск, ваш WebDAV-сервер, open-meteo.com, GitHub. Они
+  работают по своим собственным условиям и политикам, за которые я не отвечаю. Что
+  именно и когда туда отправляется, подробно описано в
+  <a href="/privacy.html">политике конфиденциальности</a>.
+</p>
+
+<h2>Приложение поставляется «как есть»</h2>
+<p>
+  Приложение предоставляется без каких-либо гарантий — явных или подразумеваемых,
+  включая гарантии пригодности для конкретной цели и бесперебойной работы. Автор не
+  несёт ответственности за утрату данных, упущенную выгоду или иной ущерб,
+  возникший при использовании приложения, в максимальной степени, допустимой
+  применимым правом. Это стандартное условие лицензии AGPL-3.0 (разделы 15–17).
+</p>
+
+<h2>Это не медицинская помощь</h2>
+<p>
+  index.life — инструмент для самонаблюдения, а не медицинское изделие. Оценки,
+  графики и ответы встроенного ИИ-собеседника не являются диагнозом, лечением или
+  профессиональной психологической помощью и не должны их заменять. Если вам
+  тяжело — обратитесь к специалисту. В кризисной ситуации звоните в службу
+  экстренной помощи вашей страны.
+</p>
+
+<h2>Изменение и прекращение</h2>
+<p>
+  Приложение развивается: функции могут появляться, меняться и исчезать, а сборки
+  для отдельных платформ могут перестать выпускаться. Поскольку код открыт, а
+  данные лежат у вас, работу уже установленной версии это не прерывает.
+</p>
+<p>
+  Условия могут обновляться; дата вверху страницы будет изменена, а история правок
+  останется открытой в репозитории.
+</p>
+
+<h2>Право и связь</h2>
+<p>
+  К этим условиям применяется право Российской Федерации — страны проживания
+  автора, — насколько это не ограничивает ваши права потребителя по месту вашего
+  жительства. Вопросы:
+  <a href="https://github.com/CryptoNerf/index-life-local/issues">issues в репозитории</a>
+  или <a href="mailto:nerf.file@gmail.com">nerf.file@gmail.com</a>.
+</p>
+
+<div class="en">
+<h2>Terms of Service (English)</h2>
+
+<h3>What this is</h3>
+<p>
+  index.life is a free, open-source mood diary for desktop and phone, made and
+  maintained by an individual, Émile Alexanyan. By using it you agree to these
+  terms; if something here doesn't suit you, simply don't use the app.
+</p>
+
+<h3>Price and licence</h3>
+<p>
+  The app is free. The source is released under the
+  <a href="https://www.gnu.org/licenses/agpl-3.0.html">GNU AGPL-3.0</a> with
+  additional Section 7 terms preserving attribution: derivative works must keep the
+  original author's credit and must not present themselves as the original
+  index.life. You may study, modify and redistribute the code under the licence.
+</p>
+
+<h3>No account</h3>
+<p>
+  There is no registration and no list of users. I cannot disable your access — nor
+  can I tell that you are using the app at all.
+</p>
+
+<h3>Your data is your responsibility</h3>
+<p>
+  Entries live on your device, and — if you enable sync — in your own cloud storage,
+  encrypted. I hold no copy and no backup. Therefore: if a device fails and you set
+  up neither sync nor backups, the diary cannot be recovered; and if you lose both
+  your passphrase and your recovery key, nobody can decrypt the cloud copy,
+  including me. The app offers Markdown export and local backups — please use them.
+</p>
+
+<h3>Third-party services</h3>
+<p>
+  Sync, weather and update checks involve third parties (Google Drive, Yandex.Disk,
+  your own WebDAV server, open-meteo.com, GitHub), each governed by its own terms,
+  for which I am not responsible. See the
+  <a href="/privacy.html">privacy policy</a> for exactly what is sent and when.
+</p>
+
+<h3>Provided "as is"</h3>
+<p>
+  The app is provided without warranties of any kind, express or implied, including
+  fitness for a particular purpose and uninterrupted operation. To the maximum
+  extent permitted by applicable law, the author is not liable for data loss, lost
+  profits or other damages arising from use of the app. This mirrors AGPL-3.0
+  sections 15–17.
+</p>
+
+<h3>Not medical advice</h3>
+<p>
+  index.life is a self-reflection tool, not a medical device. Ratings, charts and
+  the built-in AI companion's replies are not a diagnosis, treatment or professional
+  psychological help, and must not replace them. If you are struggling, please talk
+  to a professional; in a crisis, call your local emergency service.
+</p>
+
+<h3>Changes and contact</h3>
+<p>
+  Features may appear, change or be withdrawn, and platform builds may stop being
+  published; because the code is open and the data is yours, an installed version
+  keeps working. These terms may be updated — the date at the top will change and
+  the edit history stays public in the repository. Questions:
+  <a href="https://github.com/CryptoNerf/index-life-local/issues">GitHub issues</a>
+  or <a href="mailto:nerf.file@gmail.com">nerf.file@gmail.com</a>.
+</p>
+</div>
+
+<footer>
+  index.life — открытый исходный код под AGPL-3.0 ·
+  <a href="/privacy.html">Политика конфиденциальности</a> ·
+  <a href="https://github.com/CryptoNerf/index-life-local">GitHub</a>
+</footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Политика конфиденциальности — index.life</title>
+<meta name="description" content="index.life хранит дневник на вашем устройстве. Мы не получаем ваших записей: у проекта нет серверов, аналитики и рекламы.">
+<link rel="icon" href="/icons/android-chrome-192x192.png">
+<style>
+  /* The app's own language: a serif on white, hairlines, square corners and
+     one blue accent. Self-contained — these pages are static files on the
+     same domain as the PWA, with nothing to fetch. */
+  :root {
+    --ink: #111;
+    --muted: #666;
+    --line: #e0e0e0;
+    --bg: #fff;
+    --accent: #009afa;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --ink: #ececec; --muted: #9a9a9a; --line: #333; --bg: #141414; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 19px;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 56px 24px 96px; }
+  header { border-bottom: 1px solid var(--line); padding-bottom: 22px; margin-bottom: 40px; }
+  .home { color: var(--accent); text-decoration: none; font-size: 17px; }
+  .home:hover { text-decoration: underline; }
+  h1 { font-size: 30px; font-weight: normal; line-height: 1.25; margin: 18px 0 6px; }
+  .sub { color: var(--muted); font-size: 16px; margin: 0; }
+  h2 {
+    font-size: 22px; font-weight: normal; line-height: 1.3;
+    margin: 44px 0 12px; padding-top: 22px; border-top: 1px solid var(--line);
+  }
+  h2:first-of-type { border-top: none; padding-top: 0; }
+  h3 { font-size: 19px; font-weight: 600; margin: 26px 0 8px; }
+  p, li { margin: 0 0 14px; }
+  ul { padding-left: 22px; }
+  strong { font-weight: 600; }
+  a { color: var(--accent); }
+  code {
+    font-family: 'Courier New', monospace; font-size: 0.88em;
+    background: rgba(128,128,128,.14); padding: 1px 5px;
+  }
+  .lead {
+    font-size: 21px; line-height: 1.55;
+    border-left: 3px solid var(--ink); padding-left: 18px; margin: 0 0 34px;
+  }
+  table { border-collapse: collapse; width: 100%; margin: 0 0 18px; font-size: 17px; }
+  th, td { text-align: left; vertical-align: top; padding: 10px 12px 10px 0; border-bottom: 1px solid var(--line); }
+  th { font-weight: 600; width: 34%; }
+  .note { color: var(--muted); font-size: 16px; }
+  .en { border-top: 1px solid var(--line); margin-top: 64px; padding-top: 10px; }
+  footer { margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 16px; }
+  @media (max-width: 600px) {
+    body { font-size: 18px; }
+    .wrap { padding: 34px 18px 72px; }
+    h1 { font-size: 26px; }
+    th, td { display: block; width: auto; border: none; padding: 2px 0; }
+    td { border-bottom: 1px solid var(--line); padding-bottom: 12px; margin-bottom: 10px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <a class="home" href="/">← index.life</a>
+  <h1>Политика конфиденциальности</h1>
+  <p class="sub">Обновлено 7 августа 2026 · версия приложения 3.0</p>
+</header>
+
+<p class="lead">
+  index.life — дневник настроения, который работает на вашем устройстве. У проекта
+  нет серверов, нет учётных записей и нет аналитики. Ваши записи не попадают ни ко
+  мне, ни к кому-либо ещё: технически мне некуда их получить.
+</p>
+
+<h2>Кто отвечает за приложение</h2>
+<p>
+  Приложение создано и поддерживается частным лицом — Эмилем Алексаняном, автором
+  проекта index.life. Приложение бесплатно, его исходный код открыт под лицензией
+  AGPL-3.0 и доступен для проверки:
+  <a href="https://github.com/CryptoNerf/index-life-local">github.com/CryptoNerf/index-life-local</a>.
+  Любое утверждение на этой странице можно сверить с кодом.
+</p>
+
+<h2>Какие данные существуют и где они лежат</h2>
+<p>
+  Всё, что вы пишете, — оценка дня от 1 до 10 и текст заметки — хранится
+  <strong>на вашем устройстве</strong>: в файле базы данных в компьютерной версии и
+  в хранилище браузера (IndexedDB и localStorage) в мобильной. Дополнительно
+  приложение хранит настройки оформления и, если вы включили синхронизацию, ключ
+  шифрования и токен доступа к выбранному облаку — тоже только на устройстве.
+</p>
+<p>
+  Я не получаю ничего из этого. Регистрации нет, аккаунта у вас нет, отправлять
+  данные некуда: у проекта нет собственного сервера.
+</p>
+
+<h2>Синхронизация: куда уходят записи</h2>
+<p>
+  Синхронизация выключена по умолчанию. Если вы её включаете, дневник копируется
+  <strong>в ваше собственное облачное хранилище</strong> — тот аккаунт Google Drive
+  или Яндекс.Диска, в который вы вошли сами. Это ваше хранилище, а не моё; я не
+  имею к нему доступа.
+</p>
+<p>
+  Перед отправкой данные шифруются на устройстве алгоритмом XChaCha20-Poly1305;
+  ключ выводится из вашей пароль-фразы (Argon2id) и <strong>никогда не покидает
+  устройство</strong> — ни в облако, ни ко мне. Облако видит только нечитаемый
+  шифротекст. В мобильной версии облачная синхронизация без шифрования невозможна
+  в принципе: приложение отказывается выгружать открытый текст.
+</p>
+<p class="note">
+  Следствие, о котором честно предупреждаю: если вы забудете и пароль-фразу, и ключ
+  восстановления, расшифровать копию в облаке не сможет никто, включая меня.
+</p>
+
+<h2>Данные Google, к которым приложение получает доступ</h2>
+<p>
+  Если вы выбрали синхронизацию через Google Drive, приложение запрашивает одно
+  разрешение — <code>drive.file</code>. Это самый узкий доступ к Диску из
+  возможных: приложение видит <strong>только те файлы, которые создало само</strong>.
+  Остальные ваши документы, фотографии и папки для него не существуют — не
+  «мы обещаем не смотреть», а технически недоступны.
+</p>
+<table>
+  <tr><th>Что читается и пишется</th>
+      <td>Одна папка <code>index.life</code> в вашем Диске и файлы снимков внутри неё
+          (<code>device_&lt;id&gt;.json</code>, <code>vault.json</code>). Содержимое
+          зашифровано.</td></tr>
+  <tr><th>Зачем</th>
+      <td>Единственная цель — переносить дневник между вашими собственными
+          устройствами: телефоном и компьютером.</td></tr>
+  <tr><th>Кому передаётся</th>
+      <td>Никому. Данные идут напрямую между вашим устройством и вашим Google
+          Диском.</td></tr>
+  <tr><th>Как долго хранится</th>
+      <td>Пока вы сами не удалите папку. Копий на других серверах не существует.</td></tr>
+  <tr><th>Как отозвать</th>
+      <td>В приложении: «Отключить» на странице синхронизации. Со стороны Google:
+          <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>.
+          Затем можно удалить папку <code>index.life</code> с Диска.</td></tr>
+</table>
+
+<h3>Ограниченное использование (Limited Use)</h3>
+<p>
+  Использование приложением информации, полученной из Google API, соответствует
+  <a href="https://developers.google.com/terms/api-services-user-data-policy">Политике
+  Google API Services User Data</a>, включая требования Limited Use. В частности,
+  данные из вашего Google Диска используются <strong>исключительно</strong> для
+  синхронизации дневника между вашими устройствами и никогда — для рекламы,
+  профилирования, продажи третьим лицам или обучения моделей искусственного
+  интеллекта. Человек не читает эти данные: они зашифрованы и никуда не
+  передаются.
+</p>
+
+<h2>Соединения с внешними сервисами</h2>
+<p>Полный список того, куда приложение вообще может обратиться:</p>
+<table>
+  <tr><th>Ваше облако<br><span class="note">googleapis.com, accounts.google.com,
+      cloud-api.yandex.net, oauth.yandex.ru</span></td>
+      <td>Только если вы включили синхронизацию. Уходит зашифрованный дневник и
+          токен доступа к вашему же аккаунту.</td></tr>
+  <tr><th>WebDAV-сервер<br><span class="note">адрес указываете вы</span></td>
+      <td>Альтернатива облаку: любой сервер, который вы сами укажете.</td></tr>
+  <tr><th>open-meteo.com</th>
+      <td>Только если вы включили погоду. Уходят примерные координаты города и дата —
+          без записей и без идентификаторов.</td></tr>
+  <tr><th>api.github.com</th>
+      <td>Проверка наличия новой версии в компьютерной версии. Уходит только сам
+          запрос; записи не передаются.</td></tr>
+</table>
+<p>
+  Ничего другого приложение не запрашивает. Нет систем аналитики, рекламных сетей,
+  счётчиков, пикселей и сторонних SDK. Cookie сайт не использует.
+</p>
+
+<h2>ИИ-психолог</h2>
+<p>
+  Модуль ИИ в компьютерной версии работает <strong>полностью на вашем
+  компьютере</strong>: языковая модель скачивается один раз и запускается локально.
+  Ваши заметки не отправляются ни в OpenAI, ни в Google, ни на какой-либо иной
+  сервис, и не используются для обучения. В мобильной версии ИИ-модуля нет.
+</p>
+
+<h2>Дети</h2>
+<p>
+  Приложение не предназначено для детей младше 13 лет и не собирает данные
+  осознанно ни о ком — включая детей.
+</p>
+
+<h2>Ваши права</h2>
+<p>
+  Поскольку данные лежат у вас, вы распоряжаетесь ими напрямую: любую запись можно
+  изменить или удалить в приложении, весь дневник — выгрузить в Markdown-файл
+  («Экспорт»), а приложение — удалить вместе с его папкой данных. Запрашивать
+  что-либо у меня не нужно, потому что у меня ничего нет.
+</p>
+
+<h2>Изменения политики</h2>
+<p>
+  Если приложение начнёт обращаться к чему-то новому, эта страница будет обновлена,
+  а дата вверху изменена. История правок открыта в репозитории.
+</p>
+
+<h2>Связь</h2>
+<p>
+  Вопросы и замечания — через
+  <a href="https://github.com/CryptoNerf/index-life-local/issues">issues в репозитории</a>
+  или письмом на <a href="mailto:nerf.file@gmail.com">nerf.file@gmail.com</a>.
+</p>
+
+<div class="en">
+<h2>Privacy Policy (English)</h2>
+<p>
+  <strong>index.life</strong> is a mood diary that runs on your own device. The
+  project has no servers, no accounts and no analytics. Your entries never reach
+  me or anyone else — there is nowhere for them to be sent.
+</p>
+
+<h3>What data exists and where it lives</h3>
+<p>
+  Everything you write — a 1–10 rating and a note — is stored <strong>on your
+  device</strong>: in a local database file on the desktop and in browser storage
+  (IndexedDB and localStorage) on the phone. Appearance settings and, if you enable
+  sync, the encryption key and your cloud access token are stored on the device too.
+  None of it is transmitted to me.
+</p>
+
+<h3>Sync</h3>
+<p>
+  Sync is off by default. When you turn it on, the diary is copied to
+  <strong>your own cloud storage</strong> — the Google Drive or Yandex.Disk account
+  you sign into. It is encrypted on the device with XChaCha20-Poly1305 using a key
+  derived from your passphrase (Argon2id); the key <strong>never leaves your
+  device</strong>. The cloud only ever holds ciphertext. On the phone, cloud sync
+  without encryption is not possible at all: the app refuses to upload plaintext.
+</p>
+
+<h3>Google user data</h3>
+<p>
+  With Google Drive sync the app requests a single permission,
+  <code>drive.file</code> — the narrowest Drive scope there is: the app can see
+  <strong>only files it created itself</strong>. Your other documents and folders
+  are technically inaccessible to it.
+</p>
+<ul>
+  <li><strong>Accessed:</strong> one folder named <code>index.life</code> and the
+      encrypted snapshot files inside it.</li>
+  <li><strong>Purpose:</strong> moving your diary between your own devices. Nothing
+      else.</li>
+  <li><strong>Shared with:</strong> no one. Data travels directly between your
+      device and your Drive.</li>
+  <li><strong>Retention:</strong> until you delete the folder yourself.</li>
+  <li><strong>Revoking:</strong> "Disconnect" in the app, and/or
+      <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>.</li>
+</ul>
+<p>
+  <strong>Limited Use.</strong> index.life's use of information received from Google
+  APIs adheres to the
+  <a href="https://developers.google.com/terms/api-services-user-data-policy">Google
+  API Services User Data Policy</a>, including the Limited Use requirements. Data
+  from your Google Drive is used solely to synchronise your diary between your own
+  devices, and never for advertising, profiling, sale to third parties, or training
+  AI models. No human reads it: it is encrypted and never transmitted anywhere else.
+</p>
+
+<h3>Every outbound connection</h3>
+<ul>
+  <li><strong>Your cloud</strong> (googleapis.com, accounts.google.com,
+      cloud-api.yandex.net, oauth.yandex.ru) — only if you enable sync.</li>
+  <li><strong>A WebDAV server</strong> — only the address you enter yourself.</li>
+  <li><strong>open-meteo.com</strong> — only if you enable weather; an approximate
+      city location and a date, with no entries and no identifiers.</li>
+  <li><strong>api.github.com</strong> — the desktop update check.</li>
+</ul>
+<p>
+  There are no analytics services, ad networks, trackers or third-party SDKs, and
+  the site sets no cookies. The desktop AI assistant runs entirely on your own
+  computer; your notes are never sent to any AI provider or used for training.
+</p>
+
+<h3>Your rights and contact</h3>
+<p>
+  Your data is yours and local: edit or delete any entry in the app, export the whole
+  diary to a Markdown file, or delete the app together with its data folder. There is
+  nothing to request from me, because I hold nothing. Questions:
+  <a href="https://github.com/CryptoNerf/index-life-local/issues">GitHub issues</a>
+  or <a href="mailto:nerf.file@gmail.com">nerf.file@gmail.com</a>.
+</p>
+</div>
+
+<footer>
+  index.life — открытый исходный код под AGPL-3.0 ·
+  <a href="/terms.html">Условия использования</a> ·
+  <a href="https://github.com/CryptoNerf/index-life-local">GitHub</a>
+</footer>
+
+</div>
+</body>
+</html>
