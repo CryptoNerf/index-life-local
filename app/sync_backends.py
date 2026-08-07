@@ -40,6 +40,8 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+from app.nethttp import ssl_context
+
 log = logging.getLogger(__name__)
 
 # Snapshot files are named device_<id>.json. Listing only matches *.json
@@ -155,7 +157,10 @@ class WebDavBackend(SyncBackend):
             req.add_header('Authorization', f'Basic {token}')
         for k, v in (headers or {}).items():
             req.add_header(k, v)
-        return urllib.request.urlopen(req, timeout=_WEBDAV_TIMEOUT)
+        # A frozen build has no system CA store; without this context every
+        # https WebDAV server fails to verify (see app/nethttp.py).
+        return urllib.request.urlopen(req, timeout=_WEBDAV_TIMEOUT,
+                                      context=ssl_context())
 
     def _file_url(self, name: str) -> str:
         return self.base_url + urllib.parse.quote(name)

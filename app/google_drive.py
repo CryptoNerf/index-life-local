@@ -44,6 +44,8 @@ import urllib.request
 import webbrowser
 from pathlib import Path
 
+from app.nethttp import ssl_context
+
 from app import db
 from app.models import SyncMeta
 
@@ -208,7 +210,8 @@ def _post_form(url: str, fields: dict) -> dict:
     data = urllib.parse.urlencode(fields).encode('ascii')
     req = urllib.request.Request(url, data=data, method='POST')
     req.add_header('Content-Type', 'application/x-www-form-urlencoded')
-    with urllib.request.urlopen(req, timeout=_HTTP_TIMEOUT) as resp:
+    with urllib.request.urlopen(req, timeout=_HTTP_TIMEOUT,
+                                context=ssl_context()) as resp:
         return json.loads(resp.read().decode('utf-8'))
 
 
@@ -273,9 +276,20 @@ def connect_interactive(timeout_s: float = 180.0) -> str | None:
             'redirect_uri': redirect,
             'grant_type': 'authorization_code',
         })
+    except urllib.error.HTTPError as exc:
+        # Google puts the reason in the body ({"error": "...", ...}); without
+        # it every failure looked like a network problem.
+        detail = ''
+        try:
+            body = json.loads(exc.read().decode('utf-8'))
+            detail = body.get('error_description') or body.get('error') or ''
+        except Exception:
+            pass
+        log.warning('Google token exchange failed: HTTP %s %s', exc.code, detail)
+        return f'Google отклонил обмен кода на токен: {detail or exc.code}'
     except Exception as exc:
         log.warning('Google token exchange failed: %s', exc)
-        return 'Не удалось обменять код на токен — проверьте сеть'
+        return f'Не удалось обменять код на токен: {exc}'
 
     refresh = tokens.get('refresh_token')
     if not refresh:
@@ -325,7 +339,8 @@ def _api(method: str, path: str, *, data: bytes | None = None,
     if content_type:
         req.add_header('Content-Type', content_type)
     try:
-        with urllib.request.urlopen(req, timeout=_HTTP_TIMEOUT) as resp:
+        with urllib.request.urlopen(req, timeout=_HTTP_TIMEOUT,
+                                    context=ssl_context()) as resp:
             return resp.read()
     except urllib.error.HTTPError as exc:
         if exc.code == 401:

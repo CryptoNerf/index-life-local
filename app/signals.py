@@ -56,26 +56,9 @@ _FORECAST_PAST_DAYS = 90
 
 # ── HTTP (single audited entry point) ─────────────────────────
 
-_ssl_ctx = None
-
-
-def _get_ssl_context():
-    """SSL context that can verify certificates even in a frozen build.
-
-    PyInstaller bundles often ship without a usable CA store, so plain
-    `urlopen` fails with CERTIFICATE_VERIFY_FAILED and weather silently never
-    works. Prefer certifi's bundle (present in the bundled/venv deps); fall
-    back to the platform default if certifi can't be imported.
-    """
-    global _ssl_ctx
-    if _ssl_ctx is None:
-        import ssl
-        try:
-            import certifi
-            _ssl_ctx = ssl.create_default_context(cafile=certifi.where())
-        except Exception:
-            _ssl_ctx = ssl.create_default_context()
-    return _ssl_ctx
+# The frozen-build CA problem is the same everywhere; one implementation
+# lives in app/nethttp.py.
+from app.nethttp import ssl_context as _get_ssl_context
 
 
 def _http_get_json(url: str) -> dict | None:

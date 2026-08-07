@@ -6,6 +6,7 @@ import logging
 import threading
 import urllib.request
 import json
+from app.nethttp import ssl_context
 
 log = logging.getLogger(__name__)
 
@@ -33,7 +34,8 @@ def check_for_update(app) -> None:
                 RELEASES_URL,
                 headers={'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'index.life-updater'}
             )
-            with urllib.request.urlopen(req, timeout=5) as resp:
+            with urllib.request.urlopen(req, timeout=5,
+                                        context=ssl_context()) as resp:
                 data = json.loads(resp.read())
 
             remote_tag = data.get('tag_name', '')
