@@ -53,6 +53,7 @@ log = logging.getLogger(__name__)
 
 # Same folder name the PWA creates/uses (pwa/src/lib/config.js).
 DRIVE_FOLDER_NAME = 'index.life'
+VAULT_FILENAME = 'vault.json'    # marks a folder as a real sync folder
 SCOPE = 'https://www.googleapis.com/auth/drive.file'
 
 _AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
@@ -373,18 +374,67 @@ class GoogleDriveApiBackend:
         self._index: dict[str, str] | None = None   # name -> file id
 
     # -- folder --
-    def _folder_id(self) -> str:
-        cached = _meta_get(_FOLDER_KEY)
-        if cached:
-            return cached
+    def _folder_exists(self, fid: str) -> bool:
+        try:
+            _api_json('GET', f'drive/v3/files/{fid}?fields=id,trashed')
+            return True
+        except urllib.error.HTTPError as exc:
+            if exc.code in (404, 403):
+                return False
+            raise
+        except Exception:
+            return True     # a network blip is not a missing folder
+
+    def _pick_folder(self) -> str | None:
+        """The sync folder among however many are named index.life.
+
+        Drive lets several folders share a name, and both clients used to take
+        whichever the search happened to list first — so a phone and a desktop
+        could settle on different folders and never meet again. Prefer a folder
+        that actually holds a vault (that is what makes it *the* sync folder),
+        then the most recently touched. The PWA applies the same rule, so both
+        ends converge on the same answer.
+        """
         q = urllib.parse.quote(
             f"name='{DRIVE_FOLDER_NAME}' and "
             "mimeType='application/vnd.google-apps.folder' and trashed=false")
-        found = _api_json('GET', f'drive/v3/files?q={q}&fields=files(id)')
-        files = found.get('files') or []
-        if files:
-            fid = files[0]['id']
-        else:
+        found = _api_json(
+            'GET', f'drive/v3/files?q={q}&fields=files(id,modifiedTime)&pageSize=50')
+        candidates = found.get('files') or []
+        if not candidates:
+            return None
+        if len(candidates) == 1:
+            return candidates[0]['id']
+
+        def touched(f):
+            return f.get('modifiedTime') or ''
+
+        with_vault = []
+        for f in sorted(candidates, key=touched, reverse=True):
+            inner_q = urllib.parse.quote(
+                f"'{f['id']}' in parents and name='{VAULT_FILENAME}' and trashed=false")
+            try:
+                inner = _api_json('GET', f'drive/v3/files?q={inner_q}&fields=files(id)')
+            except Exception:
+                continue
+            if inner.get('files'):
+                with_vault.append(f)
+        pool = with_vault or candidates
+        best = max(pool, key=touched)
+        log.info('Drive: %d folders named %s; using %s',
+                 len(candidates), DRIVE_FOLDER_NAME, best['id'])
+        return best['id']
+
+    def _folder_id(self) -> str:
+        cached = _meta_get(_FOLDER_KEY)
+        # A remembered id can go stale — the folder may have been deleted, and
+        # then every sync fails against something that no longer exists.
+        if cached and self._folder_exists(cached):
+            return cached
+        if cached:
+            log.warning('Drive: remembered folder %s is gone — looking again', cached)
+        fid = self._pick_folder()
+        if fid is None:
             created = _api_json('POST', 'drive/v3/files?fields=id', body={
                 'name': DRIVE_FOLDER_NAME,
                 'mimeType': 'application/vnd.google-apps.folder',

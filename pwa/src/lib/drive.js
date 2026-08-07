@@ -7,6 +7,7 @@
 // into is covered headless. Verify in-browser via the CloudSync UI.
 
 import { GOOGLE_CLIENT_ID, DRIVE_FOLDER_NAME } from './config.js';
+import { VAULT_FILENAME } from './sync.js';
 
 const GIS_SRC = 'https://accounts.google.com/gsi/client';
 const SCOPE = 'https://www.googleapis.com/auth/drive.file';
@@ -165,14 +166,46 @@ const escapeQ = (s) => s.replace(/'/g, "\\'");
 
 // ── folder + file index (lazy, cached) ───────────────────────────────
 let folderId = null;
-async function getFolderId() {
-  if (folderId) return folderId;
+// The sync folder among however many are named index.life.
+//
+// Drive lets several folders share a name, and both clients used to take
+// whichever the search happened to list first — so a phone and a desktop
+// could settle on different folders and never meet again, each showing "the
+// other device isn't here". Prefer a folder that actually holds a vault
+// (that is what makes it *the* sync folder), then the most recently touched.
+// The desktop applies the same rule, so both ends converge on one answer.
+async function pickFolder() {
   const q = encodeURIComponent(
     `name='${escapeQ(DRIVE_FOLDER_NAME)}' and mimeType='${FOLDER_MIME}' and trashed=false`
   );
-  const found = await (await api(`drive/v3/files?q=${q}&fields=files(id)&spaces=drive`)).json();
-  if (found.files?.length) {
-    folderId = found.files[0].id;
+  const found = await (await api(
+    `drive/v3/files?q=${q}&fields=files(id,modifiedTime)&spaces=drive&pageSize=50`
+  )).json();
+  const candidates = found.files || [];
+  if (!candidates.length) return null;
+  if (candidates.length === 1) return candidates[0].id;
+
+  const byTouched = (a, b) => String(b.modifiedTime || '').localeCompare(String(a.modifiedTime || ''));
+  const withVault = [];
+  for (const f of [...candidates].sort(byTouched)) {
+    const inner = encodeURIComponent(
+      `'${escapeQ(f.id)}' in parents and name='${VAULT_FILENAME}' and trashed=false`
+    );
+    try {
+      const res = await (await api(`drive/v3/files?q=${inner}&fields=files(id)&spaces=drive`)).json();
+      if (res.files?.length) withVault.push(f);
+    } catch {
+      /* can't look inside — judge it by its timestamp alone */
+    }
+  }
+  return (withVault.length ? withVault : [...candidates].sort(byTouched))[0].id;
+}
+
+async function getFolderId() {
+  if (folderId) return folderId;
+  const picked = await pickFolder();
+  if (picked) {
+    folderId = picked;
     return folderId;
   }
   const created = await (await api('drive/v3/files?fields=id', {

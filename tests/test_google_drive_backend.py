@@ -193,3 +193,93 @@ def test_health_check_reports_not_connected(app):
     backend = google_drive.GoogleDriveApiBackend()
     msg = backend.health_check()
     assert msg is not None and 'Google' in msg
+
+
+# ── Which folder is THE folder ───────────────────────────────────────
+# Drive allows several folders with the same name, and both clients used to
+# take whichever the search listed first. A phone and a desktop could settle
+# on different folders and never meet again — each showing only itself in
+# "devices in this folder" while syncing perfectly happily on its own.
+
+class _FolderApi:
+    """Just enough Drive to answer folder questions."""
+
+    def __init__(self, folders, vaults=(), missing=()):
+        self.folders = folders          # [(id, modifiedTime)]
+        self.vaults = set(vaults)       # folder ids that contain vault.json
+        self.missing = set(missing)     # folder ids that 404 on lookup
+        self.created = 0
+
+    def api_json(self, method, path, body=None):
+        if method == 'GET' and '/files/' in path and '?q=' not in path:
+            fid = path.split('/files/')[1].split('?')[0]
+            if fid in self.missing:
+                raise urllib.error.HTTPError(path, 404, 'gone', {}, None)
+            return {'id': fid, 'trashed': False}
+        if method == 'GET' and 'in+parents' in path or (method == 'GET' and 'in%20parents' in path):
+            owner = next((f for f in self.folders if f[0] in path), None)
+            return {'files': [{'id': 'v1'}] if owner and owner[0] in self.vaults else []}
+        if method == 'GET' and 'mimeType' in path:
+            return {'files': [{'id': i, 'modifiedTime': t} for i, t in self.folders]}
+        if method == 'POST':
+            self.created += 1
+            return {'id': 'brand-new'}
+        raise AssertionError(f'unexpected {method} {path}')
+
+
+def _folder_api(monkeypatch, api):
+    monkeypatch.setattr(google_drive, '_api_json',
+                        lambda m, p, body=None: api.api_json(m, p, body))
+    return google_drive.GoogleDriveApiBackend()
+
+
+def test_a_single_folder_is_used_as_is(app, monkeypatch):
+    api = _FolderApi([('only', '2026-06-01T00:00:00Z')])
+    backend = _folder_api(monkeypatch, api)
+    assert backend._folder_id() == 'only'
+    assert api.created == 0
+
+
+def test_the_folder_holding_the_vault_wins_over_a_newer_empty_one(app, monkeypatch):
+    """An empty folder created by accident must not steal the sync."""
+    api = _FolderApi(
+        folders=[('real', '2026-06-01T00:00:00Z'), ('empty', '2026-08-01T00:00:00Z')],
+        vaults=['real'])
+    backend = _folder_api(monkeypatch, api)
+    assert backend._folder_id() == 'real'
+
+
+def test_among_several_vault_folders_the_freshest_wins(app, monkeypatch):
+    api = _FolderApi(
+        folders=[('old', '2026-06-01T00:00:00Z'), ('new', '2026-08-01T00:00:00Z')],
+        vaults=['old', 'new'])
+    backend = _folder_api(monkeypatch, api)
+    assert backend._folder_id() == 'new'
+
+
+def test_nothing_to_choose_from_creates_one(app, monkeypatch):
+    api = _FolderApi(folders=[])
+    backend = _folder_api(monkeypatch, api)
+    assert backend._folder_id() == 'brand-new'
+    assert api.created == 1
+
+
+def test_a_remembered_folder_that_is_gone_is_replaced(app, monkeypatch):
+    """The exact dead end seen in the wild: the folder the app remembered had
+    been deleted, so every sync ran against something that no longer existed."""
+    db.session.add(SyncMeta(key='gdrive_folder_id', value='deleted-one'))
+    db.session.commit()
+    api = _FolderApi(folders=[('survivor', '2026-08-01T00:00:00Z')],
+                     vaults=['survivor'], missing=['deleted-one'])
+    backend = _folder_api(monkeypatch, api)
+
+    assert backend._folder_id() == 'survivor'
+    assert db.session.get(SyncMeta, 'gdrive_folder_id').value == 'survivor'
+
+
+def test_a_remembered_folder_that_still_exists_is_kept(app, monkeypatch):
+    db.session.add(SyncMeta(key='gdrive_folder_id', value='mine'))
+    db.session.commit()
+    api = _FolderApi(folders=[('other', '2026-08-01T00:00:00Z')])
+    backend = _folder_api(monkeypatch, api)
+    assert backend._folder_id() == 'mine'
