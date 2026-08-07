@@ -221,6 +221,54 @@ def parse_pairing_code(text: str) -> bytes:
     return vk
 
 
+def key_matches_folder(backend) -> bool | None:
+    """Does the key we hold open what is already in this folder?
+
+    Returns True when a peer's envelope decrypts with our key, False when
+    peers exist and none of them do, and None when there is nothing to judge
+    by (an empty folder, or no key held).
+
+    Why this exists: switching to another folder or cloud keeps the key
+    cached from the previous one. Nothing checks it, so the app happily
+    publishes snapshots no other device can read, and the only symptom is a
+    line about "unprocessed snapshots" that blames the *other* device.
+    """
+    vk = get_vault_key()
+    if vk is None or backend is None:
+        return None
+    own = _meta_get('device_id')
+    try:
+        names = backend.list_files()
+    except Exception as exc:
+        log.warning('vault: cannot list folder to verify the key (%s)', exc)
+        return None
+
+    saw_peer = False
+    for name in names:
+        if name == VAULT_FILENAME:
+            continue
+        if not (name.startswith('device_') and name.endswith('.json')):
+            continue
+        blob = backend.read(name)
+        if not blob:
+            continue
+        try:
+            obj = json.loads(blob)
+        except (json.JSONDecodeError, ValueError):
+            continue
+        if not is_envelope(obj):
+            continue
+        if obj.get('device') == own:      # our own blob proves nothing
+            continue
+        saw_peer = True
+        try:
+            sync_crypto.open_envelope(blob, vk)
+            return True
+        except Exception:
+            continue
+    return False if saw_peer else None
+
+
 def adopt_pairing_code(backend, text: str) -> str:
     """Join the vault using a pairing code shown on another device.
 

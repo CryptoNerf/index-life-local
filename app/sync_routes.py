@@ -114,6 +114,7 @@ def sync_settings():
         # connect button instead of the confusing "sync disabled".
         flash(t('sync.gdrive_connect_first'), 'warning')
     elif is_sync_configured():
+        _guard_key_against_new_folder()
         flash(t('sync.flash_settings_saved'), 'success')
         # Saved over plain http — credentials + diary go in clear text.
         if is_webdav_insecure(mode, url):
@@ -266,6 +267,7 @@ def google_connect():
         flash(t('sync.gdrive_connect_failed', err=err), 'error')
         return redirect(url_for('sync.sync_page'))
     set_sync_config('gdrive')
+    _guard_key_against_new_folder()
     flash(t('sync.gdrive_connected'), 'success')
     _kick_full_sync()
     return redirect(url_for('sync.sync_page'))
@@ -285,6 +287,27 @@ def sync_devices():
     except Exception as e:
         current_app.logger.warning('device listing failed: %s', e)
         return jsonify({'devices': [], 'error': str(e)})
+
+
+def _guard_key_against_new_folder():
+    """After the sync target changes, make sure our key opens what's there.
+
+    A key stays cached across a change of folder or cloud. If the new folder
+    belongs to a vault someone else created — a phone that set up encryption
+    on its own, say — we would keep publishing snapshots nobody can read, and
+    the only sign would be a line blaming the other device's snapshot. Lock
+    instead and say what to do; local entries are untouched by locking.
+    """
+    if not is_sync_configured() or not sync_vault.is_unlocked():
+        return
+    try:
+        verdict = sync_vault.key_matches_folder(_current_backend())
+    except Exception as exc:
+        current_app.logger.warning('key check failed: %s', exc)
+        return
+    if verdict is False:
+        sync_vault.lock()
+        flash(t('sync.key_mismatch_locked'), 'warning')
 
 
 @bp.route('/sync/devices/remove', methods=['POST'])

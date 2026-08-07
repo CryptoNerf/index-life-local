@@ -257,7 +257,12 @@
         {% if sync_report and (sync_report.errors or sync_report.push_ok == false) %}
           <div class="flash-msg flash-warning">
             {% if sync_report.locked %}{{ t('sync.report_locked') }}{% endif %}
-            {% if sync_report.errors and sync_report.errors > (sync_report.locked or 0) %}
+            {# A key mismatch is not a broken file: the devices were set up
+               with different keys in one folder, and the actionable line is
+               about pairing them — not about a snapshot that "failed". #}
+            {% if sync_report.key_mismatch %}
+              {{ t('sync.report_key_mismatch', count=sync_report.key_mismatch) }}
+            {% elif sync_report.errors and sync_report.errors > (sync_report.locked or 0) %}
               {{ t('sync.report_errors', count=sync_report.errors) }}
               {% if sync_report.error_files %}(<code>{{ sync_report.error_files|join(', ') }}</code>){% endif %}
             {% endif %}

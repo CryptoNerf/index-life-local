@@ -754,7 +754,8 @@ def pull_peers(backend, names: list[str] | None = None,
     total: dict[str, Any] = {
         'files': 0, 'inserted': 0, 'updated': 0, 'conflicts': 0,
         'chat_inserted': 0, 'skipped_invalid': 0, 'errors': 0,
-        'error_files': [], 'peers_unchanged': 0, 'locked': 0}
+        'error_files': [], 'peers_unchanged': 0, 'locked': 0,
+        'key_mismatch': 0}
 
     def _record_error(name: str):
         total['errors'] += 1
@@ -801,8 +802,15 @@ def pull_peers(backend, names: list[str] | None = None,
             try:
                 snapshot = sync_crypto.open_envelope(text, vk)
             except Exception as exc:
-                log.error('Sync: cannot decrypt %s: %s', name, exc)
+                # We DO hold a key and it doesn't open this peer's blob: the
+                # two devices were set up with different keys in one folder.
+                # Counted apart from generic errors because the fix is
+                # specific — pair the devices, or unlock with this folder's
+                # passphrase — and because the blob that looks broken is the
+                # peer's while the wrong key may well be ours.
+                log.error('Sync: cannot decrypt %s (key mismatch?): %s', name, exc)
                 _record_error(name)
+                total['key_mismatch'] += 1
                 continue
         else:
             snapshot = obj

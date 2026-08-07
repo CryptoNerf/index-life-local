@@ -733,5 +733,7 @@
   "customization.cube_scale_desc": "A filled day takes its colour from its rating — from the colour of a 1, through the middle, to the colour of a 10. Empty days and the border stay as set above.",
   "sync.devices_remove": "remove inactive",
   "sync.devices_remove_confirm": "Remove the inactive device \"{name}\" from the sync folder? Its file is deleted from the cloud; entries other devices already received stay. This button is for devices that no longer sync (an old phone, a reinstall). A live device will reappear — fully cutting one off from the data currently requires changing the passphrase.",
-  "sync.devices_remove_failed": "Couldn't remove the device. See the log for details."
+  "sync.devices_remove_failed": "Couldn't remove the device. See the log for details.",
+  "sync.report_key_mismatch": "Other devices' snapshots ({count}) are encrypted with a different key — the devices were set up for this folder separately and cannot read each other. Lock this device below (your entries stay), then unlock with this folder's passphrase or with a pairing code from the device that can read it.",
+  "sync.key_mismatch_locked": "This folder already holds data encrypted with a different key, and this device's previous key does not open it. Sync is locked so the folder does not fill with unreadable snapshots; your entries are untouched. Enter this folder's passphrase, or a pairing code from the device that can read it."
 }
