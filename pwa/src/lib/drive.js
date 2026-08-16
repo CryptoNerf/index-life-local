@@ -213,10 +213,15 @@ async function getFolderId() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name: DRIVE_FOLDER_NAME, mimeType: FOLDER_MIME })
   })).json();
-  folderId = created.id;
-  if (!folderId) {
+  if (!created.id) {
     throw new Error('не удалось создать папку index.life в Google Drive');
   }
+  // Two devices setting up at the same moment each saw an empty Drive and
+  // each made a folder — that is how a phone and a computer ended up with a
+  // vault apiece, seconds apart. Look again now that ours exists: if the
+  // shared rule prefers another, follow it and leave our empty one behind.
+  const winner = await pickFolder();
+  folderId = (winner && winner !== created.id) ? winner : created.id;
   return folderId;
 }
 

@@ -300,3 +300,28 @@ def test_a_remembered_folder_sitting_in_the_bin_is_replaced(app, monkeypatch):
     api = _Api(folders=[('alive', '2026-08-01T00:00:00Z')], vaults=['alive'])
     backend = _folder_api(monkeypatch, api)
     assert backend._folder_id() == 'alive'
+
+
+def test_a_folder_created_in_a_race_yields_to_the_shared_choice(app, monkeypatch):
+    """Both devices set up at the same second, each saw an empty Drive, each
+    made a folder — and each ended up with its own vault. After creating,
+    look again and follow the rule both sides use."""
+
+    class _Racy(_FolderApi):
+        def api_json(self, method, path, body=None):
+            if method == 'POST':
+                # Someone else's folder — with a vault — appears meanwhile.
+                self.folders = [('theirs', '2026-08-16T12:06:41Z'),
+                                ('ours', '2026-08-16T12:06:41Z')]
+                self.vaults = {'theirs'}
+            return super().api_json(method, path, body)
+
+    api = _Racy(folders=[])
+    backend = _folder_api(monkeypatch, api)
+    assert backend._folder_id() == 'theirs'
+
+
+def test_without_a_race_the_folder_we_just_made_is_kept(app, monkeypatch):
+    api = _FolderApi(folders=[])
+    backend = _folder_api(monkeypatch, api)
+    assert backend._folder_id() == 'brand-new'

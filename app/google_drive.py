@@ -442,6 +442,16 @@ class GoogleDriveApiBackend:
                 'mimeType': 'application/vnd.google-apps.folder',
             })
             fid = created['id']
+            # Two devices setting up at the same moment each saw an empty
+            # Drive and each made a folder — that is how a phone and a
+            # computer ended up with a vault apiece, seconds apart. Look
+            # again now that ours exists: if the shared rule prefers someone
+            # else's, follow it and leave our empty one behind.
+            winner = self._pick_folder()
+            if winner and winner != fid:
+                log.info('Drive: another %s appeared at the same time; '
+                         'using %s', DRIVE_FOLDER_NAME, winner)
+                fid = winner
         _meta_set(_FOLDER_KEY, fid)
         return fid
 
