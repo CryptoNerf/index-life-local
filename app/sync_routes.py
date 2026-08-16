@@ -134,6 +134,10 @@ def sync_disconnect():
     still read what we last pushed.
     """
     set_sync_config('local', folder='', url='', username='', password='')
+    # Forget the encryption key and flag too: a key that outlives the folder
+    # it belonged to gets carried into the next one, and a device left
+    # "encrypted but locked" with no vault to unlock has no way forward.
+    sync_vault.forget_encryption()
     # Also drop the Google link (refresh token) — "disconnect" must not
     # leave a credential behind.
     try:

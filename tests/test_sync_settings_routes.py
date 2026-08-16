@@ -6,7 +6,7 @@ testing the connection.
 """
 import pytest
 
-from app import sync
+from app import db, sync, sync_vault
 from app.models import SyncMeta  # noqa: F401  (table registration)
 from app.sync_routes import bp as sync_bp
 
@@ -76,3 +76,34 @@ def test_disconnect_clears_the_password(client, app):
     client.post('/sync/disconnect')
 
     assert sync.get_sync_config()['password'] == ''
+
+
+def test_disconnect_forgets_the_encryption_key_and_flag(client, app):
+    """Otherwise the key outlives the folder it belonged to.
+
+    Two failures came out of that: reconnecting to a different folder carried
+    the old key in and published snapshots nobody there could read, and a
+    device left "encrypted but locked" with no vault in the folder had no way
+    forward on the page — every passphrase was refused because the vault it
+    belonged to had been deleted.
+    """
+    sync_vault._cache_vault_key(b'\x05' * 32)
+    db.session.add(SyncMeta(key='sync_encryption_enabled', value='true'))
+    db.session.commit()
+    assert sync_vault.is_encryption_enabled() is True
+
+    client.post('/sync/disconnect')
+
+    assert sync_vault.is_encryption_enabled() is False
+    assert sync_vault.get_vault_key() is None
+
+
+def test_disconnect_keeps_the_diary(client, app):
+    from datetime import date
+    from app.models import MoodEntry
+    db.session.add(MoodEntry(date=date(2026, 7, 1), rating=8, note='моя запись'))
+    db.session.commit()
+
+    client.post('/sync/disconnect')
+
+    assert MoodEntry.query.count() == 1

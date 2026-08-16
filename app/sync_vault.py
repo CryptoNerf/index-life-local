@@ -119,6 +119,22 @@ def lock() -> None:
 
 # ── vault.json in the shared folder ──────────────────────────────────
 
+def forget_encryption() -> None:
+    """Forget the key AND the "encryption is on" flag for this device.
+
+    What "disconnect" has to do. Keeping the key after detaching from a folder
+    is not a convenience but a trap: reconnecting to a *different* folder
+    carries the old key into it and publishes snapshots nobody there can read
+    — the exact way a phone and a computer end up unable to see each other.
+    It also left the page demanding a passphrase for a vault that no longer
+    existed, with nothing on screen able to satisfy it.
+
+    Entries are untouched: this forgets a key, not data.
+    """
+    lock()
+    _meta_del(_ENABLED_KEY)
+
+
 def vault_exists(backend) -> bool | None:
     """True / False / None when the folder could not be read at all.
 
