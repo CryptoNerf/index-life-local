@@ -283,6 +283,27 @@
             </details>
           {% endif %}
 
+        {% elif encryption.enabled and encryption.vault_checked
+                and not encryption.vault_in_folder %}
+          {# Locked, but this folder holds no vault to unlock against — a new
+             or emptied folder. Asking for a passphrase here is a dead end:
+             there is nothing for it to open. Offer to set this folder up. #}
+          <div class="step-card">
+            <div class="step-body">
+              <div class="step-title">
+                <span class="mark"></span> {{ t('sync.step_fresh_folder_title') }}
+              </div>
+              <p class="step-text">{{ t('sync.step_fresh_folder_hint') }}</p>
+              <form method="post" action="{{ url_for('sync.encryption_enable') }}" class="enc-form">
+                <input type="password" name="passphrase" class="sync-input"
+                       placeholder="{{ t('sync.enc_passphrase') }}" autocomplete="new-password">
+                <input type="password" name="passphrase_confirm" class="sync-input"
+                       placeholder="{{ t('sync.enc_passphrase_confirm') }}" autocomplete="new-password">
+                <button class="sync-btn sync-btn-primary">{{ t('sync.enc_enable') }}</button>
+              </form>
+            </div>
+          </div>
+
         {% elif encryption.enabled or encryption.vault_in_folder %}
           <div class="step-card step-warn">
             <div class="step-body">

@@ -376,8 +376,10 @@ class GoogleDriveApiBackend:
     # -- folder --
     def _folder_exists(self, fid: str) -> bool:
         try:
-            _api_json('GET', f'drive/v3/files/{fid}?fields=id,trashed')
-            return True
+            meta = _api_json('GET', f'drive/v3/files/{fid}?fields=id,trashed')
+            # A folder in the bin still answers 200. Syncing into it would
+            # look like it works right until the bin is emptied.
+            return not meta.get('trashed')
         except urllib.error.HTTPError as exc:
             if exc.code in (404, 403):
                 return False

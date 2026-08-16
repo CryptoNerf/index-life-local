@@ -283,3 +283,20 @@ def test_a_remembered_folder_that_still_exists_is_kept(app, monkeypatch):
     api = _FolderApi(folders=[('other', '2026-08-01T00:00:00Z')])
     backend = _folder_api(monkeypatch, api)
     assert backend._folder_id() == 'mine'
+
+
+def test_a_remembered_folder_sitting_in_the_bin_is_replaced(app, monkeypatch):
+    """Drive answers 200 for a trashed folder, so syncing into the bin looks
+    like it works — right up until the bin is emptied."""
+    db.session.add(SyncMeta(key='gdrive_folder_id', value='binned'))
+    db.session.commit()
+
+    class _Api(_FolderApi):
+        def api_json(self, method, path, body=None):
+            if method == 'GET' and '/files/binned' in path:
+                return {'id': 'binned', 'trashed': True}
+            return super().api_json(method, path, body)
+
+    api = _Api(folders=[('alive', '2026-08-01T00:00:00Z')], vaults=['alive'])
+    backend = _folder_api(monkeypatch, api)
+    assert backend._folder_id() == 'alive'

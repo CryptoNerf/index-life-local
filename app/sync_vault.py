@@ -96,10 +96,14 @@ def status(backend) -> dict:
     None when sync isn't configured (then there's no folder to hold a vault).
     `vault_in_folder` distinguishes 'enable a new vault' from 'unlock the
     vault a peer already created in this folder'."""
+    present = vault_exists(backend) if backend else False
     return {
         'enabled': is_encryption_enabled(),
         'unlocked': is_unlocked(),
-        'vault_in_folder': bool(backend) and vault_exists(backend),
+        # True / False / None — see vault_exists. The UI needs the difference
+        # between "no vault yet, offer to create one" and "couldn't look".
+        'vault_in_folder': present,
+        'vault_checked': present is not None,
     }
 
 
@@ -115,12 +119,18 @@ def lock() -> None:
 
 # ── vault.json in the shared folder ──────────────────────────────────
 
-def vault_exists(backend) -> bool:
+def vault_exists(backend) -> bool | None:
+    """True / False / None when the folder could not be read at all.
+
+    The third answer matters: "there is no vault here" invites creating one,
+    and doing that because the network hiccuped would mint a second key for a
+    folder that already has one.
+    """
     try:
         return backend.read(VAULT_FILENAME) is not None
     except Exception as exc:           # a flaky backend must not crash sync
         log.warning('vault.json read failed: %s', exc)
-        return False
+        return None
 
 
 def load_vault(backend) -> dict | None:
