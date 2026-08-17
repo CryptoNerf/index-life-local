@@ -23,6 +23,9 @@ header { width: 100%; }
   font-size: var(--il-text-nav);
   margin-top: 60px;
   margin-left: 70px;
+  /* Own leading: the header is the same on every page, so its height
+     must not follow whatever the page sets for its prose. */
+  line-height: var(--il-leading-tight);
 }
 
 /* Desktop: center the header (any height — not only short laptop screens) */

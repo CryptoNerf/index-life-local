@@ -25,6 +25,9 @@ header {
   font-size: var(--il-text-nav);
   margin-top: 60px;
   margin-left: 70px;
+  /* Own leading: the header is the same on every page, so its height
+     must not follow whatever the page sets for its prose. */
+  line-height: var(--il-leading-tight);
 }
 
 .menu-link {
@@ -193,7 +196,7 @@ main {
    Размер клеток масштабируется по высоте экрана (vh)
    Расчёт: 4 ряда × 6 клеток = 24 клетки по вертикали
    ========================================================== */
-@media (min-height: 600px) and (min-width: 769px) {
+@media (min-width: 769px) {
   /* Переменные масштабируются с высотой экрана */
   :root {
     --cube-size: clamp(12px, 2.35vh, 44px);
