@@ -414,7 +414,9 @@ def river(year=None):
     def y_of(rating):
         return pad_t + (10 - rating) / 9 * plot_h
 
-    raw_points = [(x_of(d), y_of(r)) for (d, r, _dt) in series]
+    # The rating rides along: the dots are days, and a day can be
+    # painted by its rating when the calendar grid is.
+    raw_points = [(x_of(d), y_of(r), r) for (d, r, _dt) in series]
     smooth_points = [(x_of(d), y_of(r)) for (d, r) in smoothed]
 
     # Month label positions

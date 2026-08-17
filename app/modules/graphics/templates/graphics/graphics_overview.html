@@ -57,12 +57,19 @@
           {% for c in heat.cells %}
             {% if c.in_year %}
               {% if c.rating %}
-                {# fill colour from CSS class .heat-cell (var(--chart-color));
-                   fill-opacity carries the rating signal. #}
+                {# Two ways to say the same rating. Normally: one colour from
+                   .heat-cell (var(--chart-color)) at a data-driven opacity.
+                   While the calendar grid is coloured by rating and this
+                   chart hasn't been given a colour of its own, the day takes
+                   the grid's colour instead, at full strength — a seven here
+                   and a seven in the grid are then the same green. #}
+                {% set scale_fill = cz_rating_scale.color('overview', c.rating)
+                                    if cz_rating_scale else none %}
                 <rect x="{{ heat_pad_l + c.x }}" y="{{ heat_pad_t + c.y }}"
                       width="{{ heat.cell }}" height="{{ heat.cell }}"
-                      fill-opacity="{{ 1.0 - (c.rating - 1) / 9 * 0.85 }}"
-                      class="heat-cell {% if c.is_today %}heat-today{% endif %}">
+                      {% if scale_fill %}style="fill: {{ scale_fill }}; fill-opacity: 1"
+                      {% else %}fill-opacity="{{ 1.0 - (c.rating - 1) / 9 * 0.85 }}"
+                      {% endif %}class="heat-cell {% if c.is_today %}heat-today{% endif %}">
                   <title>{{ c.date.strftime('%Y-%m-%d') }} · {{ c.rating }}/10</title>
                 </rect>
               {% else %}
@@ -76,13 +83,23 @@
           {% endfor %}
         </svg>
       </div>
+      {% set scale_legend = cz_rating_scale.legend('overview')
+                            if cz_rating_scale else [] %}
       <div class="heat-legend">
         <span class="legend-label">{{ t('graphics.chart.legend_low') }}</span>
-        <span class="legend-swatch" style="opacity:1"></span>
-        <span class="legend-swatch" style="opacity:0.78"></span>
-        <span class="legend-swatch" style="opacity:0.57"></span>
-        <span class="legend-swatch" style="opacity:0.36"></span>
-        <span class="legend-swatch" style="opacity:0.15;border: 1px solid #d8d8d8"></span>
+        {% if scale_legend %}
+          {# The legend has to be recoloured with the cells: grey swatches
+             beside red-to-green days would describe a different chart. #}
+          {% for swatch in scale_legend %}
+            <span class="legend-swatch" style="background-color: {{ swatch }}"></span>
+          {% endfor %}
+        {% else %}
+          <span class="legend-swatch" style="opacity:1"></span>
+          <span class="legend-swatch" style="opacity:0.78"></span>
+          <span class="legend-swatch" style="opacity:0.57"></span>
+          <span class="legend-swatch" style="opacity:0.36"></span>
+          <span class="legend-swatch" style="opacity:0.15;border: 1px solid #d8d8d8"></span>
+        {% endif %}
         <span class="legend-label">{{ t('graphics.chart.legend_high') }}</span>
       </div>
     </section>

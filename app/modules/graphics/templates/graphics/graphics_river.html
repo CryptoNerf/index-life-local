@@ -67,9 +67,13 @@
             points="{% for p in smooth_points %}{{ p[0] }},{{ p[1] }} {% endfor %}"/>
         {% endif %}
 
-        {# raw dots #}
+        {# raw dots — one per day. The smoothed line stays the chart's own
+           colour: it is a trend across days, not a day. #}
         {% for p in raw_points %}
-          <circle cx="{{ p[0] }}" cy="{{ p[1] }}" r="2.5" class="river-raw-dot"/>
+          {% set scale_fill = cz_rating_scale.color('river', p[2])
+                              if cz_rating_scale else none %}
+          <circle cx="{{ p[0] }}" cy="{{ p[1] }}" r="2.5" class="river-raw-dot"
+                  {% if scale_fill %}style="fill: {{ scale_fill }}; opacity: 1"{% endif %}/>
         {% endfor %}
 
         {# month ticks #}

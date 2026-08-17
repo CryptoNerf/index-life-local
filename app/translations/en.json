@@ -523,6 +523,7 @@
   "graphics.rhythm.summary": "{n} entries · average {avg} / 10 — each cell is the average rating for a (weekday, month) pair; the grid shows your weekly rhythm across the seasons",
   "graphics.rose.title": "Rose",
   "graphics.rose.summary": "{n} entries · average {avg} / 10 — each petal is a weekday; its shape shows the rating distribution, its darkness shows the average",
+  "graphics.rose.summary_scale": "{n} entries · average {avg} / 10 — each petal is a weekday; its shape shows the rating distribution, its colour shows the average",
   "graphics.ridgeline.title": "Ridgeline",
   "graphics.ridgeline.summary": "{n} entries · average {avg} / 10 — each row is a month's rating distribution; the shape reveals where your ratings clustered",
   "graphics.overview.title": "Overview",

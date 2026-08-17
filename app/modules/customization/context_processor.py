@@ -30,6 +30,7 @@ import json
 import logging
 from markupsafe import Markup
 
+from . import rating_scale
 from .defaults import DEFAULTS
 
 log = logging.getLogger(__name__)
@@ -339,33 +340,24 @@ _CHART_OVERRIDE_MAP: dict[str, tuple[str, str]] = {
 }
 
 
-def _mix_rgb(a, b, k):
-    """Linear blend between two (r, g, b) tuples, k in 0..1."""
-    return tuple(round(a[i] + (b[i] - a[i]) * k) for i in range(3))
-
-
 def _cube_scale_rules(settings: dict) -> str:
     """`.cube.rN` rules painting each day by its 1–10 rating.
 
     Emitted as explicit rules rather than variables for the same reasons as
     the chart overrides: ten interpolated colours don't fit one variable, and
     inline rules can't be served stale from the browser's CSS cache.
+
+    The scale itself lives in `rating_scale`, shared with the charts that
+    draw days — the grid and the spiral have to agree on what a seven is.
     """
-    if settings.get('cube-scale-enabled') != 'true':
+    if not rating_scale.is_enabled(settings):
         return ''
-    low = _hex_to_rgb(settings.get('cube-scale-low') or DEFAULTS['cube-scale-low'])
-    mid = _hex_to_rgb(settings.get('cube-scale-mid') or DEFAULTS['cube-scale-mid'])
-    high = _hex_to_rgb(settings.get('cube-scale-high') or DEFAULTS['cube-scale-high'])
-    rules = []
-    for rating in range(1, 11):
-        # 1 → low, 5.5 → mid, 10 → high
-        pos = (rating - 1) / 9
-        if pos <= 0.5:
-            rgb = _mix_rgb(low, mid, pos * 2)
-        else:
-            rgb = _mix_rgb(mid, high, (pos - 0.5) * 2)
-        rules.append('.cube.filled.r%d { background: rgb(%d, %d, %d); }' % (rating, *rgb))
-    return '\n'.join(rules)
+    stops = rating_scale.stops(settings)
+    return '\n'.join(
+        '.cube.filled.r%d { background: rgb(%d, %d, %d); }'
+        % (rating, *rating_scale.rgb_at(stops, rating))
+        for rating in range(1, 11)
+    )
 
 
 def _chart_overrides(settings: dict) -> str:
@@ -655,4 +647,11 @@ def _mosaic_script_tags(settings: dict) -> str:
 def register_context_processor(app):
     @app.context_processor
     def inject_customization():
-        return {'customization_css': _emit_css_block(_load_user_settings())}
+        settings = _load_user_settings()
+        return {
+            'customization_css': _emit_css_block(settings),
+            # Present only while days are coloured by rating, so a chart
+            # template can ask `if cz_rating_scale` and nothing more. Absent
+            # (Jinja Undefined, which is falsy) when this module is off.
+            'cz_rating_scale': rating_scale.for_charts(settings),
+        }
