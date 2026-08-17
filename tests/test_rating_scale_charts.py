@@ -12,7 +12,7 @@ from app.modules.customization import rating_scale as rs
 
 
 ON = {'cube-scale-enabled': 'true'}
-CHARTS = ['overview', 'spiral', 'rose', 'rhythm', 'river']
+CHARTS = ['overview', 'overview-bars', 'spiral', 'rose', 'rhythm', 'river']
 
 
 # ── when the mode applies at all ──────────────────────────────
@@ -168,3 +168,29 @@ def test_positions_outside_the_span_are_clamped():
 
     assert scale.color_across('rose', -1) == scale.color_across('rose', 0)
     assert scale.color_across('rose', 2) == scale.color_across('rose', 1)
+
+
+# ── the overview's bars are their own surface ─────────────────
+
+def test_recolouring_the_heatmap_leaves_the_bars_on_the_grid():
+    """Two surfaces, two keys: the year heatmap and the two bar charts under
+    it are customized separately, so following the grid ends separately."""
+    scale = rs.for_charts({**ON, 'overview-heat-color': '#123456'})
+
+    assert scale.color('overview', 7) is None
+    assert scale.color('overview-bars', 7) is not None
+
+
+def test_recolouring_the_bars_leaves_the_heatmap_on_the_grid():
+    scale = rs.for_charts({**ON, 'overview-bar-color': '#123456'})
+
+    assert scale.color('overview-bars', 7) is None
+    assert scale.color('overview', 7) is not None
+
+
+def test_a_bar_is_the_same_colour_as_the_days_it_stands_for():
+    """A month averaging seven, and the column of sevens, are the colour a
+    seven has in the grid."""
+    scale = rs.for_charts(ON)
+
+    assert scale.color('overview-bars', 7) == scale.color('overview', 7)

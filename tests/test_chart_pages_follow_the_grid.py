@@ -154,6 +154,26 @@ assert spread > 0.5, (
 for path in ('/graphics/rose', '/graphics/rhythm'):
     assert 'legend-dot' in body(path), 'legend vanished on ' + path
 
+# ── the overview's bars, a surface of their own ───────────────
+def bar_fills():
+    import re
+    return set(re.findall(r'class="bar" style="fill: (rgb\(\d+, \d+, \d+\))',
+                          body(PAGES['overview'])))
+
+bars = bar_fills()
+assert len(bars) >= 3, 'the overview bars came out in %d colour(s)' % len(bars)
+assert bars <= scale_palette(), 'the bars used colours outside the grid palette'
+
+# Two surfaces, two keys: customizing one must not decide for the other.
+settings(**{'cube-scale-enabled': 'true', 'overview-bar-color': '#123456'})
+assert not bar_fills(), 'the bars ignored the colour the user chose for them'
+assert LOW in body(PAGES['overview']), 'recolouring the bars silenced the heatmap'
+
+settings(**{'cube-scale-enabled': 'true', 'overview-heat-color': '#123456'})
+assert bar_fills(), 'recolouring the heatmap silenced the bars'
+
+settings(**{'cube-scale-enabled': 'true'})
+
 # ── a chart given its own colour keeps it ─────────────────────
 settings(**{'cube-scale-enabled': 'true', 'spiral-dot-color': '#123456'})
 spiral = body(PAGES['spiral'])

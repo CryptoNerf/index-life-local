@@ -31,6 +31,11 @@ chosen a colour for this chart?" answerable at all.
 # markers, gridlines) say nothing about how a day should be painted.
 CHART_DAY_KEY = {
     'overview': 'overview-heat-color',
+    # The overview's two bar charts are a separate surface with a key of its
+    # own: a monthly average is a rating, and each bar of the distribution
+    # *is* a rating, so both belong on the grid's scale — but recolouring the
+    # heatmap says nothing about them, or the other way round.
+    'overview-bars': 'overview-bar-color',
     'spiral':   'spiral-dot-color',
     'rose':     'rose-petal-color',
     'rhythm':   'rhythm-cell-color',

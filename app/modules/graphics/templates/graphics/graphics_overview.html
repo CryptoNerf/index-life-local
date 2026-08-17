@@ -110,9 +110,15 @@
       <svg viewBox="0 0 {{ bars_w }} {{ bars_h }}" class="chart-svg" preserveAspectRatio="xMidYMid meet">
         <line x1="{{ bars_pad_l }}" y1="{{ bars_baseline_y }}" x2="{{ bars_w - 10 }}" y2="{{ bars_baseline_y }}" class="axis"/>
         <line x1="{{ bars_pad_l }}" y1="{{ bars_pad_t + bars_plot_h * 0.5 }}" x2="{{ bars_w - 10 }}" y2="{{ bars_pad_t + bars_plot_h * 0.5 }}" class="axis-faint" stroke-dasharray="2 4"/>
+        {# A bar is a month's average rating, so it takes the grid's colour
+           for that rating — the same colour the days it averages are drawn
+           in on the heatmap above. #}
         {% for b in monthly_bars %}
           {% if b.v is not none %}
-            <rect x="{{ b.x }}" y="{{ b.y }}" width="{{ b.w }}" height="{{ b.h }}" class="bar"/>
+            {% set scale_fill = cz_rating_scale.color('overview-bars', b.v)
+                                if cz_rating_scale else none %}
+            <rect x="{{ b.x }}" y="{{ b.y }}" width="{{ b.w }}" height="{{ b.h }}"
+                  class="bar"{% if scale_fill %} style="fill: {{ scale_fill }}"{% endif %}/>
             <text x="{{ b.x + b.w/2 }}" y="{{ b.y - 8 }}" class="bar-label" text-anchor="middle">{{ '%.1f'|format(b.v) }}</text>
           {% endif %}
           <text x="{{ b.x + b.w/2 }}" y="{{ bars_baseline_y + 20 }}" class="axis-label-lg" text-anchor="middle">{{ '%02d'|format(b.label) }}</text>
@@ -126,9 +132,14 @@
       <p class="chart-title">{{ t('graphics.overview.distribution') }}</p>
       <svg viewBox="0 0 {{ dist_w }} {{ dist_h }}" class="chart-svg" preserveAspectRatio="xMidYMid meet">
         <line x1="{{ dist_pad_l }}" y1="{{ dist_baseline_y }}" x2="{{ dist_w - 10 }}" y2="{{ dist_baseline_y }}" class="axis"/>
+        {# Here the bar's label *is* the rating — the column of sixes is
+           painted the colour a six has everywhere else. #}
         {% for b in dist_bars %}
           {% if b.v > 0 %}
-            <rect x="{{ b.x }}" y="{{ b.y }}" width="{{ b.w }}" height="{{ b.h }}" class="bar"/>
+            {% set scale_fill = cz_rating_scale.color('overview-bars', b.label)
+                                if cz_rating_scale else none %}
+            <rect x="{{ b.x }}" y="{{ b.y }}" width="{{ b.w }}" height="{{ b.h }}"
+                  class="bar"{% if scale_fill %} style="fill: {{ scale_fill }}"{% endif %}/>
             <text x="{{ b.x + b.w/2 }}" y="{{ b.y - 8 }}" class="bar-label" text-anchor="middle">{{ b.v }}</text>
           {% endif %}
           <text x="{{ b.x + b.w/2 }}" y="{{ dist_baseline_y + 20 }}" class="axis-label-lg" text-anchor="middle">{{ b.label }}</text>
