@@ -76,14 +76,15 @@
 
         {# Petals — fill colour from CSS, opacity = data signal. While the
            calendar grid is coloured by rating and the rose has no colour of
-           its own, a petal is painted for its average on the same 1–10
-           scale as the grid. Note what changes: the opacity shading is
-           relative (worst weekday → best weekday), the grid's colour is
-           absolute, so a week of close averages comes out close in colour.
-           The petal's shape carries the distribution either way. #}
+           its own, the petal takes the grid's palette instead. Placed by
+           where the weekday sits between the worst and the best one, not by
+           its absolute rating: the seven averages usually fall within half a
+           point, and on the absolute scale that is seven identical petals —
+           the weekday comparison this chart exists for would be gone. The
+           legend below names the two ends it is spread over. #}
         {% for p in petals %}
           {% if p.has_data %}
-            {% set scale_fill = cz_rating_scale.color('rose', p.avg)
+            {% set scale_fill = cz_rating_scale.color_across('rose', p.shade)
                                 if cz_rating_scale else none %}
             <path d="M {{ p.points[0][0] }} {{ p.points[0][1] }}
                      {% for pt in p.points[1:] %}L {{ pt[0] }} {{ pt[1] }} {% endfor %}Z"
@@ -115,9 +116,10 @@
       {% set scale_legend = cz_rating_scale.legend('rose', 4)
                             if cz_rating_scale else [] %}
       <div class="spiral-legend rose-legend">
-        {# The ends of the legend name what the colours span. On the grid's
-           scale that is 1 and 10, not this year's worst and best weekday. #}
-        <span class="legend-label">{% if scale_legend %}1{% elif color_min is not none %}{{ '%.2f'|format(color_min) }}{% else %}{{ t('graphics.chart.legend_low') }}{% endif %}</span>
+        {# The ends name what the colours are spread over: this year's worst
+           and best weekday, whether that span is drawn in shades or in the
+           grid's palette. #}
+        <span class="legend-label">{% if color_min is not none %}{{ '%.2f'|format(color_min) }}{% else %}{{ t('graphics.chart.legend_low') }}{% endif %}</span>
         {% if scale_legend %}
           {% for swatch in scale_legend %}
             {# Same size for every swatch: the colour is the whole signal
@@ -132,9 +134,9 @@
           <span class="legend-dot" style="width:7px;height:7px;opacity:0.45"></span>
           <span class="legend-dot" style="width:5px;height:5px;opacity:0.25;border:1px solid #d8d8d8"></span>
         {% endif %}
-        <span class="legend-label">{% if scale_legend %}10{% elif color_max is not none %}{{ '%.2f'|format(color_max) }}{% else %}{{ t('graphics.chart.legend_high') }}{% endif %}</span>
+        <span class="legend-label">{% if color_max is not none %}{{ '%.2f'|format(color_max) }}{% else %}{{ t('graphics.chart.legend_high') }}{% endif %}</span>
       </div>
-      {% if color_min is not none and color_max is not none and not scale_legend %}
+      {% if color_min is not none and color_max is not none %}
         <p style="text-align:center; color:#999; font-size:13px; font-family: var(--font-body, 'Times New Roman', Times, serif); margin-top:6px;">
           {{ t('graphics.color_scaled_weekday', lo='%.2f'|format(color_min), hi='%.2f'|format(color_max)) }}
         </p>

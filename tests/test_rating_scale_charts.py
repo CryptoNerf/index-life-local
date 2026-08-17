@@ -122,3 +122,49 @@ def test_a_customized_chart_keeps_its_old_legend():
     scale = rs.for_charts({**ON, 'overview-heat-color': '#123456'})
 
     assert scale.legend('overview') == []
+
+
+# ── spread across a chart's own range ─────────────────────────
+
+def test_the_palette_can_be_spread_over_a_narrow_span():
+    """The rose compares weekdays with each other. Seven averages inside half
+    a point are seven identical petals on the absolute scale, so the same
+    palette is stretched over the span they actually cover."""
+    scale = rs.for_charts(ON)
+
+    assert scale.color_across('rose', 0.0) == scale.color('rose', 1)
+    assert scale.color_across('rose', 0.5) == scale.color('rose', 5.5)
+    assert scale.color_across('rose', 1.0) == scale.color('rose', 10)
+
+
+def test_spreading_uses_the_same_stops_as_the_grid():
+    """Stretched or not, the colours are the calendar's."""
+    scale = rs.for_charts({**ON, 'cube-scale-low': '#ff00ff'})
+
+    assert scale.color_across('rose', 0.0) == 'rgb(255, 0, 255)'
+
+
+def test_close_averages_still_come_out_different():
+    scale = rs.for_charts(ON)
+    petals = [scale.color_across('rose', t) for t in (0.0, 0.35, 0.7, 1.0)]
+
+    assert len(set(petals)) == 4
+
+
+def test_a_customized_rose_is_not_spread_either():
+    scale = rs.for_charts({**ON, 'rose-petal-color': '#123456'})
+
+    assert scale.color_across('rose', 0.5) is None
+
+
+def test_a_petal_with_no_place_on_the_span_gets_no_colour():
+    """One weekday, or none — the route hands over None rather than a
+    position, and nothing is painted."""
+    assert rs.for_charts(ON).color_across('rose', None) is None
+
+
+def test_positions_outside_the_span_are_clamped():
+    scale = rs.for_charts(ON)
+
+    assert scale.color_across('rose', -1) == scale.color_across('rose', 0)
+    assert scale.color_across('rose', 2) == scale.color_across('rose', 1)

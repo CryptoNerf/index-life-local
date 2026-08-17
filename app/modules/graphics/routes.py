@@ -775,6 +775,7 @@ def rose(year=None):
             t = max(0.0, min(1.0, t))
             fill_opacity = round(1.0 - t * 0.85, 3)
         else:
+            t = None
             fill_opacity = 0.05
 
         petals.append({
@@ -785,6 +786,12 @@ def rose(year=None):
             'label_x': round(lx, 2),
             'label_y': round(ly, 2),
             'fill_opacity': fill_opacity,
+            # Where this weekday sits between the worst and the best one.
+            # The shading has always been relative — seven averages within
+            # half a point of each other still have to look different from
+            # one another — so the calendar's colours are spread across the
+            # same span rather than read off the absolute 1–10 scale.
+            'shade': None if t is None else round(t, 4),
             'has_data': count > 0,
         })
 

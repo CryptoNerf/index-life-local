@@ -37,12 +37,17 @@ YEAR = 2026
 LOW = 'fill: rgb(192, 57, 43)'
 HIGH = 'fill: rgb(42, 143, 42)'
 
+# A rating per weekday: the year then holds both ends of the scale (so the
+# charts that paint days must show both), and all seven weekday averages
+# differ (so the rose, which spreads the palette over its own span, must come
+# out in seven colours rather than one).
+BY_WEEKDAY = [1, 3, 4, 6, 7, 9, 10]     # Monday … Sunday
+
 with application.app_context():
-    # A year holding both ends of the scale, so both colours must appear.
-    day = date(YEAR, 1, 6)
-    for i, rating in enumerate([1, 10] * 6):
-        db.session.add(MoodEntry(date=day + timedelta(days=i * 9),
-                                 rating=rating, note='x'))
+    day = date(YEAR, 1, 1)
+    for i in range(120):
+        d = day + timedelta(days=i)
+        db.session.add(MoodEntry(date=d, rating=BY_WEEKDAY[d.weekday()], note='x'))
     db.session.commit()
 
 def settings(**values):
@@ -66,6 +71,30 @@ PAGES = {
 PLAIN = dict.fromkeys(PAGES, 'fill-opacity=')
 PLAIN['river'] = 'river-raw-dot'
 
+def scale_palette():
+    """Every colour the grid's scale can produce, at fine resolution — a
+    petal must be one of them, wherever on the span it landed."""
+    from app.modules.customization import rating_scale as rs
+    stops = rs.stops({})
+    return {'rgb(%d, %d, %d)' % rs.rgb_at(stops, 1 + i * 9 / 900)
+            for i in range(901)}
+
+
+_PALETTE = None
+
+
+def palette_position(color):
+    """Where a colour sits on the grid's ramp, 0 (rating 1) to 1 (rating 10)."""
+    global _PALETTE
+    from app.modules.customization import rating_scale as rs
+    if _PALETTE is None:
+        stops = rs.stops({})
+        _PALETTE = {'rgb(%d, %d, %d)' % rs.rgb_at(stops, 1 + i * 9 / 900): i / 900
+                    for i in range(901)}
+    assert color in _PALETTE, color + ' is not on the grid palette'
+    return _PALETTE[color]
+
+
 def body(path):
     r = client.get(path + '?year=%d' % YEAR)
     assert r.status_code == 200, path + ' -> %d' % r.status_code
@@ -82,11 +111,46 @@ for name, path in PAGES.items():
 # ── grid coloured by rating: charts follow ────────────────────
 settings(**{'cube-scale-enabled': 'true'})
 for name, path in PAGES.items():
+    if name == 'rose':
+        continue          # spread over its own span — checked below
     html = body(path)
     assert LOW in html, name + ' missing the low end of the grid scale'
     assert HIGH in html, name + ' missing the high end of the grid scale'
 
-# The rose and the rhythm grid stop advertising a range they no longer use.
+# The rose compares weekdays with each other, so the palette is spread over
+# the span the seven averages cover (padded, so the ends of the scale are
+# deliberately never reached). What has to hold is that the petals differ.
+def rose_fills():
+    import re
+    return set(re.findall(r'fill: (rgb\(\d+, \d+, \d+\))', body(PAGES['rose'])))
+
+fills = rose_fills()
+assert len(fills) == 7, 'the rose came out in %d colour(s), not seven' % len(fills)
+assert fills <= scale_palette(), 'the rose used colours outside the grid palette'
+
+# The case the spread exists for: seven weekday averages within about half a
+# point of each other, which is what real diaries look like. Read off the
+# absolute 1–10 scale they would all be the same yellow; spread over their own
+# span they must still cover most of the palette.
+with application.app_context():
+    MoodEntry.query.delete()
+    day = date(YEAR, 1, 1)
+    for i in range(140):
+        d = day + timedelta(days=i)
+        # Every weekday averages near 5.5, drifting by a tenth per weekday.
+        pattern = [1, 10, 4, 5, 6, 5, 5]
+        rating = pattern[i // 7 % 7]
+        if i // 7 % 7 == 6:
+            rating = max(1, min(10, 5 + d.weekday() - 3))
+        db.session.add(MoodEntry(date=d, rating=rating, note='x'))
+    db.session.commit()
+
+positions = sorted(palette_position(c) for c in rose_fills())
+spread = positions[-1] - positions[0]
+assert spread > 0.5, (
+    'the rose only covered %.2f of the palette — the averages were read off '
+    'the absolute scale instead of their own span' % spread)
+
 for path in ('/graphics/rose', '/graphics/rhythm'):
     assert 'legend-dot' in body(path), 'legend vanished on ' + path
 

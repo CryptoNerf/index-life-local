@@ -119,6 +119,21 @@ class ChartScale:
             return None
         return 'rgb(%d, %d, %d)' % rgb_at(self._stops, rating)
 
+    def color_across(self, chart: str, position) -> str | None:
+        """A colour from the same palette, placed by fraction instead of rating.
+
+        For a chart whose marks are compared against each other rather than
+        against the 1–10 scale. The rose is the case: seven weekday averages
+        usually sit within half a point, so reading them off the absolute
+        scale paints seven petals the same yellow and the weekday differences
+        — the only thing the chart is about — disappear. Spreading the same
+        red-to-green palette across the span it actually covers keeps the
+        calendar's colours and the comparison both.
+        """
+        if position is None or not self.follows_grid(chart):
+            return None
+        return self.color(chart, 1 + max(0.0, min(1.0, float(position))) * 9)
+
     def legend(self, chart: str, steps: int = 5) -> list:
         """Evenly spaced colours from 1 to 10, for a chart's legend.
 
