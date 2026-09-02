@@ -1380,6 +1380,47 @@ def people_alias_bulk():
     return redirect(url_for('graphics.people_manage'))
 
 
+def _alias_root(name, alias_map):
+    """Follow `alias → canonical` to the name actually displayed."""
+    seen = set()
+    while name in alias_map and name not in seen:
+        seen.add(name)
+        name = alias_map[name]
+    return name
+
+
+def _point_alias_at(alias, canonical):
+    """Write `alias → canonical`, keeping the table a flat one-hop map.
+
+    Two rules the writing paths kept breaking, each with its own symptom:
+
+      * The target is resolved first. Merging into a name that is itself an
+        alias must land on the name that is actually displayed, or the pair
+        becomes a loop — "Марь → Мари" alongside "Мари → Марь", where each
+        name is the other's alias, neither ever wins, and the two groups
+        never merge no matter how many times the user tries.
+
+      * The row is replaced, not inserted. `alias` is UNIQUE, and a name
+        being demoted usually already has a row from an earlier merge in the
+        other direction; that INSERT is what raised "UNIQUE constraint
+        failed: person_aliases.alias" and showed the user an internal error.
+
+    Returns False when both names already resolve to the same person and
+    nothing needs writing.
+    """
+    from app.models import PersonAlias
+    alias_map = {a.alias: a.canonical for a in PersonAlias.query.all()}
+    target = _alias_root(canonical, alias_map)
+    if target == alias:
+        return False
+    row = PersonAlias.query.filter_by(alias=alias).first()
+    if row:
+        row.canonical = target
+    else:
+        db.session.add(PersonAlias(alias=alias, canonical=target))
+    return True
+
+
 @bp.route('/graphics/people/alias/create', methods=['POST'])
 def people_alias_create():
     """Create an alias mapping `alias → canonical`. Used by the merge
@@ -1393,13 +1434,11 @@ def people_alias_create():
     if not alias or not canonical or alias == canonical:
         return redirect(url_for('graphics.people'))
 
-    from app.models import PersonAlias
-    # Replace existing mapping for this alias if any (idempotent updates).
-    existing = PersonAlias.query.filter_by(alias=alias).first()
-    if existing:
-        existing.canonical = canonical
-    else:
-        db.session.add(PersonAlias(alias=alias, canonical=canonical))
+    if not _point_alias_at(alias, canonical):
+        # The reverse mapping already exists, so these are one person
+        # already. Writing this one would close a loop; changing which name
+        # shows is what "set canonical" is for.
+        return redirect(url_for('graphics.people_detail', name=canonical))
     db.session.commit()
     return redirect(url_for('graphics.people_detail', name=canonical))
 
@@ -1435,10 +1474,20 @@ def people_alias_set_canonical():
         {'canonical': new_canonical}
     )
 
-    # 3. Make the previous canonical itself an alias of the new one,
-    #    so any historical entry_people rows under that name keep flowing
-    #    to the merged group.
-    db.session.add(PersonAlias(alias=current_canonical, canonical=new_canonical))
+    # 3. Make the previous canonical itself an alias of the new one, so any
+    #    historical entry_people rows under that name keep flowing to the
+    #    merged group. It often already has a row of its own — from an
+    #    earlier rename in the opposite direction — and inserting a second
+    #    one is what used to fail on the UNIQUE index and show "Something
+    #    went wrong". Steps 1 and 2 have to reach the database first for the
+    #    lookup below to see them.
+    db.session.flush()
+    demoted = PersonAlias.query.filter_by(alias=current_canonical).first()
+    if demoted:
+        demoted.canonical = new_canonical
+    else:
+        db.session.add(PersonAlias(alias=current_canonical,
+                                   canonical=new_canonical))
     db.session.commit()
 
     return redirect(url_for('graphics.people_detail', name=new_canonical))

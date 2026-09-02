@@ -50,7 +50,7 @@ def _set_sqlite_pragmas(dbapi_connection, connection_record):
         cursor.close()
 
 # ── Schema version — bump when adding new migrations ──
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 
 
 def _get_schema_version(conn) -> int:
@@ -337,6 +337,77 @@ def _migrate_v11(conn, inspector):
         conn.execute(text('ALTER TABLE user_people ADD COLUMN silhouette VARCHAR(120)'))
 
 
+def _migrate_v12(conn, inspector):
+    """Flatten person_aliases to a one-hop map and break any loops in it.
+
+    Two of the three paths that wrote `alias → canonical` never resolved the
+    target first, so a name could become an alias of a name that was already
+    an alias of it — "Марь → Мари" living beside "Мари → Марь". Nothing
+    crashed while reading (every resolver walks with a `seen` set), but
+    neither name ever won, the two groups stayed separate however often the
+    user merged them, and the next rename died on the UNIQUE index with an
+    internal error.
+
+    Loops are cut at their newest row, which is the one that closed the loop;
+    everything else is re-pointed at the name its chain actually ends on.
+    """
+    if not _table_exists(inspector, 'person_aliases'):
+        return
+
+    rows = list(conn.execute(text(
+        'SELECT id, alias, canonical FROM person_aliases ORDER BY id')))
+    if not rows:
+        return
+
+    alias_map = {alias: canonical for _id, alias, canonical in rows}
+
+    def root(name):
+        seen = set()
+        while name in alias_map and name not in seen:
+            seen.add(name)
+            name = alias_map[name]
+        return name
+
+    def leads_back_to(start, target):
+        """True when following `start` returns to `target`.
+
+        Not expressible with `root()`: inside a loop that walk stops at
+        whichever name it happens to revisit first, so it never reports the
+        name it started from.
+        """
+        seen = set()
+        name = start
+        while name in alias_map and name not in seen:
+            seen.add(name)
+            name = alias_map[name]
+            if name == target:
+                return True
+        return False
+
+    # Drop the newest row of each loop — it is the one that closed it.
+    dropped = set()
+    for _id, alias, canonical in reversed(rows):
+        if alias in dropped:
+            continue
+        if leads_back_to(canonical, alias):
+            conn.execute(text('DELETE FROM person_aliases WHERE id = :i'),
+                         {'i': _id})
+            dropped.add(alias)
+            del alias_map[alias]
+
+    for _id, alias, canonical in rows:
+        if alias in dropped:
+            continue
+        target = root(canonical)
+        if target != canonical:
+            conn.execute(
+                text('UPDATE person_aliases SET canonical = :c WHERE id = :i'),
+                {'c': target, 'i': _id})
+
+    # A name can never be its own alias.
+    conn.execute(text('DELETE FROM person_aliases WHERE alias = canonical'))
+
+
 MIGRATIONS = {
     1: _migrate_v1,
     2: _migrate_v2,
@@ -349,6 +420,7 @@ MIGRATIONS = {
     9: _migrate_v9,
     10: _migrate_v10,
     11: _migrate_v11,
+    12: _migrate_v12,
 }
 
 
