@@ -57,6 +57,21 @@
 
     .wx-empty { color: var(--text-muted, #999); font-style: italic; text-align: center; padding: 48px 0;
                 font-family: var(--font-body, serif); }
+    .wx-table-block { max-width: 760px; margin: 72px auto 0; }
+    .wx-table { width: 100%; border-collapse: collapse;
+                font-family: var(--font-body, 'Times New Roman', Times, serif);
+                font-size: var(--il-text-body, 16px); }
+    .wx-table th, .wx-table td { padding: 8px 12px; text-align: left;
+                                 border-bottom: 1px solid var(--chart-grid-color, #e2e2e2); }
+    .wx-table th { font-weight: normal; color: var(--text-muted, #888);
+                   font-size: var(--il-text-ui, 14px); }
+    .wx-table td.num, .wx-table th.num { text-align: right;
+                                         font-variant-numeric: tabular-nums; }
+    .wx-table tr.wx-thin td { color: var(--text-muted, #999); }
+    .wx-thin-tag { font-size: var(--il-text-hint, 13px); color: var(--text-muted, #aaa); }
+    .wx-table-hint { max-width: 760px; margin: 14px auto 0;
+                     font-size: var(--il-text-hint, 13px); color: var(--text-muted, #999);
+                     line-height: 1.5; }
     .wx-backfill-btn { background: transparent; color: var(--text-muted, #888);
       border: 1px solid color-mix(in srgb, var(--text-color, #000) 25%, transparent);
       border-radius: 4px; padding: 7px 16px; font-size: 14px; cursor: pointer; }
@@ -134,14 +149,88 @@
       </div>
     {% endif %}
 
+    {% if condition_rows %}
+      {# The counts are the reason this table exists. The tiles above name a
+         single best weather; without "how many days" beside each average,
+         four thunderstorms outranking eighty-six rainy days looks like a
+         discovery. #}
+      <section class="wx-table-block">
+        <p class="wx-chart-title">{{ t('weather.table_title') }}</p>
+        <table class="wx-table">
+          <thead>
+            <tr>
+              <th>{{ t('weather.table_condition') }}</th>
+              <th class="num">{{ t('weather.table_days') }}</th>
+              <th class="num">{{ t('weather.table_avg') }}</th>
+              <th class="num">{{ t('weather.table_delta') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in condition_rows %}
+              <tr{% if r.thin %} class="wx-thin"{% endif %}>
+                <td>{{ r.label }}{% if r.thin %} <span class="wx-thin-tag">{{ t('weather.table_thin') }}</span>{% endif %}</td>
+                <td class="num">{{ r.days }}</td>
+                <td class="num">{{ '%.2f'|format(r.avg) }}</td>
+                <td class="num">{% if r.delta is not none %}{{ '%+.2f'|format(r.delta) }}{% else %}—{% endif %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <p class="wx-table-hint">{{ t('weather.table_hint', n=min_days) }}</p>
+      </section>
+    {% endif %}
+
     {% if weather_configured %}
       <div style="text-align:center;margin-top:100px;">
         <form method="post" action="{{ url_for('main.weather_backfill') }}" style="display:inline;">
           <input type="hidden" name="next" value="{{ url_for('graphics.weather') }}">
           <button type="submit" class="wx-backfill-btn">{{ t('weather.backfill_button') }}</button>
         </form>
-        <div style="font-size:12px;color:var(--text-muted,#999);margin-top:8px;">{{ t('weather.backfill_hint') }}</div>
+        <div id="wx-backfill-note"
+             style="font-size:12px;color:var(--text-muted,#999);margin-top:8px;">{{ t('weather.backfill_hint') }}</div>
       </div>
+
+      {# Poll while a fill is running, then reload once so the chart and the
+         table show the days that just arrived. Without this the page said
+         "refresh in a minute" and left the user guessing whether anything
+         was happening. #}
+      <script>
+      (function () {
+        var note = document.getElementById('wx-backfill-note');
+        var T = {
+          progress: {{ t('weather.backfill_progress', done='__D__', total='__T__')|tojson }},
+          done:     {{ t('weather.backfill_done')|tojson }},
+          failed:   {{ t('weather.backfill_failed')|tojson }},
+          idle:     {{ t('weather.backfill_hint')|tojson }}
+        };
+        // The number of completed fills at the moment this page was built.
+        // Reload when it grows — never on a bare "finished", which stays true
+        // for the life of the process and would reload the page forever.
+        var baseline = {{ backfill_runs|default(0) }};
+        function poll() {
+          fetch({{ url_for('main.weather_backfill_status')|tojson }},
+                { headers: { 'Accept': 'application/json' } })
+            .then(function (r) { return r.json(); })
+            .then(function (st) {
+              if (st.error) { note.textContent = T.failed; return; }
+              if (st.running) {
+                note.textContent = T.progress
+                  .replace('__D__', st.done_days).replace('__T__', st.total_days);
+                setTimeout(poll, 1200);
+                return;
+              }
+              if (st.runs > baseline) {
+                note.textContent = T.done;
+                setTimeout(function () { window.location.reload(); }, 600);
+                return;
+              }
+              note.textContent = T.idle;
+            })
+            .catch(function () { /* offline or navigating away — leave the text */ });
+        }
+        poll();
+      })();
+      </script>
     {% endif %}
   </main>
 </body>

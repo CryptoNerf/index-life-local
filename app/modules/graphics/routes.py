@@ -219,6 +219,12 @@ def _mood_by_numeric(corr):
     }
 
 
+# A weather needs at least this many days behind it before the page will
+# call it the user's best. Four thunderstorms outranking eighty-six rainy
+# days is arithmetic, not weather.
+MIN_DAYS_FOR_BEST_WEATHER = 20
+
+
 def _weather_stat_tiles(temp, precip, cond):
     """Three plain-language stat cards for the chart sidebar: how much better
     warm days are than cold ones, dry days than rainy ones, and the user's
@@ -241,12 +247,19 @@ def _weather_stat_tiles(temp, precip, cond):
             tiles.append({'value': '%+.1f' % round(da - wa, 1),
                           'label': t('weather.tile_wetdry'),
                           'sub': t('weather.tile_wetdry_sub', dry=da, wet=wa)})
-    groups = cond.get('groups') or []   # sorted happiest → saddest upstream
+    # Sorted happiest → saddest upstream, but the top row can be three days
+    # of thunderstorm sitting above eighty days of rain. Naming that "your
+    # best weather" reads as a finding when it is noise, so a weather has to
+    # cover at least a few weeks of days to be called best — and the tile
+    # says how many, which is the number that lets the user judge it.
+    groups = [g for g in (cond.get('groups') or [])
+              if g.get('count', 0) >= MIN_DAYS_FOR_BEST_WEATHER]
     if groups:
         best = groups[0]
         tiles.append({'value': signals.condition_label(best['label'], get_current_lang()),
                       'label': t('weather.tile_best'),
-                      'sub': t('weather.tile_best_sub', mood=best['avg'])})
+                      'sub': t('weather.tile_best_sub_n', mood=best['avg'],
+                               days=best['count'])})
     return tiles or None
 
 
@@ -268,8 +281,25 @@ def weather():
     line_chart = _mood_by_numeric(temp) if temp.get('kind') == 'numeric' else None
     stats = _weather_stat_tiles(temp, precip, cond)
 
+    # Every weather with its day count and its gap from the overall average.
+    # The counts are the point: without them the ranking invites conclusions
+    # the sample cannot carry.
+    from app.i18n import get_current_lang
+    rows = []
+    for g in (cond.get('groups') or []):
+        rows.append({
+            'label': signals.condition_label(g['label'], get_current_lang()),
+            'days': g['count'],
+            'avg': g['avg'],
+            'delta': round(g['avg'] - overall, 2) if overall is not None else None,
+            'thin': g['count'] < MIN_DAYS_FOR_BEST_WEATHER,
+        })
+
     return render_template('graphics/graphics_weather.html',
         has_data=has_data, line_chart=line_chart, stats=stats,
+        condition_rows=rows, min_days=MIN_DAYS_FOR_BEST_WEATHER,
+        # What the page was rendered with; the poller reloads once this grows.
+        backfill_runs=signals.get_backfill_status()['runs'],
         overall=round(overall, 1) if overall is not None else None,
         weather_configured=bool(signals.is_weather_enabled()
                                 and signals.get_weather_location()),

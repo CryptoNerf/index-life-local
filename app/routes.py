@@ -9,7 +9,7 @@
 Routes for local diary application
 Single-user version (no authentication)
 """
-from flask import Blueprint, render_template, request, redirect, url_for, flash, make_response, send_from_directory, current_app
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, make_response, send_from_directory, current_app
 from datetime import datetime, date, timedelta
 from app.timeutil import utcnow
 import calendar
@@ -536,6 +536,15 @@ def set_weather():
     signals.backfill_all_weather_async(current_app._get_current_object())
     flash(t('weather.enabled', location=loc['label']), 'success')
     return redirect(back)
+
+
+@bp.route('/account/weather/backfill/status')
+def weather_backfill_status():
+    """How far the history fill has got, in days. Polled by the weather page
+    so a multi-year fill shows progress instead of a sentence asking the user
+    to refresh in a minute."""
+    from app import signals
+    return jsonify(signals.get_backfill_status())
 
 
 @bp.route('/account/weather/backfill', methods=['POST'])

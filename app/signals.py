@@ -186,31 +186,81 @@ def record_weather_async(app, start: date_type, end: date_type) -> None:
     threading.Thread(target=_run, daemon=True).start()
 
 
+# ── Backfill progress ─────────────────────────────────────────
+#
+# Filling a couple of years of history is a dozen network round trips, and
+# the page used to say only "started, refresh in a minute" — no way to tell
+# whether it was working, finished, or had failed. The run publishes its
+# progress here in days covered, which the weather page polls.
+
+_backfill_status = {
+    'running': False,
+    'done_days': 0,
+    'total_days': 0,
+    'rows': 0,
+    'error': None,
+    'finished': False,     # at least one run has completed in this process
+    # Completed runs, ever. The page remembers the value it was rendered with
+    # and reloads when it grows. A sticky boolean cannot do this job: it stays
+    # true forever, so every later page load would see "finished" and reload
+    # itself, and then reload again, without end.
+    'runs': 0,
+}
+_backfill_lock = threading.Lock()
+
+
+def get_backfill_status() -> dict:
+    with _backfill_lock:
+        return dict(_backfill_status)
+
+
+def _backfill_set(**fields) -> None:
+    with _backfill_lock:
+        _backfill_status.update(fields)
+
+
 def backfill_weather(lat: float, lon: float, start: date_type,
-                     end: date_type) -> int:
+                     end: date_type, on_progress=None) -> int:
     """Record weather across the whole [start, end] span.
 
     Recent days go through the forecast endpoint (the archive lags ~5 days),
     older days through the historical archive, chunked to keep each request
     bounded. Idempotent — upserts in place. Returns the number of rows.
+
+    `on_progress(days_done, rows_so_far)` is called after each chunk, which
+    is what lets the page show how far along a multi-year fill is instead of
+    a sentence asking the user to come back later.
     """
     if start > end:
         return 0
     total = 0
+    days_done = 0
     forecast_cut = date_type.today() - timedelta(days=_FORECAST_PAST_DAYS)
 
-    # Recent window via the forecast endpoint (covers right up to today).
-    recent_start = max(start, forecast_cut)
-    if recent_start <= end:
-        total += record_weather(lat, lon, recent_start, end)
+    def _tick(covered):
+        nonlocal days_done
+        days_done += covered
+        if on_progress:
+            try:
+                on_progress(days_done, total)
+            except Exception:
+                pass          # progress reporting must never break the fill
 
-    # Older history via the archive endpoint, chunked by ~one year.
+    # Older history first, so the bar moves in the order the user reads the
+    # chart: the archive is the bulk of the work.
     older_end = min(end, forecast_cut - timedelta(days=1))
     cur = start
     while cur <= older_end:
         chunk_end = min(older_end, cur + timedelta(days=365))
         total += record_weather(lat, lon, cur, chunk_end)
+        _tick((chunk_end - cur).days + 1)
         cur = chunk_end + timedelta(days=1)
+
+    # Recent window via the forecast endpoint (covers right up to today).
+    recent_start = max(start, forecast_cut)
+    if recent_start <= end:
+        total += record_weather(lat, lon, recent_start, end)
+        _tick((end - recent_start).days + 1)
     return total
 
 
@@ -221,6 +271,10 @@ def backfill_all_weather_async(app) -> None:
     with months of history fill in the whole mood↔weather correlation, not
     just the days since they enabled weather.
     """
+    if get_backfill_status()['running']:
+        log.info('Weather backfill already running — ignoring the request')
+        return
+
     def _run():
         with app.app_context():
             try:
@@ -235,14 +289,27 @@ def backfill_all_weather_async(app) -> None:
                 if first is None:
                     return
                 today = date_type.today()
-                n = backfill_weather(loc['lat'], loc['lon'], first, today)
+                _backfill_set(running=True, done_days=0, rows=0, error=None,
+                              finished=False,
+                              total_days=(today - first).days + 1)
+                n = backfill_weather(
+                    loc['lat'], loc['lon'], first, today,
+                    on_progress=lambda days, rows: _backfill_set(
+                        done_days=days, rows=rows))
                 log.info('Weather backfill: %d rows over %s..%s', n, first, today)
-            except Exception:
+                _backfill_set(rows=n, done_days=(today - first).days + 1)
+            except Exception as exc:
                 log.warning('Weather backfill failed', exc_info=True)
+                _backfill_set(error=str(exc)[:200])
                 try:
                     db.session.rollback()
                 except Exception:
                     pass
+            finally:
+                with _backfill_lock:
+                    _backfill_status['running'] = False
+                    _backfill_status['finished'] = True
+                    _backfill_status['runs'] += 1
 
     threading.Thread(target=_run, daemon=True).start()
 

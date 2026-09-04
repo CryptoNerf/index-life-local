@@ -269,8 +269,10 @@ def test_weather_stat_tiles(app):
     temp = {'kind': 'numeric', 'high_avg': 7.5, 'low_avg': 4.5, 'pearson': 0.6,
             'overall_avg': 6, 'points': [], 'count': 50}
     precip = {'kind': 'numeric', 'points': [[0.0, 7], [0.0, 8], [5.0, 4], [3.0, 5]]}
-    cond = {'kind': 'categorical', 'groups': [{'label': 'Clear', 'avg': 8, 'count': 5},
-                                              {'label': 'Rain', 'avg': 4, 'count': 3}]}
+    # Day counts are now part of the fixture: naming a best weather takes a
+    # real sample behind it (see the thin-group case below).
+    cond = {'kind': 'categorical', 'groups': [{'label': 'Clear', 'avg': 8, 'count': 40},
+                                              {'label': 'Rain', 'avg': 4, 'count': 30}]}
     tiles = _weather_stat_tiles(temp, precip, cond)
     values = [tl['value'] for tl in tiles]
     assert '+3.0' in values                         # warm − cold = 7.5 − 4.5
@@ -278,3 +280,22 @@ def test_weather_stat_tiles(app):
     # best-weather tile shows the happiest condition (localized), not a number
     assert tiles[-1]['value'] in ('Ясно', 'Clear')
     assert '8' in tiles[-1]['sub']                  # its average mood
+    assert '40' in tiles[-1]['sub']                 # and the days behind it
+
+
+def test_a_thin_condition_is_not_named_the_best_weather(app):
+    """Four thunderstorms outranking eighty-six rainy days is arithmetic,
+    not weather — the tile must not report it as a finding."""
+    from app.modules.graphics.routes import _weather_stat_tiles
+    temp = {'kind': 'numeric', 'high_avg': 7.5, 'low_avg': 4.5,
+            'overall_avg': 6, 'points': [], 'count': 50}
+    cond = {'kind': 'categorical',
+            'groups': [{'label': 'Thunderstorm', 'avg': 6.0, 'count': 4},
+                       {'label': 'Rain', 'avg': 5.8, 'count': 86}]}
+
+    tiles = _weather_stat_tiles(temp, {}, cond)
+
+    named = [tl['value'] for tl in tiles]
+    assert 'Гроза' not in named and 'Thunderstorm' not in named
+    assert any(v in ('Дождь', 'Rain') for v in named), \
+        'the next weather with a real sample should take its place'
