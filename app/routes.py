@@ -224,9 +224,13 @@ def delete_day(day):
 
             # Push the deletion to shared storage right away (best-effort).
             try:
-                from app.sync import is_sync_configured, export_now
+                from app.sync import is_sync_configured, request_push
                 if is_sync_configured():
-                    export_now(current_app._get_current_object())
+                    # Hands the upload to a worker and returns. The close
+                    # path waits for it, so quitting right after saving —
+                    # which is what most evenings look like — still reaches
+                    # the cloud.
+                    request_push(current_app._get_current_object())
             except Exception:
                 log.warning('Immediate sync push failed; periodic sync will retry',
                             exc_info=True)
@@ -364,9 +368,13 @@ def edit_day(day):
 
             # Push our snapshot to shared storage (if configured)
             try:
-                from app.sync import is_sync_configured, export_now
+                from app.sync import is_sync_configured, request_push
                 if is_sync_configured():
-                    export_now(current_app._get_current_object())
+                    # Hands the upload to a worker and returns. The close
+                    # path waits for it, so quitting right after saving —
+                    # which is what most evenings look like — still reaches
+                    # the cloud.
+                    request_push(current_app._get_current_object())
             except Exception:
                 log.warning('Immediate sync push failed; periodic sync will retry',
                             exc_info=True)

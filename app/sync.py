@@ -43,6 +43,7 @@ import hashlib
 import json
 import logging
 import threading
+import time
 from datetime import datetime, date as date_type, timedelta, timezone
 from typing import Any
 
@@ -971,6 +972,120 @@ def export_now(app) -> bool:
             return push_snapshot(backend)
     finally:
         _sync_lock.release()
+
+
+# ── Deferred push ─────────────────────────────────────────────
+#
+# Saving a day used to upload the whole snapshot inside the request handler,
+# so the Save button sat there for as long as a megabyte of ciphertext took
+# to reach the cloud — seconds, all of it network: building and sealing the
+# snapshot measures at 59 ms. The upload now happens on a worker thread and
+# the request returns as soon as the entry is committed.
+#
+# The catch is how the app is actually used: open it at the end of the day,
+# write, save, quit. The window's close handler ends the process with
+# os._exit(), which gives no thread the chance to finish anything, so
+# deferring the upload on its own would simply lose it until the next
+# launch. `flush_pending_push` is the other half of this: the close path
+# waits for the worker before the process dies. The wait is invisible —
+# the window is already gone by then.
+
+_push_wanted = False           # a save is committed that the cloud lacks
+_push_busy = False             # a worker is mid-upload
+_push_cv = threading.Condition()
+_push_thread: threading.Thread | None = None
+
+# A cycle holds the lock for seconds, not minutes. Three tries at
+# _LOCK_TIMEOUT_S each is far past any healthy case; beyond that the
+# periodic cycle and the next launch's sync are the safety net.
+_PUSH_LOCK_ATTEMPTS = 3
+
+
+def request_push(app) -> None:
+    """Ask for our snapshot to reach the cloud soon. Returns immediately.
+
+    Calls coalesce: the worker lowers the flag *before* it builds the
+    snapshot, so a save landing mid-upload raises it again and earns its own
+    push. Nothing committed can be silently missed — which the old
+    save-time path could not promise, because on a busy lock it dropped the
+    push and trusted the running cycle to have built its snapshot after the
+    commit. Whether it had was a matter of timing.
+    """
+    global _push_wanted, _push_thread
+    with _push_cv:
+        _push_wanted = True
+        if _push_thread is not None and _push_thread.is_alive():
+            _push_cv.notify_all()
+            return
+        _push_thread = threading.Thread(
+            target=_push_worker, args=(app,), daemon=True, name='sync-push')
+        _push_thread.start()
+
+
+def _push_worker(app) -> None:
+    global _push_wanted, _push_busy, _push_thread
+
+    def _stand_down():
+        global _push_wanted, _push_busy, _push_thread
+        _push_wanted = False
+        _push_busy = False
+        _push_thread = None
+        _push_cv.notify_all()
+
+    attempts = 0
+    while True:
+        with _push_cv:
+            if not _push_wanted:
+                # Exiting and clearing the handle happen together under the
+                # lock, so a request arriving now either sees this thread
+                # alive (and it re-checks the flag before leaving) or sees
+                # None and starts a fresh one. Never neither.
+                _stand_down()
+                return
+            _push_wanted = False
+            _push_busy = True
+
+        if not _sync_lock.acquire(timeout=_LOCK_TIMEOUT_S):
+            attempts += 1
+            with _push_cv:
+                _push_wanted = True          # still owed
+                if attempts >= _PUSH_LOCK_ATTEMPTS:
+                    log.warning('Deferred push: sync stayed busy, leaving it '
+                                'to the periodic cycle')
+                    _stand_down()
+                    return
+            continue
+
+        attempts = 0
+        try:
+            with app.app_context():
+                backend = _current_backend()
+                if backend is not None:
+                    push_snapshot(backend)
+        except Exception:
+            log.warning('Deferred push failed; the periodic cycle will retry',
+                        exc_info=True)
+        finally:
+            _sync_lock.release()
+
+
+def flush_pending_push(timeout_s: float = 8.0) -> bool:
+    """Wait for any owed push to finish. True if the cloud is caught up.
+
+    Called on the way out of the app. False means we gave up waiting: the
+    entry is committed locally either way, and the next launch pushes it —
+    late propagation, never lost data.
+    """
+    deadline = time.monotonic() + timeout_s
+    with _push_cv:
+        while _push_wanted or _push_busy:
+            left = deadline - time.monotonic()
+            if left <= 0:
+                log.info('Shutdown: giving up on the pending push after %.0fs',
+                         timeout_s)
+                return False
+            _push_cv.wait(left)
+    return True
 
 
 def import_now(app) -> dict:

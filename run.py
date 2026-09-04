@@ -343,8 +343,19 @@ def main():
         return
 
     import signal
-    signal.signal(signal.SIGINT, lambda *_: os._exit(0))
-    signal.signal(signal.SIGTERM, lambda *_: os._exit(0))
+    def _bail(*_):
+        # Same courtesy on Ctrl-C / SIGTERM as on a window close: a save made
+        # a moment ago should still reach the cloud. Shorter budget — a
+        # signal often means something is waiting on us.
+        try:
+            from app.sync import flush_pending_push
+            flush_pending_push(timeout_s=4.0)
+        except Exception:
+            pass
+        os._exit(0)
+
+    signal.signal(signal.SIGINT, _bail)
+    signal.signal(signal.SIGTERM, _bail)
 
     # JS ↔ native bridge for things the WebView can't do on its own.
     # save_text_file       — Save dialog for exports (markdown / theme JSON).
@@ -452,9 +463,28 @@ def main():
         js_api=JsApi(),
     )
 
+    def _on_closing():
+        """Let an owed cloud push finish, then end the process.
+
+        os._exit() is deliberate — it avoids the crash-prone PyObjC cleanup
+        on macOS — but it also gives no thread a chance to finish, and the
+        common evening is "write the day, save, quit". Saving now hands the
+        upload to a worker so the Save button returns at once; this is where
+        that upload gets its seconds. The window is already off the screen,
+        so the wait is invisible, and it is bounded: if the cloud is slow or
+        unreachable we quit anyway and the next launch pushes.
+        """
+        try:
+            from app.sync import flush_pending_push
+            flush_pending_push(timeout_s=8.0)
+        except Exception:
+            logging.getLogger(__name__).warning(
+                'Shutdown push flush failed', exc_info=True)
+        os._exit(0)
+
     # Clean shutdown when user closes the window — avoids crash-prone
     # PyObjC cleanup on macOS. Only called on real user close, not errors.
-    window.events.closing += lambda: os._exit(0)
+    window.events.closing += _on_closing
 
     start_kwargs = {}
     if sys.platform == 'win32':
