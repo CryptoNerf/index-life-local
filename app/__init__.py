@@ -11,6 +11,7 @@ Flask application factory
 import logging
 import os
 import sys
+import threading
 import uuid as _uuid
 
 from flask import Flask
@@ -50,7 +51,7 @@ def _set_sqlite_pragmas(dbapi_connection, connection_record):
         cursor.close()
 
 # ── Schema version — bump when adding new migrations ──
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 13
 
 
 def _get_schema_version(conn) -> int:
@@ -408,6 +409,24 @@ def _migrate_v12(conn, inspector):
     conn.execute(text('DELETE FROM person_aliases WHERE alias = canonical'))
 
 
+def _migrate_v13(conn, inspector):
+    """Create entry_index_marks — "extraction has run over this entry".
+
+    Existing diaries get the table empty, so the first launch after upgrading
+    re-indexes whatever is still pending and then marks it. That is one last
+    pass of the work that used to repeat on every launch.
+    """
+    if not _table_exists(inspector, 'entry_index_marks'):
+        conn.execute(text('''
+            CREATE TABLE entry_index_marks (
+                entry_id INTEGER NOT NULL,
+                kind VARCHAR(20) NOT NULL,
+                marked_at DATETIME,
+                PRIMARY KEY (entry_id, kind)
+            )
+        '''))
+
+
 MIGRATIONS = {
     1: _migrate_v1,
     2: _migrate_v2,
@@ -421,6 +440,7 @@ MIGRATIONS = {
     10: _migrate_v10,
     11: _migrate_v11,
     12: _migrate_v12,
+    13: _migrate_v13,
 }
 
 
@@ -868,11 +888,20 @@ def create_app(config_class='config.Config'):
         except Exception as exc:
             log.warning('Startup backup failed: %s', exc)
 
-        # Auto-sync on startup + schedule periodic sync
+        # Auto-sync on startup + schedule periodic sync.
+        #
+        # The first cycle runs on a thread. It was measured at 3.05 s of the
+        # 3.6 s it took the window to appear — a network round trip sitting
+        # on the path to the app opening, for data the user has not asked to
+        # see yet. Nothing downstream depends on it having finished: peers
+        # that merge trigger their own reprocessing from inside full_sync,
+        # which is what the assistant catch-up below used to be ordered
+        # after.
         try:
             from app.sync import is_sync_configured, full_sync, schedule_periodic_sync
             if is_sync_configured():
-                full_sync(app)
+                threading.Thread(target=full_sync, args=(app,), daemon=True,
+                                 name='sync-startup').start()
                 schedule_periodic_sync(app, interval_seconds=120)
         except Exception as exc:
             log.warning('Startup sync failed: %s', exc)
@@ -882,8 +911,10 @@ def create_app(config_class='config.Config'):
     # query entry_embeddings / entry_summaries right away, so starting them
     # before db.create_all() + migrations crashed them with "no such table"
     # on every fresh database (first launch, restore, new data dir).
-    # Running after the startup full_sync is also deliberate — entries just
-    # merged from peers are visible to the catch-up instead of racing it.
+    # The startup sync no longer runs ahead of this (it moved to a thread so
+    # the window opens at once). Entries merged from peers are picked up
+    # regardless: full_sync calls _trigger_reprocessing when a merge actually
+    # changes something.
     if 'assistant' in app.config.get('ACTIVE_MODULES', []):
         try:
             from app.modules.assistant.background import (

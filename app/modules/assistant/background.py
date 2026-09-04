@@ -223,6 +223,39 @@ def get_activities_extract_status() -> dict:
     return dict(_activities_extract_status)
 
 
+def _marked_ids(kind: str) -> set:
+    """Entries extraction has already been run over, for this kind."""
+    from app.models import EntryIndexMark
+    return {r.entry_id for r in EntryIndexMark.query
+            .with_entities(EntryIndexMark.entry_id)
+            .filter(EntryIndexMark.kind == kind).all()}
+
+
+def _mark_indexed(entry_ids, kind: str) -> None:
+    """Record that extraction ran over these entries, whatever it found.
+
+    Marking is what stops an entry that mentions nobody from being asked
+    about again on every launch. Only entries that were actually processed
+    without error get here — a crashed extraction stays pending, exactly as
+    it did before.
+    """
+    if not entry_ids:
+        return
+    from app.models import EntryIndexMark
+    try:
+        already = _marked_ids(kind)
+        for entry_id in entry_ids:
+            if entry_id not in already:
+                db.session.add(EntryIndexMark(entry_id=entry_id, kind=kind))
+        db.session.commit()
+    except Exception as exc:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        log.warning('Could not mark %s as indexed (%s): %s', kind, len(entry_ids), exc)
+
+
 def _run_extraction(app, entry_ids: list, extract_fn, label: str, status: dict | None = None):
     """Iterate entry_ids on the shared LLM lock, with cooperative yield.
 
@@ -231,13 +264,16 @@ def _run_extraction(app, entry_ids: list, extract_fn, label: str, status: dict |
     keeps the SQLAlchemy session (and underlying SQLite connection) open
     across multi-second LLM calls, causing "database is locked" for every
     other writer (Flask requests, other background threads).
+    Returns the ids it got through without an error, so the caller can mark
+    them as indexed. Entries that raised are left out and stay pending.
     """
+    done: list = []
     if not entry_ids:
-        return
+        return done
 
     if not _lock.acquire(timeout=300):
         log.warning(f'{label}: lock busy, giving up')
-        return
+        return done
 
     lock_held = True
     try:
@@ -263,6 +299,7 @@ def _run_extraction(app, entry_ids: list, extract_fn, label: str, status: dict |
                     continue
                 try:
                     extract_fn(entry, llm)
+                    done.append(entry_id)
                 except Exception as e:
                     # Roll back any pending state from a failed commit so the
                     # session is clean before teardown closes it.
@@ -285,10 +322,11 @@ def _run_extraction(app, entry_ids: list, extract_fn, label: str, status: dict |
             time.sleep(_extract_yield())
             if not _lock.acquire(timeout=300):
                 log.warning(f'{label}: could not reacquire lock, pausing')
-                return
+                return done
             lock_held = True
 
         log.info(f'{label} complete: {total} entries')
+        return done
     finally:
         if lock_held:
             _lock.release()
@@ -316,6 +354,10 @@ def _reextract_people(app):
     try:
         with app.app_context():
             EntryPerson.query.delete()
+            # A rebuild forgets that we ever looked, too — the run
+            # below marks each entry again as it reaches it.
+            from app.models import EntryIndexMark
+            EntryIndexMark.query.filter_by(kind='people').delete()
             db.session.commit()
             log.info('Cleared EntryPerson for re-extraction')
             entries = MoodEntry.query.filter(
@@ -324,10 +366,12 @@ def _reextract_people(app):
             entry_ids = [e.id for e in entries]
         _people_extract_status['total'] = len(entry_ids)
         from .memory import extract_people_mentions
-        _run_extraction(
+        done = _run_extraction(
             app, entry_ids, extract_people_mentions,
             'People re-extract', status=_people_extract_status,
         )
+        with app.app_context():
+            _mark_indexed(done, 'people')
     finally:
         _people_extract_status['running'] = False
 
@@ -348,6 +392,10 @@ def _reextract_activities(app):
     try:
         with app.app_context():
             EntryActivity.query.delete()
+            # A rebuild forgets that we ever looked, too — the run
+            # below marks each entry again as it reaches it.
+            from app.models import EntryIndexMark
+            EntryIndexMark.query.filter_by(kind='activities').delete()
             db.session.commit()
             log.info('Cleared EntryActivity for re-extraction')
             entries = MoodEntry.query.filter(
@@ -356,10 +404,12 @@ def _reextract_activities(app):
             entry_ids = [e.id for e in entries]
         _activities_extract_status['total'] = len(entry_ids)
         from .memory import extract_activities
-        _run_extraction(
+        done = _run_extraction(
             app, entry_ids, extract_activities,
             'Activities re-extract', status=_activities_extract_status,
         )
+        with app.app_context():
+            _mark_indexed(done, 'activities')
     finally:
         _activities_extract_status['running'] = False
 
@@ -428,7 +478,10 @@ def _backfill_activities(app, status=None):
 
     Incremental (only entries missing rows), so it preserves existing data —
     unlike re-extract, which wipes and rebuilds. Checks pending entries on every
-    startup — no persistent "done" flag — which keeps it correct under DB swaps.
+    startup. An entry counts as pending only while it has neither rows nor
+    an index mark: without the mark, a note that genuinely mentions nothing
+    was indistinguishable from one never looked at, and got re-extracted at
+    every launch for the rest of its life.
     Pass `status` (the extract-status dict) to surface progress to the UI.
     """
     with app.app_context():
@@ -436,7 +489,8 @@ def _backfill_activities(app, status=None):
         if not entries:
             return
         existing_ids = {r.entry_id for r in EntryActivity.query.with_entities(EntryActivity.entry_id).all()}
-        pending_ids = [e.id for e in entries if e.id not in existing_ids and (e.note or '').strip()]
+        seen_ids = existing_ids | _marked_ids('activities')
+        pending_ids = [e.id for e in entries if e.id not in seen_ids and (e.note or '').strip()]
 
     if not pending_ids:
         return
@@ -445,7 +499,9 @@ def _backfill_activities(app, status=None):
         status['total'] = len(pending_ids)
     log.info(f'Activities backfill: {len(pending_ids)} entries pending')
     from .memory import extract_activities
-    _run_extraction(app, pending_ids, extract_activities, 'Activities backfill', status=status)
+    done = _run_extraction(app, pending_ids, extract_activities, 'Activities backfill', status=status)
+    with app.app_context():
+        _mark_indexed(done, 'activities')
 
 
 def backfill_people_async(app) -> bool:
@@ -476,7 +532,10 @@ def _backfill_people(app, status=None):
 
     Incremental (only entries missing rows), so it preserves existing data —
     unlike re-extract, which wipes and rebuilds. Checks pending entries on every
-    startup — no persistent "done" flag — which keeps it correct under DB swaps.
+    startup. An entry counts as pending only while it has neither rows nor
+    an index mark: without the mark, a note that genuinely mentions nothing
+    was indistinguishable from one never looked at, and got re-extracted at
+    every launch for the rest of its life.
     Pass `status` (the extract-status dict) to surface progress to the UI.
     """
     with app.app_context():
@@ -484,7 +543,8 @@ def _backfill_people(app, status=None):
         if not entries:
             return
         existing_ids = {r.entry_id for r in EntryPerson.query.with_entities(EntryPerson.entry_id).all()}
-        pending_ids = [e.id for e in entries if e.id not in existing_ids and (e.note or '').strip()]
+        seen_ids = existing_ids | _marked_ids('people')
+        pending_ids = [e.id for e in entries if e.id not in seen_ids and (e.note or '').strip()]
 
     if not pending_ids:
         return
@@ -493,7 +553,9 @@ def _backfill_people(app, status=None):
         status['total'] = len(pending_ids)
     log.info(f'People backfill: {len(pending_ids)} entries pending')
     from .memory import extract_people_mentions
-    _run_extraction(app, pending_ids, extract_people_mentions, 'People backfill', status=status)
+    done = _run_extraction(app, pending_ids, extract_people_mentions, 'People backfill', status=status)
+    with app.app_context():
+        _mark_indexed(done, 'people')
 
 
 def _process_entry(app, entry_id: int):
@@ -556,6 +618,10 @@ def _process_entry(app, entry_id: int):
                     from .routes import _get_llm
                     combined_done = extract_entry_combined(entry, _get_llm())
                     if combined_done:
+                        # One call answered for both, so both are indexed —
+                        # including when the answer was "nobody, nothing".
+                        _mark_indexed([entry_id], 'people')
+                        _mark_indexed([entry_id], 'activities')
                         log.info('Combined extract done for entry %d', entry_id)
                 except Exception as e:
                     try:
@@ -593,6 +659,7 @@ def _process_entry(app, entry_id: int):
                     from .memory import extract_people_mentions
                     from .routes import _get_llm
                     extract_people_mentions(entry, _get_llm())
+                    _mark_indexed([entry_id], 'people')
                     log.info('People mentions extracted for entry %d', entry_id)
                 except Exception as e:
                     try:
@@ -611,6 +678,7 @@ def _process_entry(app, entry_id: int):
                     from .memory import extract_activities
                     from .routes import _get_llm
                     extract_activities(entry, _get_llm())
+                    _mark_indexed([entry_id], 'activities')
                     log.info('Activities extracted for entry %d', entry_id)
                 except Exception as e:
                     try:

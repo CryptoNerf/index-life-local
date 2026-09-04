@@ -149,6 +149,28 @@ class EntryActivity(db.Model):
     entry = db.relationship('MoodEntry', backref=db.backref('activity_mentions', lazy='dynamic'))
 
 
+class EntryIndexMark(db.Model):
+    """Records that extraction has been run over an entry — including when it
+    found nothing.
+
+    Without this, "no rows" and "not looked at yet" are the same state, so an
+    entry whose note genuinely mentions no people stayed pending forever and
+    was re-extracted on every single launch. One diary had 47 such entries and
+    spent thirteen minutes of model time on them after each start, every time
+    reaching the same conclusion.
+
+    Derived, per-device state: deliberately NOT part of the sync snapshot. An
+    entry arriving from a peer has no mark here and gets indexed locally,
+    which is what should happen — the peer's extraction lives in its own rows.
+    """
+    __tablename__ = 'entry_index_marks'
+
+    entry_id = db.Column(db.Integer, db.ForeignKey('mood_entries.id'),
+                         primary_key=True)
+    kind = db.Column(db.String(20), primary_key=True)   # 'people' | 'activities'
+    marked_at = db.Column(db.DateTime, default=utcnow)
+
+
 class EntryPerson(db.Model):
     """Person or family-role mention extracted from an entry via LLM.
 
