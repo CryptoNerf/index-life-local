@@ -179,3 +179,43 @@ def test_marks_are_not_part_of_the_sync_snapshot(app, entries):
 
     assert not any('index_mark' in key or 'index_marks' in key
                    for key in snapshot), sorted(snapshot)
+
+
+# ── the run is almost never allowed to finish ─────────────────
+
+def test_entries_are_marked_as_they_go_not_at_the_end(app, entries, run_backfill):
+    """The case that decides whether any of this works.
+
+    The app is open for a couple of minutes; a backfill of a few dozen entries
+    runs far longer. Marking only when the whole batch finishes would mean the
+    marks were never written on a real evening, and every launch would start
+    the same work over — the loop this exists to break.
+    """
+    class _Interrupted(_Extractor):
+        def __call__(self, entry, llm):
+            if len(self.asked) == 2:
+                raise KeyboardInterrupt('user quit the app')
+            super().__call__(entry, llm)
+
+    with pytest.raises(KeyboardInterrupt):
+        run_backfill(_Interrupted())
+
+    assert _marks() == set(entries[:2]), (
+        'work already done was forgotten when the run was cut short')
+
+
+def test_what_was_marked_is_not_repeated_next_launch(app, entries, run_backfill):
+    class _Interrupted(_Extractor):
+        def __call__(self, entry, llm):
+            if len(self.asked) == 2:
+                raise KeyboardInterrupt('user quit the app')
+            super().__call__(entry, llm)
+
+    with pytest.raises(KeyboardInterrupt):
+        run_backfill(_Interrupted())
+
+    resumed = _Extractor()
+    run_backfill(resumed)
+
+    assert sorted(resumed.asked) == sorted(entries[2:]), (
+        'the second launch redid entries the first had already finished')

@@ -256,7 +256,8 @@ def _mark_indexed(entry_ids, kind: str) -> None:
         log.warning('Could not mark %s as indexed (%s): %s', kind, len(entry_ids), exc)
 
 
-def _run_extraction(app, entry_ids: list, extract_fn, label: str, status: dict | None = None):
+def _run_extraction(app, entry_ids: list, extract_fn, label: str,
+                    status: dict | None = None, mark_kind: str | None = None):
     """Iterate entry_ids on the shared LLM lock, with cooperative yield.
 
     Each entry runs in its own app_context so the DB connection is fully
@@ -264,8 +265,15 @@ def _run_extraction(app, entry_ids: list, extract_fn, label: str, status: dict |
     keeps the SQLAlchemy session (and underlying SQLite connection) open
     across multi-second LLM calls, causing "database is locked" for every
     other writer (Flask requests, other background threads).
-    Returns the ids it got through without an error, so the caller can mark
-    them as indexed. Entries that raised are left out and stay pending.
+    `mark_kind` marks each entry as indexed the moment it is done, not at the
+    end of the batch. That distinction is the whole point on a long run: the
+    app is typically open for a couple of minutes while a backfill of a few
+    dozen entries takes far longer, so marking only at the end would mean the
+    marks were never written at all and the work repeated at every launch —
+    exactly the loop this was meant to break. Entries that raised stay
+    unmarked and pending.
+
+    Also returns the ids it got through without an error.
     """
     done: list = []
     if not entry_ids:
@@ -300,6 +308,8 @@ def _run_extraction(app, entry_ids: list, extract_fn, label: str, status: dict |
                 try:
                     extract_fn(entry, llm)
                     done.append(entry_id)
+                    if mark_kind:
+                        _mark_indexed([entry_id], mark_kind)
                 except Exception as e:
                     # Roll back any pending state from a failed commit so the
                     # session is clean before teardown closes it.
@@ -366,12 +376,10 @@ def _reextract_people(app):
             entry_ids = [e.id for e in entries]
         _people_extract_status['total'] = len(entry_ids)
         from .memory import extract_people_mentions
-        done = _run_extraction(
+        _run_extraction(
             app, entry_ids, extract_people_mentions,
-            'People re-extract', status=_people_extract_status,
+            'People re-extract', status=_people_extract_status, mark_kind='people',
         )
-        with app.app_context():
-            _mark_indexed(done, 'people')
     finally:
         _people_extract_status['running'] = False
 
@@ -404,12 +412,10 @@ def _reextract_activities(app):
             entry_ids = [e.id for e in entries]
         _activities_extract_status['total'] = len(entry_ids)
         from .memory import extract_activities
-        done = _run_extraction(
+        _run_extraction(
             app, entry_ids, extract_activities,
-            'Activities re-extract', status=_activities_extract_status,
+            'Activities re-extract', status=_activities_extract_status, mark_kind='activities',
         )
-        with app.app_context():
-            _mark_indexed(done, 'activities')
     finally:
         _activities_extract_status['running'] = False
 
@@ -499,9 +505,8 @@ def _backfill_activities(app, status=None):
         status['total'] = len(pending_ids)
     log.info(f'Activities backfill: {len(pending_ids)} entries pending')
     from .memory import extract_activities
-    done = _run_extraction(app, pending_ids, extract_activities, 'Activities backfill', status=status)
-    with app.app_context():
-        _mark_indexed(done, 'activities')
+    _run_extraction(app, pending_ids, extract_activities, 'Activities backfill', status=status,
+                    mark_kind='activities')
 
 
 def backfill_people_async(app) -> bool:
@@ -553,9 +558,8 @@ def _backfill_people(app, status=None):
         status['total'] = len(pending_ids)
     log.info(f'People backfill: {len(pending_ids)} entries pending')
     from .memory import extract_people_mentions
-    done = _run_extraction(app, pending_ids, extract_people_mentions, 'People backfill', status=status)
-    with app.app_context():
-        _mark_indexed(done, 'people')
+    _run_extraction(app, pending_ids, extract_people_mentions, 'People backfill', status=status,
+                    mark_kind='people')
 
 
 def _process_entry(app, entry_id: int):
