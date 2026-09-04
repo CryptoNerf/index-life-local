@@ -300,3 +300,40 @@ def test_a_finished_fill_does_not_make_the_page_reload_for_ever(app, monkeypatch
 
     assert signals.get_backfill_status()['runs'] == baseline + 1, (
         'the next fill has to be distinguishable from the last one')
+
+
+# ── does the data keep itself current? ────────────────────────
+
+def test_saving_a_day_fetches_its_weather_and_the_week_before(app, monkeypatch):
+    """The answer to "do I have to press the button every month": no.
+
+    Every save fetches a seven-day window ending on the day being saved, so
+    ordinary use keeps the chart current, and a week away heals itself on the
+    next entry. The button is for history from before weather was switched
+    on, or for gaps left by a fetch that failed.
+    """
+    from datetime import date
+    asked = []
+    monkeypatch.setattr(app_signals_module(), 'is_weather_enabled', lambda: True)
+    monkeypatch.setattr(app_signals_module(), 'record_weather_async',
+                        lambda application, start, end: asked.append((start, end)))
+
+    from app.routes import bp as main_bp
+    app.config['SECRET_KEY'] = 'test'
+    if 'main' not in app.blueprints:
+        app.register_blueprint(main_bp)
+    client = app.test_client()
+
+    resp = client.post('/day/2026-09-04', data={'rating': '7', 'note': 'сегодня'})
+    assert resp.status_code == 302
+
+    assert asked, 'saving a day did not ask for its weather at all'
+    start, end = asked[-1]
+    assert end == date(2026, 9, 4), 'the day being saved was not covered'
+    assert start == date(2026, 8, 29), (
+        'the window must reach back a week so a few skipped days heal')
+
+
+def app_signals_module():
+    from app import signals as s
+    return s
