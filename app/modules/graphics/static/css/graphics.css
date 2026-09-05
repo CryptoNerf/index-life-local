@@ -353,6 +353,12 @@ html, body {
 .spiral-legend {
   display: flex;
   align-items: center;
+  /* Centre the swatches inside the row, not just the row inside the page.
+     The spiral and the rose sit in a flex .chart-block that shrinks this box
+     to its contents, so the two coincided there and the missing rule never
+     showed. The rhythm grid's .chart-block is a plain block: the row
+     stretched the full width and the scale piled up against the left edge. */
+  justify-content: center;
   gap: 10px;
   margin-top: 20px;
   color: var(--text-muted, #888);
