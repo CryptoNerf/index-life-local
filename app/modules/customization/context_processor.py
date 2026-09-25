@@ -30,7 +30,7 @@ import json
 import logging
 from markupsafe import Markup
 
-from . import rating_scale
+from . import cube_symbols, rating_scale
 from .defaults import DEFAULTS
 
 log = logging.getLogger(__name__)
@@ -57,6 +57,12 @@ _METADATA_KEYS = {
     'mosaic-empty-mode', 'mosaic-empty-filename',
     'mosaic-empty-grad-from', 'mosaic-empty-grad-to', 'mosaic-empty-grad-angle',
     'mosaic-empty-color',
+    # Symbols in day cells — written by the calendar template and emitted as
+    # rules; the JSON list must never become a CSS variable.
+    'cube-symbols-enabled', 'cube-symbols', 'cube-symbols-hide-fill',
+    # Cards — emitted as rules on the card selectors (see _card_rules).
+    'card-bg-mode', 'card-bg-color', 'card-bg-opacity',
+    'card-border-color', 'card-text-color',
 }
 
 # Per-chart keys are emitted via _chart_overrides as explicit class
@@ -273,22 +279,162 @@ def _luma(rgb: tuple[int, int, int]) -> float:
     return r * 0.299 + g * 0.587 + b * 0.114
 
 
-def _auto_invert_overrides(settings: dict) -> tuple[str | None, str | None]:
-    """If `auto-invert-text` is enabled, pick text + muted colours that
-    contrast with the effective background. Returns (text, muted) or
-    (None, None) when auto-invert is off or we can't infer a background.
+# Text below this contrast ratio against what is behind it counts as hard
+# to read (WCAG's floor for large text). Deliberately a rescue threshold,
+# not a style rule: a colour the user chose that reads fine is left alone.
+_MIN_CONTRAST = 3.0
+
+# What text becomes when it has to be rescued, by the kind of background.
+_READABLE_ON_DARK = {'text-color': '#ffffff', 'heading-color': '#ffffff',
+                     'text-muted': '#cccccc'}
+_READABLE_ON_LIGHT = {'text-color': '#000000', 'heading-color': '#000000',
+                      'text-muted': '#666666'}
+_TEXT_KEYS = ('text-color', 'heading-color', 'text-muted')
+
+
+def _relative_luminance(rgb: tuple[int, int, int]) -> float:
+    def channel(c):
+        c = c / 255.0
+        return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+    r, g, b = rgb
+    return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
+
+
+def _contrast(a: tuple[int, int, int], b: tuple[int, int, int]) -> float:
+    """WCAG contrast ratio, 1 (none) to 21 (black on white)."""
+    la, lb = _relative_luminance(a), _relative_luminance(b)
+    hi, lo = max(la, lb), min(la, lb)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+def _auto_invert_enabled(settings: dict) -> bool:
+    return settings.get('auto-invert-text', DEFAULTS['auto-invert-text']) == 'true'
+
+
+def _readable(colours: dict, bg_rgb: tuple[int, int, int]) -> dict:
+    """The entries of `colours` that are hard to read on `bg_rgb`, each
+    replaced by white or black text for that kind of background."""
+    rescue = _READABLE_ON_DARK if _luma(bg_rgb) < 128 else _READABLE_ON_LIGHT
+    out = {}
+    for key, value in colours.items():
+        parsed = _parse_css_color(value)
+        rgb = parsed[:3] if parsed else (0, 0, 0)
+        if _contrast(rgb, bg_rgb) < _MIN_CONTRAST:
+            out[key] = rescue[key]
+    return out
+
+
+# What an unset text colour actually looks like on the page. The stylesheets
+# give each rule its own fallback — muted text alone ranges from #444 to
+# #bbb — so a colour the user never picked is judged by its darkest one:
+# that is the one a dark background swallows first.
+_UNSET_TEXT = {'text-color': '#000000', 'heading-color': '#222222',
+               'text-muted': '#444444'}
+
+
+def _page_text_colours(settings: dict) -> dict:
+    return {k: settings.get(k, _UNSET_TEXT[k]) for k in _TEXT_KEYS}
+
+
+def _auto_invert_overrides(settings: dict) -> dict:
+    """Text colours to replace so the page stays readable.
+
+    It used to force white text on a dark background and black on a light
+    one, overwriting whatever the user had picked either way. With the
+    option now on by default that would have thrown away every text colour
+    choice, so it only replaces a colour that is actually hard to read on
+    the background: the default black text on a black page becomes white,
+    a light-yellow pick on the same page stays yellow, and the default
+    white page gets nothing at all.
+
+    Returns {css-variable-name: colour}; empty when the option is off, the
+    background cannot be judged (a photo without a sampled colour) or
+    nothing needs rescuing.
     """
-    if settings.get('auto-invert-text') != 'true':
-        return (None, None)
+    if not _auto_invert_enabled(settings):
+        return {}
     rgb = _effective_bg_rgb(settings)
     if rgb is None:
-        return (None, None)
-    if _luma(rgb) < 128:
-        # Dark background — light text. Muted is a slightly darker white
-        # so it still reads as a secondary tone, not pure body text.
-        return ('#ffffff', '#cccccc')
-    # Light background — keep the classic dark stack.
-    return ('#000000', '#666666')
+        return {}
+    return _readable(_page_text_colours(settings), rgb)
+
+
+# ── Cards ────────────────────────────────────────────────────
+# Cards that are painted with the page colour today...
+_CARDS_FILLED = ('.viz-card', '.module-card', '.step-card:not(.step-warn)',
+                 '.mpd-entry')
+# ...and all cards, including the weather tiles, which are see-through.
+_CARDS_ALL = _CARDS_FILLED + ('.wx-stat',)
+
+
+def _selector(parts) -> str:
+    # `html ` in front outranks the page's own rules for the same classes,
+    # some of which are written into templates after this block.
+    return ','.join('html ' + p for p in parts)
+
+
+def _card_fill_rgb(settings: dict):
+    """The colour a card's text actually sits on, or None when unknowable."""
+    mode = settings.get('card-bg-mode', DEFAULTS['card-bg-mode'])
+    if mode == 'color':
+        card = _hex_to_rgb(settings.get('card-bg-color', DEFAULTS['card-bg-color']))
+        alpha = _opacity(settings)
+        if alpha >= 1:
+            return card
+        page = _effective_bg_rgb(settings)
+        if page is None:
+            # Over a photo we cannot sample: a mostly opaque card is close
+            # enough to its own colour; a faint one could be anything.
+            return card if alpha >= 0.5 else None
+        return tuple(round(c * alpha + p * (1 - alpha)) for c, p in zip(card, page))
+    # 'page': painted with the page colour itself, even when the page shows
+    # a gradient or a photo behind it.
+    return _hex_to_rgb(settings.get('bg-color', DEFAULTS['bg-color']))
+
+
+def _opacity(settings: dict) -> float:
+    try:
+        return min(1.0, max(0.0, float(settings.get('card-bg-opacity',
+                                                    DEFAULTS['card-bg-opacity']))))
+    except (TypeError, ValueError):
+        return 1.0
+
+
+def _card_rules(settings: dict, page_text: dict) -> str:
+    """Fill, border and text colour for every card.
+
+    Text is set on the card by redefining the text variables in its scope,
+    so everything inside — titles, captions, descriptions — follows. It is
+    worked out against the card, not the page: a white card on a black page
+    keeps dark text even though the page's own text turned white.
+    """
+    mode = settings.get('card-bg-mode', DEFAULTS['card-bg-mode'])
+    rules = []
+    if mode == 'color':
+        r, g, b = _hex_to_rgb(settings.get('card-bg-color', DEFAULTS['card-bg-color']))
+        rules.append('%s{background:rgba(%d,%d,%d,%s);}'
+                     % (_selector(_CARDS_ALL), r, g, b, _format_alpha(_opacity(settings))))
+    if 'card-border-color' in settings:
+        rules.append('%s{border-color:%s;}'
+                     % (_selector(_CARDS_ALL), settings['card-border-color']))
+
+    text = dict(page_text)
+    scoped = {}
+    if 'card-text-color' in settings:
+        for key in ('text-color', 'heading-color'):
+            text[key] = scoped[key] = settings['card-text-color']
+    fill = _card_fill_rgb(settings)
+    if _auto_invert_enabled(settings) and fill is not None:
+        scoped.update(_readable(text, fill))
+    if scoped:
+        cards = _CARDS_ALL if mode == 'color' else _CARDS_FILLED
+        body = ''.join('--%s:%s;' % (k, v) for k, v in scoped.items())
+        rules.append('%s{%scolor:var(--text-color);}' % (_selector(cards), body))
+    return '\n'.join(rules)
+
+
+def _format_alpha(alpha: float) -> str:
+    return ('%.2f' % alpha).rstrip('0').rstrip('.') or '0'
 
 
 # Per-chart override map: each schema key → (selector, css-property).
@@ -530,15 +676,12 @@ def _emit_css_block(settings: dict) -> str:
     # Auto-invert text: overrides any manually-chosen text/muted colours
     # so the user can't end up with unreadable black-on-dark. Runs after
     # the explicit text-color/text-muted entries so we win.
-    auto_text, auto_muted = _auto_invert_overrides(settings)
-    if auto_text:
-        css_vars['text-color'] = auto_text
-        # Headings use var(--heading-color, ...) separately from body text,
-        # so they must be inverted too — otherwise they keep the dark
-        # default (#222) and vanish on a dark background.
-        css_vars['heading-color'] = auto_text
-    if auto_muted:
-        css_vars['text-muted'] = auto_muted
+    # Headings use var(--heading-color, ...) separately from body text, so
+    # they are judged on their own — otherwise they keep the dark default
+    # and vanish on a dark background.
+    auto = _auto_invert_overrides(settings)
+    css_vars.update(auto)
+    page_text = dict(_page_text_colours(settings), **auto)
 
     custom_face = _custom_font_face_rule(settings)
 
@@ -547,6 +690,8 @@ def _emit_css_block(settings: dict) -> str:
     # options that don't fit cleanly into a single CSS variable.
     chart_block = _chart_overrides(settings)
     cube_scale_block = _cube_scale_rules(settings)
+    symbol_block = cube_symbols.css_rules(settings)
+    card_block = _card_rules(settings, page_text)
 
     # Mosaic emission must be considered before short-circuiting:
     # mosaic uses metadata-only keys, so a mosaic-only configuration
@@ -599,6 +744,10 @@ def _emit_css_block(settings: dict) -> str:
         parts.append(chart_block)
     if cube_scale_block:
         parts.append(cube_scale_block)
+    if symbol_block:
+        parts.append(symbol_block)
+    if card_block:
+        parts.append(card_block)
 
     body = '\n'.join(parts)
     style_block = f'<style id="customization-vars">\n{body}\n</style>'
@@ -654,4 +803,6 @@ def register_context_processor(app):
             # template can ask `if cz_rating_scale` and nothing more. Absent
             # (Jinja Undefined, which is falsy) when this module is off.
             'cz_rating_scale': rating_scale.for_charts(settings),
+            # {rating: symbol} while day cells carry symbols; absent otherwise.
+            'cz_cube_symbols': cube_symbols.for_template(settings),
         }

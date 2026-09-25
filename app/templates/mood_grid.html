@@ -83,9 +83,12 @@
         <div class="month-block">
           <div class="month-grid">
             {% for day in month.days %}
+              {# A symbol per rating, when the customization module turns
+                 them on; Jinja escapes it like any other text. #}
+              {% set sym = cz_cube_symbols.get(day.rating) if (cz_cube_symbols and day.filled and day.rating) else none %}
               <a href="{{ url_for('main.edit_day', day=day.date.strftime('%Y-%m-%d')) }}"
-                 class="cube{% if day.filled %} filled{% if day.rating %} r{{ day.rating }}{% endif %}{% endif %}{% if day.date == today %} today{% endif %}"
-                 title="{{ day.date.strftime('%Y-%m-%d') }}"></a>
+                 class="cube{% if day.filled %} filled{% if day.rating %} r{{ day.rating }}{% endif %}{% endif %}{% if day.date == today %} today{% endif %}{% if sym %} has-sym{% endif %}"
+                 title="{{ day.date.strftime('%Y-%m-%d') }}">{% if sym %}<span class="cube-sym{% if sym|length >= 3 %} long{% endif %}">{{ sym }}</span>{% endif %}</a>
             {% endfor %}
           </div>
         </div>

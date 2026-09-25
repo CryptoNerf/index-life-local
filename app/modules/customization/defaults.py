@@ -107,6 +107,16 @@ DEFAULTS = {
     'cube-scale-mid':     '#e0c14a',   # the middle of the scale
     'cube-scale-high':    '#2a8f2a',   # rating 10
 
+    # ── A symbol in each day's cell ─────────────────────────
+    # Per rating, whatever the user likes: the number, a face, a letter.
+    # Stored as one JSON list of ten strings so an empty symbol ("nothing
+    # for a five") survives — the settings layer drops empty values. See
+    # cube_symbols.py.
+    'cube-symbols-enabled':   'false',
+    'cube-symbols':           '["1","2","3","4","5","6","7","8","9","10"]',
+    # Leave the cell unpainted under a symbol, so an emoji stands on its own.
+    'cube-symbols-hide-fill': 'false',
+
     # ── Calendar mosaic (Stage 5) ───────────────────────────
     # When mosaic is active, each cube is treated as a tiny window into
     # one of two images stretched across the entire calendar grid:
@@ -152,12 +162,25 @@ DEFAULTS = {
     # metadata in lists and forms. Pulled out of hardcoded #888/#666/#999
     # rules so changing text-color also pulls all the secondary text along.
     'text-muted': '#888888',
-    # Auto-invert text against effective page background luminance.
-    # When 'true', the context processor recomputes --text-color (and
-    # --text-muted) to white-on-dark or black-on-light, overriding the
-    # user's manual text-color pick. Useful when a dark photo background
-    # would otherwise leave black text unreadable.
-    'auto-invert-text': 'false',
+    # Keep text readable against the page (and card) background. On by
+    # default: pick a black background with it off and most of the app's
+    # text disappears at once. It only steps in where the text would be
+    # hard to read — a colour the user picked that reads fine is left
+    # alone — so on the default white page it changes nothing. See
+    # context_processor._auto_invert_overrides.
+    'auto-invert-text': 'true',
+
+    # ── Cards ───────────────────────────────────────────────
+    # The blocks on the charts page, the weather tiles, the module and sync
+    # cards, the entries on a person's page. By default they are painted
+    # with the page colour ('page'), which over a gradient or a photo makes
+    # them flat white slabs; 'color' gives them their own colour and
+    # opacity. Border and text colour apply only once the user sets them.
+    'card-bg-mode':      'page',     # 'page' | 'color'
+    'card-bg-color':     '#ffffff',
+    'card-bg-opacity':   '1',
+    'card-border-color': '#dddddd',
+    'card-text-color':   '#000000',
 
     # ── AI psychologist chat avatar ─────────────────────────
     # The avatar bubble next to each assistant message. Renders as a

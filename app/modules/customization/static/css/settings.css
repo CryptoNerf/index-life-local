@@ -566,3 +566,92 @@ input[type="color"].cz-color::-webkit-color-swatch {
   height: 140px;
   display: block;
 }
+
+/* ── Symbols in day cells ─────────────────────────────────── */
+.cz-symbol-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin: 4px 0 10px;
+}
+.cz-symbol-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cz-symbol-n {
+  width: 18px;
+  text-align: right;
+  font-size: 12px;
+  color: var(--text-muted, #888);
+}
+.cz-symbol-input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  text-align: center;
+  font-size: 16px;
+  padding: 4px 2px;
+  border: 1px solid #ccc;
+  border-radius: 0;
+  background: #fff;
+  color: #222;
+}
+.cz-symbol-presets {
+  display: flex;
+  gap: 14px;
+  margin: 0 0 14px;
+}
+.cz-symbol-preset {
+  font-size: 12px;
+  color: var(--text-muted, #888);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  font-family: inherit;
+}
+.cz-symbol-preset:hover { color: var(--text-color, #222); }
+.preview-mini-cube.has-sym {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  container-type: size;
+  line-height: 1;
+}
+.preview-mini-sym {
+  font-size: 8px;
+  font-size: 66cqmin;
+  white-space: nowrap;
+}
+.preview-mini-sym.long { font-size: 6px; font-size: 44cqmin; }
+
+/* ── Cards preview ────────────────────────────────────────── */
+.cz-card-preview-frame {
+  display: flex;
+  justify-content: center;
+  padding: 18px;
+  background-image: var(--bg-image, none);
+  background-color: var(--bg-color, #fff);
+  background-size: cover;
+  background-position: center;
+}
+.cz-preview-card {
+  width: 100%;
+  max-width: 240px;
+  padding: 16px;
+  border: 1px solid var(--text-color, #222);
+  box-sizing: border-box;
+}
+.cz-preview-card-title {
+  margin: 0 0 6px;
+  font-size: 17px;
+  font-family: var(--font-heading, 'Times New Roman', Times, serif);
+}
+.cz-preview-card-desc {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+}

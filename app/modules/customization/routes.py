@@ -29,6 +29,7 @@ from app.models import UserCustomization
 
 from . import bp, uploads_dir
 from .defaults import DEFAULTS, merge_with_defaults
+from . import cube_symbols as _cube_symbols
 
 
 # ── Validation ────────────────────────────────────────────────
@@ -76,6 +77,8 @@ _COLOR_KEYS = {
     # colour string so it survives DB round-trips like every other
     # colour setting.
     'bg-image-avg-color',
+    # Cards.
+    'card-bg-color', 'card-border-color', 'card-text-color',
 }
 
 # Per-chart color keys are pulled in programmatically from the schema.
@@ -180,6 +183,11 @@ _VALIDATORS.update({
     'notes-use-body-font': _is_valid_bool_str,
     'auto-invert-text':    _is_valid_bool_str,
     'cube-scale-enabled':     _is_valid_bool_str,
+    'cube-symbols-enabled':   _is_valid_bool_str,
+    'cube-symbols':           _cube_symbols.is_valid,
+    'cube-symbols-hide-fill': _is_valid_bool_str,
+    'card-bg-mode':           lambda v: v in ('page', 'color'),
+    'card-bg-opacity':        _is_valid_unit_interval,
     'mosaic-enabled':         _is_valid_bool_str,
     'mosaic-filled-filename': _is_valid_filename,
     'mosaic-empty-mode':      _is_valid_mosaic_mode,
@@ -232,6 +240,11 @@ _SECTION_KEYS = {
         'cube-filled-color', 'cube-empty-color',
         'cube-border-color', 'cube-today-color',
         'cube-scale-enabled', 'cube-scale-low', 'cube-scale-mid', 'cube-scale-high',
+        'cube-symbols-enabled', 'cube-symbols', 'cube-symbols-hide-fill',
+    },
+    'sec-cards': {
+        'card-bg-mode', 'card-bg-color', 'card-bg-opacity',
+        'card-border-color', 'card-text-color',
     },
     'sec-charts-global': {
         'chart-color', 'chart-grid-color',
@@ -301,6 +314,7 @@ def settings():
     return render_template(
         'customization/settings.html',
         current=current,
+        cube_symbol_list=_cube_symbols.symbols(current),
         defaults=DEFAULTS,
         font_catalog=FONT_CATALOG,
         chart_schema=CHART_SCHEMA,

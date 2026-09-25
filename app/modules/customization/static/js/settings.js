@@ -195,6 +195,9 @@
       if (key === 'auto-invert-text') {
         applyAutoInvert();
       }
+      if (key === 'cube-symbols-enabled' || key === 'cube-symbols-hide-fill') {
+        renderCalendar();
+      }
     });
   });
 
@@ -234,33 +237,184 @@
   function luma(rgb) {
     return rgb[0] * 0.299 + rgb[1] * 0.587 + rgb[2] * 0.114;
   }
-  function applyAutoInvert() {
+  // Mirrors context_processor._readable: a text colour is replaced only
+  // when it is hard to read on what is behind it (WCAG contrast below 3),
+  // by white text on a dark background or black on a light one. A colour
+  // the user picked that reads fine is left alone.
+  var MIN_CONTRAST = 3.0;
+  var READABLE_ON_DARK = {'text-color': '#ffffff', 'heading-color': '#ffffff',
+                          'text-muted': '#cccccc'};
+  var READABLE_ON_LIGHT = {'text-color': '#000000', 'heading-color': '#000000',
+                           'text-muted': '#666666'};
+  var TEXT_KEYS = ['text-color', 'heading-color', 'text-muted'];
+
+  function relLum(rgb) {
+    var ch = rgb.map(function (c) {
+      c = c / 255;
+      return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+  }
+  function contrast(a, b) {
+    var la = relLum(a), lb = relLum(b);
+    return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+  }
+  function readable(colours, bg) {
+    var rescue = luma(bg) < 128 ? READABLE_ON_DARK : READABLE_ON_LIGHT;
+    var out = {};
+    Object.keys(colours).forEach(function (k) {
+      if (contrast(hexToRgb(colours[k]), bg) < MIN_CONTRAST) out[k] = rescue[k];
+    });
+    return out;
+  }
+  function pickerValue(id, fallback) {
+    var el = document.getElementById(id);
+    return (el && el.value) || fallback;
+  }
+  function autoInvertOn() {
     var toggle = document.getElementById('cz-auto-invert');
-    var on = toggle && toggle.checked;
-    if (!on) {
-      // Restore manual values. The pickers carry the current intent.
-      var tc = (document.getElementById('cz-text-color') || {}).value;
-      var tm = (document.getElementById('cz-text-muted') || {}).value;
-      var hc = (document.getElementById('cz-heading-color') || {}).value;
-      if (tc) applyVar('text-color', tc);
-      if (tm) applyVar('text-muted', tm);
-      // Headings share the auto-invert treatment server-side, so mirror
-      // it here for live preview parity (without this the body text
-      // inverts instantly but headings only catch up after Save+reload).
-      if (hc) applyVar('heading-color', hc);
-      return;
-    }
-    var rgb = effectiveBgRgb();
-    if (!rgb) return;  // image bg, no overlay — leave whatever's set
-    if (luma(rgb) < 128) {
-      applyVar('text-color', '#ffffff');
-      applyVar('text-muted', '#cccccc');
-      applyVar('heading-color', '#ffffff');
+    return !!(toggle && toggle.checked);
+  }
+  // Mirrors context_processor._UNSET_TEXT: a colour the user never picked
+  // is judged by the darkest fallback the stylesheets use for it.
+  var UNSET_TEXT = {'text-color': '#000000', 'heading-color': '#222222',
+                    'text-muted': '#444444'};
+  var TEXT_PICKERS = {'text-color': 'cz-text-color', 'heading-color': 'cz-heading-color',
+                      'text-muted': 'cz-text-muted'};
+  function pageTextColours() {
+    var out = {};
+    TEXT_KEYS.forEach(function (k) {
+      out[k] = isAuthoritative(k) ? pickerValue(TEXT_PICKERS[k], UNSET_TEXT[k]) : UNSET_TEXT[k];
+    });
+    return out;
+  }
+  function effectivePageText() {
+    var text = pageTextColours();
+    if (!autoInvertOn()) return text;
+    var bg = effectiveBgRgb();
+    if (!bg) return text;   // a photo without a sampled colour: no decision
+    var fix = readable(text, bg);
+    Object.keys(fix).forEach(function (k) { text[k] = fix[k]; });
+    return text;
+  }
+  function applyAutoInvert() {
+    var base = pageTextColours();
+    var text = effectivePageText();
+    TEXT_KEYS.forEach(function (k) {
+      if (isAuthoritative(k) || text[k] !== base[k]) {
+        applyVar(k, text[k]);
+      } else {
+        // Unset and readable: let each rule's own fallback show, as the
+        // real page does. `initial` (not removal) also masks a rescued
+        // value the server's style block may still carry from before.
+        ROOT.style.setProperty('--' + k, 'initial');
+      }
+    });
+    renderCardPreview();
+  }
+
+  // ── Cards (mirrors context_processor._card_rules) ───────────
+  var cardModeBtns = Array.prototype.slice.call(
+    document.querySelectorAll('.cz-card-mode-btn')
+  );
+  var cardModeHidden = document.getElementById('cz-card-mode');
+  var cardColorRows = document.getElementById('cz-card-color-rows');
+
+  function cardMode() {
+    return (cardModeHidden && cardModeHidden.value) || 'page';
+  }
+  function setCardMode(mode) {
+    cardModeBtns.forEach(function (b) {
+      b.classList.toggle('active', b.getAttribute('data-mode') === mode);
+    });
+    if (cardModeHidden) cardModeHidden.value = mode;
+    dirtyKeys['card-bg-mode'] = true;
+    if (cardColorRows) cardColorRows.style.display = mode === 'color' ? '' : 'none';
+    renderCardPreview();
+  }
+  cardModeBtns.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      setCardMode(btn.getAttribute('data-mode'));
+    });
+  });
+
+  function cardOpacity() {
+    var el = document.getElementById('cz-card-opacity');
+    var v = el ? parseInt(el.value, 10) / 100 : 1;
+    return isNaN(v) ? 1 : Math.max(0, Math.min(1, v));
+  }
+  function renderCardPreview() {
+    var card = document.getElementById('cz-preview-card');
+    if (!card) return;
+    var fill = null;
+    if (cardMode() === 'color') {
+      var c = hexToRgb(pickerValue('cz-card-bg', '#ffffff'));
+      var op = cardOpacity();
+      card.style.background = 'rgba(' + c.join(',') + ',' + op + ')';
+      var page = effectiveBgRgb();
+      if (op >= 1) fill = c;
+      else if (page) fill = c.map(function (v, i) { return Math.round(v * op + page[i] * (1 - op)); });
+      else fill = op >= 0.5 ? c : null;
     } else {
-      applyVar('text-color', '#000000');
-      applyVar('text-muted', '#666666');
-      applyVar('heading-color', '#000000');
+      card.style.background = 'var(--bg-color, #fff)';
+      fill = hexToRgb(pickerValue('cz-bg-color', '#ffffff'));
     }
+    card.style.borderColor = isAuthoritative('card-border-color')
+      ? pickerValue('cz-card-border', '#dddddd') : '';
+    var text = effectivePageText();
+    if (isAuthoritative('card-text-color')) {
+      text['text-color'] = text['heading-color'] = pickerValue('cz-card-text', '#000000');
+    }
+    if (autoInvertOn() && fill) {
+      var fix = readable(text, fill);
+      Object.keys(fix).forEach(function (k) { text[k] = fix[k]; });
+    }
+    card.style.color = text['text-color'];
+    var title = card.querySelector('.cz-preview-card-title');
+    var desc = card.querySelector('.cz-preview-card-desc');
+    if (title) title.style.color = text['heading-color'];
+    if (desc) desc.style.color = text['text-muted'];
+  }
+
+  // ── Symbols in day cells ─────────────────────────────────────
+  // Ten inputs edit one JSON list (the `cube-symbols` hidden field), the
+  // shape the server stores — an empty symbol has to survive a save.
+  var symbolInputs = Array.prototype.slice.call(
+    document.querySelectorAll('.cz-symbol-input')
+  );
+  var symbolJson = document.getElementById('cz-cube-symbols-json');
+  var SYMBOL_PRESETS = {
+    digits: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'],
+    faces: ['\ud83d\ude2d', '\ud83d\ude22', '\ud83d\ude1e', '\ud83d\ude41', '\ud83d\ude10',
+            '\ud83d\ude42', '\ud83d\ude0a', '\ud83d\ude04', '\ud83d\ude01', '\ud83e\udd29'],
+    clear: ['', '', '', '', '', '', '', '', '', ''],
+  };
+  function currentSymbols() {
+    return symbolInputs.map(function (inp) { return inp.value.trim(); });
+  }
+  function syncSymbols() {
+    if (symbolJson) {
+      symbolJson.value = JSON.stringify(currentSymbols());
+      dirtyKeys['cube-symbols'] = true;
+    }
+    renderCalendar();
+  }
+  symbolInputs.forEach(function (inp) { inp.addEventListener('input', syncSymbols); });
+  document.querySelectorAll('.cz-symbol-preset').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var set = SYMBOL_PRESETS[btn.getAttribute('data-preset')];
+      if (!set) return;
+      symbolInputs.forEach(function (inp, i) { inp.value = set[i]; });
+      syncSymbols();
+    });
+  });
+  function symbolsOn() {
+    var cb = document.getElementById('cz-cube-symbols');
+    return !!(cb && cb.checked);
+  }
+  function symbolsHideFill() {
+    var cb = document.getElementById('cz-cube-symbols-hide-fill');
+    return !!(cb && cb.checked);
   }
 
   function applyNotesFont(on) {
@@ -437,7 +591,7 @@
   // button (e.g. "gradient") fired both handlers and silently flipped
   // the page bg-type along with the mosaic mode.
   var bgTypeBtns = Array.prototype.slice.call(
-    document.querySelectorAll('.cz-bg-type-btn:not(.cz-mosaic-empty-btn)')
+    document.querySelectorAll('.cz-bg-type-btn:not(.cz-mosaic-empty-btn):not(.cz-card-mode-btn)')
   );
   var bgShapeBtns = Array.prototype.slice.call(
     document.querySelectorAll('.cz-bg-shape-btn')
@@ -1192,6 +1346,10 @@
   // Mirrors _cube_scale_rules() in context_processor.py: 1 → low,
   // 5.5 → mid, 10 → high.
   function scaleColor(rating) {
+    var c = scaleRgb(rating);
+    return 'rgb(' + c[0] + ', ' + c[1] + ', ' + c[2] + ')';
+  }
+  function scaleRgb(rating) {
     var pick = function (id, fallback) {
       var el = document.getElementById(id);
       return hexToRgb(el ? el.value : fallback);
@@ -1203,8 +1361,7 @@
     var a = pos <= 0.5 ? low : mid;
     var b = pos <= 0.5 ? mid : high;
     var k = pos <= 0.5 ? pos * 2 : (pos - 0.5) * 2;
-    var c = [0, 1, 2].map(function (i) { return Math.round(a[i] + (b[i] - a[i]) * k); });
-    return 'rgb(' + c[0] + ', ' + c[1] + ', ' + c[2] + ')';
+    return [0, 1, 2].map(function (i) { return Math.round(a[i] + (b[i] - a[i]) * k); });
   }
 
   function renderCalendar() {
@@ -1231,10 +1388,29 @@
           // "Colour by rating" is emitted server-side as .cube.rN rules, so
           // the preview paints its own cubes: same three-stop scale, with a
           // stable pseudo-rating per cell.
+          var rating = 1 + Math.floor((h / threshold) * 10);
+          if (rating > 10) rating = 10;
           if (scaleOn()) {
-            var rating = 1 + Math.floor((h / threshold) * 10);
-            if (rating > 10) rating = 10;
             cube.style.background = scaleColor(rating);
+          }
+          // Mirrors cube_symbols.css_rules: the symbol's colour is chosen
+          // against whatever the cell is painted with.
+          var sym = symbolsOn() ? currentSymbols()[rating - 1] : '';
+          if (sym) {
+            var under;
+            if (symbolsHideFill()) {
+              cube.style.background = 'var(--cube-empty-color, #fff)';
+              under = hexToRgb(pickerValue('cz-cube-empty', '#ffffff'));
+            } else {
+              under = scaleOn() ? scaleRgb(rating)
+                                : hexToRgb(pickerValue('cz-cube-filled', '#000000'));
+            }
+            var span = document.createElement('span');
+            span.className = 'preview-mini-sym' + (sym.length >= 3 ? ' long' : '');
+            span.textContent = sym;
+            span.style.color = luma(under) < 128 ? '#ffffff' : '#000000';
+            cube.classList.add('has-sym');
+            cube.appendChild(span);
           }
         }
         // Mark last filled day in month 1 as "today"
@@ -2021,12 +2197,20 @@
   }
 
   function onPreviewChange(key) {
-    // Any change to the effective background should re-evaluate the
-    // auto-invert decision so the live preview matches what the server
-    // will emit on the next render.
+    // Any change to the effective background — or to a text colour, which
+    // is now kept when it reads fine — re-evaluates auto-invert so the live
+    // preview matches what the server will emit on the next render. It also
+    // redraws the card preview, which depends on both.
     if (key === 'bg-color' || key === 'bg-type' ||
-        key.indexOf('bg-gradient-') === 0) {
+        key.indexOf('bg-gradient-') === 0 || TEXT_KEYS.indexOf(key) !== -1) {
       applyAutoInvert();
+    }
+    if (key.indexOf('card-') === 0) {
+      renderCardPreview();
+    }
+    // Symbol colours follow the cell colours.
+    if (key.indexOf('cube-') === 0 && symbolsOn()) {
+      renderCalendar();
     }
     // Mini-calendar uses pure CSS, no JS redraw.
     if (key.indexOf('neural-') === 0 || key === 'text-color' || key === 'text-muted') {
@@ -2051,7 +2235,7 @@
     renderCalendar();
     renderAllCharts();
     renderNeural();
-    applyAutoInvert();
+    applyAutoInvert();   // also draws the card preview
   }
 
   // Re-render on resize (canvas needs to scale)

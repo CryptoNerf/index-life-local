@@ -7,6 +7,8 @@ headings: `--font-heading` must only be emitted when the user actually
 picks a non-default heading font, otherwise the CSS fallback (Times)
 must win on its own.
 """
+import json
+
 import pytest
 
 from app.modules.customization import context_processor as cp
@@ -44,30 +46,60 @@ def test_luma_black_and_white():
 
 
 # ── auto-invert text colour ───────────────────────────────────
+# On by default now. It used to force black text on any light page and white
+# on any dark one, overwriting the user's picks; switched on for everyone
+# that would have thrown away every text colour choice. It now replaces a
+# colour only when it is hard to read on the background.
 
-def test_auto_invert_off_returns_nothing():
-    assert cp._auto_invert_overrides({}) == (None, None)
+def test_auto_invert_is_on_by_default_and_silent_on_the_default_page():
+    """Nothing saved: white page, dark text, nothing to rescue."""
+    assert cp._auto_invert_enabled({}) is True
+    assert cp._auto_invert_overrides({}) == {}
+
+
+def test_auto_invert_can_still_be_turned_off():
+    assert cp._auto_invert_overrides(
+        {'auto-invert-text': 'false', 'bg-type': 'color', 'bg-color': '#000000'}) == {}
 
 
 def test_auto_invert_dark_bg_gives_light_text():
-    text, muted = cp._auto_invert_overrides(
-        {'auto-invert-text': 'true', 'bg-type': 'color', 'bg-color': '#000000'})
-    assert text == '#ffffff'
-    assert muted == '#cccccc'
+    out = cp._auto_invert_overrides({'bg-type': 'color', 'bg-color': '#000000'})
+    assert out['text-color'] == '#ffffff'
+    assert out['heading-color'] == '#ffffff'
 
 
-def test_auto_invert_light_bg_gives_dark_text():
-    text, muted = cp._auto_invert_overrides(
-        {'auto-invert-text': 'true', 'bg-type': 'color', 'bg-color': '#ffffff'})
-    assert text == '#000000'
-    assert muted == '#666666'
+def test_unset_muted_text_is_judged_by_its_darkest_fallback():
+    """The stylesheets fall back to anything from #444 to #bbb for muted
+    text. Judged by the #888 picker default it passed on a dark page, and
+    the #555 subtitles stayed unreadable."""
+    out = cp._auto_invert_overrides({'bg-type': 'color', 'bg-color': '#15161a'})
+    assert out['text-muted'] == '#cccccc'
+
+
+def test_a_readable_pick_on_a_dark_page_is_kept():
+    out = cp._auto_invert_overrides(
+        {'bg-type': 'color', 'bg-color': '#000000', 'text-color': '#ffe680'})
+    assert 'text-color' not in out
+
+
+def test_a_readable_pick_on_a_light_page_is_kept():
+    """The old rule forced black here and threw away a navy choice."""
+    out = cp._auto_invert_overrides(
+        {'bg-type': 'color', 'bg-color': '#ffffff', 'text-color': '#1a2a6c'})
+    assert out == {}
+
+
+def test_light_text_on_a_light_page_is_rescued():
+    out = cp._auto_invert_overrides(
+        {'bg-type': 'color', 'bg-color': '#ffffff', 'text-color': '#eeeeee'})
+    assert out['text-color'] == '#000000'
 
 
 def test_auto_invert_image_bg_cannot_decide():
     # Can't sample a photo server-side → stays off.
     assert cp._auto_invert_overrides(
         {'auto-invert-text': 'true', 'bg-type': 'image',
-         'bg-image-filename': 'p.jpg'}) == (None, None)
+         'bg-image-filename': 'p.jpg'}) == {}
 
 
 def test_auto_invert_also_inverts_heading_color():
@@ -319,3 +351,124 @@ def test_scale_interpolates_between_the_three_stops():
     values = [int(m) for m in re.findall(r'background: rgb\((\d+),', css)]
     assert values == sorted(values)
     assert values[4] < 128 < values[5]
+
+
+# ── cards ─────────────────────────────────────────────────────
+# The blocks on the charts, weather, modules and sync pages used to be
+# painted with the page colour, full stop. They can now have their own.
+
+def test_cards_emit_nothing_by_default():
+    assert cp._card_rules({}, cp._page_text_colours({})) == ''
+    assert 'viz-card' not in str(cp._emit_css_block({}))
+
+
+def test_a_card_colour_with_opacity_becomes_rgba_on_every_card():
+    css = cp._card_rules({'card-bg-mode': 'color', 'card-bg-color': '#102030',
+                          'card-bg-opacity': '0.5'}, cp._page_text_colours({}))
+    assert 'background:rgba(16,32,48,0.5)' in css
+    for sel in ('.viz-card', '.wx-stat', '.module-card', '.mpd-entry'):
+        assert 'html ' + sel in css
+    assert '.step-card:not(.step-warn)' in css, 'the warning card keeps its colour'
+
+
+def test_card_text_is_judged_against_the_card_not_the_page():
+    """Black page, white cards: the page text turns white, the cards' must
+    not — it would vanish on them."""
+    settings = {'bg-type': 'color', 'bg-color': '#000000',
+                'card-bg-mode': 'color', 'card-bg-color': '#ffffff'}
+    out = str(cp._emit_css_block(settings))
+    assert '--text-color: #ffffff' in out                  # the page
+    cards = cp._card_rules(settings, dict(cp._page_text_colours(settings),
+                                          **cp._auto_invert_overrides(settings)))
+    assert '--text-color:#000000' in cards                  # the cards
+
+
+def test_page_coloured_cards_over_a_dark_photo_keep_dark_text():
+    """The bug behind the request: a dark photo turns the page text white,
+    while the cards stay painted with the (white) page colour."""
+    settings = {'bg-type': 'image', 'bg-image-filename': 'a' * 16 + '.jpg',
+                'bg-image-avg-color': '#101010'}
+    page_text = dict(cp._page_text_colours(settings), **cp._auto_invert_overrides(settings))
+    assert page_text['text-color'] == '#ffffff'
+    cards = cp._card_rules(settings, page_text)
+    assert '--text-color:#000000' in cards
+    assert '.wx-stat' not in cards, 'the see-through tiles sit on the photo, not on white'
+
+
+def test_a_chosen_card_text_colour_is_used():
+    cards = cp._card_rules({'card-text-color': '#7a1f1f'}, cp._page_text_colours({}))
+    assert '--text-color:#7a1f1f' in cards
+    assert '--heading-color:#7a1f1f' in cards
+
+
+def test_a_chosen_border_colour_applies_to_every_card():
+    cards = cp._card_rules({'card-border-color': '#abcdef'}, cp._page_text_colours({}))
+    assert 'border-color:#abcdef' in cards and '.wx-stat' in cards
+
+
+def test_card_settings_never_leak_as_css_variables():
+    out = str(cp._emit_css_block({'card-bg-mode': 'color', 'card-bg-color': '#123456',
+                                  'card-bg-opacity': '0.4'}))
+    assert '--card-bg' not in out
+
+
+# ── symbols in day cells ──────────────────────────────────────
+
+from app.modules.customization import cube_symbols as cs  # noqa: E402
+
+
+def test_symbols_are_off_by_default():
+    assert cs.for_template({}) is None
+    assert cs.css_rules({}) == ''
+
+
+def test_symbols_default_to_the_ratings_themselves():
+    assert cs.for_template({'cube-symbols-enabled': 'true'}) == {
+        i: str(i) for i in range(1, 11)}
+
+
+def test_an_empty_symbol_means_no_symbol_for_that_rating():
+    faces = ['😭', '😢', '', '', '😐', '', '', '', '😄', '🤩']
+    got = cs.for_template({'cube-symbols-enabled': 'true',
+                           'cube-symbols': json.dumps(faces, ensure_ascii=False)})
+    assert got == {1: '😭', 2: '😢', 5: '😐', 9: '😄', 10: '🤩'}
+
+
+@pytest.mark.parametrize('value', [
+    '["1","2"]',                                   # not ten
+    'not json',
+    json.dumps(['x' * 9] + [''] * 9),              # too long
+    json.dumps(['a\u0000'] + [''] * 9),           # control character
+    json.dumps([1] + [''] * 9),                    # not a string
+])
+def test_bad_symbol_lists_are_rejected(value):
+    assert cs.is_valid(value) is False
+
+
+def test_emoji_with_joiners_and_skin_tones_are_accepted():
+    assert cs.is_valid(json.dumps(['👍🏽', '❤️', '👩‍💻'] + [''] * 7, ensure_ascii=False))
+
+
+def test_the_symbol_colour_reads_on_what_the_cell_is_painted_with():
+    dark = cs.css_rules({'cube-symbols-enabled': 'true'})           # black fill
+    assert '.cube.filled.r7 .cube-sym{color:#ffffff;}' in dark
+    light = cs.css_rules({'cube-symbols-enabled': 'true', 'cube-filled-color': '#f5f5dc'})
+    assert '.cube.filled.r7 .cube-sym{color:#000000;}' in light
+    unfilled = cs.css_rules({'cube-symbols-enabled': 'true',
+                             'cube-symbols-hide-fill': 'true'})   # white empty colour
+    assert '.cube.filled.r7 .cube-sym{color:#000000;}' in unfilled
+    assert 'background:var(--cube-empty-color' in unfilled
+
+
+def test_symbol_colours_follow_the_rating_scale():
+    css = cs.css_rules({'cube-symbols-enabled': 'true', 'cube-scale-enabled': 'true',
+                        'cube-scale-low': '#000000', 'cube-scale-high': '#ffffff',
+                        'cube-scale-mid': '#808080'})
+    assert '.cube.filled.r1 .cube-sym{color:#ffffff;}' in css
+    assert '.cube.filled.r10 .cube-sym{color:#000000;}' in css
+
+
+def test_the_symbol_list_never_becomes_a_css_variable():
+    out = str(cp._emit_css_block({'cube-symbols-enabled': 'true',
+                                  'cube-symbols': json.dumps(['<'] + [''] * 9)}))
+    assert '--cube-symbols' not in out

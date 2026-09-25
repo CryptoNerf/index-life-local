@@ -507,12 +507,109 @@
             <input type="text" class="cz-hex" data-hex-for="cz-cube-scale-high"
                    value="{{ current['cube-scale-high'] }}">
           </div>
+
+          <div class="cz-row cz-toggle-row">
+            <label for="cz-cube-symbols" class="cz-toggle-label">
+              <input type="checkbox" class="cz-toggle" id="cz-cube-symbols"
+                     data-key="cube-symbols-enabled"
+                     {% if current['cube-symbols-enabled'] == 'true' %}checked{% endif %}>
+              <span>{{ t('cz.lbl.cube_symbols') }}</span>
+            </label>
+          </div>
+          <p class="cz-section-desc" style="margin-top:-8px">{{ t('customization.cube_symbols_desc') }}</p>
+          {# The ten symbols travel as one JSON list (see cube_symbols.py);
+             the inputs below only edit it. #}
+          <input type="hidden" id="cz-cube-symbols-json" data-key="cube-symbols"
+                 value="{{ current['cube-symbols'] }}">
+          <div class="cz-symbol-grid" id="cz-symbol-grid">
+            {% for sym in cube_symbol_list %}
+              <label class="cz-symbol-cell">
+                <span class="cz-symbol-n">{{ loop.index }}</span>
+                <input type="text" class="cz-symbol-input" data-rating="{{ loop.index }}"
+                       maxlength="8" value="{{ sym }}" autocomplete="off" spellcheck="false">
+              </label>
+            {% endfor %}
+          </div>
+          <div class="cz-symbol-presets">
+            <button type="button" class="cz-symbol-preset" data-preset="digits">{{ t('cz.symbols_digits') }}</button>
+            <button type="button" class="cz-symbol-preset" data-preset="faces">{{ t('cz.symbols_faces') }}</button>
+            <button type="button" class="cz-symbol-preset" data-preset="clear">{{ t('cz.symbols_clear') }}</button>
+          </div>
+          <div class="cz-row cz-toggle-row">
+            <label for="cz-cube-symbols-hide-fill" class="cz-toggle-label">
+              <input type="checkbox" class="cz-toggle" id="cz-cube-symbols-hide-fill"
+                     data-key="cube-symbols-hide-fill"
+                     {% if current['cube-symbols-hide-fill'] == 'true' %}checked{% endif %}>
+              <span>{{ t('cz.lbl.cube_symbols_hide_fill') }}</span>
+            </label>
+          </div>
         </div>
       </div>
       <div class="cz-preview">
         <span class="cz-preview-label">{{ t('cz.preview_prefix') }}{{ t('cz.preview.calendar') }}</span>
         <div class="cz-preview-frame">
           <div class="preview-mini-calendar" id="preview-calendar"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Cards: the blocks on the charts, weather, modules and sync pages ── -->
+    <section class="cz-section" id="sec-cards">
+      <div>
+        <div class="cz-section-head">
+          <h2 class="cz-section-title">{{ t('cz.sec.cards') }}</h2>
+          <button type="button" class="cz-section-reset" data-section="sec-cards">{{ t('cz.reset_section') }}</button>
+          <p class="cz-section-desc">{{ t('customization.cards_desc') }}</p>
+        </div>
+        <div class="cz-controls">
+          <div class="cz-row cz-bg-type-row">
+            <label>{{ t('cz.lbl.card_fill') }}</label>
+            <div class="cz-bg-type-toggle" id="cz-card-mode-toggle">
+              <button type="button" class="cz-bg-type-btn cz-card-mode-btn{% if current['card-bg-mode'] != 'color' %} active{% endif %}" data-mode="page">{{ t('cz.lbl.card_fill_page') }}</button>
+              <button type="button" class="cz-bg-type-btn cz-card-mode-btn{% if current['card-bg-mode'] == 'color' %} active{% endif %}" data-mode="color">{{ t('cz.lbl.card_fill_color') }}</button>
+            </div>
+          </div>
+          <input type="hidden" id="cz-card-mode" data-key="card-bg-mode" value="{{ current['card-bg-mode'] }}">
+          <div class="cz-card-color-rows" id="cz-card-color-rows"{% if current['card-bg-mode'] != 'color' %} style="display:none"{% endif %}>
+            <div class="cz-row">
+              <label for="cz-card-bg">{{ t('cz.lbl.card_bg') }}</label>
+              <input type="color" class="cz-color" id="cz-card-bg"
+                     data-key="card-bg-color" value="{{ current['card-bg-color'] }}">
+              <input type="text" class="cz-hex" data-hex-for="cz-card-bg"
+                     value="{{ current['card-bg-color'] }}">
+            </div>
+            <div class="cz-row">
+              <label for="cz-card-opacity">{{ t('cz.lbl.card_opacity') }}</label>
+              <input type="range" class="cz-slider" id="cz-card-opacity"
+                     data-key="card-bg-opacity" data-unit="percent" min="0" max="100" step="5"
+                     value="{{ ((current['card-bg-opacity']|float) * 100)|round|int }}">
+              <span class="cz-slider-val" id="cz-card-opacity-val">{{ ((current['card-bg-opacity']|float) * 100)|round|int }}%</span>
+            </div>
+          </div>
+          <div class="cz-row">
+            <label for="cz-card-border">{{ t('cz.lbl.card_border') }}</label>
+            <input type="color" class="cz-color" id="cz-card-border"
+                   data-key="card-border-color" value="{{ current['card-border-color'] }}">
+            <input type="text" class="cz-hex" data-hex-for="cz-card-border"
+                   value="{{ current['card-border-color'] }}">
+          </div>
+          <div class="cz-row">
+            <label for="cz-card-text">{{ t('cz.lbl.card_text') }}</label>
+            <input type="color" class="cz-color" id="cz-card-text"
+                   data-key="card-text-color" value="{{ current['card-text-color'] }}">
+            <input type="text" class="cz-hex" data-hex-for="cz-card-text"
+                   value="{{ current['card-text-color'] }}">
+          </div>
+          <p class="cz-section-desc">{{ t('customization.cards_text_desc') }}</p>
+        </div>
+      </div>
+      <div class="cz-preview">
+        <span class="cz-preview-label">{{ t('cz.preview_prefix') }}{{ t('cz.preview.cards') }}</span>
+        <div class="cz-preview-frame cz-card-preview-frame">
+          <div class="cz-preview-card" id="cz-preview-card">
+            <p class="cz-preview-card-title">{{ t('cz.preview.card_title') }}</p>
+            <p class="cz-preview-card-desc">{{ t('cz.preview.card_desc') }}</p>
+          </div>
         </div>
       </div>
     </section>
