@@ -1,7 +1,15 @@
-/* Override calendar.css desktop lock — allow scrolling on insights pages */
-html, body {
+/* Override calendar.css desktop lock — allow scrolling on insights pages.
+   Only the root scrolls. With overflow set on both html and body, body turns
+   into a scroll container of its own that never scrolls (the viewport does),
+   and anything position: sticky inside it — the figure beside a person's
+   notes — has nothing to stick to and scrolls away with the page. */
+html {
   height: auto !important;
   overflow: auto !important;
+}
+body {
+  height: auto !important;
+  overflow: visible !important;
 }
 
 .graphics-main {
