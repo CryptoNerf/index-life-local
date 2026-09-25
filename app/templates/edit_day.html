@@ -218,13 +218,20 @@
       draftTimer = setTimeout(() => saveDraft(markdown), 300);
     }
 
-    // Load initial content or draft
+    // Load initial content or draft.
+    // A draft only wins while it is the fresher of the two — the rule the
+    // PWA already follows (drafts.js, draftIsFresh). Typing here without
+    // saving, then writing the same day on the phone, used to bring the old
+    // draft back over the phone's newer text, and Save then overwrote it.
+    const ENTRY_UPDATED_MS = {{ entry_updated_ms|tojson }};   // null: no saved entry
     const initialContent = noteTextarea.value;
     const draft = loadDraft();
     let contentToLoad = initialContent;
 
     if (draft && draft.content) {
-      if (draft.content === initialContent) {
+      const staleDraft = ENTRY_UPDATED_MS !== null
+        && (draft.updatedAt || 0) < ENTRY_UPDATED_MS;
+      if (draft.content === initialContent || staleDraft) {
         clearDraft();
       } else {
         contentToLoad = draft.content;
@@ -252,13 +259,15 @@
       window.TiptapEditorUtils.setupToolbarButtons(tiptapEditor, toolbar);
     }
 
-    // Sync before form submission and clear draft
+    // Sync the editor into the form before submission. The draft is cleared
+    // by the validation handler below, and only once the form really goes:
+    // clearing it here too meant a Save refused for a missing rating had
+    // already thrown away the only copy that survives closing the window.
     editForm.addEventListener('submit', function() {
       if (tiptapEditor) {
         const markdown = window.TiptapEditorUtils.getMarkdownFromEditor(tiptapEditor);
         noteTextarea.value = markdown;
       }
-      clearDraft();
     });
 
 
@@ -293,6 +302,7 @@
         
         return false;
       }
+      clearDraft();
     });
   </script>
   {% if module_active('voice') %}

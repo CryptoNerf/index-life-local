@@ -142,6 +142,10 @@ def mood_grid(year=None):
     # If no year specified, use current year
     if year is None:
         year = date.today().year
+    # date() only goes to 9999, and /mood_grid/99999 used to die on it
+    # below — before the redirect for a year with no entries could run.
+    if not 1 <= year <= 9999:
+        return redirect(url_for('main.mood_grid'))
 
     # Get all entries for specified year (exclude soft-deleted tombstones)
     entries = MoodEntry.query.filter(
@@ -392,10 +396,18 @@ def edit_day(day):
     # <span style="…"> wrappers that plain Markdown has no use for. Load them
     # cleaned, so the markup is gone the next time the day is saved.
     note = plain_text(display_entry.note) if display_entry else ''
+    # When the saved version was last written (epoch ms, UTC), so the page can
+    # tell an unsaved draft that is newer than it from one that is older. A
+    # tombstone counts too: a deletion on another device outdates a draft
+    # that was typed before it.
+    entry_updated_ms = None
+    if entry is not None and entry.updated_at is not None:
+        entry_updated_ms = calendar.timegm(entry.updated_at.timetuple()) * 1000
     return render_template('edit_day.html',
                          day=day_date,
                          entry=display_entry,
                          note=note,
+                         entry_updated_ms=entry_updated_ms,
                          is_new=display_entry is None,
                          current_year=date.today().year)
 
