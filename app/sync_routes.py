@@ -78,6 +78,7 @@ def _render_sync(**extra):
         sync_configured=configured,
         encryption=sync_vault.status(backend),
         new_recovery_key=None,
+        passphrase_check=None,
         # "Connect your phone" block: the VK as QR payload + text code.
         # Only present while unlocked — a locked vault has nothing to show.
         pairing_payload=sync_vault.pairing_payload() if configured else None,
@@ -203,6 +204,11 @@ def encryption_unlock():
             sync_vault.unlock_with_recovery(backend, recovery)
         else:
             sync_vault.unlock_with_passphrase(backend, pw)
+    except sync_vault.StaleVault:
+        # The passphrase is right, the vault is not: its key is not the one
+        # the other devices use. Pairing is the way in; see the flash.
+        flash(t('sync.enc_stale'), 'error')
+        return redirect(url_for('sync.sync_page'))
     except ValueError:
         flash(t('sync.enc_no_vault'), 'error')
         return redirect(url_for('sync.sync_page'))
@@ -239,6 +245,56 @@ def encryption_pair():
     # replace any plaintext snapshot of ours with a sealed one.
     _kick_full_sync()
     return redirect(url_for('sync.sync_page'))
+
+
+@bp.route('/sync/encryption/check', methods=['POST'])
+def encryption_check():
+    """Would the passphrase bring this diary back on a new device?
+
+    Read-only. A "stale" or "wrong" answer opens the re-seal form right
+    below, since that is the one thing that fixes either.
+    """
+    if not is_sync_configured() or not sync_vault.is_unlocked():
+        return redirect(url_for('sync.sync_page'))
+    verdict = sync_vault.check_passphrase(
+        _current_backend(), request.form.get('passphrase', ''))
+    # Shown inside the fold itself (the form posts to its anchor), not as a
+    # flash at the top of a page the user is looking at the bottom of.
+    return _render_sync(passphrase_check=verdict)
+
+
+@bp.route('/sync/encryption/reseal', methods=['POST'])
+def encryption_reseal():
+    """Rewrite vault.json around the key this device uses.
+
+    The repair for a vault that drifted away from the devices' key, and the
+    way to change a forgotten passphrase: holding the key already means
+    holding the diary, so a new passphrase grants nothing more.
+    """
+    if not is_sync_configured() or not sync_vault.is_unlocked():
+        return redirect(url_for('sync.sync_page'))
+    pw = request.form.get('passphrase', '')
+    if len(pw) < 8:
+        flash(t('sync.enc_passphrase_short'), 'error')
+        return _render_sync(passphrase_check='retry')
+    if pw != request.form.get('passphrase_confirm', ''):
+        flash(t('sync.enc_passphrase_mismatch'), 'error')
+        return _render_sync(passphrase_check='retry')
+    try:
+        recovery = sync_vault.reseal_vault(
+            _current_backend(), pw,
+            backup_dir=current_app.config.get('BACKUP_DIR') or None)
+    except sync_vault.KeyNotShared:
+        flash(t('sync.vault_reseal_not_shared'), 'error')
+        return redirect(url_for('sync.sync_page'))
+    except Exception as e:
+        current_app.logger.warning('vault reseal failed: %s', e)
+        flash(t('sync.vault_reseal_failed', err=str(e)), 'error')
+        return redirect(url_for('sync.sync_page'))
+    flash(t('sync.vault_resealed_flash'), 'success')
+    # Rendered directly, like enabling: the one-time recovery key is shown
+    # but never travels through a cookie.
+    return _render_sync(new_recovery_key=recovery)
 
 
 @bp.route('/sync/encryption/lock', methods=['POST'])

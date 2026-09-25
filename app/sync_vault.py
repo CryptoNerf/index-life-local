@@ -182,30 +182,128 @@ def enable_encryption(backend, passphrase: str) -> str:
     return recovery
 
 
+class StaleVault(Exception):
+    """vault.json opened, but the key in it is not the one the devices use.
+
+    How it happens: two devices each set up encryption on their own, then
+    pair, and the folder keeps the vault whose key nobody seals with. The
+    passphrase still opens that file — it just yields the wrong key. Adopting
+    it would publish snapshots nobody can read while reading nobody, so the
+    unlock is refused and the user is sent to pair instead.
+    """
+
+
+def _unlock(backend, unwrap, how: str) -> bool:
+    vault = load_vault(backend)
+    if vault is None:
+        raise ValueError('no vault.json in the sync folder')
+    vk = unwrap(vault)
+    if key_opens_peers(backend, vk) is False:
+        log.warning('Encrypted sync: the %s opens vault.json, but its key '
+                    'opens no other device — the vault is stale', how)
+        raise StaleVault(how)
+    _cache_vault_key(vk)
+    _meta_set(_ENABLED_KEY, 'true')
+    log.info('Encrypted sync unlocked (%s)', how)
+    return True
+
+
 def unlock_with_passphrase(backend, passphrase: str) -> bool:
     """Join/unlock the existing vault with the passphrase. Caches the VK and
     turns encryption on. Raises nacl.exceptions.CryptoError on a wrong
-    passphrase, ValueError if there is no vault to unlock."""
-    vault = load_vault(backend)
-    if vault is None:
-        raise ValueError('no vault.json in the sync folder')
-    vk = sync_crypto.unwrap_with_passphrase(vault, passphrase)
-    _cache_vault_key(vk)
-    _meta_set(_ENABLED_KEY, 'true')
-    log.info('Encrypted sync unlocked (passphrase)')
-    return True
+    passphrase, ValueError if there is no vault to unlock, StaleVault when the
+    vault's key is not the one the other devices seal with."""
+    return _unlock(
+        backend, lambda v: sync_crypto.unwrap_with_passphrase(v, passphrase),
+        'passphrase')
 
 
 def unlock_with_recovery(backend, recovery_key_text: str) -> bool:
-    """Unlock the existing vault with the recovery key (lost-passphrase path)."""
+    """Unlock the existing vault with the recovery key (lost-passphrase path).
+    Same failure modes as `unlock_with_passphrase`."""
+    return _unlock(
+        backend, lambda v: sync_crypto.unwrap_with_recovery(v, recovery_key_text),
+        'recovery key')
+
+
+# ── Keeping vault.json honest ────────────────────────────────────────
+# The passphrase is only a way back to the key if vault.json wraps the key
+# the devices actually use. Nothing else ever checks that — the devices talk
+# to each other with the cached key and never look at vault.json again — so
+# a stale vault goes unnoticed until the day it is needed.
+
+def check_passphrase(backend, passphrase: str) -> str:
+    """Would this passphrase bring this diary back on a new device?
+
+    'ok'       — it opens vault.json and yields the key this device uses;
+    'stale'    — it opens vault.json, but the key there is a different one;
+    'wrong'    — it does not open vault.json;
+    'no_vault' — there is no vault.json to open;
+    'locked'   — this device holds no key to compare against.
+    Reads only; changes nothing.
+    """
+    vk = get_vault_key()
+    if vk is None:
+        return 'locked'
     vault = load_vault(backend)
     if vault is None:
-        raise ValueError('no vault.json in the sync folder')
-    vk = sync_crypto.unwrap_with_recovery(vault, recovery_key_text)
-    _cache_vault_key(vk)
-    _meta_set(_ENABLED_KEY, 'true')
-    log.info('Encrypted sync unlocked (recovery key)')
-    return True
+        return 'no_vault'
+    try:
+        found = sync_crypto.unwrap_with_passphrase(vault, passphrase)
+    except Exception:
+        return 'wrong'
+    return 'ok' if found == vk else 'stale'
+
+
+class KeyNotShared(Exception):
+    """This device's key opens none of the other devices' snapshots.
+
+    Re-sealing the vault around it would make the passphrase lead to a key
+    the rest of the fleet cannot use — the very fault the re-seal repairs.
+    """
+
+
+def reseal_vault(backend, passphrase: str, backup_dir=None) -> str:
+    """Rewrite vault.json around the key this device uses. Returns the new
+    one-time recovery key.
+
+    The data needs no re-encryption and the other devices need no action:
+    the key does not change, only the file that lets a new device find it.
+    The old recovery key stops working, since it wrapped the old vault.
+    The previous vault.json is copied to `backup_dir` first, so the change
+    can be undone by hand.
+    """
+    vk = get_vault_key()
+    if vk is None:
+        raise ValueError('this device is locked — nothing to seal')
+    if key_opens_peers(backend, vk) is False:
+        raise KeyNotShared()
+
+    old = None
+    try:
+        old = backend.read(VAULT_FILENAME)
+    except Exception as exc:
+        log.warning('reseal: could not read the old vault.json (%s)', exc)
+    if old and backup_dir:
+        from datetime import datetime
+        from pathlib import Path
+        target = Path(backup_dir) / 'vault'
+        target.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+        (target / f'vault-{stamp}.json').write_text(old, encoding='utf-8')
+
+    vault, _, recovery = sync_crypto.create_vault(passphrase, vk=vk)
+    text = json.dumps(vault, ensure_ascii=False, indent=2)
+    backend.write_atomic(VAULT_FILENAME, text)
+
+    # Read it back through the backend: a cloud that silently kept the old
+    # file (or wrote a second one beside it) must not be reported as fixed.
+    # Compared as text: unwrapping again would mean a second Argon2 run for
+    # nothing, since the text is exactly what was just proven to wrap `vk`.
+    if backend.read(VAULT_FILENAME) != text:
+        raise RuntimeError('vault.json did not read back as written')
+    log.info('Encrypted sync: vault.json re-sealed around the key in use')
+    return recovery
 
 
 # ── Device pairing: VK hand-off without the passphrase ──────────────
@@ -247,20 +345,19 @@ def parse_pairing_code(text: str) -> bytes:
     return vk
 
 
-def key_matches_folder(backend) -> bool | None:
-    """Does the key we hold open what is already in this folder?
+def key_opens_peers(backend, vk: bytes) -> bool | None:
+    """Does `vk` open what the other devices have written to this folder?
 
-    Returns True when a peer's envelope decrypts with our key, False when
-    peers exist and none of them do, and None when there is nothing to judge
-    by (an empty folder, or no key held).
+    True when a peer's envelope decrypts with it, False when peers exist and
+    none of them do, None when there is nothing to judge by (an empty folder,
+    or one that could not be listed).
 
-    Why this exists: switching to another folder or cloud keeps the key
-    cached from the previous one. Nothing checks it, so the app happily
-    publishes snapshots no other device can read, and the only symptom is a
-    line about "unprocessed snapshots" that blames the *other* device.
+    Judged on the PEERS' snapshots and on the whole set. Our own blob proves
+    nothing — it is sealed with whatever key we are about to replace — and
+    one stale blob from a retired device must not veto a good key. Treating
+    the first failure as fatal once deadlocked pairing in either direction.
     """
-    vk = get_vault_key()
-    if vk is None or backend is None:
+    if backend is None:
         return None
     own = _meta_get('device_id')
     try:
@@ -275,6 +372,11 @@ def key_matches_folder(backend) -> bool | None:
             continue
         if not (name.startswith('device_') and name.endswith('.json')):
             continue
+        # Our own blob is skipped by name before it is downloaded: it is
+        # usually the largest file in the folder, and a download is about a
+        # second on Drive. The header check below still catches a renamed one.
+        if own and name == f'device_{own}.json':
+            continue
         blob = backend.read(name)
         if not blob:
             continue
@@ -284,15 +386,31 @@ def key_matches_folder(backend) -> bool | None:
             continue
         if not is_envelope(obj):
             continue
-        if obj.get('device') == own:      # our own blob proves nothing
+        if obj.get('device') == own:
             continue
         saw_peer = True
         try:
             sync_crypto.open_envelope(blob, vk)
             return True
         except Exception:
-            continue
+            continue        # another device's stale key — keep looking
     return False if saw_peer else None
+
+
+def key_matches_folder(backend) -> bool | None:
+    """Does the key we hold open what is already in this folder?
+
+    `key_opens_peers` for the cached key; None while locked.
+
+    Why this exists: switching to another folder or cloud keeps the key
+    cached from the previous one. Nothing checks it, so the app happily
+    publishes snapshots no other device can read, and the only symptom is a
+    line about "unprocessed snapshots" that blames the *other* device.
+    """
+    vk = get_vault_key()
+    if vk is None:
+        return None
+    return key_opens_peers(backend, vk)
 
 
 def adopt_pairing_code(backend, text: str) -> str:
@@ -306,45 +424,10 @@ def adopt_pairing_code(backend, text: str) -> str:
     merging works). Raises ValueError on malformed or mismatched codes.
     """
     vk = parse_pairing_code(text)
-    verified = False
-    if backend is not None:
-        own = _meta_get('device_id')
-        try:
-            names = backend.list_files()
-        except Exception as exc:
-            log.warning('pairing: cannot list folder (%s) — adopting unverified', exc)
-            names = []
-        # Judge on the PEERS' snapshots, and on the whole set. Testing our own
-        # blob could only ever fail — it is sealed with the key we are about to
-        # replace — and treating the first failure as fatal meant one stale
-        # blob rejected a perfectly good code. With both devices already in the
-        # folder that deadlocked pairing in either direction.
-        saw_peer = False
-        for name in names:
-            if name == VAULT_FILENAME:
-                continue
-            if not (name.startswith('device_') and name.endswith('.json')):
-                continue
-            blob = backend.read(name)
-            if not blob:
-                continue
-            try:
-                obj = json.loads(blob)
-            except (json.JSONDecodeError, ValueError):
-                continue
-            if not is_envelope(obj):
-                continue
-            if obj.get('device') == own:
-                continue
-            saw_peer = True
-            try:
-                sync_crypto.open_envelope(blob, vk)
-                verified = True
-                break
-            except Exception:
-                continue        # another device's stale key — keep looking
-        if saw_peer and not verified:
-            raise ValueError("the pairing code does not match this folder's data")
+    verdict = key_opens_peers(backend, vk)
+    if verdict is False:
+        raise ValueError("the pairing code does not match this folder's data")
+    verified = verdict is True
     _cache_vault_key(vk)
     _meta_set(_ENABLED_KEY, 'true')
     log.info('Encrypted sync joined via pairing code (%s)',

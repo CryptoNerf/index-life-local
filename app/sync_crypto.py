@@ -249,8 +249,14 @@ def decode_recovery_key(text: str) -> bytes:
 
 
 def create_vault(passphrase: str, *, opslimit: int = KDF_OPSLIMIT,
-                 memlimit: int = KDF_MEMLIMIT) -> tuple[dict, bytes, str]:
-    """Initialize a new vault.
+                 memlimit: int = KDF_MEMLIMIT,
+                 vk: bytes | None = None) -> tuple[dict, bytes, str]:
+    """Initialize a new vault — around a fresh key, or around `vk`.
+
+    Passing `vk` re-seals a key already in use: a new salt, passphrase wrap
+    and recovery key, while every snapshot sealed with it stays readable.
+    That is how a vault.json that drifted away from the key the devices
+    actually use is repaired. The file format is the same either way.
 
     Returns (vault_dict, vault_key, recovery_key_text):
       * vault_dict      — the JSON written to the cloud as vault.json. Safe
@@ -259,7 +265,10 @@ def create_vault(passphrase: str, *, opslimit: int = KDF_OPSLIMIT,
                           the caller; never written to the cloud.
       * recovery_key_text — shown ONCE to the user to write down.
     """
-    vk = nacl.utils.random(VK_BYTES)
+    if vk is None:
+        vk = nacl.utils.random(VK_BYTES)
+    elif len(vk) != VK_BYTES:
+        raise ValueError('vault key must be %d bytes' % VK_BYTES)
     salt = nacl.utils.random(SALT_BYTES)
     kek = derive_key(passphrase, salt, opslimit, memlimit)
     recovery = secrets.token_bytes(RECOVERY_BYTES)

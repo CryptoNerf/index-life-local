@@ -299,7 +299,7 @@
                        placeholder="{{ t('sync.enc_passphrase') }}" autocomplete="new-password">
                 <input type="password" name="passphrase_confirm" class="sync-input"
                        placeholder="{{ t('sync.enc_passphrase_confirm') }}" autocomplete="new-password">
-                <button class="sync-btn sync-btn-primary">{{ t('sync.enc_enable') }}</button>
+                <button class="sync-btn sync-btn-primary" data-busy="{{ t('sync.busy_creating') }}">{{ t('sync.enc_enable') }}</button>
               </form>
             </div>
           </div>
@@ -316,14 +316,14 @@
               <form method="post" action="{{ url_for('sync.encryption_unlock') }}" class="enc-form">
                 <input type="password" name="passphrase" class="sync-input"
                        placeholder="{{ t('sync.enc_passphrase') }}" autocomplete="current-password" autofocus>
-                <button class="sync-btn sync-btn-primary">{{ t('sync.enc_unlock') }}</button>
+                <button class="sync-btn sync-btn-primary" data-busy="{{ t('sync.busy_checking') }}">{{ t('sync.enc_unlock') }}</button>
               </form>
               <details class="enc-recovery-toggle">
                 <summary>{{ t('sync.enc_use_recovery') }}</summary>
                 <form method="post" action="{{ url_for('sync.encryption_unlock') }}" class="enc-form">
                   <input type="text" name="recovery_key" class="sync-input"
                          placeholder="{{ t('sync.enc_recovery_key') }}" autocomplete="off">
-                  <button class="sync-btn">{{ t('sync.enc_unlock') }}</button>
+                  <button class="sync-btn" data-busy="{{ t('sync.busy_checking') }}">{{ t('sync.enc_unlock') }}</button>
                 </form>
               </details>
               <details class="enc-recovery-toggle">
@@ -332,7 +332,7 @@
                 <form method="post" action="{{ url_for('sync.encryption_pair') }}" class="enc-form">
                   <input type="text" name="pairing_code" class="sync-input"
                          placeholder="{{ t('sync.pair_code_placeholder') }}" autocomplete="off">
-                  <button class="sync-btn">{{ t('sync.pair_join') }}</button>
+                  <button class="sync-btn" data-busy="{{ t('sync.busy_checking') }}">{{ t('sync.pair_join') }}</button>
                 </form>
               </details>
             </div>
@@ -350,7 +350,7 @@
                        placeholder="{{ t('sync.enc_passphrase') }}" autocomplete="new-password">
                 <input type="password" name="passphrase_confirm" class="sync-input"
                        placeholder="{{ t('sync.enc_passphrase_confirm') }}" autocomplete="new-password">
-                <button class="sync-btn sync-btn-primary">{{ t('sync.enc_enable') }}</button>
+                <button class="sync-btn sync-btn-primary" data-busy="{{ t('sync.busy_creating') }}">{{ t('sync.enc_enable') }}</button>
               </form>
             </div>
           </div>
@@ -365,6 +365,42 @@
 
       {# ── Folded: full settings. Sibling of the other folds so the three
          disclosures read as one list at the foot of the page. ── #}
+      {# ── Folded: is the passphrase still a way back to this diary? ──
+         Devices talk to each other with the cached key and never read
+         vault.json again, so a vault that drifted away from that key goes
+         unnoticed until the day it is needed. This is where it is checked
+         and repaired. #}
+      {% if encryption.unlocked %}
+        {% set vault_needs_fix = passphrase_check in ('stale', 'wrong', 'no_vault', 'retry') %}
+        <details class="sync-fold" id="vault-fold" {% if passphrase_check %}open{% endif %}>
+          <summary>{{ t('sync.vault_fold') }}</summary>
+          <p class="sync-hint">{{ t('sync.vault_fold_hint') }}</p>
+          <form method="post" action="{{ url_for('sync.encryption_check') }}#vault-fold" class="enc-form">
+            <input type="password" name="passphrase" class="sync-input"
+                   placeholder="{{ t('sync.enc_passphrase') }}" autocomplete="current-password">
+            <button class="sync-btn" data-busy="{{ t('sync.busy_checking') }}">{{ t('sync.vault_check') }}</button>
+          </form>
+          {% if passphrase_check and passphrase_check != 'retry' %}
+            <p class="sync-hint sync-hint-strong vault-verdict vault-verdict-{{ passphrase_check }}">
+              {{ t('sync.vault_check_' + passphrase_check) }}
+            </p>
+          {% endif %}
+          <div class="step-card{% if vault_needs_fix %} step-warn{% endif %}">
+            <div class="step-body">
+              <div class="step-title">{{ t('sync.vault_reseal_title') }}</div>
+              <p class="step-text">{{ t('sync.vault_reseal_hint') }}</p>
+              <form method="post" action="{{ url_for('sync.encryption_reseal') }}" class="enc-form">
+                <input type="password" name="passphrase" class="sync-input"
+                       placeholder="{{ t('sync.enc_passphrase') }}" autocomplete="new-password">
+                <input type="password" name="passphrase_confirm" class="sync-input"
+                       placeholder="{{ t('sync.enc_passphrase_confirm') }}" autocomplete="new-password">
+                <button class="sync-btn{% if vault_needs_fix %} sync-btn-primary{% endif %}" data-busy="{{ t('sync.busy_resealing') }}">{{ t('sync.vault_reseal') }}</button>
+              </form>
+            </div>
+          </div>
+        </details>
+      {% endif %}
+
       <details class="sync-fold" id="advanced-setup">
           <summary>{{ t('sync.settings_heading') }}</summary>
           {{ settings_form() }}
@@ -727,6 +763,24 @@
           pairQr.innerHTML = qr.createSvgTag({ cellSize: 4, margin: 2 });
         });
       }
+    })();
+
+    // Every key action talks to the cloud several times (on Google Drive
+    // about a second a call), and rebuilding the vault also runs Argon2.
+    // A button that just sits there for half a minute reads as a hang —
+    // say it is working, and stop a second press from starting it again.
+    (function () {
+      document.querySelectorAll('form.enc-form').forEach(function (form) {
+        form.addEventListener('submit', function () {
+          var btn = form.querySelector('button[data-busy]');
+          if (!btn) return;
+          // Deferred: disabling in the same tick can drop the submission.
+          setTimeout(function () {
+            btn.disabled = true;
+            btn.textContent = btn.getAttribute('data-busy');
+          }, 0);
+        });
+      });
     })();
   </script>
   <script src="{{ url_for('static', filename='js/vendor/qrcode.js') }}"></script>

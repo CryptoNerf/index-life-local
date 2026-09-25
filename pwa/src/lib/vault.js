@@ -78,22 +78,39 @@ export async function enableEncryption(transport, passphrase) {
   return { recoveryKey, vaultKey };
 }
 
-export async function unlockWithPassphrase(transport, passphrase) {
+// The passphrase opening vault.json proves only that it is the right
+// passphrase for that file — not that the file holds the key the other
+// devices seal with. Two devices that each set up encryption on their own,
+// then paired, leave behind a vault.json wrapping a key nobody uses; a new
+// device unlocking it by passphrase would seal everything with that key and
+// be unable to read anyone, while nobody could read it. So the key is
+// checked against the peers first, exactly as a pairing code is.
+export const STALE_VAULT_MESSAGE =
+  'Пароль-фраза верная, но записи других устройств зашифрованы другим ключом: ' +
+  'сейф в облаке устарел. Подключите это устройство по QR-коду с компьютера. ' +
+  'Затем на компьютере откройте Синхронизация → «Пароль-фраза и восстановление» ' +
+  'и задайте пароль-фразу заново.';
+
+async function unlockWith(transport, unwrap) {
   await crypto.ready;
   const vault = await loadVault(transport);
   if (!vault) throw new Error('no vault.json in the cloud folder');
-  const vk = crypto.unwrapWithPassphrase(vault, passphrase);
+  const vk = unwrap(vault);
+  if ((await keyOpensPeers(transport, vk)) === false) {
+    const err = new Error(STALE_VAULT_MESSAGE);
+    err.code = 'vault-stale';
+    throw err;
+  }
   cacheVaultKey(vk);
   return vk;
 }
 
-export async function unlockWithRecovery(transport, recoveryKey) {
-  await crypto.ready;
-  const vault = await loadVault(transport);
-  if (!vault) throw new Error('no vault.json in the cloud folder');
-  const vk = crypto.unwrapWithRecovery(vault, recoveryKey);
-  cacheVaultKey(vk);
-  return vk;
+export function unlockWithPassphrase(transport, passphrase) {
+  return unlockWith(transport, (v) => crypto.unwrapWithPassphrase(v, passphrase));
+}
+
+export function unlockWithRecovery(transport, recoveryKey) {
+  return unlockWith(transport, (v) => crypto.unwrapWithRecovery(v, recoveryKey));
 }
 
 export async function status(transport) {
@@ -124,6 +141,49 @@ export function getPairingPayload() {
   return code ? PAIRING_PREFIX + code : null;
 }
 
+// Does `vk` open what the other devices have written to this folder?
+// true — a peer's snapshot decrypted; false — peers exist and none did;
+// null — nothing to judge by (no peers yet, or the folder can't be listed).
+//
+// Judged on the PEERS' snapshots and on the whole set. Our own blob proves
+// nothing — it is sealed with whatever key we are about to replace — and one
+// stale blob from a retired device must not veto a good key. Treating the
+// first failure as fatal once deadlocked pairing in either direction.
+export async function keyOpensPeers(transport, vk) {
+  let names = [];
+  try {
+    names = await transport.list();
+  } catch {
+    return null;    // folder unreachable — the devices panel will tell
+  }
+  const own = getDeviceId();
+  let sawPeer = false;
+  for (const name of names) {
+    if (!name.startsWith('device_') || !name.endsWith('.json')) continue;
+    // Skipped by name before downloading: our own blob proves nothing and
+    // is often the largest file in the folder.
+    if (name === `device_${own}.json`) continue;
+    const blob = await transport.get(name);
+    if (!blob) continue;
+    let obj;
+    try {
+      obj = JSON.parse(blob);
+    } catch {
+      continue;
+    }
+    if (!isEnvelope(obj)) continue;
+    if (obj.device === own) continue;
+    sawPeer = true;
+    try {
+      crypto.openEnvelope(blob, vk);
+      return true;
+    } catch {
+      /* another device's stale key — keep looking */
+    }
+  }
+  return sawPeer ? false : null;
+}
+
 // Accept a scanned QR payload or a hand-typed grouped code; cache the key
 // and enable encryption. Throws when the text isn't a 32-byte key.
 //
@@ -142,49 +202,11 @@ export async function adoptPairingCode(text, transport = null) {
   if (vk.length !== crypto.VK_BYTES) {
     throw new Error('Код не распознан — проверьте, что он скопирован целиком');
   }
-  if (transport) {
-    let names = [];
-    try {
-      names = await transport.list();
-    } catch {
-      /* folder unreachable — adopt unverified; the devices panel will tell */
-    }
-    // Check the code against the PEERS' snapshots, and judge only on the
-    // whole set. Two things went wrong before: our own blob was tested (it
-    // is sealed with the key we are about to replace, so it can only fail),
-    // and the first failure was fatal — so a folder holding one stale blob
-    // rejected a perfectly good code. With both devices already in the
-    // folder that deadlocked pairing in either direction.
-    const own = getDeviceId();
-    let sawPeer = false;
-    let opened = false;
-    for (const name of names) {
-      if (!name.startsWith('device_') || !name.endsWith('.json')) continue;
-      const blob = await transport.get(name);
-      if (!blob) continue;
-      let obj;
-      try {
-        obj = JSON.parse(blob);
-      } catch {
-        continue;
-      }
-      if (!isEnvelope(obj)) continue;
-      if (obj.device === own) continue;   // ours: proves nothing either way
-      sawPeer = true;
-      try {
-        crypto.openEnvelope(blob, vk);
-        opened = true;
-        break;
-      } catch {
-        /* another device's stale key — keep looking */
-      }
-    }
-    if (sawPeer && !opened) {
-      throw new Error(
-        'Код не подходит к данным этого облака — проверьте, что выбраны ' +
-        'то же облако и тот же аккаунт, что на компьютере'
-      );
-    }
+  if (transport && (await keyOpensPeers(transport, vk)) === false) {
+    throw new Error(
+      'Код не подходит к данным этого облака — проверьте, что выбраны ' +
+      'то же облако и тот же аккаунт, что на компьютере'
+    );
   }
   cacheVaultKey(vk);
   return vk;

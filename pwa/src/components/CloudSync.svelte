@@ -167,11 +167,24 @@
     {/if}
     <ReplacedLog />
     {#if syncState.lastLocked}
-      <p class="hint">
-        ⚠ Не удалось расшифровать данные {syncState.lastLocked} устройств(а) —
-        возможно, там другой ключ. Проверьте, что все устройства подключены
-        одним кодом или одной пароль-фразой.
-      </p>
+      <!-- Which side holds the odd key decides what to do. Reading none of
+           the others means this phone is the odd one out; reading some means
+           the unreadable ones are stale. -->
+      {#if syncState.lastLocked >= devices.filter((d) => !d.self).length}
+        <p class="hint">
+          ⚠ Этот телефон не может прочитать ни одно другое устройство: у него
+          другой ключ. Нажмите «Заблокировать на этом устройстве» ниже и
+          подключитесь заново по QR-коду с компьютера (Синхронизация →
+          «Подключить телефон»). Записи на телефоне не пропадут.
+        </p>
+      {:else}
+        <p class="hint">
+          ⚠ Не удалось расшифровать данные {syncState.lastLocked} устройств(а):
+          у них другой ключ. Если это старые устройства, уберите их на
+          компьютере («убрать неактивное»). Если нет, переподключите их по
+          QR-коду с компьютера.
+        </p>
+      {/if}
     {/if}
     {#if devices.length}
       <div class="dev-list">
