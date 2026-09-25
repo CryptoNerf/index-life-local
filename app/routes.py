@@ -220,6 +220,10 @@ def delete_day(day):
             # from the UI by the deleted=False filter on read queries.
             entry.deleted = True
             entry.updated_at = utcnow()
+            # The assistant's index of the deleted text goes too, or it keeps
+            # turning up in summaries and the profile (see app/derived.py).
+            from app.derived import forget_derived
+            forget_derived([entry.id])
             db.session.commit()
 
             # Push the deletion to shared storage right away (best-effort).

@@ -160,7 +160,8 @@ def name_cluster(cluster_entry_ids, llm, max_entries=MAX_TOPIC_ENTRIES):
     """
     from .prompts import TOPIC_NAMING_PROMPT, TOPIC_NAMING_FORCED_PROMPT
 
-    entries = MoodEntry.query.filter(MoodEntry.id.in_(cluster_entry_ids)).all()
+    entries = MoodEntry.query.filter(MoodEntry.id.in_(cluster_entry_ids),
+                                     MoodEntry.deleted == False).all()  # noqa: E712
     if not entries:
         return 'Неизвестная тема', '', 0.5
 

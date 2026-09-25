@@ -456,6 +456,9 @@ def apply_snapshot(snapshot: dict) -> dict:
         _meta_set(f'peer_name:{remote_device}', peer_name[:60])
 
     # ── Mood entries ──
+    # Local entries whose text this merge replaces or deletes; what the
+    # assistant indexed from the old text goes with it (see app/derived.py).
+    rewritten: list[int] = []
     for ed in snapshot.get('mood_entries', []):
         if not _valid_mood(ed):
             stats['skipped_invalid'] += 1
@@ -490,6 +493,7 @@ def apply_snapshot(snapshot: dict) -> dict:
             local.deleted = True
             local.updated_at = remote_updated
             local.device_id = ed.get('device_id')
+            rewritten.append(local.id)
             stats['updated'] += 1
         elif remote_deleted and local.deleted:
             local.updated_at = remote_updated  # converge timestamp only
@@ -501,12 +505,18 @@ def apply_snapshot(snapshot: dict) -> dict:
             if content_diff and not local.deleted:
                 _record_conflict(entry_date, local, ed, remote_device, 'remote')
                 stats['conflicts'] += 1
+            if local.note != ed.get('note'):
+                rewritten.append(local.id)
             local.rating = ed.get('rating') if ed.get('rating') is not None else local.rating
             local.note = ed.get('note')
             local.deleted = False
             local.updated_at = remote_updated
             local.device_id = ed.get('device_id')
             stats['updated'] += 1
+
+    if rewritten:
+        from app.derived import forget_derived
+        forget_derived(rewritten)
 
     # ── Chat messages (append-only by uuid) ──
     # If this device has cleared its chat history, drop any peer messages

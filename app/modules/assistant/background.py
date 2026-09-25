@@ -491,7 +491,7 @@ def _backfill_activities(app, status=None):
     Pass `status` (the extract-status dict) to surface progress to the UI.
     """
     with app.app_context():
-        entries = MoodEntry.query.order_by(MoodEntry.date).all()
+        entries = MoodEntry.query.filter_by(deleted=False).order_by(MoodEntry.date).all()
         if not entries:
             return
         existing_ids = {r.entry_id for r in EntryActivity.query.with_entities(EntryActivity.entry_id).all()}
@@ -544,7 +544,7 @@ def _backfill_people(app, status=None):
     Pass `status` (the extract-status dict) to surface progress to the UI.
     """
     with app.app_context():
-        entries = MoodEntry.query.order_by(MoodEntry.date).all()
+        entries = MoodEntry.query.filter_by(deleted=False).order_by(MoodEntry.date).all()
         if not entries:
             return
         existing_ids = {r.entry_id for r in EntryPerson.query.with_entities(EntryPerson.entry_id).all()}
@@ -959,8 +959,12 @@ def _sync_missing(app, force=False):
                 row[0] for row in
                 EntrySummary.query.with_entities(EntrySummary.entry_id).all()
             }
+            # Deleted days are not indexed: their text is gone from the
+            # diary, and spending model time on it would put it back into
+            # everything built from the index.
             entry_rows = (MoodEntry.query
                           .with_entities(MoodEntry.id)
+                          .filter(MoodEntry.deleted == False)  # noqa: E712
                           .order_by(MoodEntry.date)
                           .all())
             missing = []

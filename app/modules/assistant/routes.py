@@ -964,7 +964,8 @@ def chat():
                     MindClusterEntry.query.filter_by(cluster_id=topic_id).limit(5).all()
                 ]
                 entries = MoodEntry.query.filter(
-                    MoodEntry.id.in_(member_ids)
+                    MoodEntry.id.in_(member_ids),
+                    MoodEntry.deleted == False,  # noqa: E712
                 ).order_by(MoodEntry.date.desc()).all()
                 sample_dates = ', '.join(e.date.isoformat() for e in entries[:3])
                 preload_message = (
@@ -1537,7 +1538,7 @@ def context_usage():
 @bp.route('/status')
 def status():
     """Return processing status for the UI."""
-    total_entries = MoodEntry.query.count()
+    total_entries = MoodEntry.query.filter_by(deleted=False).count()
     from app.models import EntryEmbedding, EntrySummary
     embedded = EntryEmbedding.query.count()
     summarized = EntrySummary.query.count()

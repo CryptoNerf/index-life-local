@@ -1120,6 +1120,7 @@ def generate_month_summary(year: int, month: int, llm) -> PeriodSummary | None:
     entries = (MoodEntry.query
                .filter(db.extract('year', MoodEntry.date) == year)
                .filter(db.extract('month', MoodEntry.date) == month)
+               .filter(MoodEntry.deleted == False)  # noqa: E712 — a deleted day is not part of the month
                .order_by(MoodEntry.date)
                .all())
     if not entries:
@@ -1202,7 +1203,7 @@ def generate_month_summary(year: int, month: int, llm) -> PeriodSummary | None:
 def update_profile(llm, force_rebuild: bool = False):
     """Generate or update the psychological profile."""
     profile = UserPsychProfile.query.first()
-    total_entries = MoodEntry.query.count()
+    total_entries = MoodEntry.query.filter_by(deleted=False).count()
 
     if not total_entries:
         return profile
@@ -1228,6 +1229,7 @@ def update_profile(llm, force_rebuild: bool = False):
     # Gather all entry summaries
     summaries = (db.session.query(EntrySummary, MoodEntry)
                  .join(MoodEntry, EntrySummary.entry_id == MoodEntry.id)
+                 .filter(MoodEntry.deleted == False)  # noqa: E712 — deleted days stay out of the profile
                  .order_by(MoodEntry.date)
                  .all())
 
