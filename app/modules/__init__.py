@@ -191,7 +191,10 @@ def register_modules(app):
 
             if missing:
                 missing_list = ', '.join(missing)
-                app.logger.warning(
+                # An optional module whose packages are absent is simply not
+                # installed — the normal state, not a fault. At WARNING it was
+                # most of the log: one line per launch for every such module.
+                app.logger.info(
                     f'Module "{name}" dependencies missing: {missing_list}. '
                     f'Install via: pip install -r app/modules/{name}/requirements.txt '
                     'or run install_modules.'
