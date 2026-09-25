@@ -72,6 +72,19 @@ class SyncBackend:
         short human-readable error string."""
         raise NotImplementedError
 
+    def version(self, name: str) -> str | None:
+        """A cheap token that changes whenever the blob's content does, as
+        seen by the last `list_files()` — or None when the backend cannot
+        tell, in which case the blob is simply downloaded.
+
+        The sync cycle runs every two minutes and used to download every
+        peer's whole snapshot just to find it unchanged by hash: on Drive
+        about a megabyte a cycle, most of a gigabyte a day. The listing
+        already carries a checksum or an ETag, which says the same thing
+        for nothing. (The PWA does the same through `listMeta`.)
+        """
+        return getattr(self, '_versions', {}).get(name)
+
 
 # ── Local folder ──────────────────────────────────────────────
 
@@ -85,9 +98,18 @@ class FileBackend(SyncBackend):
         if not self.folder.exists():
             return []
         names = []
+        versions = {}
         for p in sorted(self.folder.glob(SNAPSHOT_GLOB)):
+            try:
+                st = p.stat()
+            except OSError:
+                continue
             if p.is_file():
                 names.append(p.name)
+                # write_atomic replaces the file, so a rewrite always moves
+                # the mtime — and the size rides along for coarse clocks.
+                versions[p.name] = f'{st.st_mtime_ns}:{st.st_size}'
+        self._versions = versions
         return names
 
     def read(self, name: str) -> str | None:
@@ -169,7 +191,7 @@ class WebDavBackend(SyncBackend):
         body = (
             '<?xml version="1.0" encoding="utf-8"?>'
             '<d:propfind xmlns:d="DAV:"><d:prop>'
-            '<d:resourcetype/></d:prop></d:propfind>'
+            '<d:resourcetype/><d:getetag/></d:prop></d:propfind>'
         ).encode('utf-8')
         try:
             resp = self._request(
@@ -187,14 +209,22 @@ class WebDavBackend(SyncBackend):
         except ET.ParseError as exc:
             log.warning('WebDAV PROPFIND parse error: %s', exc)
             return []
-        # Collect every <d:href> leaf filename ending in .json
-        for href in root.iter('{DAV:}href'):
-            if not href.text:
-                continue
-            path = urllib.parse.urlparse(href.text).path
-            leaf = urllib.parse.unquote(path.rstrip('/').split('/')[-1])
-            if leaf.endswith('.json') and not leaf.startswith('.'):
-                names.append(leaf)
+        # Collect every <d:href> leaf filename ending in .json, with its ETag
+        # when the server gives one (the change token for `version`).
+        versions = {}
+        responses = list(root.iter('{DAV:}response')) or [root]
+        for resp_el in responses:
+            for href in resp_el.iter('{DAV:}href'):
+                if not href.text:
+                    continue
+                path = urllib.parse.urlparse(href.text).path
+                leaf = urllib.parse.unquote(path.rstrip('/').split('/')[-1])
+                if leaf.endswith('.json') and not leaf.startswith('.'):
+                    names.append(leaf)
+                    etag = resp_el.find('.//{DAV:}getetag')
+                    if etag is not None and etag.text and resp_el is not root:
+                        versions[leaf] = etag.text.strip()
+        self._versions = versions
         return sorted(set(names))
 
     def read(self, name: str) -> str | None:

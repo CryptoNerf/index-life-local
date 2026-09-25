@@ -764,26 +764,56 @@ def pull_peers(backend, names: list[str] | None = None,
 
     merged_anything = False
     vk = sync_vault.get_vault_key()
+    # Which key a remembered failure was judged with: a blob this key could
+    # not open is worth downloading again only once the blob or the key
+    # changes (unlocking, pairing, a re-sealed vault).
+    key_fp = hashlib.sha256(vk).hexdigest()[:16] if vk else 'locked'
     own_name = _own_snapshot_filename()
     if names is None:
         names = backend.list_files()
+    version_of = getattr(backend, 'version', None)
     for name in names:
         if name == sync_vault.VAULT_FILENAME:   # wrapped-key file, not a snapshot
             continue
         if name == own_name:                    # our own blob — never merged
             continue
+        # The listing's change token, when the backend has one: an unchanged
+        # blob is skipped without downloading it (see SyncBackend.version).
+        tag = version_of(name) if version_of else None
+        if tag and not ignore_hashes:
+            if _meta_get(f'peer_tag:{name}') == tag:
+                total['peers_unchanged'] += 1
+                continue
+            failed = _meta_get(f'peer_fail:{name}')
+            if failed and failed.startswith(f'{tag}|{key_fp}|'):
+                # Still the same blob we could not read with the same key:
+                # report it again — the user must keep seeing it — but spare
+                # the download and the log line every two minutes.
+                kind = failed.rsplit('|', 1)[1]
+                _record_error(name)
+                if kind in ('locked', 'key_mismatch'):
+                    total[kind] += 1
+                continue
+
+        def _remember_failure(kind: str) -> None:
+            if tag:
+                _meta_set(f'peer_fail:{name}', f'{tag}|{key_fp}|{kind}')
+
         text = backend.read(name)
         if text is None:
             continue
         digest = hashlib.sha256(text.encode('utf-8')).hexdigest()
         if not ignore_hashes and _meta_get(f'peer_hash:{name}') == digest:
             total['peers_unchanged'] += 1
+            if tag:
+                _meta_set(f'peer_tag:{name}', tag)
             continue
         try:
             obj = json.loads(text)
         except (json.JSONDecodeError, ValueError) as exc:
             log.warning('Sync: skipping unreadable %s: %s', name, exc)
             _record_error(name)
+            _remember_failure('unreadable')
             continue
 
         # Dual-read for migration: a blob is either an encrypted envelope or
@@ -799,6 +829,7 @@ def pull_peers(backend, names: list[str] | None = None,
                 # Counted separately so the UI can say the actionable thing
                 # ("enter the passphrase") instead of a generic error.
                 total['locked'] += 1
+                _remember_failure('locked')
                 continue
             try:
                 snapshot = sync_crypto.open_envelope(text, vk)
@@ -812,6 +843,7 @@ def pull_peers(backend, names: list[str] | None = None,
                 log.error('Sync: cannot decrypt %s (key mismatch?): %s', name, exc)
                 _record_error(name)
                 total['key_mismatch'] += 1
+                _remember_failure('key_mismatch')
                 continue
         else:
             snapshot = obj
@@ -834,8 +866,12 @@ def pull_peers(backend, names: list[str] | None = None,
             _record_error(name)
             continue
         # Merge succeeded (or was a self-snapshot no-op) — remember the blob
-        # hash so the next cycle skips it until the peer writes new content.
+        # hash so the next cycle skips it until the peer writes new content,
+        # and its listing tag so the next cycle need not even download it.
         _meta_set(f'peer_hash:{name}', digest)
+        if tag:
+            _meta_set(f'peer_tag:{name}', tag)
+        _meta_del(f'peer_fail:{name}')
         if s.get('skipped'):
             continue
         total['files'] += 1
@@ -1221,7 +1257,8 @@ def remove_peer_device(backend, device_id: str) -> bool:
         if dev != device_id:
             continue
         backend.delete(name)
-        _meta_del(f'peer_hash:{name}')
+        for key in ('peer_hash', 'peer_tag', 'peer_fail'):
+            _meta_del(f'{key}:{name}')
         removed = True
     if removed:
         _meta_del(f'peer_name:{device_id}')

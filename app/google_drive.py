@@ -459,13 +459,24 @@ class GoogleDriveApiBackend:
         fid = self._folder_id()
         q = urllib.parse.quote(f"'{fid}' in parents and trashed=false")
         data = _api_json(
-            'GET', f'drive/v3/files?q={q}&fields=files(id,name)&pageSize=1000')
-        self._index = {f['name']: f['id'] for f in (data.get('files') or [])}
+            'GET', f'drive/v3/files?q={q}'
+            '&fields=files(id,name,md5Checksum,modifiedTime)&pageSize=1000')
+        files = data.get('files') or []
+        self._index = {f['name']: f['id'] for f in files}
+        # The content checksum, which is exactly "did it change"; the
+        # modification time only where Drive keeps no checksum.
+        self._versions = {f['name']: f.get('md5Checksum') or f.get('modifiedTime')
+                          for f in files
+                          if f.get('md5Checksum') or f.get('modifiedTime')}
         return self._index
 
     # -- SyncBackend contract --
     def list_files(self) -> list[str]:
         return sorted(self._refresh_index().keys())
+
+    def version(self, name: str) -> str | None:
+        """Change token from the last listing — see SyncBackend.version."""
+        return getattr(self, '_versions', {}).get(name)
 
     def read(self, name: str) -> str | None:
         index = self._index if self._index is not None else self._refresh_index()
