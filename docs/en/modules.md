@@ -8,7 +8,7 @@ The core diary (calendar, entries, life-in-weeks, account, sync) works on its ow
 |---|---|---|
 | **Graphics** | Mood visualizations | none (activation only) |
 | **Customization** | Colors, fonts, background, mosaic | none (activation only) |
-| **AI Psychologist** | Chat with a local model | heavy (LLM ~4.7 GB + Python packages) |
+| **AI Psychologist** | Chat with a local model | heavy (LLM ~5.7 GB + Python packages) |
 | **Neural Map** | A map of your diary's topics | medium (~50 MB, needs AI Psychologist) |
 
 ---
@@ -34,6 +34,8 @@ Enable/install from the **Modules** page inside the app ("Install" button) or wi
 
 Open the **Modules** page → click "Install" on the module. Progress shows right in the window. After installing a heavy module, restart the app.
 
+The AI Psychologist is only offered where it can run: Apple Silicon with 16 GB, or NVIDIA with 8 GB VRAM plus 16 GB RAM, and 10 GB of free disk space. Details: [AI Psychologist → System requirements](ai-psychologist.md#system-requirements).
+
 ### Via scripts (from a release / source)
 
 **Windows:** double-click `install_modules.bat` (or with arguments):
@@ -48,7 +50,7 @@ install_modules.bat --module assistant --profile auto
 bash install_modules.sh --module assistant --profile auto
 ```
 
-The AI psychologist's GGUF model (~4.7 GB) downloads automatically during install.
+The AI psychologist's GGUF model (~5.7 GB) downloads automatically during install. The scripts check the free disk space, not the hardware.
 
 ---
 
@@ -59,7 +61,7 @@ The AI psychologist can run on CPU or GPU. The profile is chosen at install time
 | Profile | GPU | Speed | Requirements |
 |---|---|---|---|
 | `auto` | Auto-detect | Varies | **Recommended** — picks the best option itself |
-| `cpu` | None | ~3–5 tok/s | Any system with 16 GB RAM |
+| `cpu` | None | ~3–5 tok/s | 16 GB RAM; scripts only, very slow |
 | `vulkan` | Any GPU | ~40–55 tok/s | GPU with Vulkan support (NVIDIA/AMD/Intel), 8 GB+ VRAM, no SDK needed |
 | `cuda` | NVIDIA | ~40–50 tok/s | NVIDIA 8 GB+ VRAM, driver 452.39+ |
 | `metal` | Apple | ~15–25 tok/s | Apple Silicon Mac, 16 GB+ unified memory (8 GB is not enough) |
@@ -75,7 +77,7 @@ The AI psychologist can run on CPU or GPU. The profile is chosen at install time
 
 ### NVIDIA requirements
 - **Driver:** 452.39+. Check with `nvidia-smi`.
-- **VRAM:** 8 GB minimum.
+- **VRAM:** 8 GB minimum, plus 16 GB of system RAM.
 
 ---
 

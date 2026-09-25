@@ -39,7 +39,7 @@ MODULE_INFO = {
     'assistant': {
         'title': 'modules.assistant.title',
         'description': 'modules.assistant.description',
-        'size': '~5 GB (model download)',
+        'size': '~6 GB (model download)',
     },
     'deep_mind': {
         'title': 'modules.deep_mind.title',
@@ -563,7 +563,10 @@ def install_module_route():
             from app.i18n import t
             hw = assistant_capability()
             if not hw['can_run']:
-                return jsonify({'error': t(hw['reason']), 'hw_blocked': True}), 400
+                return jsonify({'error': t(hw['reason'],
+                                           need=hw.get('disk_needed_gb'),
+                                           free=hw.get('disk_free_gb')),
+                                'hw_blocked': True}), 400
 
         # Module-level dependencies: refuse install when a required module
         # isn't currently active. Prevents users from installing deep_mind

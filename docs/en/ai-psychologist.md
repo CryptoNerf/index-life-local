@@ -14,7 +14,7 @@ The AI Psychologist is a chat with a **local** language model that has read acce
 
 ![AI psychologist chat](../images/ai-chat.png)
 
-- **Qwen3.5-9B** in **GGUF** format, **Q4_K_M** quantization (~4.7 GB). Downloaded automatically when you install the module.
+- **Qwen3.5-9B** in **GGUF** format, **Q4_K_M** quantization (~5.7 GB). Downloaded automatically when you install the module.
 - Runs via **llama-cpp-python** (CPU or GPU — see [profiles](modules.md#ai-psychologist-gpu-profiles)).
 - **Context window:** 4096 tokens by default (overridable via `LLM_N_CTX`). The chat shows a "Context fill" indicator for how much of the window is used.
 
@@ -111,11 +111,16 @@ A single question can combine up to **three** tools — e.g. "What did I do with
 
 | Profile | What you need |
 |---|---|
-| **CPU** | ~16 GB RAM, any modern processor. Slow but works everywhere |
-| **NVIDIA (cuda)** | GPU 8 GB+ VRAM, driver 452.39+ |
-| **Any GPU (vulkan)** | GPU with Vulkan support (NVIDIA/AMD/Intel), 8 GB+ VRAM |
 | **Apple Silicon (metal)** | M1/M2/M3/M4 Mac with 16 GB+ unified memory (8 GB is not enough) |
-| **Disk** | ~5 GB for the GGUF model + space for the Python environment |
+| **NVIDIA (cuda)** | GPU 8 GB+ VRAM, 16 GB RAM, driver 452.39+ |
+| **Any GPU (vulkan)** | GPU with Vulkan support (AMD/Intel), 8 GB+ VRAM — command-line installer only: the app cannot measure such a GPU |
+| **CPU** | ~16 GB RAM — command line only; a 9B model on the CPU alone is very slow |
+| **Disk** | 10 GB free: ~5.7 GB model + the Python environment and temporary files |
+
+The Modules page only offers the install where the model can actually run:
+**Apple Silicon with 16 GB** or an **NVIDIA GPU with 8 GB VRAM plus 16 GB RAM**,
+and **10 GB of free disk space** (4 GB if the model is already downloaded).
+Elsewhere the Install button is disabled and the page says why.
 | **Network** | only for the one-time model + package download; offline afterward |
 
 For profile choice and install, see [Module system](modules.md).

@@ -450,6 +450,42 @@ def _get_models_dir() -> Path:
     return MODULES_DIR / "assistant" / "models"
 
 
+# Free space the assistant install needs (GiB). Mirrors app/hardware.py —
+# the in-app Modules page refuses the install before it starts; this is the
+# same check for people who run the installer from a terminal.
+MODEL_SIZE_GB = 5.7
+DISK_GB_FULL = 10
+DISK_GB_MODEL_PRESENT = 4
+
+
+def _model_already_present() -> bool:
+    for d in (_get_models_dir(), MODULES_DIR / "assistant" / "models"):
+        if d.exists() and any(d.glob("*.gguf")):
+            return True
+    return False
+
+
+def check_disk_space_for_assistant() -> None:
+    """Stop before downloading anything when the disk cannot hold it.
+
+    Running out of space halfway through a 5.7 GB download leaves a broken
+    install and a full disk; saying so up front costs nothing.
+    """
+    needed = DISK_GB_MODEL_PRESENT if _model_already_present() else DISK_GB_FULL
+    target = _get_models_dir()
+    while not target.exists() and target.parent != target:
+        target = target.parent
+    try:
+        free = shutil.disk_usage(target).free / (1024 ** 3)
+    except OSError:
+        return          # cannot tell: let the install try
+    if free < needed:
+        raise SystemExit(
+            f"\nNot enough disk space for the AI psychologist: {needed} GB free "
+            f"is needed, {free:.1f} GB is free on {target}.\n"
+            f"Free up some space and run the installer again.")
+
+
 def download_model() -> None:
     """Download the GGUF model for the assistant module if not present."""
     models_dir = _get_models_dir()
@@ -465,7 +501,7 @@ def download_model() -> None:
                 return
 
     print()
-    print("Downloading AI model (~4.7 GB, this may take a while)...")
+    print(f"Downloading AI model (~{MODEL_SIZE_GB} GB, this may take a while)...")
 
     # Direct URL download first — emits line-based progress (newline per
     # percent) so the in-app terminal and its SSE stream show progress.
@@ -804,6 +840,9 @@ def install_module(
     module_name: str,
     profile: str | None = None,
 ) -> None:
+    if module_name == "assistant":
+        check_disk_space_for_assistant()
+
     # Resolve auto profile
     if module_name == "assistant" and profile == "auto":
         print()

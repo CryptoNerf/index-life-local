@@ -68,12 +68,17 @@
             {% if mod.hw_block %}
               {# Machine doesn't meet the minimum for the local LLM. #}
               <div class="module-hw-block">
-                <p class="module-hw-msg">⚠️ {{ t(mod.hw_block.reason) }}</p>
-                <p class="module-hw-req">{{ t('hw.requirements') }}</p>
+                <p class="module-hw-msg">⚠️ {{ t(mod.hw_block.reason,
+                                              need=mod.hw_block.disk_needed_gb,
+                                              free=mod.hw_block.disk_free_gb) }}</p>
+                <p class="module-hw-req">{{ t('hw.requirements', disk=mod.hw_block.disk_needed_gb) }}</p>
                 <p class="module-hw-detected">
                   {{ t('hw.detected',
                         ram=(mod.hw_block.ram_gb if mod.hw_block.ram_gb else '—'),
                         vram=(mod.hw_block.vram_gb if mod.hw_block.vram_gb else '—')) }}
+                  {% if mod.hw_block.disk_free_gb is not none %}
+                    {{ t('hw.detected_disk', free=mod.hw_block.disk_free_gb) }}
+                  {% endif %}
                 </p>
               </div>
               <div class="module-action-row">
