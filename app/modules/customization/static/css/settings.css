@@ -143,8 +143,11 @@ input[type="color"].cz-color::-webkit-color-swatch {
   letter-spacing: 0.5px;
 }
 .cz-preview-frame {
-  background: #fafafa;
-  border: 1px solid #e6e6e6;
+  /* See-through, so a preview sits on the user's real background the way the
+     page it mirrors does. A fixed #fafafa card showed every dark theme's
+     white text on near-white. */
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--text-color, #000) 14%, transparent);
   padding: 16px;
   min-height: 120px;
   display: flex;
@@ -156,8 +159,8 @@ input[type="color"].cz-color::-webkit-color-swatch {
 .cz-cleanup {
   margin: 32px 0 0;
   padding: 16px 20px;
-  background: #fafafa;
-  border: 1px solid #e6e6e6;
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--text-color, #000) 14%, transparent);
 }
 .cz-cleanup-summary {
   font-size: 14px;
@@ -346,7 +349,13 @@ input[type="color"].cz-color::-webkit-color-swatch {
   border-radius: 0;
   overflow: hidden;
 }
-.cz-bg-type-btn {
+/* Every segmented control on the page shares this look. The gradient-shape
+   and avatar buttons had no rule at all, so they fell back to the browser's
+   grey buttons and the chosen one looked exactly like the others. */
+.cz-bg-type-btn,
+.cz-bg-shape-btn,
+.cz-avatar-type-btn,
+.cz-avatar-shape-btn {
   background: #fff;
   border: none;
   padding: 6px 14px;
@@ -354,12 +363,23 @@ input[type="color"].cz-color::-webkit-color-swatch {
   font-size: 13px;
   cursor: pointer;
   border-right: 1px solid #ccc;
-  color: var(--text-muted, #444);
+  /* A light control on any theme, so its text stays dark: the theme's muted
+     colour turned light on dark pages and vanished on the white button. */
+  color: #444;
   transition: background 0.12s, color 0.12s;
 }
-.cz-bg-type-btn:last-child { border-right: none; }
-.cz-bg-type-btn:hover { background: #f4f4f4; }
-.cz-bg-type-btn.active {
+.cz-bg-type-btn:last-child,
+.cz-bg-shape-btn:last-child,
+.cz-avatar-type-btn:last-child,
+.cz-avatar-shape-btn:last-child { border-right: none; }
+.cz-bg-type-btn:hover,
+.cz-bg-shape-btn:hover,
+.cz-avatar-type-btn:hover,
+.cz-avatar-shape-btn:hover { background: #f4f4f4; }
+.cz-bg-type-btn.active,
+.cz-bg-shape-btn.active,
+.cz-avatar-type-btn.active,
+.cz-avatar-shape-btn.active {
   background: #222;
   color: #fff;
 }
@@ -633,10 +653,6 @@ input[type="color"].cz-color::-webkit-color-swatch {
   display: flex;
   justify-content: center;
   padding: 18px;
-  background-image: var(--bg-image, none);
-  background-color: var(--bg-color, #fff);
-  background-size: cover;
-  background-position: center;
 }
 .cz-preview-card {
   width: 100%;

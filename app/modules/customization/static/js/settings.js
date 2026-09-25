@@ -154,6 +154,8 @@
         document.documentElement.style.removeProperty('--' + cssVarName);
       }
       dirtyKeys[key] = true;
+      renderAllCharts();
+      renderNeural();
     });
   });
 
@@ -197,6 +199,12 @@
       }
       if (key === 'cube-symbols-enabled' || key === 'cube-symbols-hide-fill') {
         renderCalendar();
+      }
+      // Colouring days by rating repaints the calendar and every chart that
+      // follows the grid. The preview used to ignore this toggle entirely.
+      if (key === 'cube-scale-enabled') {
+        renderCalendar();
+        renderAllCharts();
       }
     });
   });
@@ -1366,7 +1374,15 @@
 
   function renderCalendar() {
     var box = document.getElementById('preview-calendar');
-    if (!box) return;
+    if (box) buildMiniCalendar(box);
+    // The mosaic section's preview is the same calendar with the picture
+    // laid over it, so whatever changes this one changes that one too.
+    if (typeof renderMosaicPreview === 'function') renderMosaicPreview();
+  }
+
+  // Three months of fake days, painted the way the real calendar paints
+  // them: filled colour or the rating scale, symbols, today's outline.
+  function buildMiniCalendar(box) {
     box.innerHTML = '';
     // 3 months of fake days: 30 cubes each, randomly filled with a
     // deterministic pattern so the preview doesn't reshuffle on every
@@ -1390,6 +1406,7 @@
           // stable pseudo-rating per cell.
           var rating = 1 + Math.floor((h / threshold) * 10);
           if (rating > 10) rating = 10;
+          cube.setAttribute('data-rating', rating);
           if (scaleOn()) {
             cube.style.background = scaleColor(rating);
           }
@@ -1494,6 +1511,25 @@
     return 'rgba(' + rgb.join(',') + ',' + opacity + ')';
   }
 
+  // ── Charts that follow the grid (mirrors rating_scale.ChartScale) ──
+  // While days are coloured by rating, the charts that draw days take the
+  // grid's colours — unless the user picked that chart's own day colour, or
+  // the global chart colour, which outranks following the grid.
+  var CHART_DAY_KEY = {
+    'overview': 'overview-heat-color', 'overview-bars': 'overview-bar-color',
+    'spiral': 'spiral-dot-color', 'rose': 'rose-petal-color',
+    'rhythm': 'rhythm-cell-color', 'river': 'river-dot-color',
+  };
+  function followsGrid(chart) {
+    var key = CHART_DAY_KEY[chart];
+    return !!key && scaleOn() && !isAuthoritative(key) && !isAuthoritative('chart-color');
+  }
+  // `rgb()` for a rating on the 1..10 scale, or null to draw as before.
+  function gridFill(chart, rating) {
+    if (!followsGrid(chart)) return null;
+    return scaleColor(Math.max(1, Math.min(10, rating)));
+  }
+
   // ── River: smoothed line + area + raw dots + today vertical ──
   function renderRiver(svg) {
     clear(svg);
@@ -1549,8 +1585,10 @@
       'stroke-linejoin': 'round', 'stroke-linecap': 'round',
     });
     // Raw daily dots
-    pts.forEach(function (p) {
-      svgEl(svg, 'circle', { cx: p[0], cy: p[1], r: 2.5, fill: dotColor, opacity: 0.55 });
+    pts.forEach(function (p, i) {
+      var fill = gridFill('river', data[i]);
+      svgEl(svg, 'circle', { cx: p[0], cy: p[1], r: 2.5, fill: fill || dotColor,
+                             opacity: fill ? 1 : 0.55 });
     });
   }
 
@@ -1583,9 +1621,10 @@
       var r = 8 + t * 44;
       var a = t * Math.PI * 6 - Math.PI / 2;
       var op = 0.25 + (Math.sin(i * 0.7) * 0.5 + 0.5) * 0.65;
+      var fill = gridFill('spiral', 1 + (op - 0.25) / 0.65 * 9);
       svgEl(svg, 'circle', {
         cx: cx + Math.cos(a) * r, cy: cy + Math.sin(a) * r,
-        r: 2.4, fill: dotColor, 'fill-opacity': op,
+        r: 2.4, fill: fill || dotColor, 'fill-opacity': fill ? 1 : op,
       });
     }
     // Today ring
@@ -1614,11 +1653,12 @@
         var seed = Math.sin(r * 11 + c * 17) * 1000;
         var op = (seed - Math.floor(seed));
         var isEmpty = op < 0.12;
+        var fill = isEmpty ? null : gridFill('rhythm', 1 + op * 9);
         svgEl(svg, 'rect', {
           x: padL + c * cellW, y: padT + r * cellH,
           width: cellW - 1, height: cellH - 1,
-          fill: isEmpty ? emptyColor : cellColor,
-          'fill-opacity': isEmpty ? 1 : (0.18 + op * 0.7),
+          fill: isEmpty ? emptyColor : (fill || cellColor),
+          'fill-opacity': isEmpty || fill ? 1 : (0.18 + op * 0.7),
         });
       }
     }
@@ -1646,6 +1686,10 @@
 
     // 7 petals (sized by pseudo-random data)
     var sizes = [0.8, 0.6, 0.4, 0.9, 0.5, 0.7, 0.3];
+    // The real rose spreads the grid's palette across the span its petals
+    // cover (color_across), not the absolute 1..10 scale.
+    var live = sizes.filter(function (v) { return v >= 0.35; });
+    var lo = Math.min.apply(null, live), hi = Math.max.apply(null, live);
     for (var i = 0; i < 7; i++) {
       var ang = (i / 7) * Math.PI * 2 - Math.PI / 2;
       var len = 20 + sizes[i] * 36;
@@ -1658,10 +1702,12 @@
       var p2 = ax + ',' + ay;
       var p3 = (cx - px) + ',' + (cy - py);
       var isEmpty = sizes[i] < 0.35;
+      var fill = isEmpty ? null
+        : gridFill('rose', 1 + (hi > lo ? (sizes[i] - lo) / (hi - lo) : 0.5) * 9);
       svgEl(svg, 'polygon', {
         points: cx + ',' + cy + ' ' + p1 + ' ' + p2 + ' ' + p3,
-        fill: isEmpty ? emptyColor : petalColor,
-        'fill-opacity': isEmpty ? 1 : 0.22 + sizes[i] * 0.6,
+        fill: isEmpty ? emptyColor : (fill || petalColor),
+        'fill-opacity': isEmpty || fill ? 1 : 0.22 + sizes[i] * 0.6,
       });
     }
   }
@@ -1739,9 +1785,10 @@
             fill: emptyColor, stroke: gridColor, 'stroke-width': 0.5,
           });
         } else {
+          var fill = gridFill('overview', 1 + op * 9);
           svgEl(svg, 'rect', {
             x: 8 + c * cw, y: 8 + r * ch, width: cw - 0.5, height: ch - 0.5,
-            fill: heatColor, 'fill-opacity': 0.15 + op * 0.7,
+            fill: fill || heatColor, 'fill-opacity': fill ? 1 : 0.15 + op * 0.7,
           });
         }
       }
@@ -1759,7 +1806,7 @@
       svgEl(svg, 'rect', {
         x: bX, y: bY + i * step + 1,
         width: v * bW, height: step - 2,
-        fill: barColor,
+        fill: gridFill('overview-bars', 1 + v * 9) || barColor,
       });
     });
   }
@@ -2081,31 +2128,13 @@
   function renderMosaicPreview() {
     var box = document.getElementById('preview-mosaic-calendar');
     if (!box) return;
-    box.innerHTML = '';
 
     var fillFn = mosaicFilledFilename;
     var emptyFn = mosaicEmptyFilename;
 
-    // Build 3 fake months × 30 cubes; same deterministic-fill pattern
-    // as the existing color preview so it doesn't reshuffle on every
-    // tick.
-    var monthEls = [];
-    for (var m = 0; m < 3; m++) {
-      var month = document.createElement('div');
-      month.className = 'preview-mini-month';
-      monthEls.push(month);
-      for (var d = 0; d < 30; d++) {
-        var cube = document.createElement('div');
-        cube.className = 'preview-mini-cube';
-        var threshold = m === 0 ? 0.6 : m === 1 ? 0.35 : 0.1;
-        var h = Math.sin(m * 31 + d * 7) * 1000;
-        h = h - Math.floor(h);
-        if (h < threshold) cube.classList.add('filled');
-        if (m === 1 && d === 14) cube.classList.add('today');
-        month.appendChild(cube);
-      }
-      box.appendChild(month);
-    }
+    // The same calendar as the colour preview (scale, symbols and all); the
+    // picture is laid over it below, as mosaic.js does on the real page.
+    buildMiniCalendar(box);
 
     // Done if mosaic isn't enabled or no filled image yet
     if (!enabledToggle || !enabledToggle.checked || !fillFn) return;
@@ -2208,11 +2237,20 @@
     if (key.indexOf('card-') === 0) {
       renderCardPreview();
     }
-    // Symbol colours follow the cell colours.
-    if (key.indexOf('cube-') === 0 && symbolsOn()) {
+    // The calendar preview paints the rating scale and the symbols itself,
+    // so every cube key has to redraw it (the old "pure CSS, no redraw" note
+    // stopped being true when days got coloured by rating). The scale stops
+    // also feed the charts that follow the grid, and the empty-day colour is
+    // the overview's fallback for empty cells.
+    if (key.indexOf('cube-') === 0) {
       renderCalendar();
+      if (key.indexOf('cube-scale-') === 0) renderAllCharts();
+      if (key === 'cube-empty-color') renderChartById('overview');
     }
-    // Mini-calendar uses pure CSS, no JS redraw.
+    // The accent colour is every chart's "today" marker unless set per chart.
+    if (key === 'brand-color') {
+      renderAllCharts();
+    }
     if (key.indexOf('neural-') === 0 || key === 'text-color' || key === 'text-muted') {
       renderNeural();
       return;
