@@ -342,8 +342,8 @@ def test_scale_interpolates_between_the_three_stops():
         'cube-scale-high': '#ffffff',
     })
     assert css.count('.cube.filled.r') == 10
-    assert '.cube.filled.r1 { background: rgb(0, 0, 0); }' in css
-    assert '.cube.filled.r10 { background: rgb(255, 255, 255); }' in css
+    assert '.cube.filled.r1, .cube.hovered.r1 { background: rgb(0, 0, 0); }' in css
+    assert '.cube.filled.r10, .cube.hovered.r10 { background: rgb(255, 255, 255); }' in css
 
     # The middle stop sits at 5.5, i.e. between the two middle ratings, and
     # the ramp rises monotonically from one end to the other.
@@ -415,6 +415,14 @@ def test_card_settings_never_leak_as_css_variables():
 # ── symbols in day cells ──────────────────────────────────────
 
 from app.modules.customization import cube_symbols as cs  # noqa: E402
+import re  # noqa: E402
+
+
+def _sym_colour(css, rating):
+    """The symbol colour the rules give a filled cell of this rating."""
+    m = re.search(r'\.cube\.filled\.r%d \.cube-sym[^{]*\{color:(#[0-9a-f]{6});\}' % rating, css)
+    assert m, 'no symbol colour for r%d' % rating
+    return m.group(1)
 
 
 def test_symbols_are_off_by_default():
@@ -451,12 +459,12 @@ def test_emoji_with_joiners_and_skin_tones_are_accepted():
 
 def test_the_symbol_colour_reads_on_what_the_cell_is_painted_with():
     dark = cs.css_rules({'cube-symbols-enabled': 'true'})           # black fill
-    assert '.cube.filled.r7 .cube-sym{color:#ffffff;}' in dark
+    assert _sym_colour(dark, 7) == '#ffffff'
     light = cs.css_rules({'cube-symbols-enabled': 'true', 'cube-filled-color': '#f5f5dc'})
-    assert '.cube.filled.r7 .cube-sym{color:#000000;}' in light
+    assert _sym_colour(light, 7) == '#000000'
     unfilled = cs.css_rules({'cube-symbols-enabled': 'true',
                              'cube-symbols-hide-fill': 'true'})   # white empty colour
-    assert '.cube.filled.r7 .cube-sym{color:#000000;}' in unfilled
+    assert _sym_colour(unfilled, 7) == '#000000'
     assert 'background:var(--cube-empty-color' in unfilled
 
 
@@ -464,11 +472,31 @@ def test_symbol_colours_follow_the_rating_scale():
     css = cs.css_rules({'cube-symbols-enabled': 'true', 'cube-scale-enabled': 'true',
                         'cube-scale-low': '#000000', 'cube-scale-high': '#ffffff',
                         'cube-scale-mid': '#808080'})
-    assert '.cube.filled.r1 .cube-sym{color:#ffffff;}' in css
-    assert '.cube.filled.r10 .cube-sym{color:#000000;}' in css
+    assert _sym_colour(css, 1) == '#ffffff'
+    assert _sym_colour(css, 10) == '#000000'
 
 
 def test_the_symbol_list_never_becomes_a_css_variable():
     out = str(cp._emit_css_block({'cube-symbols-enabled': 'true',
                                   'cube-symbols': json.dumps(['<'] + [''] * 9)}))
     assert '--cube-symbols' not in out
+
+
+# ── the day page's rating row ─────────────────────────────────
+# It used to fill every chosen cube black whatever the calendar did. It now
+# uses the calendar's own classes, so these rules have to cover it.
+
+def test_the_hover_preview_takes_the_rating_colour_too():
+    css = cp._cube_scale_rules({'cube-scale-enabled': 'true'})
+    assert '.cube.hovered.r7' in css
+
+
+def test_unchosen_symbols_in_the_rating_row_are_dimmed():
+    css = cs.css_rules({'cube-symbols-enabled': 'true'})
+    assert '.cubes-row .cube.has-sym:not(.filled):not(.hovered) .cube-sym{opacity:.35;}' in css
+
+
+def test_a_symbol_on_an_unfilled_cube_reads_on_the_empty_colour():
+    css = cs.css_rules({'cube-symbols-enabled': 'true', 'cube-empty-color': '#111111'})
+    assert 'html .cube.has-sym .cube-sym{color:#ffffff;}' in css
+

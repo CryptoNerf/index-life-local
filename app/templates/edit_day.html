@@ -62,9 +62,14 @@
     {% endif %}
     
     <form method="post" novalidate class="form-block" id="edit-form">
+      {# The same classes as a calendar cell, so the colours the calendar
+         gives a day (by rating, if the user colours days that way) and its
+         symbols show here too: cubes 1..N take the colour of rating N, and
+         each cube carries its own rating's symbol as a key. #}
       <div class="cubes-row" id="rating-cubes">
         {% for i in range(1, 11) %}
-          <span class="cube{% if entry and entry.rating >= i %} filled{% endif %}" data-value="{{ i }}"></span>
+          {% set sym = cz_cube_symbols.get(i) if cz_cube_symbols else none %}
+          <span class="cube{% if entry and entry.rating >= i %} filled r{{ entry.rating }}{% endif %}{% if sym %} has-sym{% endif %}" data-value="{{ i }}">{% if sym %}<span class="cube-sym{% if sym|length >= 3 %} long{% endif %}">{{ sym }}</span>{% endif %}</span>
         {% endfor %}
       </div>
       <input type="hidden" name="rating" id="rating-input" value="{{ entry.rating if entry else '' }}">
@@ -148,10 +153,14 @@
     const editForm = document.getElementById('edit-form');
     let selected = parseInt(ratingInput.value) || 0;
 
+    // Cubes 1..count take class rN of the rating itself, like a calendar
+    // cell of that rating, so a "colour by rating" theme paints them the
+    // colour the day will get.
+    const RATING_CLASSES = ['r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8', 'r9', 'r10'];
     function fillCubes(count, className) {
       cubes.forEach((c, idx) => {
-        c.classList.remove('filled', 'hovered');
-        if (idx < count) c.classList.add(className);
+        c.classList.remove('filled', 'hovered', ...RATING_CLASSES);
+        if (idx < count) c.classList.add(className, 'r' + count);
       });
     }
 

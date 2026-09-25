@@ -47,6 +47,7 @@ out['save_ok'] = save({'cube-symbols-enabled': 'true',
                        'cube-symbols': json.dumps(symbols, ensure_ascii=False)})
 out['save_bad'] = save({'cube-symbols': '["only", "two"]', 'card-bg-mode': 'sideways'})
 out['grid_after'] = c.get('/mood_grid/2026', base_url='http://localhost').get_data(as_text=True)
+out['day_page'] = c.get('/day/2026-03-02', base_url='http://localhost').get_data(as_text=True)
 out['save_cards'] = save({'card-bg-mode': 'color', 'card-bg-color': '#102030',
                           'card-bg-opacity': '0.5'})
 out['grid_cards'] = c.get('/mood_grid/2026', base_url='http://localhost').get_data(as_text=True)
@@ -97,3 +98,18 @@ def test_a_symbol_is_text_not_markup(run):
 def test_card_colours_reach_the_page(run):
     assert run['save_cards']['ok']
     assert 'background:rgba(16,32,48,0.5)' in run['grid_cards']
+
+
+def test_the_day_page_rating_row_speaks_the_calendars_language(run):
+    """Cubes 1..N carry the day's own rating class, as a calendar cell of that
+    rating does, so a colour-by-rating theme paints them the day's colour;
+    and every cube shows its rating's symbol as a key."""
+    import re
+    row = run['day_page'].split('id="rating-cubes"', 1)[1].split('</div>', 1)[0]
+    cubes = re.findall(r'<span class="cube([^"]*)" data-value="(\d+)">', row)
+    assert len(cubes) == 10
+    classes = {int(v): c.split() for c, v in cubes}
+    assert 'filled' in classes[1] and 'r2' in classes[1] and 'r2' in classes[2]   # the entry is a 2
+    assert 'filled' not in classes[3]
+    assert all('has-sym' in classes[i] for i in (1, 2, 10))          # 3..9 have empty symbols
+    assert '😭' in row and '🤩' in row

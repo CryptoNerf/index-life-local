@@ -499,11 +499,14 @@ def _cube_scale_rules(settings: dict) -> str:
     if not rating_scale.is_enabled(settings):
         return ''
     stops = rating_scale.stops(settings)
+    # `.hovered` too: the rating cubes on the day page preview a rating on
+    # hover, and should show the colour the day will actually get.
     return '\n'.join(
-        '.cube.filled.r%d { background: rgb(%d, %d, %d); }'
-        % (rating, *rating_scale.rgb_at(stops, rating))
+        '.cube.filled.r%d, .cube.hovered.r%d { background: rgb(%d, %d, %d); }'
+        % (rating, rating, *rating_scale.rgb_at(stops, rating))
         for rating in range(1, 11)
     )
+
 
 
 def _chart_overrides(settings: dict) -> str:

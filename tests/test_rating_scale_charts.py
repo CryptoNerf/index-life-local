@@ -91,7 +91,7 @@ def test_the_grid_and_the_charts_agree_on_what_a_seven_is():
     from app.modules.customization import context_processor as cp
 
     css = cp._cube_scale_rules(ON)
-    grid_seven = css.split('.cube.filled.r7 { background: ')[1].split(';')[0]
+    grid_seven = css.split('.cube.hovered.r7 { background: ')[1].split(';')[0]
 
     assert rs.for_charts(ON).color('spiral', 7) == grid_seven
 

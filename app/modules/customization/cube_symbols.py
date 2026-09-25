@@ -121,11 +121,20 @@ def css_rules(settings: dict) -> str:
         'html .cube-sym.long{font-size:7px;font-size:44cqmin;}',
     ]
     if hide_fill:
-        rules.append('html .cube.filled.has-sym{background:var(--cube-empty-color,#fff);}')
+        rules.append('html .cube.filled.has-sym,html .cube.hovered.has-sym'
+                     '{background:var(--cube-empty-color,#fff);}')
+    # The day page's rating row shows every rating's symbol as a key; the ones
+    # not chosen are dimmed, which also marks the choice when the fill under
+    # symbols is switched off.
+    rules.append('html .cubes-row .cube.has-sym:not(.filled):not(.hovered) .cube-sym'
+                 '{opacity:.35;}')
     scale_on = rating_scale.is_enabled(settings)
     stops = rating_scale.stops(settings) if scale_on else None
     filled = _hex_rgb(settings.get('cube-filled-color', DEFAULTS['cube-filled-color']))
     empty = _hex_rgb(settings.get('cube-empty-color', DEFAULTS['cube-empty-color']))
+    # An unfilled cell (the day page's rating row) sits on the empty colour.
+    rules.append('html .cube.has-sym .cube-sym{color:%s;}'
+                 % ('#ffffff' if _luma(empty) < 128 else '#000000'))
     for rating in range(1, 11):
         if hide_fill:
             under = empty
@@ -134,7 +143,8 @@ def css_rules(settings: dict) -> str:
         else:
             under = filled
         colour = '#ffffff' if _luma(under) < 128 else '#000000'
-        rules.append('html .cube.filled.r%d .cube-sym{color:%s;}' % (rating, colour))
+        rules.append('html .cube.filled.r%d .cube-sym,html .cube.hovered.r%d .cube-sym'
+                     '{color:%s;}' % (rating, rating, colour))
     return '\n'.join(rules)
 
 
