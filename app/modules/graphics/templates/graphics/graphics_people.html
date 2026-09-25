@@ -115,15 +115,15 @@
     }
     .reextract-btn {
       background: transparent;
-      color: #555;
-      border: 1px solid #999;
+      color: var(--text-muted, #555);
+      border: 1px solid color-mix(in srgb, currentColor 60%, transparent);
       padding: 8px 22px;
       font-family: var(--font-body, 'Times New Roman', Times, serif);
       font-size: 14px;
       cursor: pointer;
       transition: background 0.15s, color 0.15s;
     }
-    .reextract-btn:hover { background: #555; color: #fff; }
+    .reextract-btn:hover { background: var(--text-muted, #555); color: var(--bg-color, #fff); }
     .reextract-btn:disabled {
       cursor: default;
       opacity: 0.6;

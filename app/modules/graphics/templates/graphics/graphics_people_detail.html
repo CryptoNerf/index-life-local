@@ -28,12 +28,12 @@
     }
     .pd-stat-num {
       font-size: 28px;
-      color: #000;
+      color: var(--text-color, #000);
       font-variant-numeric: tabular-nums;
     }
     .pd-stat-label {
       font-size: 12px;
-      color: #999;
+      color: var(--text-muted, #999);
       text-transform: uppercase;
       letter-spacing: 1px;
     }
@@ -46,12 +46,12 @@
     .pd-tone-cell { display: flex; gap: 6px; align-items: baseline; }
     .pd-tone-cell .num {
       font-size: 18px;
-      color: #000;
+      color: var(--text-color, #000);
       font-variant-numeric: tabular-nums;
     }
     .pd-tone-cell .lbl {
       font-size: 12px;
-      color: #666;
+      color: var(--text-muted, #666);
       text-transform: lowercase;
     }
     .pd-entry {
@@ -67,11 +67,11 @@
       font-size: 14px;
     }
     .pd-date {
-      color: #444;
+      color: var(--text-muted, #444);
       font-variant-numeric: tabular-nums;
     }
     .pd-rating {
-      color: #666;
+      color: var(--text-muted, #666);
       font-variant-numeric: tabular-nums;
     }
     .pd-tone-tag {
@@ -87,7 +87,7 @@
       border-color: rgba(0,0,0,0.35);
     }
     .pd-tone-tag.tone-neutral {
-      color: #555;
+      color: var(--text-muted, #555);
       background: transparent;
     }
     .pd-tone-tag.tone-negative {
@@ -98,12 +98,12 @@
     .pd-note {
       font-size: 15px;
       line-height: 1.55;
-      color: #1a1a1a;
+      color: var(--text-color, #1a1a1a);
       white-space: pre-wrap;
     }
     .pd-empty {
       text-align: center;
-      color: #999;
+      color: var(--text-muted, #999);
       font-style: italic;
       padding: 40px 0;
     }
@@ -149,7 +149,7 @@
       font-family: var(--font-body, 'Times New Roman', Times, serif);
     }
     .pd-merge-title {
-      color: #555;
+      color: var(--text-muted, #555);
       font-size: 12px;
       text-transform: uppercase;
       letter-spacing: 1px;
@@ -171,16 +171,16 @@
     }
     .pd-merge-btn {
       background: transparent;
-      color: #555;
-      border: 1px solid #999;
+      color: var(--text-muted, #555);
+      border: 1px solid color-mix(in srgb, currentColor 60%, transparent);
       padding: 6px 18px;
       font-family: inherit;
       font-size: 14px;
       cursor: pointer;
     }
-    .pd-merge-btn:hover { background: #555; color: #fff; }
+    .pd-merge-btn:hover { background: var(--text-muted, #555); color: var(--bg-color, #fff); }
     .pd-merge-hint {
-      color: #999;
+      color: var(--text-muted, #999);
       font-size: 13px;
       margin-top: 6px;
     }
@@ -191,7 +191,7 @@
       font-family: var(--font-body, 'Times New Roman', Times, serif);
     }
     .pd-rename-title {
-      color: #555;
+      color: var(--text-muted, #555);
       font-size: 12px;
       text-transform: uppercase;
       letter-spacing: 1px;

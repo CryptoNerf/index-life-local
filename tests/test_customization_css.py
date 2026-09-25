@@ -500,3 +500,43 @@ def test_a_symbol_on_an_unfilled_cube_reads_on_the_empty_colour():
     css = cs.css_rules({'cube-symbols-enabled': 'true', 'cube-empty-color': '#111111'})
     assert 'html .cube.has-sym .cube-sym{color:#ffffff;}' in css
 
+
+# ── cards the first pass missed ───────────────────────────────
+
+def test_colour_mode_reaches_the_sync_status_box_and_the_neural_panel():
+    css = cp._card_rules({'card-bg-mode': 'color', 'card-bg-color': '#202020'},
+                         cp._page_text_colours({}))
+    assert 'html .status-card' in css and 'html .detail-panel' in css
+
+
+def test_every_card_gets_its_text_in_colour_mode():
+    """The neural panel pins dark text of its own; a dark card colour must
+    replace it, not leave it black on black."""
+    css = cp._card_rules({'card-bg-mode': 'color', 'card-bg-color': '#202020'},
+                         cp._page_text_colours({}))
+    rule = [r for r in css.split('\n') if '--text-color' in r][0]
+    assert '.detail-panel' in rule and '--text-color:#ffffff' in rule
+
+
+# ── silhouettes ───────────────────────────────────────────────
+
+def test_silhouettes_invert_on_a_dark_page_but_not_on_their_chips():
+    css = cp._silhouette_rules({'bg-type': 'color', 'bg-color': '#101010'})
+    assert 'html img[src*="/silhouettes/"]{filter:invert(1);}' in css
+    assert 'html .mp-sil-opt img[src*="/silhouettes/"]' in css      # picker chips stay black
+    assert '{filter:none;}' in css
+
+
+def test_silhouettes_are_left_alone_on_a_light_page():
+    assert cp._silhouette_rules({}) == ''
+
+
+def test_silhouettes_on_a_light_card_over_a_dark_page_stay_black():
+    css = cp._silhouette_rules({'bg-type': 'color', 'bg-color': '#101010',
+                                'card-bg-mode': 'color', 'card-bg-color': '#f3efe6'})
+    assert 'html .viz-card img[src*="/silhouettes/"]{filter:none;}' in css
+
+
+def test_silhouettes_follow_the_readability_switch():
+    assert cp._silhouette_rules({'bg-type': 'color', 'bg-color': '#101010',
+                                 'auto-invert-text': 'false'}) == ''

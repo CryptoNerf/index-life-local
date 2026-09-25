@@ -117,8 +117,10 @@ main {
   padding: var(--il-inline) var(--il-field);
   border: var(--il-hairline) solid var(--il-line-strong);
   border-radius: var(--il-radius);
-  background: #fff;
-  color: #222;
+  /* Theme colours, not fixed white: under a dark theme a white button kept
+     taking the (inverted, light) muted text for its disabled state. */
+  background: var(--bg-color, #fff);
+  color: var(--text-color, #222);
   line-height: 1.2;
   transition: border-color 0.15s, color 0.15s;
   box-sizing: border-box;

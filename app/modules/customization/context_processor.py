@@ -363,8 +363,12 @@ def _auto_invert_overrides(settings: dict) -> dict:
 # Cards that are painted with the page colour today...
 _CARDS_FILLED = ('.viz-card', '.module-card', '.step-card:not(.step-warn)',
                  '.mpd-entry')
-# ...and all cards, including the weather tiles, which are see-through.
-_CARDS_ALL = _CARDS_FILLED + ('.wx-stat',)
+# ...the see-through ones (the weather tiles, the sync status box)...
+_CARDS_CLEAR = ('.wx-stat', '.status-card')
+# ...and the neural map's side panel, a fixed light surface with its own dark
+# text: it takes the card colour only when the user gives cards one.
+_CARDS_FIXED = ('.detail-panel',)
+_CARDS_ALL = _CARDS_FILLED + _CARDS_CLEAR + _CARDS_FIXED
 
 
 def _selector(parts) -> str:
@@ -426,10 +430,42 @@ def _card_rules(settings: dict, page_text: dict) -> str:
     fill = _card_fill_rgb(settings)
     if _auto_invert_enabled(settings) and fill is not None:
         scoped.update(_readable(text, fill))
-    if scoped:
-        cards = _CARDS_ALL if mode == 'color' else _CARDS_FILLED
+        text.update(scoped)
+    if mode == 'color':
+        # Every card gets the full set: some (the neural map's panel) carry a
+        # fixed dark text colour of their own, which a dark card colour would
+        # otherwise leave black on black.
+        body = ''.join('--%s:%s;' % (k, text[k]) for k in _TEXT_KEYS)
+        rules.append('%s{%scolor:var(--text-color);}' % (_selector(_CARDS_ALL), body))
+    elif scoped:
         body = ''.join('--%s:%s;' % (k, v) for k, v in scoped.items())
-        rules.append('%s{%scolor:var(--text-color);}' % (_selector(cards), body))
+        rules.append('%s{%scolor:var(--text-color);}' % (_selector(_CARDS_FILLED), body))
+    return '\n'.join(rules)
+
+
+# The "My people" silhouettes are black SVGs drawn as <img>, which no text
+# colour reaches: on a dark page they sink into the background. Where the
+# surface under them is dark they are inverted. The pickers draw theirs on
+# light chips of their own and stay as they are; uploaded photos are not
+# silhouettes and are never touched.
+_SILHOUETTE = 'img[src*="/silhouettes/"]'
+_SILHOUETTE_CHIPS = ('.mp-sil-opt', '.mpd-sil-opt')
+
+
+def _silhouette_rules(settings: dict) -> str:
+    if not _auto_invert_enabled(settings):
+        return ''
+    page = _effective_bg_rgb(settings)
+    page_dark = page is not None and _luma(page) < 128
+    rules = []
+    if page_dark:
+        rules.append('html %s{filter:invert(1);}' % _SILHOUETTE)
+        rules.append(','.join('html %s %s' % (c, _SILHOUETTE) for c in _SILHOUETTE_CHIPS)
+                     + '{filter:none;}')
+    fill = _card_fill_rgb(settings)
+    if fill is not None and (_luma(fill) < 128) != page_dark:
+        rules.append('html .viz-card %s{filter:%s;}'
+                     % (_SILHOUETTE, 'invert(1)' if _luma(fill) < 128 else 'none'))
     return '\n'.join(rules)
 
 
@@ -506,7 +542,6 @@ def _cube_scale_rules(settings: dict) -> str:
         % (rating, rating, *rating_scale.rgb_at(stops, rating))
         for rating in range(1, 11)
     )
-
 
 
 def _chart_overrides(settings: dict) -> str:
@@ -695,6 +730,7 @@ def _emit_css_block(settings: dict) -> str:
     cube_scale_block = _cube_scale_rules(settings)
     symbol_block = cube_symbols.css_rules(settings)
     card_block = _card_rules(settings, page_text)
+    silhouette_block = _silhouette_rules(settings)
 
     # Mosaic emission must be considered before short-circuiting:
     # mosaic uses metadata-only keys, so a mosaic-only configuration
@@ -751,6 +787,8 @@ def _emit_css_block(settings: dict) -> str:
         parts.append(symbol_block)
     if card_block:
         parts.append(card_block)
+    if silhouette_block:
+        parts.append(silhouette_block)
 
     body = '\n'.join(parts)
     style_block = f'<style id="customization-vars">\n{body}\n</style>'

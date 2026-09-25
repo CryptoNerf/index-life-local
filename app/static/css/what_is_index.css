@@ -84,6 +84,11 @@ header {
   left: 0;
   width: 100%;
 }
+/* The link to the author had no colour of its own, so it was the browser's
+   #0000ee — unreadable on a dark theme. The app's link colour instead. */
+.text-block a {
+  color: var(--brand-color, #009AFA);
+}
 .text-block {
   /* 60ch in Times came out ~540px — a strip. 800px is what the page always
      had before the token migration. */
