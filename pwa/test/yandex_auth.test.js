@@ -47,6 +47,23 @@ const storeResult = (msg, at = Date.now()) =>
   localStorage.setItem(RESULT_KEY, JSON.stringify({ at, msg }));
 
 describe('Yandex sign-in', () => {
+  it('sends Yandex back to the callback under the app path, not the host root', () => {
+    // The app lives at cryptonerf.github.io/index-life-local/; the host's
+    // root belongs to other projects. A redirect to the root would 404 —
+    // and Yandex refuses any URI that differs from the registered one.
+    // Vitest pins BASE_URL to '/', whatever the config says; set it to what
+    // the build gives it, so a hard-coded root path would fail here.
+    vi.stubEnv('BASE_URL', '/index-life-local/');
+    let opened;
+    globalThis.window.open = (u) => { opened = u; return popup; };
+
+    new YandexDiskTransport().connect().catch(() => {});
+    vi.unstubAllEnvs();
+
+    const redirect = new URL(opened).searchParams.get('redirect_uri');
+    expect(redirect).toBe('https://index.life/index-life-local/yandex-callback.html');
+  });
+
   it('resolves and keeps the token when the callback posts one', async () => {
     const p = new YandexDiskTransport().connect();
     deliver({ source: 'yandex-oauth', access_token: 'tok-1', expires_in: 3600 });

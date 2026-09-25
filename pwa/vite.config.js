@@ -2,11 +2,16 @@ import { defineConfig } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { VitePWA } from 'vite-plugin-pwa';
 
-// base '/' — the app is served from the root of its own domain (the chosen
-// static-CDN host). A relative base ('./') breaks the dev server (404 at /),
-// and isn't needed now that we're not targeting a GitHub Pages subpath.
+// Served from GitHub Pages at cryptonerf.github.io/index-life-local/ — the
+// project's own subpath on a free host, after the custom domain lapsed. The
+// base must be absolute: a relative one ('./') breaks the dev server. The PWA
+// plugin derives the manifest's scope and start_url and the service worker's
+// scope from it, so the worker stays inside this path and never answers for
+// the other projects that share the cryptonerf.github.io origin.
+export const BASE = '/index-life-local/';
+
 export default defineConfig({
-  base: '/',
+  base: BASE,
   // Allow cloudflared tunnel hostnames so the dev/preview server doesn't reject
   // requests whose Host is *.trycloudflare.com (used to test on a real phone).
   server: { allowedHosts: ['.trycloudflare.com'] },

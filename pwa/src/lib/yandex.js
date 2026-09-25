@@ -69,7 +69,10 @@ function authorize() {
     const startedAt = Date.now();
     try { localStorage.removeItem(RESULT_KEY); } catch { /* ignore */ }
 
-    const redirect = `${location.origin}/yandex-callback.html`;
+    // Under the app's base, not the origin root: on a shared host the root
+    // belongs to someone else. Must match the redirect URI registered with
+    // the Yandex OAuth app exactly.
+    const redirect = `${location.origin}${import.meta.env.BASE_URL}yandex-callback.html`;
     const url = 'https://oauth.yandex.ru/authorize?response_type=token'
       + `&client_id=${YANDEX_CLIENT_ID}`
       + `&redirect_uri=${encodeURIComponent(redirect)}`;
