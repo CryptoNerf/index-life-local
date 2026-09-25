@@ -268,12 +268,11 @@ def test_weather_stat_tiles(app):
     from app.modules.graphics.routes import _weather_stat_tiles
     temp = {'kind': 'numeric', 'high_avg': 7.5, 'low_avg': 4.5, 'pearson': 0.6,
             'overall_avg': 6, 'points': [], 'count': 50}
-    precip = {'kind': 'numeric', 'points': [[0.0, 7], [0.0, 8], [5.0, 4], [3.0, 5]]}
     # Day counts are now part of the fixture: naming a best weather takes a
     # real sample behind it (see the thin-group case below).
     cond = {'kind': 'categorical', 'groups': [{'label': 'Clear', 'avg': 8, 'count': 40},
                                               {'label': 'Rain', 'avg': 4, 'count': 30}]}
-    tiles = _weather_stat_tiles(temp, precip, cond)
+    tiles = _weather_stat_tiles(temp, cond)
     values = [tl['value'] for tl in tiles]
     assert '+3.0' in values                         # warm − cold = 7.5 − 4.5
     assert not any(v.startswith('+0.6') for v in values)   # no Pearson jargon tile
@@ -293,9 +292,89 @@ def test_a_thin_condition_is_not_named_the_best_weather(app):
             'groups': [{'label': 'Thunderstorm', 'avg': 6.0, 'count': 4},
                        {'label': 'Rain', 'avg': 5.8, 'count': 86}]}
 
-    tiles = _weather_stat_tiles(temp, {}, cond)
+    tiles = _weather_stat_tiles(temp, cond)
 
     named = [tl['value'] for tl in tiles]
     assert 'Гроза' not in named and 'Thunderstorm' not in named
     assert any(v in ('Дождь', 'Rain') for v in named), \
         'the next weather with a real sample should take its place'
+
+
+# ── the tiles must not contradict each other, or themselves ──
+# A real diary: the best-weather tile named Rain, and the tile beside it said
+# dry days were better. The dry/rainy split was by millimetres of
+# precipitation, where 34 snow days — the lowest mood of all — counted as
+# rain. Both tiles now use the same weather conditions.
+
+_REAL_DIARY = {'kind': 'categorical', 'groups': [
+    {'label': 'Thunderstorm', 'avg': 6.00, 'count': 4},
+    {'label': 'Rain', 'avg': 5.85, 'count': 94},
+    {'label': 'Clouds', 'avg': 5.75, 'count': 183},
+    {'label': 'Clear', 'avg': 5.62, 'count': 13},
+    {'label': 'Snow', 'avg': 5.20, 'count': 56},
+    {'label': 'Fog', 'avg': 5.00, 'count': 2},
+]}
+_TEMP = {'kind': 'numeric', 'high_avg': 6.12, 'low_avg': 5.25,
+         'overall_avg': 5.7, 'points': [], 'count': 352}
+
+
+def _tile(tiles, *labels):
+    found = [tl for tl in tiles if tl['label'] in labels]
+    assert len(found) == 1, [tl['label'] for tl in tiles]
+    return found[0]
+
+
+def test_snow_is_not_rain_and_the_tiles_agree(app):
+    from app.i18n import t
+    from app.modules.graphics.routes import _weather_stat_tiles
+
+    tiles = _weather_stat_tiles(_TEMP, _REAL_DIARY)
+
+    best = tiles[-1]
+    assert best['value'] in ('Дождь', 'Rain')
+    wetdry = _tile(tiles, t('weather.tile_wetdry'), t('weather.tile_rainy_better'),
+                   t('weather.tile_wetdry_same'))
+    assert wetdry['label'] == t('weather.tile_rainy_better'), (
+        'the page names Rain the best weather and says dry days are better')
+    assert wetdry['value'] == '+0.1'
+
+
+def test_a_colder_is_better_diary_is_not_told_warm_is_better(app):
+    from app.i18n import t
+    from app.modules.graphics.routes import _weather_stat_tiles
+    temp = dict(_TEMP, high_avg=5.0, low_avg=5.4)
+
+    tile = _tile(_weather_stat_tiles(temp, _REAL_DIARY),
+                 t('weather.tile_warmcold'), t('weather.tile_coldwarm'),
+                 t('weather.tile_temp_same'))
+
+    assert tile['label'] == t('weather.tile_coldwarm')
+    assert tile['value'] == '+0.4'
+
+
+def test_no_difference_says_so(app):
+    from app.i18n import t
+    from app.modules.graphics.routes import _weather_stat_tiles
+    cond = {'kind': 'categorical', 'groups': [
+        {'label': 'Clear', 'avg': 6.02, 'count': 30},
+        {'label': 'Rain', 'avg': 6.0, 'count': 30}]}
+
+    tile = _tile(_weather_stat_tiles(dict(_TEMP, high_avg=6.0, low_avg=6.0), cond),
+                 t('weather.tile_wetdry'), t('weather.tile_rainy_better'),
+                 t('weather.tile_wetdry_same'))
+
+    assert tile['label'] == t('weather.tile_wetdry_same')
+    assert tile['value'] == '0.0'
+
+
+def test_no_rainy_days_means_no_dry_rainy_tile(app):
+    from app.i18n import t
+    from app.modules.graphics.routes import _weather_stat_tiles
+    cond = {'kind': 'categorical', 'groups': [
+        {'label': 'Clear', 'avg': 6.0, 'count': 30},
+        {'label': 'Snow', 'avg': 4.0, 'count': 30}]}
+
+    labels = [tl['label'] for tl in _weather_stat_tiles(_TEMP, cond)]
+
+    assert t('weather.tile_wetdry') not in labels
+    assert t('weather.tile_rainy_better') not in labels

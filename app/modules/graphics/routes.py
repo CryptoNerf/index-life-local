@@ -225,10 +225,46 @@ def _mood_by_numeric(corr):
 MIN_DAYS_FOR_BEST_WEATHER = 20
 
 
-def _weather_stat_tiles(temp, precip, cond):
-    """Three plain-language stat cards for the chart sidebar: how much better
-    warm days are than cold ones, dry days than rainy ones, and the user's
-    single best weather. Deliberately skips the Pearson coefficient — the
+# The dry-vs-rainy tile groups the same weather conditions as the table and
+# the best-weather tile. It used to split days by millimetres of
+# precipitation instead — and snow is precipitation too, so a winter of snow
+# days (the lowest mood of all) counted as "rain", dragged it under the dry
+# days, and the tile said dry days were better while the next tile named
+# Rain the best weather. Snow and fog are neither dry nor rainy.
+_RAINY_CONDITIONS = frozenset({'Rain', 'Thunderstorm'})
+_DRY_CONDITIONS = frozenset({'Clear', 'Clouds'})
+
+
+def _pooled_avg(groups, labels):
+    """Mean mood over the days of these conditions, weighted by day count."""
+    n = sum(g.get('count', 0) for g in groups if g.get('label') in labels)
+    if not n:
+        return None
+    return sum(g['avg'] * g['count'] for g in groups if g.get('label') in labels) / n
+
+
+def _gap_tile(a, b, a_higher, b_higher, same, sub):
+    """A "which is better" tile whose words follow the numbers.
+
+    The label used to be fixed ("warmer days lift your mood") while the value
+    was a signed difference, so a colder-is-better diary read "−0.3 Warmer
+    days lift your mood". The gap is shown as a size and the label names
+    whichever side is actually higher.
+    """
+    gap = round(a - b, 1)
+    if gap > 0:
+        label, value = a_higher, '+%.1f' % gap
+    elif gap < 0:
+        label, value = b_higher, '+%.1f' % -gap
+    else:
+        label, value = same, '0.0'
+    return {'value': value, 'label': label, 'sub': sub}
+
+
+def _weather_stat_tiles(temp, cond):
+    """Three plain-language stat cards for the chart sidebar: warm days
+    against cold ones, dry days against rainy ones, and the user's single
+    best weather. Deliberately skips the Pearson coefficient — the
     warm-minus-cold gap says the same thing in plain mood points."""
     from app.i18n import t, get_current_lang
     from app import signals
@@ -236,17 +272,20 @@ def _weather_stat_tiles(temp, precip, cond):
     if temp.get('kind') == 'numeric' and temp.get('high_avg') is not None \
             and temp.get('low_avg') is not None:
         warm, cold = temp['high_avg'], temp['low_avg']
-        tiles.append({'value': '%+.1f' % round(warm - cold, 1),
-                      'label': t('weather.tile_warmcold'),
-                      'sub': t('weather.tile_warmcold_sub', warm=warm, cold=cold)})
-    if precip.get('kind') == 'numeric' and precip.get('points'):
-        wet = [m for p, m in precip['points'] if p > 1.0]
-        dry = [m for p, m in precip['points'] if p <= 1.0]
-        if wet and dry:
-            wa, da = round(sum(wet) / len(wet), 1), round(sum(dry) / len(dry), 1)
-            tiles.append({'value': '%+.1f' % round(da - wa, 1),
-                          'label': t('weather.tile_wetdry'),
-                          'sub': t('weather.tile_wetdry_sub', dry=da, wet=wa)})
+        tiles.append(_gap_tile(
+            warm, cold,
+            t('weather.tile_warmcold'), t('weather.tile_coldwarm'),
+            t('weather.tile_temp_same'),
+            t('weather.tile_warmcold_sub', warm=warm, cold=cold)))
+    groups_all = cond.get('groups') or []
+    dry = _pooled_avg(groups_all, _DRY_CONDITIONS)
+    wet = _pooled_avg(groups_all, _RAINY_CONDITIONS)
+    if dry is not None and wet is not None:
+        tiles.append(_gap_tile(
+            dry, wet,
+            t('weather.tile_wetdry'), t('weather.tile_rainy_better'),
+            t('weather.tile_wetdry_same'),
+            t('weather.tile_wetdry_sub', dry=round(dry, 2), wet=round(wet, 2))))
     # Sorted happiest → saddest upstream, but the top row can be three days
     # of thunderstorm sitting above eighty days of rain. Naming that "your
     # best weather" reads as a finding when it is noise, so a weather has to
@@ -272,14 +311,13 @@ def weather():
 
     temp = signals.correlate_signal_with_mood('weather', 'temp_c')
     cond = signals.correlate_signal_with_mood('weather', 'condition')
-    precip = signals.correlate_signal_with_mood('weather', 'precip_mm')
     has_data = temp.get('kind') != 'empty' or cond.get('kind') != 'empty'
     overall = temp.get('overall_avg')
     if overall is None:
         overall = cond.get('overall_avg')
 
     line_chart = _mood_by_numeric(temp) if temp.get('kind') == 'numeric' else None
-    stats = _weather_stat_tiles(temp, precip, cond)
+    stats = _weather_stat_tiles(temp, cond)
 
     # Every weather with its day count and its gap from the overall average.
     # The counts are the point: without them the ranking invites conclusions

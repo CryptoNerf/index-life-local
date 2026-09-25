@@ -121,7 +121,9 @@ assert '30' in head, 'the tile gave an average with no sample size'
 # ── nothing qualifies → nothing is named ──────────────────────
 seed({'Rain': [8] * (MIN - 1), 'Clouds': [5] * (MIN - 1)})
 head, table = split(page())
-assert 'Rain' not in head and 'Clouds' not in head, \
+# Looked for by the tile's own label: the dry/rainy tile beside it may say
+# "Rainy days lift your mood", which is not naming a best weather.
+assert 'Your best weather' not in head, \
     'a weather under the minimum was still named best'
 
 # ── the table is ordered best first ───────────────────────────
