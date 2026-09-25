@@ -613,35 +613,6 @@ def what_is_index():
                          current_year=date.today().year)
 
 
-@bp.route('/stats')
-def stats():
-    """Statistics page"""
-    profile = UserProfile.query.first()
-    entries = MoodEntry.query.filter(MoodEntry.deleted == False).order_by(MoodEntry.date.desc()).all()  # noqa: E712
-
-    # Calculate stats
-    total_entries = len(entries)
-    avg_rating = profile.avg_rating if profile else 0
-
-    # Monthly stats for current year
-    year = date.today().year
-    monthly_stats = {}
-    for month in range(1, 13):
-        month_entries = [e for e in entries if e.date.year == year and e.date.month == month]
-        if month_entries:
-            monthly_avg = sum(e.rating for e in month_entries) / len(month_entries)
-            monthly_stats[month] = {
-                'count': len(month_entries),
-                'avg': round(monthly_avg, 1)
-            }
-
-    return render_template('stats.html',
-                         total_entries=total_entries,
-                         avg_rating=avg_rating,
-                         monthly_stats=monthly_stats,
-                         year=year)
-
-
 @bp.route('/life')
 def life_calendar():
     """Life in weeks calendar page"""
