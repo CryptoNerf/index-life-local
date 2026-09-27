@@ -443,6 +443,26 @@ def _card_rules(settings: dict, page_text: dict) -> str:
     return '\n'.join(rules)
 
 
+def _neural_canvas_rules(settings: dict, page_text: dict) -> str:
+    """Text on the neural map is judged against the map's own background.
+
+    The map draws on a canvas with a background of its own (near-white by
+    default), while its labels took the page's text colour. On a black page
+    that colour turns white — right for the page, white on white inside the
+    map. The text variables are redefined for the map's container, so the
+    labels (read from it by neural_map.js) and anything else drawn inside it
+    follow the canvas instead.
+    """
+    if not _auto_invert_enabled(settings):
+        return ''
+    canvas = _hex_to_rgb(settings.get('neural-canvas-bg', DEFAULTS['neural-canvas-bg']))
+    fix = _readable(page_text, canvas)
+    if not fix:
+        return ''
+    body = ''.join('--%s:%s;' % (k, v) for k, v in fix.items())
+    return 'html #graph-container{%scolor:var(--text-color);}' % body
+
+
 # The "My people" silhouettes are black SVGs drawn as <img>, which no text
 # colour reaches: on a dark page they sink into the background. Where the
 # surface under them is dark they are inverted. The pickers draw theirs on
@@ -731,6 +751,7 @@ def _emit_css_block(settings: dict) -> str:
     symbol_block = cube_symbols.css_rules(settings)
     card_block = _card_rules(settings, page_text)
     silhouette_block = _silhouette_rules(settings)
+    neural_block = _neural_canvas_rules(settings, page_text)
 
     # Mosaic emission must be considered before short-circuiting:
     # mosaic uses metadata-only keys, so a mosaic-only configuration
@@ -789,6 +810,8 @@ def _emit_css_block(settings: dict) -> str:
         parts.append(card_block)
     if silhouette_block:
         parts.append(silhouette_block)
+    if neural_block:
+        parts.append(neural_block)
 
     body = '\n'.join(parts)
     style_block = f'<style id="customization-vars">\n{body}\n</style>'

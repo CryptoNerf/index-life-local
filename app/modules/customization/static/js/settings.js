@@ -319,6 +319,9 @@
       }
     });
     renderCardPreview();
+    // The map's labels are worked out from the same text colours (against
+    // its own canvas), so a new page background has to redraw it too.
+    renderNeural();
   }
 
   // ── Cards (mirrors context_processor._card_rules) ───────────
@@ -1898,6 +1901,20 @@
     [0, 1], [0, 3], [1, 3], [1, 4], [2, 5], [3, 5], [3, 4],
   ];
 
+  // Mirrors context_processor._neural_canvas_rules: the map's labels are
+  // judged against the canvas background, not the page's. (The page's text
+  // variable is not read here: for a colour the user never set it holds
+  // `initial`, which a canvas cannot draw with.)
+  function labelOn(canvasBg) {
+    var text = effectivePageText();
+    var label = text['text-color'];
+    if (autoInvertOn()) {
+      var fix = readable({'text-color': label}, hexToRgb(canvasBg));
+      if (fix['text-color']) label = fix['text-color'];
+    }
+    return label;
+  }
+
   function renderNeural() {
     var canvas = document.getElementById('preview-neural');
     if (!canvas) return;
@@ -1947,7 +1964,7 @@
       ctx.fill();
 
       // Label below
-      ctx.fillStyle = readVar('text-color') || '#222';
+      ctx.fillStyle = labelOn(colBg);
       ctx.font = '11px ' + (readVar('font-body') || 'Times New Roman, serif');
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';

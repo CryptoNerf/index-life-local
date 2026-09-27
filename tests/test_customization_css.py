@@ -540,3 +540,31 @@ def test_silhouettes_on_a_light_card_over_a_dark_page_stay_black():
 def test_silhouettes_follow_the_readability_switch():
     assert cp._silhouette_rules({'bg-type': 'color', 'bg-color': '#101010',
                                  'auto-invert-text': 'false'}) == ''
+
+
+# ── neural map labels ─────────────────────────────────────────
+# The map draws on its own background (near-white by default) but took the
+# page's text colour for its labels: a black page turned them white, on a
+# white canvas.
+
+def test_a_dark_page_does_not_whiten_the_labels_on_a_light_canvas():
+    css = cp._neural_canvas_rules({'bg-type': 'color', 'bg-color': '#000000'},
+                                  dict(cp._page_text_colours({}), **cp._auto_invert_overrides(
+                                      {'bg-type': 'color', 'bg-color': '#000000'})))
+    assert css.startswith('html #graph-container{')
+    assert '--text-color:#000000' in css
+
+
+def test_a_dark_canvas_on_a_light_page_gets_light_labels():
+    settings = {'neural-canvas-bg': '#101010'}
+    css = cp._neural_canvas_rules(settings, cp._page_text_colours(settings))
+    assert '--text-color:#ffffff' in css
+
+
+def test_the_default_page_and_canvas_need_nothing():
+    assert cp._neural_canvas_rules({}, cp._page_text_colours({})) == ''
+
+
+def test_the_emitted_block_carries_the_map_rule():
+    out = str(cp._emit_css_block({'bg-type': 'color', 'bg-color': '#000000'}))
+    assert 'html #graph-container{--text-color:#000000' in out

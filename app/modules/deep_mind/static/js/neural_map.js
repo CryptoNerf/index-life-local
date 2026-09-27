@@ -69,6 +69,15 @@
   function withAlpha(rgb, alpha) {
     return 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',' + alpha + ')';
   }
+  // Labels sit on the map's own background, not the page's: read the text
+  // colour from the map's container, where the customization module
+  // redefines it against the canvas colour (context_processor.
+  // _neural_canvas_rules). Reading it from the page root gave white labels
+  // on the near-white canvas as soon as the page itself was dark.
+  function labelColor() {
+    var v = getComputedStyle(graphContainer).getPropertyValue('--text-color').trim();
+    return v || cssVar('text-color', '#444');
+  }
   var THEME = null;
   function resolveTheme() {
     THEME = {
@@ -76,7 +85,7 @@
       nodeRgb:   parseRgb(cssVar('neural-node-color', 'rgb(40,40,40)')),
       activeRgb: parseRgb(cssVar('neural-node-active-color', '#009afa')),
       glowRgb:   parseRgb(cssVar('neural-glow-color', 'rgb(0,154,250)')),
-      labelColor: cssVar('text-color', '#444'),
+      labelColor: labelColor(),
     };
     THEME.activeCss = 'rgb(' + THEME.activeRgb.join(',') + ')';
   }
