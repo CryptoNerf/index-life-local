@@ -124,6 +124,9 @@ def merge_slots(current: Slots, prior: Slots | None) -> Slots:
         people=current.people or prior.people,
         activities=current.activities or prior.activities,
         emotions=current.emotions or prior.emotions,
+        rating=current.rating,
+        weekday=current.weekday,
+        weather=current.weather,
     )
 
 
@@ -238,14 +241,29 @@ _EXTREMES = re.compile(r'(лучш|худш|хорош|плох)\w*\s+(\w+\s+)?(
 _PEOPLE_WORDS = re.compile(r'\bлюд|\bкто\b|\bкого\b|\bс кем\b|друз', re.I)
 
 
-def _period_args(p: Period) -> dict:
+def _period_args(p: Period, long_limit: int = 25) -> dict:
     """period_entries arguments: a whole month or year by number, anything
-    else as an exact range."""
+    else as an exact range. A long period asks for fewer entries, spread
+    across it, so the list fits the context whole instead of being cut to
+    its newest part."""
     if p.kind == 'month' and p.start.day == 1:
-        return {'year': p.start.year, 'month': p.start.month}
-    if p.kind == 'year' and (p.start.month, p.start.day) == (1, 1):
-        return {'year': p.start.year}
+        args = {'year': p.start.year, 'month': p.start.month}
+    elif p.kind == 'year' and (p.start.month, p.start.day) == (1, 1):
+        args = {'year': p.start.year}
+    else:
+        args = {'start': p.start.isoformat(), 'end': p.end.isoformat()}
+    if (p.end - p.start).days > 45:
+        args['limit'] = long_limit
+    return args
+
+
+def _range_args(p: Period) -> dict:
     return {'start': p.start.isoformat(), 'end': p.end.isoformat()}
+
+
+# Periods short enough that "про Сергея в марте" means those entries rather
+# than the whole story of the person.
+_NARROW = {'day', 'week', 'month', 'range', 'season'}
 
 
 def _period_spec(p: Period) -> str:
@@ -298,6 +316,17 @@ def _is_follow_up(d: Decision, message: str) -> bool:
     return names_nothing and len(re.findall(r'\w+', message)) <= 4
 
 
+def _topic_words(d: Decision) -> list[str]:
+    """Words to find a topic by in the text itself: the router's topic, or
+    a feeling's commonest words."""
+    if d.topic:
+        head = re.findall(r'\w+', d.topic)
+        return head[:1]
+    if d.slots.emotions:
+        return emotion_synonyms(d.slots.emotions[0])[:4]
+    return []
+
+
 def _people(d: Decision, message: str = '') -> list[str]:
     """People the question is about: named in it (by rule or by the model),
     or, for a bare follow-up, the ones the previous question named."""
@@ -312,12 +341,17 @@ def _people(d: Decision, message: str = '') -> list[str]:
 
 # Scenarios where a named person is not what the data should be about.
 _NO_PERSON_LOOKUP = {'conversation', 'people'}
+_SUPERLATIVE = re.compile(r'сам\w+\s+(лучш|худш|плох|хорош|тяж[её]л|счастлив|светл)', re.I)
+_WHEN = re.compile(r'\bкогда\b|как часто|сколько раз|последний раз|впервые|'
+                   r'перв\w+ раз|стал\w* (?:реже|чаще|меньше|больше)|перестал', re.I)
 _CHANGE = re.compile(r'подъ[её]м|спад|\bстал[аио]?\b|\bстало\b|измени|последн\w* врем', re.I)
 
 
 def plan(d: Decision, message: str, today: date) -> list[dict]:
     """Tool calls for a decision: [{'tool': name, 'args': {...}}], at most three."""
     s = d.slots
+    period = s.period
+    filters = s.filters()
     calls: list[dict] = []
 
     def add(tool: str, **args):
@@ -327,10 +361,16 @@ def plan(d: Decision, message: str, today: date) -> list[dict]:
     sc = d.scenario
     # A named person comes first whatever the scenario: the model names the
     # person reliably even when it files "что я писал про Машу" under a
-    # topic, and a question about someone needs their entries.
+    # topic, and a question about someone needs their entries. With a short
+    # period ("про Сергея в марте") that means the entries of that period;
+    # otherwise the whole picture of the person.
     if sc not in _NO_PERSON_LOOKUP:
+        narrow = bool(period and period.kind in _NARROW)
         for name in _people(d, message):
-            add('person_history', name=name)
+            if narrow and sc in ('person', 'topic', 'period', 'diary_meta'):
+                add('entries_query', person=name, **_range_args(period), **filters)
+            else:
+                add('person_deep', name=name)
 
     if sc == 'support':
         add('mood_trend', window_days=14)
@@ -339,79 +379,91 @@ def plan(d: Decision, message: str, today: date) -> list[dict]:
             add('search_topic', query=_topic_query(d, message))
 
     elif sc == 'why_changed':
-        p = s.period
-        if p and p.kind not in ('recent', 'day', 'anniversary'):
-            # A named month or season: what it was like, against the one before.
-            if _is_past(p, today):
-                add('period_entries', **_period_args(p))
+        if period and period.kind not in ('recent', 'day', 'anniversary'):
+            # A named month or season, against the one before it.
+            add('what_changed', period_a=_period_spec(previous_period(period)),
+                period_b=_period_spec(period))
+            if _is_past(period, today):
+                add('period_entries', **_period_args(period))
             else:
-                add('mood_trend', window_days=_trend_window((today - p.start).days + 1))
-            add('compare_periods', period_a=_period_spec(previous_period(p)),
-                period_b=_period_spec(p))
+                add('mood_trend', window_days=_trend_window((today - period.start).days + 1))
         else:
-            days = (p.end - p.start).days + 1 if p and p.kind == 'recent' else 30
+            days = (period.end - period.start).days + 1 if period and period.kind == 'recent' else 30
             now = _recent(days, today)
-            add('mood_trend', window_days=_trend_window(days))
-            add('compare_periods', period_a=_period_spec(previous_period(now)),
+            add('what_changed', period_a=_period_spec(previous_period(now)),
                 period_b=_period_spec(now))
-        add('activity_impact')
+            add('mood_trend', window_days=_trend_window(days))
 
     elif sc == 'drivers':
-        if _WEATHER.search(message):
+        if _WEATHER.search(message) or s.weather:
             add('weather_impact')
-        if _EXTREMES.search(message):
-            add('best_worst_days', top_n=5)
+        add('contrast_days')
         add('activity_impact')
-        if _CHANGE.search(message) or (s.period and s.period.kind == 'recent'):
+        if _CHANGE.search(message) or (period and period.kind == 'recent'):
             # "с чем связан мой подъём": the change itself, not only its causes
             add('mood_trend', window_days=30)
         if _PEOPLE_WORDS.search(message):
             add('people_overview')
 
+    elif sc == 'rhythms':
+        add('rhythms')
+        if s.weather:
+            # "в снежные дни": how weather goes with mood, not the calendar
+            add('weather_impact')
+        if filters:
+            # "что я пишу по понедельникам": the days themselves too
+            add('entries_query', **filters, limit=15)
+
     elif sc == 'themes':
+        add('themes', **(_range_args(period) if period else {}))
         # "Что я писал про деньги?" filed as a theme still has a subject.
         if d.topic:
             add('search_topic', query=_topic_query(d, message))
 
-    elif sc == 'rhythms':
-        # No weekday/season tool yet (ROADMAP §17.4 "rhythms"); the half-year
-        # trend is the closest ground.
-        add('mood_trend', window_days=180)
-
     elif sc == 'topic':
         add('search_topic', query=_topic_query(d, message))
-        if s.period:
-            add('period_entries', **_period_args(s.period))
+        words = _topic_words(d)
+        if words and (period or filters or _WHEN.search(message)):
+            # Search by meaning finds similar days; "когда", "как часто" and
+            # a period need the matching days by date.
+            add('entries_query', word='|'.join(words),
+                **(_range_args(period) if period else {}), **filters)
+        elif period:
+            add('period_entries', **_period_args(period))
 
     elif sc == 'person':
         if not calls and d.topic:
             add('search_topic', query=_topic_query(d, message))
-        if s.period:
-            add('period_entries', **_period_args(s.period))
 
     elif sc == 'people':
         add('people_overview')
 
     elif sc == 'period':
-        p = s.period or _recent(7, today)
-        if p.kind == 'anniversary':
+        p = period or _recent(7, today)
+        if not period and _SUPERLATIVE.search(message):
+            # "Когда был мой самый худший день?" asks for the extremes of the
+            # whole diary, not for bad days of the last week.
+            add('best_worst_days', top_n=5)
+        elif p.kind == 'anniversary':
             add('on_this_day')
+        elif filters:
+            add('entries_query', **_range_args(p), **filters)
         else:
             add('period_entries', **_period_args(p))
 
     elif sc == 'review':
-        p = s.period or Period(today.replace(day=1), today, 'month', 'этот месяц')
-        add('period_entries', **_period_args(p))
-        add('compare_periods', period_a=_period_spec(previous_period(p)),
+        p = period or Period(today.replace(day=1), today, 'month', 'этот месяц')
+        add('period_entries', **_period_args(p, long_limit=20))
+        add('what_changed', period_a=_period_spec(previous_period(p)),
             period_b=_period_spec(p))
+        add('themes', **_range_args(p))
 
     elif sc == 'compare':
         pair = compare_pair(message, today)
         if pair is None:
             now = Period(today.replace(day=1), today, 'month', 'этот месяц')
             pair = (previous_period(now), now)
-        add('compare_periods', period_a=_period_spec(pair[0]),
-            period_b=_period_spec(pair[1]))
+        add('what_changed', period_a=_period_spec(pair[0]), period_b=_period_spec(pair[1]))
 
     elif sc == 'progress':
         add('mood_trend', window_days=180)
@@ -420,13 +472,14 @@ def plan(d: Decision, message: str, today: date) -> list[dict]:
         pair = compare_pair(message, today) if own.period and re.search(
             r'\bчем\b|по сравнению', message, re.I) else None
         if pair:
-            add('compare_periods', period_a=_period_spec(pair[0]),
-                period_b=_period_spec(pair[1]))
-        if d.topic or s.emotions:
-            add('search_topic', query=_topic_query(d, message))
+            add('what_changed', period_a=_period_spec(pair[0]), period_b=_period_spec(pair[1]))
+        words = _topic_words(d)
+        if words:
+            # Month by month, how often: "стал реже тревожиться?"
+            add('entries_query', word='|'.join(words))
 
     elif sc == 'diary_meta':
-        if _EXTREMES.search(message) or re.search(r'сам\w+\s+(лучш|худш)', message, re.I):
+        if _EXTREMES.search(message) or _SUPERLATIVE.search(message):
             add('best_worst_days', top_n=5)
         else:
             add('diary_stats')

@@ -149,36 +149,62 @@ def test_period_plans_fetch_exactly_the_period_named():
         {'tool': 'period_entries', 'args': {'start': '2026-09-21', 'end': '2026-09-27'}}]
 
 
+def test_period_plans_apply_the_day_filters_named():
+    assert _plan('period', 'Покажи мои плохие дни в марте') == [
+        {'tool': 'entries_query', 'args': {'start': '2026-03-01', 'end': '2026-03-31',
+                                           'max_rating': 4}}]
+    assert _plan('period', 'Что было в дождливые дни на прошлой неделе?') == [
+        {'tool': 'entries_query', 'args': {'start': '2026-09-14', 'end': '2026-09-20',
+                                           'weather': 'Rain'}}]
+    # A long period asks for fewer entries, spread across it.
+    assert _plan('period', 'Что у меня было прошлым летом?') == [
+        {'tool': 'period_entries', 'args': {'start': '2025-06-01', 'end': '2025-08-31',
+                                            'limit': 25}}]
+
+
+def test_the_worst_day_ever_is_not_the_worst_of_last_week():
+    assert _plan('period', 'Когда был мой самый худший день?') == [
+        {'tool': 'best_worst_days', 'args': {'top_n': 5}}]
+    # With a period named, it stays that period's bad days.
+    assert _tools(_plan('period', 'Какой был самый худший день в марте?')) == ['entries_query']
+
+
 def test_compare_reads_both_periods_earlier_first():
     assert _plan('compare', 'Как отличается август от июля?') == [
-        {'tool': 'compare_periods', 'args': {'period_a': '2026-07', 'period_b': '2026-08'}}]
+        {'tool': 'what_changed', 'args': {'period_a': '2026-07', 'period_b': '2026-08'}}]
     assert _plan('compare', 'Этот месяц лучше прошлого?') == [
-        {'tool': 'compare_periods', 'args': {'period_a': '2026-08', 'period_b': '2026-09'}}]
+        {'tool': 'what_changed', 'args': {'period_a': '2026-08', 'period_b': '2026-09'}}]
     assert _plan('compare', 'Лето было лучше зимы?') == [
-        {'tool': 'compare_periods', 'args': {'period_a': '2025-12-01..2026-02-28',
-                                             'period_b': '2026-06-01..2026-08-31'}}]
+        {'tool': 'what_changed', 'args': {'period_a': '2025-12-01..2026-02-28',
+                                          'period_b': '2026-06-01..2026-08-31'}}]
 
 
-def test_why_changed_looks_at_the_change_not_only_the_level():
+def test_why_changed_looks_at_what_changed_and_the_trend():
     calls = _plan('why_changed', 'Почему в последние две недели настроение упало?')
-    assert _tools(calls) == ['mood_trend', 'compare_periods', 'activity_impact']
-    assert calls[1]['args'] == {'period_a': '2026-08-31..2026-09-13',
-                                'period_b': '2026-09-14..2026-09-27'}
-    # A month that is over: its entries, against the month before.
+    assert calls == [
+        {'tool': 'what_changed', 'args': {'period_a': '2026-08-31..2026-09-13',
+                                          'period_b': '2026-09-14..2026-09-27'}},
+        {'tool': 'mood_trend', 'args': {'window_days': 30}}]
+    # A month that is over: against the month before, and its entries.
     calls = _plan('why_changed', 'Что пошло не так в августе?')
-    assert calls[0] == {'tool': 'period_entries', 'args': {'year': 2026, 'month': 8}}
-    assert calls[1]['args'] == {'period_a': '2026-07', 'period_b': '2026-08'}
+    assert calls == [
+        {'tool': 'what_changed', 'args': {'period_a': '2026-07', 'period_b': '2026-08'}},
+        {'tool': 'period_entries', 'args': {'year': 2026, 'month': 8}}]
 
 
 def test_person_plan_uses_names_from_slots_and_router():
+    # A short period: that period's entries about the person.
     assert _plan('person', 'Что я писал про Сергея в марте?') == [
-        {'tool': 'person_history', 'args': {'name': 'Сергей'}},
-        {'tool': 'period_entries', 'args': {'year': 2026, 'month': 3}}]
-    # A name the diary doesn't know yet comes from the router.
+        {'tool': 'entries_query', 'args': {'person': 'Сергей', 'start': '2026-03-01',
+                                           'end': '2026-03-31'}}]
+    # Otherwise the whole picture, whether the name came from the rules or,
+    # being new to the diary, from the router.
+    assert _plan('person', 'Как менялись мои отношения с Машей за год?') == [
+        {'tool': 'person_deep', 'args': {'name': 'Маша'}}]
     assert _plan('person', 'Как там Аркадий?', person='Аркадий') == [
-        {'tool': 'person_history', 'args': {'name': 'Аркадий'}}]
+        {'tool': 'person_deep', 'args': {'name': 'Аркадий'}}]
     assert _plan('person', 'Расскажи подробнее', prior='Что я писал про Машу?') == [
-        {'tool': 'person_history', 'args': {'name': 'Маша'}}]
+        {'tool': 'person_deep', 'args': {'name': 'Маша'}}]
 
 
 @pytest.mark.parametrize('scenario', ['topic', 'period', 'diary_meta', 'drivers', 'support'])
@@ -186,7 +212,7 @@ def test_a_named_person_is_fetched_whatever_the_scenario(scenario):
     # The eval showed the model filing "что я писал про Машу" under topic,
     # period or diary_meta while naming the person correctly.
     calls = _plan(scenario, 'Что я писал про Машу?', person='Маша')
-    assert calls[0] == {'tool': 'person_history', 'args': {'name': 'Маша'}}
+    assert calls[0] == {'tool': 'person_deep', 'args': {'name': 'Маша'}}
     assert len(calls) <= scenarios.MAX_CALLS
 
 
@@ -197,19 +223,31 @@ def test_small_talk_and_the_people_overview_skip_the_person_lookup():
 
 def test_a_bare_follow_up_keeps_the_previous_person_under_any_scenario():
     calls = _plan('chat_memory', 'Расскажи подробнее', prior='Что я писал про Машу?')
-    assert calls == [{'tool': 'person_history', 'args': {'name': 'Маша'}}]
+    assert calls == [{'tool': 'person_deep', 'args': {'name': 'Маша'}}]
     # A follow-up with its own subject does not drag the old person along.
-    assert 'person_history' not in _tools(
-        _plan('topic', 'А что я писал про деньги в марте?', topic='деньги',
-              prior='Что я писал про Машу?'))
+    tools = _tools(_plan('topic', 'А что я писал про деньги в марте?', topic='деньги',
+                         prior='Что я писал про Машу?'))
+    assert tools == ['search_topic', 'entries_query']
 
 
-def test_progress_compares_when_the_question_does():
+def test_progress_compares_and_counts_when_the_question_does():
     calls = _plan('progress', 'Я сейчас счастливее, чем год назад?')
-    assert _tools(calls)[:2] == ['mood_trend', 'compare_periods']
+    assert _tools(calls)[:2] == ['mood_trend', 'what_changed']
     assert calls[1]['args'] == {'period_a': '2025-08-29..2025-09-27',
                                 'period_b': '2026-08-29..2026-09-27'}
     assert _tools(_plan('progress', 'Становится ли мне лучше со временем?')) == ['mood_trend']
+    calls = _plan('progress', 'Я стал реже тревожиться?')
+    assert calls[1]['tool'] == 'entries_query'
+    assert calls[1]['args']['word'].split('|')[:2] == ['тревога', 'тревожность']
+
+
+def test_topic_finds_dates_when_asked_when():
+    calls = _plan('topic', 'Когда я последний раз писал про тревогу?')
+    assert _tools(calls) == ['search_topic', 'entries_query']
+    calls = _plan('topic', 'Что я писал про деньги в марте?', topic='деньги')
+    assert calls[1] == {'tool': 'entries_query', 'args': {
+        'word': 'деньги', 'start': '2026-03-01', 'end': '2026-03-31'}}
+    assert _tools(_plan('topic', 'Что у меня с работой?', topic='работа')) == ['search_topic']
 
 
 def test_drivers_add_the_trend_when_asked_about_a_change():
@@ -217,10 +255,25 @@ def test_drivers_add_the_trend_when_asked_about_a_change():
     assert 'mood_trend' in _tools(_plan('drivers', 'чё у меня с настроением последнее время'))
 
 
-def test_themes_with_a_subject_search_it():
+def test_themes_and_rhythms_have_tools_of_their_own():
+    assert _plan('themes', 'О чём я чаще всего пишу?') == [{'tool': 'themes', 'args': {}}]
+    assert _plan('themes', 'Про что мои мысли в последнее время?') == [
+        {'tool': 'themes', 'args': {'start': '2026-08-29', 'end': '2026-09-27'}}]
     assert _plan('themes', 'Что я писал про деньги?', topic='деньги') == [
-        {'tool': 'search_topic', 'args': {'query': 'деньги'}}]
-    assert _plan('themes', 'О чём я чаще всего пишу?') == []
+        {'tool': 'themes', 'args': {}}, {'tool': 'search_topic', 'args': {'query': 'деньги'}}]
+    assert _plan('rhythms', 'В какой день недели мне лучше всего?') == [{'tool': 'rhythms', 'args': {}}]
+    assert _tools(_plan('rhythms', 'Как я себя чувствую в снежные дни?')) == [
+        'rhythms', 'weather_impact', 'entries_query']
+    assert _plan('rhythms', 'Что я пишу по понедельникам?') == [
+        {'tool': 'rhythms', 'args': {}},
+        {'tool': 'entries_query', 'args': {'weekday': 0, 'limit': 15}}]
+
+
+def test_review_gets_entries_changes_and_themes():
+    assert _plan('review', 'Подведи итоги моего года') == [
+        {'tool': 'period_entries', 'args': {'year': 2026, 'limit': 20}},
+        {'tool': 'what_changed', 'args': {'period_a': '2025', 'period_b': '2026'}},
+        {'tool': 'themes', 'args': {'start': '2026-01-01', 'end': '2026-09-27'}}]
 
 
 def test_topic_query_widens_a_feeling_with_its_words():
@@ -230,13 +283,13 @@ def test_topic_query_widens_a_feeling_with_its_words():
     assert _plan('topic', 'Что у меня с работой?', topic='работа')[0]['args']['query'] == 'работа'
 
 
-def test_drivers_pick_weather_and_extremes_from_the_question():
-    assert _tools(_plan('drivers', 'В дождь мне правда хуже?')) == ['weather_impact', 'activity_impact']
-    assert _tools(_plan('drivers', 'Что общего у моих лучших дней?')) == ['best_worst_days', 'activity_impact']
-    assert _tools(_plan('drivers', 'Что меня выматывает?')) == ['activity_impact']
+def test_drivers_compare_good_and_bad_days_and_pick_weather():
+    assert _tools(_plan('drivers', 'В дождь мне правда хуже?')) == [
+        'weather_impact', 'contrast_days', 'activity_impact']
+    assert _tools(_plan('drivers', 'Что общего у моих лучших дней?')) == ['contrast_days', 'activity_impact']
 
 
-@pytest.mark.parametrize('scenario', ['conversation', 'themes', 'chat_memory', 'about_me'])
+@pytest.mark.parametrize('scenario', ['conversation', 'chat_memory', 'about_me'])
 def test_scenarios_without_a_tool_fetch_nothing(scenario):
     # (no person, no topic named)
     assert _plan(scenario, 'Что ты обо мне знаешь про работу в марте?') == []

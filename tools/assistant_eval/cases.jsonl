@@ -34,13 +34,13 @@
 {"q": "От чего мне становится хуже?", "scenario": "drivers", "needs": ["activities"]}
 {"q": "Что меня выматывает?", "scenario": "drivers", "needs": ["activities"]}
 {"q": "Чем мои хорошие дни отличаются от плохих?", "scenario": "drivers", "needs": ["extremes"], "alt": ["themes"]}
-{"q": "Что общего у моих лучших дней?", "scenario": "drivers", "needs": ["extremes"]}
+{"q": "Что общего у моих лучших дней?", "scenario": "drivers", "needs": ["extremes"], "slots": {"filters": {"min_rating": 7}}}
 {"q": "Влияет ли на меня погода?", "scenario": "drivers", "needs": ["weather"]}
-{"q": "В дождь мне правда хуже?", "scenario": "drivers", "needs": ["weather"]}
+{"q": "В дождь мне правда хуже?", "scenario": "drivers", "needs": ["weather"], "slots": {"filters": {"weather": "Rain"}}}
 {"q": "Какие занятия поднимают мне настроение?", "scenario": "drivers", "needs": ["activities"]}
 {"q": "Помогает ли мне спорт?", "scenario": "drivers", "needs": ["activities"], "alt": ["progress"]}
 {"q": "Что делает меня счастливым по дневнику?", "scenario": "drivers", "needs": ["activities"]}
-{"q": "Есть ли у меня провалы по понедельникам?", "scenario": "rhythms", "needs": ["rhythm"]}
+{"q": "Есть ли у меня провалы по понедельникам?", "scenario": "rhythms", "needs": ["rhythm"], "slots": {"filters": {"weekday": 0}}}
 {"q": "Зимой мне хуже?", "scenario": "rhythms", "needs": ["rhythm"], "alt": ["compare"], "slots": {"period": {"kind": "season"}}}
 {"q": "В какой день недели мне лучше всего?", "scenario": "rhythms", "needs": ["rhythm"]}
 {"q": "Есть у меня какие-то циклы настроения?", "scenario": "rhythms", "needs": ["rhythm"]}
@@ -118,7 +118,7 @@
 {"q": "Какая у меня самая длинная серия записей?", "scenario": "diary_meta", "needs": ["stats"]}
 {"q": "Сколько у меня записей?", "scenario": "diary_meta", "needs": ["stats"]}
 {"q": "Какое у меня среднее настроение?", "scenario": "diary_meta", "needs": ["stats"], "alt": ["progress"]}
-{"q": "Когда был мой самый худший день?", "scenario": "diary_meta", "needs": ["extremes"], "alt": ["period"]}
+{"q": "Когда был мой самый худший день?", "scenario": "diary_meta", "needs": ["extremes"], "alt": ["period"], "slots": {"filters": {"max_rating": 4}}}
 {"q": "Что я тебе говорил про работу на прошлой неделе?", "scenario": "chat_memory", "needs": ["chat"], "alt": ["topic"]}
 {"q": "Напомни, о чём мы говорили вчера", "scenario": "chat_memory", "needs": ["chat"]}
 {"q": "Ты помнишь, что я рассказывал про маму?", "scenario": "chat_memory", "needs": ["chat"], "alt": ["person"], "slots": {"people": ["мама"]}}
@@ -137,3 +137,11 @@
 {"q": "кто меня бисит больше всех", "scenario": "people", "needs": ["people"]}
 {"q": "скока я пишу дневник", "scenario": "diary_meta", "needs": ["stats"]}
 {"q": "как там с машей было", "scenario": "person", "needs": ["person:Маша"], "slots": {"people": ["Маша"]}}
+{"q": "Покажи мои плохие дни в марте", "scenario": "period", "needs": ["period", "query"], "alt": ["topic", "review"], "slots": {"period": {"kind": "month", "start": "2026-03-01"}, "filters": {"max_rating": 4}}}
+{"q": "Что было в дождливые дни на прошлой неделе?", "scenario": "period", "needs": ["period", "query"], "alt": ["drivers"], "slots": {"period": {"kind": "week", "start": "2026-09-14", "end": "2026-09-20"}, "filters": {"weather": "Rain"}}}
+{"q": "Какие были хорошие дни этим летом?", "scenario": "period", "needs": ["period", "query"], "alt": ["review"], "slots": {"period": {"kind": "season", "start": "2026-06-01"}, "filters": {"min_rating": 7}}}
+{"q": "Что я обычно пишу по понедельникам?", "scenario": "rhythms", "needs": ["rhythm", "query"], "alt": ["themes", "period"], "slots": {"filters": {"weekday": 0}}}
+{"q": "Как часто я писал про тревогу за последний год?", "scenario": "progress", "needs": ["topic"], "alt": ["topic"], "slots": {"emotions": ["тревога"]}}
+{"q": "Когда я в последний раз бегал?", "scenario": "topic", "needs": ["topic"], "alt": ["drivers", "diary_meta"]}
+{"q": "Что я писал про Машу в августе?", "scenario": "person", "needs": ["person:Маша", "period"], "alt": ["period"], "slots": {"people": ["Маша"], "period": {"kind": "month", "start": "2026-08-01"}}}
+{"q": "Как я себя чувствую в снежные дни?", "scenario": "drivers", "needs": ["weather"], "alt": ["rhythms"], "slots": {"filters": {"weather": "Snow"}}}

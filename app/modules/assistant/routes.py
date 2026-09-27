@@ -186,13 +186,25 @@ def _route_to_tools(llm, user_message: str,
 
 
 def _tool_section(tool_outputs: list[tuple[str, str]], total_chars: int) -> str:
-    """Tool results as a system-prompt section, `total_chars` shared evenly."""
-    per_tool_cap = total_chars // max(1, len(tool_outputs))
+    """Tool results as a system-prompt section within `total_chars`.
+
+    A short result keeps all of it and leaves the rest of its share to the
+    longer ones: a 600-character comparison next to a list of entries
+    shouldn't cut the list to a third.
+    """
+    caps: dict[int, int] = {}
+    left, pending = total_chars, sorted(range(len(tool_outputs)),
+                                        key=lambda i: len(tool_outputs[i][1]))
+    while pending:
+        share = left // len(pending)
+        i = pending.pop(0)
+        caps[i] = min(len(tool_outputs[i][1]), share)
+        left -= caps[i]
     sections = []
-    for tname, text in tool_outputs:
+    for i, (tname, text) in enumerate(tool_outputs):
         chunk = text
-        if len(chunk) > per_tool_cap:
-            chunk = chunk[:per_tool_cap].rstrip() + '\n[обрезано]'
+        if len(chunk) > caps[i]:
+            chunk = chunk[:caps[i]].rstrip() + '\n[обрезано]'
         sections.append(f'[{tname}]\n{chunk}')
     return (
         '\n\nДОПОЛНИТЕЛЬНЫЕ ДАННЫЕ ИЗ ДНЕВНИКА (получены '
@@ -211,6 +223,12 @@ def _execute_tool(tool_name: str, args: dict) -> str | None:
             tool_activity_impact, tool_people_overview, tool_best_worst_days,
             tool_diary_stats, tool_on_this_day, tool_weather_impact,
         )
+        from .tools import ANALYSIS_TOOLS
+        if tool_name in ANALYSIS_TOOLS:
+            import inspect
+            fn = ANALYSIS_TOOLS[tool_name]
+            accepted = inspect.signature(fn).parameters
+            return fn(**{k: v for k, v in (args or {}).items() if k in accepted})
         if tool_name == 'activity_impact':
             return tool_activity_impact()
         if tool_name == 'weather_impact':
@@ -233,12 +251,14 @@ def _execute_tool(tool_name: str, args: dict) -> str | None:
             year = (args or {}).get('year')
             month = (args or {}).get('month')
             start = (args or {}).get('start')
+            limit = (args or {}).get('limit', 40)
             if start:
                 return tool_period_entries(start=str(start),
-                                           end=str((args or {}).get('end') or start))
+                                           end=str((args or {}).get('end') or start),
+                                           limit=limit)
             if year is None:
                 return None
-            return tool_period_entries(year, month)
+            return tool_period_entries(year, month, limit=limit)
         if tool_name == 'search_topic':
             query = str((args or {}).get('query') or '').strip()
             if not query:
@@ -303,6 +323,100 @@ def _route_by_scenario(llm, user_message: str, prior_user_messages: list[str]):
     log.info('Scenario router: %s (%s) → %s', decision.scenario, decision.source,
              [c['tool'] for c in calls])
     return decision, calls
+
+
+# ── one reply, step by step ───────────────────────────────────
+#
+# stream() and the answer eval (tools/assistant_eval/answers.py) both build a
+# reply from these, so the eval measures the app's code, not a copy of it.
+
+def _gather_evidence(llm, user_message: str, prior_user_msgs: list[str],
+                     mode: str | None = None):
+    """Route the message and run the tools it needs.
+
+    A generator: yields each call ({'tool', 'args'}) as it starts, so the
+    chat can show what is being fetched, and returns (scenario decision or
+    None for the old router, [(tool, text)]).
+    """
+    scenario = None
+    if (mode or _router_mode()) == 'scenario':
+        scenario, calls = _route_by_scenario(llm, user_message, prior_user_msgs)
+    else:
+        with _thinking_off():
+            calls = _route_to_tools(llm, user_message,
+                                    prior_user_msgs[-1] if prior_user_msgs else None)
+    outputs: list[tuple[str, str]] = []
+    for call in calls:
+        yield call
+        text = _execute_tool(call['tool'], call['args'])
+        if text:
+            outputs.append((call['tool'], text))
+    # Plain strings from here on: release the connection before the next read.
+    db.session.remove()
+    return scenario, outputs
+
+
+def _grounded_system(llm, user_message: str, scenario, tool_outputs,
+                     thinking_enabled: bool = False) -> str:
+    """The system prompt: the memory layers plus the tools' evidence."""
+    from .memory import assemble_context
+    n_ctx = _llm_n_ctx or _env_int('LLM_N_CTX', _DEFAULT_GPU_CTX, min_value=256)
+    reserve = _env_int('LLM_RESERVE_TOKENS', 512, min_value=0)
+    thinking_overhead = (_count_tokens(llm, _get_thinking_instruction()) + 10
+                         if thinking_enabled else 0)
+    # Budget for system prompt: n_ctx minus output reserve, chat history (~1000),
+    # thinking instruction, and safety margin
+    system_budget = n_ctx - reserve - 1000 - thinking_overhead - 64
+    if scenario is None:
+        system = assemble_context(user_message,
+                                  max_system_tokens=max(512, system_budget))
+        # Tool results go after the base prompt, capped at ~5000
+        # chars (≈1000-1300 tokens) to leave room for everything else.
+        if tool_outputs:
+            system += _tool_section(tool_outputs, 5000)
+        return system
+    # Scenario router: the tools' evidence is measured first and the
+    # background layers get the rest of the budget, minus the ones that
+    # would repeat it.
+    from .scenarios import context_layers
+    tools_text = _tool_section(tool_outputs, 8000) if tool_outputs else ''
+    tools_tokens = _count_tokens(llm, tools_text) if tools_text else 0
+    return assemble_context(
+        user_message,
+        max_system_tokens=max(512, system_budget - tools_tokens),
+        **context_layers(scenario.scenario, bool(tool_outputs)),
+    ) + tools_text
+
+
+def _tone_hint(user_message: str) -> tuple[str, str]:
+    """(a line for the system prompt or '', the detected tone)."""
+    from .memory import detect_emotional_tone
+    tone, confidence = detect_emotional_tone(user_message)
+    if confidence > 0.5 and tone in ('distressed', 'sad'):
+        return ('\n\nТОН ПОЛЬЗОВАТЕЛЯ: Пользователь сейчас в тяжёлом '
+                'эмоциональном состоянии. Будь особенно мягким и поддерживающим.', tone)
+    if confidence > 0.5 and tone == 'positive':
+        return ('\n\nТОН ПОЛЬЗОВАТЕЛЯ: Пользователь в хорошем настроении. '
+                'Можешь быть более свободным и лёгким в общении.', tone)
+    return '', tone
+
+
+def _reply_temperature(user_tone: str, thinking_enabled: bool) -> float:
+    """Softer and steadier when the user is struggling."""
+    heavy = user_tone in ('distressed', 'sad')
+    if thinking_enabled:
+        return 0.4 if heavy else 0.5
+    return 0.5 if heavy else 0.7
+
+
+def _tool_events(evidence):
+    """SSE events for `_gather_evidence`'s calls; returns what it returns."""
+    try:
+        while True:
+            call = next(evidence)
+            yield 'data: ' + json.dumps({'tool': call['tool'], 'args': call['args']}) + '\n\n'
+    except StopIteration as stop:
+        return stop.value
 
 
 _llm_loading = False
@@ -1155,73 +1269,22 @@ def stream():
             except Exception:
                 # Non-fatal: the router just loses multi-turn context.
                 log.warning('Could not load prior user message', exc_info=True)
-            prior_user_msg = prior_user_msgs[-1] if prior_user_msgs else None
             # prior_user_msgs are plain strings — release connection before
             # the router LLM call so it doesn't block other writers.
             db.session.remove()
 
-            scenario = None
-            if _router_mode() == 'scenario':
-                scenario, tool_decisions = _route_by_scenario(
-                    llm, user_message, prior_user_msgs)
-            else:
-                with _thinking_off():
-                    tool_decisions = _route_to_tools(llm, user_message, prior_user_msg)
-            tool_outputs: list[tuple[str, str]] = []  # [(tool_name, result_text)]
-            for decision in tool_decisions:
-                yield ('data: ' + json.dumps({
-                    'tool': decision['tool'],
-                    'args': decision['args'],
-                }) + '\n\n')
-                result_text = _execute_tool(decision['tool'], decision['args'])
-                if result_text:
-                    tool_outputs.append((decision['tool'], result_text))
+            scenario, tool_outputs = yield from _tool_events(
+                _gather_evidence(llm, user_message, prior_user_msgs))
             if tool_outputs:
                 yield 'data: ' + json.dumps({'tool_done': True}) + '\n\n'
-            # tool_outputs contains plain strings — release connection before
-            # assemble_context which opens its own DB read.
-            db.session.remove()
 
-            # Detect emotional tone for adaptive responses
-            from .memory import assemble_context, detect_emotional_tone
-            user_tone, tone_confidence = detect_emotional_tone(user_message)
-            n_ctx = _llm_n_ctx or _env_int('LLM_N_CTX', _DEFAULT_GPU_CTX, min_value=256)
-            reserve = _env_int('LLM_RESERVE_TOKENS', 512, min_value=0)
-            thinking_overhead = (_count_tokens(llm, _get_thinking_instruction()) + 10
-                                 if thinking_enabled else 0)
-            # Budget for system prompt: n_ctx minus output reserve, chat history (~1000),
-            # thinking instruction, and safety margin
-            system_budget = n_ctx - reserve - 1000 - thinking_overhead - 64
-            if scenario is None:
-                system = assemble_context(user_message,
-                                          max_system_tokens=max(512, system_budget))
-                # Tool results go after the base prompt, capped at ~5000
-                # chars (≈1000-1300 tokens) to leave room for everything else.
-                if tool_outputs:
-                    system += _tool_section(tool_outputs, 5000)
-            else:
-                # Scenario router: the tools' evidence is measured first and
-                # the background layers get the rest of the budget, minus the
-                # ones that would repeat it.
-                from .scenarios import context_layers
-                tools_text = _tool_section(tool_outputs, 8000) if tool_outputs else ''
-                tools_tokens = _count_tokens(llm, tools_text) if tools_text else 0
-                system = assemble_context(
-                    user_message,
-                    max_system_tokens=max(512, system_budget - tools_tokens),
-                    **context_layers(scenario.scenario, bool(tool_outputs)),
-                ) + tools_text
+            system = _grounded_system(llm, user_message, scenario, tool_outputs,
+                                      thinking_enabled)
             # The grounded prompt, before tone and thinking hints — what the
             # "final answer only" retry below starts from.
             system_base = system
-
-            # Inject emotional tone hint
-            if tone_confidence > 0.5 and user_tone in ('distressed', 'sad'):
-                system += ('\n\nТОН ПОЛЬЗОВАТЕЛЯ: Пользователь сейчас в тяжёлом '
-                           'эмоциональном состоянии. Будь особенно мягким и поддерживающим.')
-            elif tone_confidence > 0.5 and user_tone == 'positive':
-                system += ('\n\nТОН ПОЛЬЗОВАТЕЛЯ: Пользователь в хорошем настроении. '
-                           'Можешь быть более свободным и лёгким в общении.')
+            tone_line, user_tone = _tone_hint(user_message)
+            system += tone_line
 
             if thinking_enabled:
                 system = system + '\n\n' + _get_thinking_instruction()
@@ -1274,11 +1337,7 @@ def stream():
             except Exception:
                 db.session.rollback()
 
-            # Adaptive temperature based on emotional tone
-            if thinking_enabled:
-                temperature = 0.4 if user_tone in ('distressed', 'sad') else 0.5
-            else:
-                temperature = 0.5 if user_tone in ('distressed', 'sad') else 0.7
+            temperature = _reply_temperature(user_tone, thinking_enabled)
 
             max_tokens = _get_max_tokens()
             chat_kwargs = {

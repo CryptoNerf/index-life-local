@@ -332,6 +332,10 @@ def tool_period_entries(year: int | None = None, month: int | None = None,
     entries are picked evenly across the period, and a period longer than
     a month and a half opens with its per-month averages.
     """
+    try:
+        limit = max(1, min(60, int(limit)))
+    except (TypeError, ValueError):
+        limit = 40
     if start:
         spec = _parse_period_spec(f'{start}..{end or start}')
     else:
@@ -626,3 +630,112 @@ def tool_weather_impact() -> str:
         ]
         lines.append('- По типу погоды: ' + '; '.join(parts))
     return '\n'.join(lines)
+
+
+# ── analysis tools (ROADMAP §17 phase 2) ──────────────────────
+#
+# Thin wrappers: read the days from the database, hand them to the pure
+# functions in analysis.py. Arguments arrive from the scenario plans as
+# JSON-ish values, so each is checked here.
+
+_WEATHER_KEYS = {'Clear', 'Clouds', 'Fog', 'Rain', 'Snow', 'Thunderstorm', 'Other'}
+
+
+def _range(start, end):
+    """(start, end) dates from ISO strings; either may be missing."""
+    from datetime import date as _date
+    def one(v):
+        try:
+            return _date.fromisoformat(str(v)) if v else None
+        except ValueError:
+            return None
+    return one(start), one(end)
+
+
+def _int_or_none(v, lo=None, hi=None):
+    try:
+        n = int(v)
+    except (TypeError, ValueError):
+        return None
+    if (lo is not None and n < lo) or (hi is not None and n > hi):
+        return None
+    return n
+
+
+def tool_what_changed(period_a: str = '', period_b: str = '') -> str:
+    """Period b against period a ("YYYY", "YYYY-MM" or "A..B"); by default
+    the last 30 days against the 30 before them."""
+    from datetime import date as _date, timedelta
+    from .analysis import what_changed
+    from .daybook import load_days
+    today = _date.today()
+    b = _parse_period_spec(period_b) if period_b else None
+    b = (b[1], b[2]) if b else (today - timedelta(days=29), today)
+    a = _parse_period_spec(period_a) if period_a else None
+    if a:
+        a = (a[1], a[2])
+    else:
+        length = (b[1] - b[0]).days + 1
+        a = (b[0] - timedelta(days=length), b[0] - timedelta(days=1))
+    return what_changed(load_days(), a, b)
+
+
+def tool_contrast_days(start: str = '', end: str = '') -> str:
+    from .analysis import contrast_days
+    from .daybook import load_days
+    return contrast_days(load_days(*_range(start, end)))
+
+
+def tool_person_deep(name: str) -> str:
+    from datetime import date as _date
+    from .analysis import person_deep
+    from .daybook import load_days
+    name = (name or '').strip()
+    if not name:
+        return ''
+    return person_deep(load_days(), name, _date.today())
+
+
+def tool_entries_query(start: str = '', end: str = '', min_rating=None, max_rating=None,
+                       person: str = '', activity: str = '', weather: str = '',
+                       weekday=None, word: str = '', limit: int = 25) -> str:
+    from .analysis import entries_query
+    from .daybook import load_days
+    s, e = _range(start, end)
+    return entries_query(
+        load_days(), start=s, end=e,
+        min_rating=_int_or_none(min_rating, 1, 10), max_rating=_int_or_none(max_rating, 1, 10),
+        person=(person or '').strip() or None, activity=(activity or '').strip() or None,
+        weather=weather if weather in _WEATHER_KEYS else None,
+        weekday=_int_or_none(weekday, 0, 6), word=(word or '').strip() or None,
+        limit=_int_or_none(limit, 1, 60) or 25,
+    )
+
+
+def tool_rhythms() -> str:
+    from .analysis import rhythms
+    from .daybook import load_days
+    return rhythms(load_days())
+
+
+def tool_themes(start: str = '', end: str = '') -> str:
+    from datetime import date as _date
+    from app.models import MindCluster
+    from .analysis import themes
+    from .daybook import load_days
+    s, e = _range(start, end)
+    clusters = [(c.label, c.entry_count or 0) for c in
+                MindCluster.query.order_by(MindCluster.entry_count.desc()).limit(8).all()]
+    return themes(load_days(), _date.today(), start=s, end=e, clusters=clusters)
+
+
+# Name → function for the tools above; routes._execute_tool passes on only
+# the arguments a function accepts.
+ANALYSIS_TOOLS = {
+    'what_changed': tool_what_changed,
+    'contrast_days': tool_contrast_days,
+    'person_deep': tool_person_deep,
+    'entries_query': tool_entries_query,
+    'rhythms': tool_rhythms,
+    'themes': tool_themes,
+}

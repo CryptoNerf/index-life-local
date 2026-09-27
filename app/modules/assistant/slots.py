@@ -469,6 +469,58 @@ def emotion_synonyms(canonical: str) -> list[str]:
     return list(EMOTIONS.get(canonical, ()))
 
 
+# ── filters: which days ───────────────────────────────────────
+
+_BAD_DAYS = re.compile(r'\b(плох\w*|тяж[её]л\w*|худш\w*|грустн\w*|паршив\w*)\s+(дн\w*|день)', re.I)
+_GOOD_DAYS = re.compile(r'\b(хорош\w*|лучш\w*|светл\w*|счастлив\w*|радостн\w*)\s+(дн\w*|день)', re.I)
+
+# Recurring weekdays only: "по понедельникам", "понедельники". A single "в
+# пятницу" is usually a date ("что было в пятницу"), not a pattern.
+_WEEKDAY_STEMS = ['понедельник', 'вторник', 'сред', 'четверг', 'пятниц', 'суббот', 'воскресень']
+_WEEKDAY_RE = re.compile(
+    r'\b(?:по\s+(' + '|'.join(_WEEKDAY_STEMS) + r')\w*|(' + '|'.join(_WEEKDAY_STEMS)
+    + r')(?:и|ы|ам|ах)\b)', re.I)
+
+_WEATHER_WORDS = [
+    (re.compile(r'\bдожд\w*|\bливн\w*', re.I), 'Rain'),
+    (re.compile(r'\bснег\w*|\bснеж\w*|\bснегопад', re.I), 'Snow'),
+    (re.compile(r'\bгроз\w*', re.I), 'Thunderstorm'),
+    (re.compile(r'\bтуман\w*', re.I), 'Fog'),
+    (re.compile(r'\bпасмурн\w*|\bоблачн\w*', re.I), 'Clouds'),
+    (re.compile(r'\bсолнечн\w*|\bясн\w*\s+(?:дн|погод|день)', re.I), 'Clear'),
+]
+
+
+def find_rating(text: str) -> tuple[str, int] | None:
+    """("max", 4) for "плохие дни", ("min", 7) for "хорошие дни"."""
+    t = (text or '').replace('ё', 'е')
+    bad, good = _BAD_DAYS.search(t), _GOOD_DAYS.search(t)
+    # "Чем хорошие дни отличаются от плохих?" compares them; it filters nothing.
+    if bad and good or re.search(r'\bот\s+плох|\bот\s+хорош|\bи\s+плох|\bи\s+хорош', t, re.I):
+        return None
+    if bad:
+        return ('max', 4)
+    if good:
+        return ('min', 7)
+    return None
+
+
+def find_weekday(text: str) -> int | None:
+    m = _WEEKDAY_RE.search(text or '')
+    if not m:
+        return None
+    stem = (m.group(1) or m.group(2)).lower()
+    return next(i for i, s in enumerate(_WEEKDAY_STEMS) if stem.startswith(s))
+
+
+def find_weather(text: str) -> str | None:
+    """The weather condition a question names, as signals store it."""
+    for pattern, key in _WEATHER_WORDS:
+        if pattern.search(text or ''):
+            return key
+    return None
+
+
 # ── all of it ─────────────────────────────────────────────────
 
 @dataclass
@@ -477,11 +529,26 @@ class Slots:
     people: list[str] = field(default_factory=list)
     activities: list[str] = field(default_factory=list)
     emotions: list[str] = field(default_factory=list)
+    rating: tuple[str, int] | None = None
+    weekday: int | None = None
+    weather: str | None = None
 
     def as_dict(self) -> dict:
         return {'period': self.period.as_dict() if self.period else None,
                 'people': self.people, 'activities': self.activities,
-                'emotions': self.emotions}
+                'emotions': self.emotions, 'rating': self.rating,
+                'weekday': self.weekday, 'weather': self.weather}
+
+    def filters(self) -> dict:
+        """entries_query arguments for the day filters found."""
+        out = {}
+        if self.rating:
+            out['max_rating' if self.rating[0] == 'max' else 'min_rating'] = self.rating[1]
+        if self.weekday is not None:
+            out['weekday'] = self.weekday
+        if self.weather:
+            out['weather'] = self.weather
+        return out
 
     def describe(self) -> str:
         """One line per detected detail, for the router prompt."""
@@ -494,6 +561,12 @@ class Slots:
             lines.append('- занятия: ' + ', '.join(self.activities))
         if self.emotions:
             lines.append('- чувства: ' + ', '.join(self.emotions))
+        if self.rating:
+            lines.append('- дни: ' + ('плохие' if self.rating[0] == 'max' else 'хорошие'))
+        if self.weekday is not None:
+            lines.append('- день недели: ' + _WEEKDAY_STEMS[self.weekday])
+        if self.weather:
+            lines.append('- погода: ' + self.weather)
         return '\n'.join(lines)
 
 
@@ -503,4 +576,7 @@ def extract_slots(text: str, today: date, known_people=(), known_activities=()) 
         people=find_people(text, known_people),
         activities=find_activities(text, known_activities),
         emotions=find_emotions(text),
+        rating=find_rating(text),
+        weekday=find_weekday(text),
+        weather=find_weather(text),
     )

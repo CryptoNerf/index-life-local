@@ -38,6 +38,17 @@ def test_slots_match_the_labels(case):
         assert set(want['people']) <= set(got.people), got.people
     if 'emotions' in want:
         assert set(want['emotions']) <= set(got.emotions), got.emotions
+    if 'filters' in want:
+        assert got.filters() == want['filters'], got.filters()
+
+
+def test_questions_without_day_filters_get_none():
+    """Every labelled question that names no filter gets none: a stray
+    "плохие дни" would narrow a plan to the wrong days."""
+    for case in CASES:
+        if 'filters' not in (case.get('slots') or {}):
+            got = extract_slots(case['q'], TODAY, KNOWN_PEOPLE, KNOWN_ACTIVITIES).filters()
+            assert got == {}, (case['q'], got)
 
 
 def test_questions_without_a_period_get_none():

@@ -701,7 +701,23 @@
                   var about = I18N2.about || 'about';
                   var forP = I18N2.forPeriod || 'for';
                   var hint = I18N2.diaryData || 'diary data';
-                  if (data.tool === 'person_history' && data.args && data.args.name) {
+                  if ((data.tool === 'person_history' || data.tool === 'person_deep') &&
+                      data.args && data.args.name) {
+                    hint = about + ' ' + data.args.name;
+                  } else if (data.tool === 'entries_query' && data.args) {
+                    var q = data.args;
+                    if (q.person) hint = about + ' ' + q.person;
+                    else if (q.word) hint = '«' + String(q.word).split('|')[0] + '»';
+                    if (q.start) {
+                      var e0 = q.end || q.start;
+                      hint = (q.person || q.word ? hint + ', ' : '') + forP + ' ' +
+                        (e0 === q.start ? q.start : q.start + '…' + e0);
+                    }
+                  } else if (data.tool === 'what_changed' && data.args && data.args.period_b) {
+                    hint = (I18N2.periodCompare || 'period comparison') + ' ' +
+                      String(data.args.period_a).replace('..', '…') + ' / ' +
+                      String(data.args.period_b).replace('..', '…');
+                  } else if (data.tool === 'person_history' && data.args && data.args.name) {
                     hint = about + ' ' + data.args.name;
                   } else if (data.tool === 'period_entries' && data.args && data.args.start) {
                     // An exact range from the scenario router: a week, a season.

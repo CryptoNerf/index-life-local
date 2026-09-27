@@ -10,9 +10,9 @@ synthetic, and the tools are not executed, only chosen.
 
 Metrics
 - needs coverage: of the data kinds a question needs (a trend, a period, a
-  person...), how many the chosen calls fetch. "rhythm", "themes" and "chat"
-  have no tool yet and are counted apart, so both routers are judged only on
-  what they could fetch.
+  person...), how many the chosen calls fetch. "chat" has no tool yet and
+  is counted apart. "query" means an entries_query carrying every day
+  filter the question names ("плохие дни", "по понедельникам", "в дождь").
 - precise periods: of the covered period needs, how many calls fetch that
   period rather than a whole month or year around it.
 - quiet: questions that need nothing (a greeting, "что ты умеешь?") and got
@@ -46,12 +46,17 @@ from app.modules.assistant.tools import _parse_period_spec  # noqa: E402
 TODAY = date(2026, 9, 27)
 KNOWN_PEOPLE = ['Маша', 'Сергей', 'Лёша', 'Мари', 'Дима', 'Илья', 'Лена']
 KNOWN_ACTIVITIES = ['бег', 'спорт', 'работа', 'прогулка', 'чтение', 'учёба']
-GAP_NEEDS = {'rhythm', 'themes', 'chat'}
-TOOL_FOR_NEED = {
-    'trend': 'mood_trend', 'compare': 'compare_periods',
-    'activities': 'activity_impact', 'people': 'people_overview',
-    'weather': 'weather_impact', 'extremes': 'best_worst_days',
-    'stats': 'diary_stats', 'topic': 'search_topic',
+GAP_NEEDS = {'chat'}
+TOOLS_FOR_NEED = {
+    'trend': {'mood_trend', 'what_changed'},
+    'compare': {'compare_periods', 'what_changed'},
+    'activities': {'activity_impact', 'contrast_days'},
+    'extremes': {'best_worst_days', 'contrast_days'},
+    'people': {'people_overview'},
+    'weather': {'weather_impact'},
+    'stats': {'diary_stats'},
+    'rhythm': {'rhythms'},
+    'themes': {'themes'},
 }
 
 
@@ -85,6 +90,12 @@ def app_model_state() -> str:
 def call_range(call):
     """(start, end) of the dates a period call fetches, or None."""
     args = call.get('args') or {}
+    if call['tool'] == 'entries_query':
+        if not (args.get('start') or args.get('end')):
+            return None
+        a = date.fromisoformat(args.get('start') or '2000-01-01')
+        b = date.fromisoformat(args.get('end') or TODAY.isoformat())
+        return (a, b)
     if call['tool'] == 'period_entries':
         if args.get('start'):
             spec = _parse_period_spec(f"{args['start']}..{args.get('end') or args['start']}")
@@ -140,10 +151,17 @@ def _same_person(a: str, b: str) -> bool:
 def covers(need, call, case):
     tool = call['tool']
     args = call.get('args') or {}
-    if need in TOOL_FOR_NEED:
-        return tool == TOOL_FOR_NEED[need]
+    if need in TOOLS_FOR_NEED:
+        return tool in TOOLS_FOR_NEED[need]
+    if need == 'topic':
+        return tool == 'search_topic' or (tool == 'entries_query' and bool(args.get('word')))
     if need.startswith('person:'):
-        return tool == 'person_history' and _same_person(str(args.get('name') or ''), need[7:])
+        if tool in ('person_history', 'person_deep'):
+            return _same_person(str(args.get('name') or ''), need[7:])
+        return tool == 'entries_query' and _same_person(str(args.get('person') or ''), need[7:])
+    if need == 'query':
+        want = (case.get('slots') or {}).get('filters') or {}
+        return tool == 'entries_query' and all(args.get(k) == v for k, v in want.items())
     if need == 'anniversary':
         r = call_range(call)
         d = TODAY.replace(year=TODAY.year - 1)
