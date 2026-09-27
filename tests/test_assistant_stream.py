@@ -84,6 +84,10 @@ def test_a_question_is_routed_grounded_streamed_and_saved(chat, monkeypatch, mod
     final = llm.calls[-1]
     system = final['messages'][0]['content']
     assert f'[{tool}]' in system and 'Маша' in system
+    # The scenario path closes with how to answer a question about a person.
+    assert ('КАК ОТВЕТИТЬ:' in system) == (mode == 'scenario')
+    if mode == 'scenario':
+        assert system.rstrip().endswith('Числа (доли, средние, количества) бери из данных как есть.')
     assert final['messages'][-1] == {'role': 'user', 'content': 'Что я писал про Машу?'}
 
     saved = ChatMessage.query.order_by(ChatMessage.id).all()

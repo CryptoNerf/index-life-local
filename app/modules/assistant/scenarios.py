@@ -47,7 +47,7 @@ SCENARIOS = {
     'period': 'что было в конкретный день, неделю, месяц, сезон или год, что было в этот день год назад',
     'review': 'подвести итоги периода или сделать его обзор',
     'compare': 'сравнить два периода между собой',
-    'progress': 'изменилось ли что-то во мне со временем, есть ли прогресс, как менялось настроение',
+    'progress': 'изменилось ли что-то во мне со временем: есть ли прогресс, как менялось настроение, стал ли я реже или чаще что-то делать или чувствовать',
     'diary_meta': 'про сам дневник: сколько записей, как давно веду, серии, среднее настроение, самый худший или лучший день',
     'chat_memory': 'про наши прошлые разговоры в этом чате («что я тебе говорил», «мы уже обсуждали»)',
     'about_me': 'что ты обо мне знаешь, какой я человек, мой портрет, мои сильные стороны',
@@ -223,12 +223,16 @@ _PERSON_LOOKALIKES = {'topic', 'period', 'diary_meta'}
 
 
 def _correct(parsed: dict, own: Slots) -> str:
-    """The model's scenario, unless the message plainly names a person and
-    the model filed it under a look-alike."""
+    """The model's scenario, unless the message plainly says otherwise:
+    it names a person and the model filed it under a look-alike, or it is
+    filed as a period while naming no period, only a topic ("когда я
+    последний раз писал про переезд?")."""
     sc = parsed['scenario']
     named = bool(own.people) or bool(parsed['person'])
     if sc in _PERSON_LOOKALIKES and named:
         return 'person'
+    if sc == 'period' and not own.period and parsed['topic']:
+        return 'topic'
     return sc
 
 
@@ -410,9 +414,14 @@ def plan(d: Decision, message: str, today: date) -> list[dict]:
         if s.weather:
             # "в снежные дни": how weather goes with mood, not the calendar
             add('weather_impact')
+        if s.rating and s.weekday is None and not period:
+            # "что общего у моих лучших дней", filed as a rhythm: it asks
+            # what those days share, not when they fall.
+            add('contrast_days')
         if filters:
-            # "что я пишу по понедельникам": the days themselves too
-            add('entries_query', **filters, limit=15)
+            # "что я пишу по понедельникам", "хорошие дни этим летом": the
+            # days themselves too, within the period if one is named.
+            add('entries_query', **(_range_args(period) if period else {}), **filters, limit=15)
 
     elif sc == 'themes':
         add('themes', **(_range_args(period) if period else {}))
@@ -473,6 +482,10 @@ def plan(d: Decision, message: str, today: date) -> list[dict]:
             r'\bчем\b|по сравнению', message, re.I) else None
         if pair:
             add('what_changed', period_a=_period_spec(pair[0]), period_b=_period_spec(pair[1]))
+        elif own.period and own.period.kind in ('recent', 'month', 'season', 'year'):
+            # "что изменилось за последний месяц": that period against the one before
+            add('what_changed', period_a=_period_spec(previous_period(own.period)),
+                period_b=_period_spec(own.period))
         words = _topic_words(d)
         if words:
             # Month by month, how often: "стал реже тревожиться?"
@@ -507,4 +520,60 @@ def context_layers(scenario: str, has_evidence: bool) -> dict:
         'relevant': scenario in _RELEVANT and not has_evidence,
         'timeline': scenario in _TIMELINE,
     }
+
+
+# ── how to answer ─────────────────────────────────────────────
+
+# Written after reading the first answer eval: the model misread shares
+# ("около четверти" for 75%), cited dates it was never shown, and answered
+# an analytic question by paraphrasing it back first.
+_ANSWER_RULES = (
+    'Даты называй только те, что есть в данных выше. Если точной даты там нет, '
+    'не придумывай её. Числа (доли, средние, количества) бери из данных как есть.'
+)
+
+ANSWER_GUIDE = {
+    'support': 'Сначала коротко откликнись на чувство. Из данных возьми одно-два '
+               'наблюдения, только если они помогают: например, что раньше помогало '
+               'в похожем состоянии. Без разбора статистики и без списка советов.',
+    'conversation': 'Ответь коротко и по-человечески. Не пересказывай дневник, если '
+                    'об этом не спрашивали.',
+    'why_changed': 'Назови две-три конкретные перемены из сравнения периодов, с цифрами. '
+                   'Отдели то, что видно в записях, от догадок: причину не утверждай как факт.',
+    'drivers': 'Назови конкретные занятия, людей или погоду, которые чаще бывают в хорошие '
+               'и в плохие дни, с цифрами. Связь не значит причину, скажи это мягко.',
+    'rhythms': 'Опиши закономерность с цифрами: средние по дням недели, месяцам или сезонам. '
+               'Если разница небольшая, так и скажи.',
+    'themes': 'Назови две-четыре главные темы с долей записей, отметь, какие идут с тяжёлыми '
+              'днями и что стало чаще в последнее время.',
+    'topic': 'Ответь про эту тему по найденным записям: когда, как часто, в каком контексте. '
+             'Короткие цитаты с датами.',
+    'person': 'Опиши картину по данным: как часто, какой тон и как он менялся, настроение '
+              'в дни с этим человеком, одна-две короткие цитаты с датами. Не оценивай '
+              'и не суди этого человека.',
+    'people': 'Назови людей из данных с их тоном и частотой упоминаний. Не суди никого.',
+    'period': 'Перескажи период по записям: общий фон со средней оценкой, два-три '
+              'заметных дня с датами, что повторялось.',
+    'review': 'Итоги периода: средняя оценка и сравнение с предыдущим периодом, главные '
+              'темы, что изменилось, светлые и тяжёлые моменты с датами. Без воды.',
+    'compare': 'Сначала прямо скажи, какой период был лучше и на сколько (средние), потом '
+               'чем они различались.',
+    'progress': 'Ответь, есть ли изменение, по цифрам во времени (тренд, счёт по месяцам). '
+                'Если данных мало для вывода, скажи об этом.',
+    'diary_meta': 'Ответь прямо, цифрами из данных.',
+    'chat_memory': 'Опирайся на историю этого чата выше. Если там ответа нет, честно скажи, '
+                   'что не помнишь этого разговора.',
+    'about_me': 'Опиши человека бережно, по профилю и записям, без диагнозов и ярлыков.',
+}
+
+
+def answer_guidance(scenario: str) -> str:
+    """The closing lines of the system prompt: how to use the data above."""
+    guide = ANSWER_GUIDE.get(scenario, '')
+    lines = ['КАК ОТВЕТИТЬ:']
+    if guide:
+        lines.append(guide)
+    if scenario not in ('conversation', 'chat_memory'):
+        lines.append(_ANSWER_RULES)
+    return '\n\n' + '\n'.join(lines)
 

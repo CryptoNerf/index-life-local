@@ -378,9 +378,11 @@ def _grounded_system(llm, user_message: str, scenario, tool_outputs,
     # Scenario router: the tools' evidence is measured first and the
     # background layers get the rest of the budget, minus the ones that
     # would repeat it.
-    from .scenarios import context_layers
+    from .scenarios import answer_guidance, context_layers
     tools_text = _tool_section(tool_outputs, 8000) if tool_outputs else ''
-    tools_tokens = _count_tokens(llm, tools_text) if tools_text else 0
+    # Last, right before the conversation: how to answer this kind of question.
+    tools_text += answer_guidance(scenario.scenario)
+    tools_tokens = _count_tokens(llm, tools_text)
     return assemble_context(
         user_message,
         max_system_tokens=max(512, system_budget - tools_tokens),

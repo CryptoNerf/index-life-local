@@ -415,3 +415,36 @@ def test_router_mode_defaults_to_legacy(monkeypatch):
 
 def test_slots_describe_is_empty_without_details():
     assert Slots().describe() == ''
+
+
+def test_a_period_question_with_no_period_but_a_topic_is_a_topic():
+    d = route(FakeLLM(_json('period', topic='переезд')), 'Когда я последний раз писал про переезд?',
+              TODAY)
+    assert d.scenario == 'topic'
+    d = route(FakeLLM(_json('period', topic='работа')), 'Что было с работой в марте?', TODAY)
+    assert d.scenario == 'period'
+
+
+def test_progress_over_a_named_period_looks_at_what_changed():
+    calls = _plan('progress', 'Что изменилось в моей жизни за последний месяц?')
+    assert calls[1] == {'tool': 'what_changed', 'args': {
+        'period_a': '2026-07-30..2026-08-28', 'period_b': '2026-08-29..2026-09-27'}}
+
+
+def test_every_scenario_has_answer_guidance_and_data_ones_get_the_date_rule():
+    for sc in scenarios.SCENARIOS:
+        text = scenarios.answer_guidance(sc)
+        assert text.startswith('\n\nКАК ОТВЕТИТЬ:\n') and sc in scenarios.ANSWER_GUIDE, sc
+        assert ('Даты называй только' in text) == (sc not in ('conversation', 'chat_memory')), sc
+        assert '—' not in text
+
+
+def test_a_day_question_filed_as_a_rhythm_still_gets_those_days():
+    # The model sometimes files these under rhythms; the plan still fetches
+    # what they ask about.
+    assert _tools(_plan('rhythms', 'Что общего у моих лучших дней?')) == [
+        'rhythms', 'contrast_days', 'entries_query']
+    assert _plan('rhythms', 'Какие были хорошие дни этим летом?')[1] == {
+        'tool': 'entries_query', 'args': {'start': '2026-06-01', 'end': '2026-08-31',
+                                          'min_rating': 7, 'limit': 15}}
+
