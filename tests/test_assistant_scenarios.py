@@ -404,14 +404,14 @@ def test_thinking_is_off_while_routing_and_restored_after():
     assert not hasattr(routes._thinking_state, 'enabled')
 
 
-def test_router_mode_defaults_to_legacy(monkeypatch):
+def test_router_mode_defaults_to_the_scenario_router(monkeypatch):
     from app.modules.assistant import routes
     monkeypatch.delenv('ASSISTANT_ROUTER', raising=False)
-    assert routes._router_mode() == 'legacy'
-    monkeypatch.setenv('ASSISTANT_ROUTER', 'Scenario')
     assert routes._router_mode() == 'scenario'
-    monkeypatch.setenv('ASSISTANT_ROUTER', 'nonsense')
+    monkeypatch.setenv('ASSISTANT_ROUTER', 'Legacy')
     assert routes._router_mode() == 'legacy'
+    monkeypatch.setenv('ASSISTANT_ROUTER', 'nonsense')
+    assert routes._router_mode() == 'scenario'
 
 
 def test_slots_describe_is_empty_without_details():

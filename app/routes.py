@@ -458,7 +458,6 @@ def account():
         if 'photo' in request.files:
             file = request.files['photo']
             if file and file.filename:
-                from flask import current_app
                 if allowed_file(file.filename, current_app.config['ALLOWED_EXTENSIONS']):
                     # Delete old photo if exists. Best-effort: a locked or
                     # permission-blocked file must not turn a profile save
@@ -493,11 +492,13 @@ def account():
             flash(t('flash.profile_update_error', err=e), 'error')
 
     from app import signals
-    from app.models import SyncMeta
-    router_row = db.session.get(SyncMeta, 'assistant_router')
+    assistant_router = None
+    if 'assistant' in current_app.config.get('ACTIVE_MODULES', []):
+        from app.modules.assistant.routes import router_setting
+        assistant_router = router_setting()
     return render_template('account.html',
                          profile=profile,
-                         assistant_router=(router_row.value if router_row else 'legacy'),
+                         assistant_router=assistant_router,
                          archive_years=archive_years,
                          year_stats=year_stats,
                          weather_enabled=signals.is_weather_enabled(),

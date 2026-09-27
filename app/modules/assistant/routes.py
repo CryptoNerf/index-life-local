@@ -279,27 +279,28 @@ def _execute_tool(tool_name: str, args: dict) -> str | None:
 
 
 ROUTER_MODES = ('legacy', 'scenario')
+# The scenario router, since 3.1 (ROADMAP §17). The tool router of 3.0 stays
+# one choice away on the account page.
+DEFAULT_ROUTER = 'scenario'
 _ROUTER_META_KEY = 'assistant_router'
 
 
 def router_setting() -> str:
-    """The router chosen on the account page, for this device."""
+    """The router chosen on the account page for this device, or the default."""
     from app.models import SyncMeta
     try:
         row = db.session.get(SyncMeta, _ROUTER_META_KEY)
     except Exception:
-        return 'legacy'
-    return row.value if row and row.value in ROUTER_MODES else 'legacy'
+        return DEFAULT_ROUTER
+    return row.value if row and row.value in ROUTER_MODES else DEFAULT_ROUTER
 
 
 def _router_mode() -> str:
     """Which router answers: ASSISTANT_ROUTER in the environment if set (the
-    evals and development), else the account page's choice. The tool router
-    stays the default until the scenario router has been tried on a real
-    diary (ROADMAP §17)."""
+    evals and development), else the account page's choice."""
     env = os.environ.get('ASSISTANT_ROUTER', '').strip().lower()
     if env:
-        return env if env in ROUTER_MODES else 'legacy'
+        return env if env in ROUTER_MODES else DEFAULT_ROUTER
     return router_setting()
 
 
@@ -1606,9 +1607,9 @@ def set_router_mode():
     router. Kept per device, like the model itself."""
     from flask import redirect
     from app.models import SyncMeta
-    mode = request.form.get('mode', 'legacy')
+    mode = request.form.get('mode', DEFAULT_ROUTER)
     if mode not in ROUTER_MODES:
-        mode = 'legacy'
+        mode = DEFAULT_ROUTER
     row = db.session.get(SyncMeta, _ROUTER_META_KEY)
     if row:
         row.value = mode

@@ -162,16 +162,19 @@ def _answering(llm, decision):
 def test_the_account_page_choice_picks_the_router(chat, monkeypatch):
     client, llm = chat
     monkeypatch.delenv('ASSISTANT_ROUTER', raising=False)
-    assert routes._router_mode() == 'legacy'
-
-    resp = client.post('/assistant/set-router-mode', data={'mode': 'scenario'})
-    assert resp.status_code == 302
-    assert routes.router_setting() == 'scenario' == routes._router_mode()
+    # Nothing chosen yet: the scenario router.
+    assert routes._router_mode() == 'scenario'
     events = _events(client.post('/assistant/stream', json={'message': 'Что я писал про Машу?'}))
     assert [e['tool'] for e in events if 'tool' in e] == ['person_deep']
 
+    resp = client.post('/assistant/set-router-mode', data={'mode': 'legacy'})
+    assert resp.status_code == 302
+    assert routes.router_setting() == 'legacy' == routes._router_mode()
+    events = _events(client.post('/assistant/stream', json={'message': 'Что я писал про Машу?'}))
+    assert [e['tool'] for e in events if 'tool' in e] == ['person_history']
+
     # The environment still wins (the evals rely on it), and junk is refused.
-    monkeypatch.setenv('ASSISTANT_ROUTER', 'legacy')
-    assert routes._router_mode() == 'legacy'
+    monkeypatch.setenv('ASSISTANT_ROUTER', 'scenario')
+    assert routes._router_mode() == 'scenario'
     client.post('/assistant/set-router-mode', data={'mode': 'bogus'})
-    assert routes.router_setting() == 'legacy'
+    assert routes.router_setting() == 'scenario'
