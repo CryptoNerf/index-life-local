@@ -75,6 +75,37 @@ def _excerpt_around_term(note: str, term: str, window_chars: int = 280) -> str:
     return prefix + chunk + suffix
 
 
+def diary_vocabulary(max_people: int = 300, max_activities: int = 200):
+    """(people, activities) the diary knows, most mentioned first.
+
+    People are alias-resolved canonical names, as "My people" shows them.
+    The scenario router's slot parser matches a question against these, so
+    "с Машей" finds Маша even though no rule knows the name.
+    """
+    from sqlalchemy import func
+    aliases = {a.alias: a.canonical for a in PersonAlias.query.all()}
+
+    def resolve(n: str) -> str:
+        seen: set = set()
+        while n in aliases and n not in seen:
+            seen.add(n)
+            n = aliases[n]
+        return n
+
+    counts: dict[str, int] = {}
+    for mention, n in (db.session.query(EntryPerson.mention, func.count())
+                       .group_by(EntryPerson.mention).all()):
+        name = resolve(_normalize_mention(mention))
+        if name:
+            counts[name] = counts.get(name, 0) + n
+    people = [k for k, _ in sorted(counts.items(), key=lambda kv: -kv[1])][:max_people]
+    activities = [a for a, _ in (db.session.query(EntryActivity.activity, func.count())
+                                 .group_by(EntryActivity.activity)
+                                 .order_by(func.count().desc())
+                                 .limit(max_activities).all())]
+    return people, activities
+
+
 def tool_topic_search(query: str, limit: int = 8) -> str:
     """Semantic search over entries for a topic-style query.
 
@@ -217,38 +248,50 @@ def tool_mood_trend(window_days: int = 30) -> str:
     )
 
 
+def _parse_period_spec(spec: str):
+    """A period as the router writes it → (label, start, end), or None.
+
+    Accepts "YYYY", "YYYY-MM" and an exact range "YYYY-MM-DD..YYYY-MM-DD"
+    (a week, a season, "с 5 по 12 марта"). `end` is inclusive.
+    """
+    import calendar
+    from datetime import date as _date
+    s = (spec or '').strip()
+    try:
+        if '..' in s:
+            a, b = (p.strip() for p in s.split('..', 1))
+            start, end = _date.fromisoformat(a), _date.fromisoformat(b)
+            if end < start:
+                start, end = end, start
+            return s, start, end
+        parts = s.split('-')
+        year = int(parts[0])
+        if len(parts) > 1 and parts[1]:
+            month = int(parts[1])
+            last = calendar.monthrange(year, month)[1]
+            return s, _date(year, month, 1), _date(year, month, last)
+        return s, _date(year, 1, 1), _date(year, 12, 31)
+    except (TypeError, ValueError, IndexError):
+        return None
+
+
 def tool_compare_periods(period_a: str, period_b: str) -> str:
-    """Compare two periods. Each `period` is either "YYYY" or "YYYY-MM".
+    """Compare two periods: "YYYY", "YYYY-MM" or "YYYY-MM-DD..YYYY-MM-DD".
 
     Returns headline stats (mean, min, max, count) for each plus a delta.
     Useful when user asks "is my mood better this month than last".
     """
-    def _parse(s: str):
-        s = (s or '').strip()
-        parts = s.split('-')
-        try:
-            year = int(parts[0])
-        except (TypeError, ValueError, IndexError):
-            return None, None, None
-        month = None
-        if len(parts) > 1 and parts[1]:
-            try:
-                month = int(parts[1])
-            except ValueError:
-                pass
-        return s, year, month
-
-    a_label, a_year, a_month = _parse(period_a)
-    b_label, b_year, b_month = _parse(period_b)
-    if a_year is None or b_year is None:
+    a_spec = _parse_period_spec(period_a)
+    b_spec = _parse_period_spec(period_b)
+    if a_spec is None or b_spec is None:
         return ''
+    a_label, b_label = a_spec[0], b_spec[0]
 
-    def _stats(year: int, month: int | None):
-        q = MoodEntry.query.filter(db.extract('year', MoodEntry.date) == year,
-                                   MoodEntry.deleted == False)
-        if month:
-            q = q.filter(db.extract('month', MoodEntry.date) == month)
-        rows = q.all()
+    def _stats(start, end):
+        rows = (MoodEntry.query
+                .filter(MoodEntry.date >= start, MoodEntry.date <= end,
+                        MoodEntry.deleted == False)
+                .all())
         if not rows:
             return None
         ratings = [r.rating for r in rows]
@@ -259,8 +302,8 @@ def tool_compare_periods(period_a: str, period_b: str) -> str:
             'count': len(ratings),
         }
 
-    a = _stats(a_year, a_month)
-    b = _stats(b_year, b_month)
+    a = _stats(a_spec[1], a_spec[2])
+    b = _stats(b_spec[1], b_spec[2])
 
     if a is None and b is None:
         return f'За периоды {a_label} и {b_label} записей не найдено.'
@@ -279,34 +322,57 @@ def tool_compare_periods(period_a: str, period_b: str) -> str:
     )
 
 
-def tool_period_entries(year: int, month: int | None = None,
-                        limit: int = 40) -> str:
-    """All entries from a specific year (and optionally month)."""
-    try:
-        year = int(year)
-    except (TypeError, ValueError):
-        return ''
-    if month is not None:
+def tool_period_entries(year: int | None = None, month: int | None = None,
+                        limit: int = 40, start: str | None = None,
+                        end: str | None = None) -> str:
+    """Entries from a year, a month, or an exact range `start`..`end`.
+
+    A long period holds more entries than fit, and the newest forty of a
+    year are only its last weeks. So when there are more than `limit`, the
+    entries are picked evenly across the period, and a period longer than
+    a month and a half opens with its per-month averages.
+    """
+    if start:
+        spec = _parse_period_spec(f'{start}..{end or start}')
+    else:
         try:
-            month = int(month)
+            year = int(year)
         except (TypeError, ValueError):
-            month = None
+            return ''
+        m = None
+        if month is not None:
+            try:
+                m = int(month)
+            except (TypeError, ValueError):
+                m = None
+        spec = _parse_period_spec(f'{year}-{m:02d}' if m else f'{year}')
+    if spec is None:
+        return ''
+    label, d0, d1 = spec
 
-    q = MoodEntry.query.filter(db.extract('year', MoodEntry.date) == year,
-                               MoodEntry.deleted == False)
-    if month:
-        q = q.filter(db.extract('month', MoodEntry.date) == month)
-    entries = q.order_by(MoodEntry.date.desc()).limit(limit).all()
-
+    entries = (MoodEntry.query
+               .filter(MoodEntry.date >= d0, MoodEntry.date <= d1,
+                       MoodEntry.deleted == False)
+               .order_by(MoodEntry.date)
+               .all())
     if not entries:
-        period = f'{year}-{month:02d}' if month else f'{year}'
-        return f'Записей за {period} не найдено.'
+        return f'Записей за {label} не найдено.'
 
-    period = f'{year}-{month:02d}' if month else f'{year}'
-    lines = [f'Записи за {period} (отсортированы от свежих к старым):']
     avg = sum(e.rating for e in entries) / len(entries)
-    lines.append(f'Всего {len(entries)} записей, среднее настроение {avg:.2f}/10.')
-    for e in entries:
+    lines = [f'Записи за {label} (от свежих к старым):',
+             f'Всего {len(entries)} записей, среднее настроение {avg:.2f}/10.']
+    if (d1 - d0).days > 45:
+        by_month: dict[str, list[int]] = {}
+        for e in entries:
+            by_month.setdefault(e.date.strftime('%Y-%m'), []).append(e.rating)
+        lines.append('По месяцам: ' + ', '.join(
+            f'{k} — {sum(v) / len(v):.1f} ({len(v)})' for k, v in by_month.items()))
+    shown = entries
+    if len(entries) > limit:
+        step = len(entries) / limit
+        shown = [entries[int(i * step)] for i in range(limit)]
+        lines.append(f'Показаны {limit} записей, равномерно по периоду.')
+    for e in reversed(shown):
         lines.append(_format_entry_line(e))
     return '\n'.join(lines)
 

@@ -1,0 +1,139 @@
+{"q": "Мне сейчас очень тревожно, не могу ни на чём сосредоточиться", "scenario": "support", "needs": ["trend"], "slots": {"emotions": ["тревога"]}}
+{"q": "Мне плохо, не знаю что делать", "scenario": "support", "needs": ["trend"]}
+{"q": "Я совсем выгорел, сил вообще нет", "scenario": "support", "needs": ["trend"], "alt": ["why_changed"], "slots": {"emotions": ["усталость"]}}
+{"q": "грустно сегодня весь день", "scenario": "support", "needs": ["trend"], "slots": {"period": {"kind": "day", "start": "2026-09-27"}, "emotions": ["грусть"]}}
+{"q": "Опять не могу уснуть, мысли крутятся", "scenario": "support", "needs": ["trend"], "slots": {"emotions": ["сон"]}}
+{"q": "Как мне сейчас себе помочь?", "scenario": "support", "needs": ["activities"], "alt": ["drivers"]}
+{"q": "Что мне сделать сегодня чтобы стало полегче?", "scenario": "support", "needs": ["activities"], "alt": ["drivers"]}
+{"q": "Чувствую себя одиноко в последнее время", "scenario": "support", "needs": ["trend"], "alt": ["topic"], "slots": {"period": {"kind": "recent"}, "emotions": ["одиночество"]}}
+{"q": "меня всё бесит, сорвался на всех", "scenario": "support", "needs": ["trend"], "slots": {"emotions": ["злость"]}}
+{"q": "Паника накатывает, сердце колотится", "scenario": "support", "needs": ["trend"], "slots": {"emotions": ["тревога"]}}
+{"q": "Нет мотивации ничего делать уже неделю", "scenario": "support", "needs": ["trend"], "alt": ["why_changed"], "slots": {"emotions": ["мотивация"]}}
+{"q": "Я устал от работы и от всего", "scenario": "support", "needs": ["trend"], "alt": ["why_changed"], "slots": {"emotions": ["усталость"]}}
+{"q": "Привет!", "scenario": "conversation", "needs": []}
+{"q": "Спасибо, это правда помогло", "scenario": "conversation", "needs": []}
+{"q": "Сегодня был отличный день, съездили на море!", "scenario": "conversation", "needs": [], "alt": ["support"]}
+{"q": "Хочу просто выговориться. Сегодня на работе опять завалили задачами, начальник орал, я еле досидел до вечера и ехал домой в пробке два часа.", "scenario": "conversation", "needs": [], "alt": ["support"]}
+{"q": "Как дела?", "scenario": "conversation", "needs": []}
+{"q": "Что ты умеешь?", "scenario": "conversation", "needs": [], "alt": ["about_me"]}
+{"q": "Посоветуй книгу по психологии", "scenario": "conversation", "needs": []}
+{"q": "Как правильно дышать при стрессе?", "scenario": "conversation", "needs": [], "alt": ["support"]}
+{"q": "Ок, понял", "scenario": "conversation", "needs": []}
+{"q": "Напиши мне план тренировок на неделю", "scenario": "conversation", "needs": []}
+{"q": "Доброе утро)", "scenario": "conversation", "needs": []}
+{"q": "Ты тут?", "scenario": "conversation", "needs": []}
+{"q": "Почему мне последнее время так плохо?", "scenario": "why_changed", "needs": ["trend"], "slots": {"period": {"kind": "recent"}}}
+{"q": "Что изменилось, что мне стало хуже?", "scenario": "why_changed", "needs": ["trend"]}
+{"q": "Откуда у меня этот спад в сентябре?", "scenario": "why_changed", "needs": ["trend"], "alt": ["period"], "slots": {"period": {"kind": "month", "start": "2026-09-01"}}}
+{"q": "Почему в последние две недели настроение упало?", "scenario": "why_changed", "needs": ["trend"], "slots": {"period": {"kind": "recent", "start": "2026-09-14"}}}
+{"q": "Мне стало лучше, как думаешь почему?", "scenario": "why_changed", "needs": ["trend"]}
+{"q": "с чем связан мой подъём настроения", "scenario": "why_changed", "needs": ["trend"], "alt": ["drivers"]}
+{"q": "Что пошло не так в августе?", "scenario": "why_changed", "needs": ["period"], "alt": ["period", "review"], "slots": {"period": {"kind": "month", "start": "2026-08-01"}}}
+{"q": "Почему я стал такой раздражительный?", "scenario": "why_changed", "needs": ["trend"], "alt": ["support"], "slots": {"emotions": ["злость"]}}
+{"q": "Что мне помогает чувствовать себя лучше?", "scenario": "drivers", "needs": ["activities"]}
+{"q": "От чего мне становится хуже?", "scenario": "drivers", "needs": ["activities"]}
+{"q": "Что меня выматывает?", "scenario": "drivers", "needs": ["activities"]}
+{"q": "Чем мои хорошие дни отличаются от плохих?", "scenario": "drivers", "needs": ["extremes"], "alt": ["themes"]}
+{"q": "Что общего у моих лучших дней?", "scenario": "drivers", "needs": ["extremes"]}
+{"q": "Влияет ли на меня погода?", "scenario": "drivers", "needs": ["weather"]}
+{"q": "В дождь мне правда хуже?", "scenario": "drivers", "needs": ["weather"]}
+{"q": "Какие занятия поднимают мне настроение?", "scenario": "drivers", "needs": ["activities"]}
+{"q": "Помогает ли мне спорт?", "scenario": "drivers", "needs": ["activities"], "alt": ["progress"]}
+{"q": "Что делает меня счастливым по дневнику?", "scenario": "drivers", "needs": ["activities"]}
+{"q": "Есть ли у меня провалы по понедельникам?", "scenario": "rhythms", "needs": ["rhythm"]}
+{"q": "Зимой мне хуже?", "scenario": "rhythms", "needs": ["rhythm"], "alt": ["compare"], "slots": {"period": {"kind": "season"}}}
+{"q": "В какой день недели мне лучше всего?", "scenario": "rhythms", "needs": ["rhythm"]}
+{"q": "Есть у меня какие-то циклы настроения?", "scenario": "rhythms", "needs": ["rhythm"]}
+{"q": "Выходные у меня лучше будней?", "scenario": "rhythms", "needs": ["rhythm"]}
+{"q": "Повторяются ли мои спады в одно и то же время года?", "scenario": "rhythms", "needs": ["rhythm"]}
+{"q": "О чём я чаще всего пишу?", "scenario": "themes", "needs": ["themes"]}
+{"q": "Какие темы у меня повторяются?", "scenario": "themes", "needs": ["themes"]}
+{"q": "Что меня больше всего беспокоит по моим записям?", "scenario": "themes", "needs": ["themes"], "alt": ["topic"]}
+{"q": "Про что мои мысли в последнее время?", "scenario": "themes", "needs": ["themes"], "alt": ["period"], "slots": {"period": {"kind": "recent"}}}
+{"q": "Какие у меня главные жизненные темы?", "scenario": "themes", "needs": ["themes"]}
+{"q": "Какие мысли у меня ходят по кругу?", "scenario": "themes", "needs": ["themes"]}
+{"q": "Когда мне было одиноко?", "scenario": "topic", "needs": ["topic"], "slots": {"emotions": ["одиночество"]}}
+{"q": "Что у меня с работой?", "scenario": "topic", "needs": ["topic"]}
+{"q": "Когда я последний раз писал про тревогу?", "scenario": "topic", "needs": ["topic"], "slots": {"emotions": ["тревога"]}}
+{"q": "Что я писал про деньги?", "scenario": "topic", "needs": ["topic"]}
+{"q": "Были ли у меня проблемы со сном?", "scenario": "topic", "needs": ["topic"], "slots": {"emotions": ["сон"]}}
+{"q": "Когда я злился?", "scenario": "topic", "needs": ["topic"], "slots": {"emotions": ["злость"]}}
+{"q": "Что я писал про учёбу?", "scenario": "topic", "needs": ["topic"]}
+{"q": "Найди записи где я радовался", "scenario": "topic", "needs": ["topic"], "slots": {"emotions": ["радость"]}}
+{"q": "Как часто у меня бывают панические атаки?", "scenario": "topic", "needs": ["topic"], "alt": ["progress"], "slots": {"emotions": ["тревога"]}}
+{"q": "Что я думаю о переезде?", "scenario": "topic", "needs": ["topic"]}
+{"q": "Упоминал ли я здоровье?", "scenario": "topic", "needs": ["topic"]}
+{"q": "Что было, когда я чувствовал вину?", "scenario": "topic", "needs": ["topic"], "slots": {"emotions": ["вина"]}}
+{"q": "Как у меня отношения с мамой?", "scenario": "person", "needs": ["person:мама"], "slots": {"people": ["мама"]}}
+{"q": "Что я писал про Машу?", "scenario": "person", "needs": ["person:Маша"], "slots": {"people": ["Маша"]}}
+{"q": "Поругался с Сергеем, что делать?", "scenario": "person", "needs": ["person:Сергей"], "alt": ["support"], "slots": {"people": ["Сергей"]}}
+{"q": "Когда я последний раз видел Лёшу?", "scenario": "person", "needs": ["person:Лёша"], "slots": {"people": ["Лёша"]}}
+{"q": "Как Дима на меня влияет?", "scenario": "person", "needs": ["person:Дима"], "slots": {"people": ["Дима"]}}
+{"q": "Мари меня поддерживает?", "scenario": "person", "needs": ["person:Мари"], "slots": {"people": ["Мари"]}}
+{"q": "Что у меня с начальником?", "scenario": "person", "needs": ["person:начальник"], "slots": {"people": ["начальник"]}}
+{"q": "Расскажи про мои отношения с братом Ильёй", "scenario": "person", "needs": ["person:Илья"], "slots": {"people": ["Илья"]}}
+{"q": "Я часто ссорюсь с папой?", "scenario": "person", "needs": ["person:папа"], "slots": {"people": ["папа"]}}
+{"q": "Когда я впервые упомянул Лену?", "scenario": "person", "needs": ["person:Лена"], "slots": {"people": ["Лена"]}}
+{"q": "Как менялись мои отношения с Машей за год?", "scenario": "person", "needs": ["person:Маша"], "alt": ["progress"], "slots": {"people": ["Маша"]}}
+{"q": "Что я писал про Сергея в марте?", "scenario": "person", "needs": ["person:Сергей", "period"], "alt": ["period"], "slots": {"people": ["Сергей"], "period": {"kind": "month", "start": "2026-03-01"}}}
+{"q": "Кто на меня плохо влияет?", "scenario": "people", "needs": ["people"]}
+{"q": "Кто меня поддерживает?", "scenario": "people", "needs": ["people"]}
+{"q": "Расскажи про людей вокруг меня", "scenario": "people", "needs": ["people"]}
+{"q": "С кем мне лучше всего?", "scenario": "people", "needs": ["people"]}
+{"q": "Кого я чаще всего упоминаю?", "scenario": "people", "needs": ["people"]}
+{"q": "Кто меня больше всего расстраивает?", "scenario": "people", "needs": ["people"]}
+{"q": "Что было на прошлой неделе?", "scenario": "period", "needs": ["period"], "slots": {"period": {"kind": "week", "start": "2026-09-14", "end": "2026-09-20"}}}
+{"q": "Что я писал 12 марта?", "scenario": "period", "needs": ["period"], "slots": {"period": {"kind": "day", "start": "2026-03-12"}}}
+{"q": "Как прошёл мой март?", "scenario": "period", "needs": ["period"], "alt": ["review"], "slots": {"period": {"kind": "month", "start": "2026-03-01"}}}
+{"q": "Что было с 5 по 12 марта?", "scenario": "period", "needs": ["period"], "slots": {"period": {"kind": "range", "start": "2026-03-05", "end": "2026-03-12"}}}
+{"q": "Что у меня было год назад?", "scenario": "period", "needs": ["anniversary"], "slots": {"period": {"kind": "anniversary"}}}
+{"q": "Что было в этот день в прошлом году?", "scenario": "period", "needs": ["anniversary"]}
+{"q": "Как я себя чувствовал три месяца назад?", "scenario": "period", "needs": ["period"], "slots": {"period": {"kind": "month", "start": "2026-06-01"}}}
+{"q": "Что было вчера?", "scenario": "period", "needs": ["period"], "slots": {"period": {"kind": "day", "start": "2026-09-26"}}}
+{"q": "Что у меня было прошлым летом?", "scenario": "period", "needs": ["period"], "alt": ["review"], "slots": {"period": {"kind": "season", "start": "2025-06-01"}}}
+{"q": "Как я провёл декабрь?", "scenario": "period", "needs": ["period"], "alt": ["review"], "slots": {"period": {"kind": "month", "start": "2025-12-01"}}}
+{"q": "Что происходило в начале года?", "scenario": "period", "needs": ["period"], "alt": ["review"], "slots": {"period": {"kind": "range", "start": "2026-01-01", "end": "2026-03-31"}}}
+{"q": "Покажи записи за эту неделю", "scenario": "period", "needs": ["period"], "slots": {"period": {"kind": "week", "start": "2026-09-21"}}}
+{"q": "Подведи итоги моего года", "scenario": "review", "needs": ["period"], "slots": {"period": {"kind": "year"}}}
+{"q": "Как прошёл мой месяц?", "scenario": "review", "needs": ["period"], "alt": ["period"]}
+{"q": "Какие итоги прошлого месяца?", "scenario": "review", "needs": ["period"], "alt": ["period"], "slots": {"period": {"kind": "month", "start": "2026-08-01"}}}
+{"q": "Каким был для меня 2025 год?", "scenario": "review", "needs": ["period"], "alt": ["period"], "slots": {"period": {"kind": "year", "start": "2025-01-01"}}}
+{"q": "Сделай обзор моего лета", "scenario": "review", "needs": ["period"], "alt": ["period"], "slots": {"period": {"kind": "season"}}}
+{"q": "Чем запомнилась эта осень?", "scenario": "review", "needs": ["period"], "alt": ["period"], "slots": {"period": {"kind": "season"}}}
+{"q": "Этот месяц лучше прошлого?", "scenario": "compare", "needs": ["compare"]}
+{"q": "Сравни март и апрель", "scenario": "compare", "needs": ["compare"]}
+{"q": "Я сейчас счастливее, чем год назад?", "scenario": "compare", "needs": ["compare"], "alt": ["progress"]}
+{"q": "В этом году мне лучше, чем в прошлом?", "scenario": "compare", "needs": ["compare"], "alt": ["progress"]}
+{"q": "Лето было лучше зимы?", "scenario": "compare", "needs": ["compare"], "alt": ["rhythms"]}
+{"q": "Как отличается август от июля?", "scenario": "compare", "needs": ["compare"]}
+{"q": "Мне лучше с тех пор как я начал бегать?", "scenario": "progress", "needs": ["trend"], "alt": ["drivers"]}
+{"q": "Я стал реже тревожиться?", "scenario": "progress", "needs": ["topic"], "alt": ["topic"], "slots": {"emotions": ["тревога"]}}
+{"q": "Становится ли мне лучше со временем?", "scenario": "progress", "needs": ["trend"]}
+{"q": "Есть ли прогресс после начала терапии?", "scenario": "progress", "needs": ["trend"]}
+{"q": "Я стал больше общаться с друзьями?", "scenario": "progress", "needs": ["topic"], "alt": ["people"]}
+{"q": "Как менялось моё настроение за полгода?", "scenario": "progress", "needs": ["trend"], "alt": ["period", "review"]}
+{"q": "Я перестал так сильно уставать?", "scenario": "progress", "needs": ["topic"], "alt": ["topic"], "slots": {"emotions": ["усталость"]}}
+{"q": "Как у меня динамика настроения?", "scenario": "progress", "needs": ["trend"]}
+{"q": "Сколько я уже веду дневник?", "scenario": "diary_meta", "needs": ["stats"]}
+{"q": "Какая у меня самая длинная серия записей?", "scenario": "diary_meta", "needs": ["stats"]}
+{"q": "Сколько у меня записей?", "scenario": "diary_meta", "needs": ["stats"]}
+{"q": "Какое у меня среднее настроение?", "scenario": "diary_meta", "needs": ["stats"], "alt": ["progress"]}
+{"q": "Когда был мой самый худший день?", "scenario": "diary_meta", "needs": ["extremes"], "alt": ["period"]}
+{"q": "Что я тебе говорил про работу на прошлой неделе?", "scenario": "chat_memory", "needs": ["chat"], "alt": ["topic"]}
+{"q": "Напомни, о чём мы говорили вчера", "scenario": "chat_memory", "needs": ["chat"]}
+{"q": "Ты помнишь, что я рассказывал про маму?", "scenario": "chat_memory", "needs": ["chat"], "alt": ["person"], "slots": {"people": ["мама"]}}
+{"q": "Мы уже обсуждали мою тревогу?", "scenario": "chat_memory", "needs": ["chat"], "alt": ["topic"]}
+{"q": "Что ты обо мне знаешь?", "scenario": "about_me", "needs": []}
+{"q": "Какой я человек по твоему мнению?", "scenario": "about_me", "needs": []}
+{"q": "Опиши мой психологический портрет", "scenario": "about_me", "needs": []}
+{"q": "Какие у меня сильные стороны?", "scenario": "about_me", "needs": [], "alt": ["drivers"]}
+{"q": "А в прошлом году?", "scenario": "period", "needs": ["period"], "alt": ["compare", "review"], "prior": "Как прошёл мой март?"}
+{"q": "Расскажи подробнее", "scenario": "person", "needs": ["person:Маша"], "alt": ["topic"], "prior": "Что я писал про Машу?"}
+{"q": "А что было после этого?", "scenario": "period", "needs": ["period"], "alt": ["topic"], "prior": "Что я писал 12 марта?"}
+{"q": "А с Сергеем?", "scenario": "person", "needs": ["person:Сергей"], "prior": "Как у меня отношения с мамой?", "slots": {"people": ["Сергей"]}}
+{"q": "И почему так?", "scenario": "why_changed", "needs": ["trend"], "alt": ["drivers"], "prior": "Этот месяц лучше прошлого?"}
+{"q": "А что помогает в такие дни?", "scenario": "drivers", "needs": ["activities"], "alt": ["support"], "prior": "Когда мне было одиноко?"}
+{"q": "чё у меня с настроением последнее время", "scenario": "progress", "needs": ["trend"], "alt": ["why_changed", "support"], "slots": {"period": {"kind": "recent"}}}
+{"q": "кто меня бисит больше всех", "scenario": "people", "needs": ["people"]}
+{"q": "скока я пишу дневник", "scenario": "diary_meta", "needs": ["stats"]}
+{"q": "как там с машей было", "scenario": "person", "needs": ["person:Маша"], "slots": {"people": ["Маша"]}}

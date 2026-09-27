@@ -703,6 +703,10 @@
                   var hint = I18N2.diaryData || 'diary data';
                   if (data.tool === 'person_history' && data.args && data.args.name) {
                     hint = about + ' ' + data.args.name;
+                  } else if (data.tool === 'period_entries' && data.args && data.args.start) {
+                    // An exact range from the scenario router: a week, a season.
+                    var s0 = data.args.start, s1 = data.args.end || s0;
+                    hint = forP + ' ' + (s1 === s0 ? s0 : s0 + '…' + s1);
                   } else if (data.tool === 'period_entries' && data.args) {
                     var y = data.args.year;
                     var m = data.args.month;
@@ -715,7 +719,9 @@
                     var d = data.args.window_days || 30;
                     hint = (I18N2.moodTrend || 'mood trend for') + ' ' + d + ' d.';
                   } else if (data.tool === 'compare_periods' && data.args) {
-                    hint = (I18N2.periodCompare || 'period comparison') + ' ' + data.args.period_a + ' / ' + data.args.period_b;
+                    hint = (I18N2.periodCompare || 'period comparison') + ' ' +
+                      String(data.args.period_a).replace('..', '…') + ' / ' +
+                      String(data.args.period_b).replace('..', '…');
                   }
                   window.__toolHints.push(hint);
                   var fetchTpl = I18N2.fetchingData || 'Fetching data: {what}';

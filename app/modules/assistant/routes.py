@@ -185,6 +185,23 @@ def _route_to_tools(llm, user_message: str,
         return []
 
 
+def _tool_section(tool_outputs: list[tuple[str, str]], total_chars: int) -> str:
+    """Tool results as a system-prompt section, `total_chars` shared evenly."""
+    per_tool_cap = total_chars // max(1, len(tool_outputs))
+    sections = []
+    for tname, text in tool_outputs:
+        chunk = text
+        if len(chunk) > per_tool_cap:
+            chunk = chunk[:per_tool_cap].rstrip() + '\n[обрезано]'
+        sections.append(f'[{tname}]\n{chunk}')
+    return (
+        '\n\nДОПОЛНИТЕЛЬНЫЕ ДАННЫЕ ИЗ ДНЕВНИКА (получены '
+        'инструментами; используй конкретные даты и цитаты при '
+        'ответе, не пересказывай шаблонно):\n\n'
+        + '\n\n'.join(sections)
+    )
+
+
 def _execute_tool(tool_name: str, args: dict) -> str | None:
     """Run a tool and return its formatted result, or None on failure."""
     try:
@@ -215,6 +232,10 @@ def _execute_tool(tool_name: str, args: dict) -> str | None:
         if tool_name == 'period_entries':
             year = (args or {}).get('year')
             month = (args or {}).get('month')
+            start = (args or {}).get('start')
+            if start:
+                return tool_period_entries(start=str(start),
+                                           end=str((args or {}).get('end') or start))
             if year is None:
                 return None
             return tool_period_entries(year, month)
@@ -235,6 +256,55 @@ def _execute_tool(tool_name: str, args: dict) -> str | None:
     except Exception as exc:
         log.warning(f'Tool exec failed for {tool_name}: {exc}')
     return None
+
+
+def _router_mode() -> str:
+    """ASSISTANT_ROUTER=scenario turns on the scenario router (ROADMAP §17);
+    the tool router stays the default until the eval says otherwise."""
+    mode = os.environ.get('ASSISTANT_ROUTER', 'legacy').strip().lower()
+    return mode if mode in ('legacy', 'scenario') else 'legacy'
+
+
+class _thinking_off:
+    """Routing is a classification: with thinking on, the model spends its
+    small token budget reasoning and the answer never arrives."""
+
+    def __enter__(self):
+        self._had = hasattr(_thinking_state, 'enabled')
+        self._prev = getattr(_thinking_state, 'enabled', None)
+        _set_request_thinking(False)
+
+    def __exit__(self, *exc):
+        if self._had:
+            _set_request_thinking(self._prev)
+        else:
+            _clear_request_thinking()
+        return False
+
+
+def _route_by_scenario(llm, user_message: str, prior_user_messages: list[str]):
+    """(decision, tool calls) from the scenario router."""
+    from datetime import date
+    from . import scenarios
+    from .tools import diary_vocabulary
+    try:
+        people, activities = diary_vocabulary()
+    except Exception:
+        log.warning('Could not read the diary vocabulary', exc_info=True)
+        people, activities = [], []
+    db.session.remove()
+    today = date.today()
+    with _thinking_off():
+        decision = scenarios.route(
+            llm, user_message, today, prior_messages=prior_user_messages,
+            known_people=people, known_activities=activities,
+            lock=_llm_inference_lock)
+    calls = scenarios.plan(decision, user_message, today)
+    log.info('Scenario router: %s (%s) → %s', decision.scenario, decision.source,
+             [c['tool'] for c in calls])
+    return decision, calls
+
+
 _llm_loading = False
 _llm_loading_stage = ''  # e.g. 'warming', 'gpu:35/8192', 'cpu:8192'
 _llm_loading_progress = 0  # 0-100
@@ -1073,24 +1143,30 @@ def stream():
             #
             # Multi-turn awareness: pass the previous user message so a
             # follow-up like "расскажи подробнее" still routes correctly.
-            prior_user_msg = None
+            prior_user_msgs: list[str] = []
             try:
                 prior = (ChatMessage.query
                          .filter_by(role='user')
                          .order_by(ChatMessage.created_at.desc())
                          .offset(1)  # the current message is at offset 0
-                         .limit(1)
-                         .first())
-                if prior:
-                    prior_user_msg = prior.content
+                         .limit(2)
+                         .all())
+                prior_user_msgs = [m.content for m in reversed(prior) if m.content]
             except Exception:
                 # Non-fatal: the router just loses multi-turn context.
                 log.warning('Could not load prior user message', exc_info=True)
-            # prior_user_msg is a plain string — release connection before
+            prior_user_msg = prior_user_msgs[-1] if prior_user_msgs else None
+            # prior_user_msgs are plain strings — release connection before
             # the router LLM call so it doesn't block other writers.
             db.session.remove()
 
-            tool_decisions = _route_to_tools(llm, user_message, prior_user_msg)
+            scenario = None
+            if _router_mode() == 'scenario':
+                scenario, tool_decisions = _route_by_scenario(
+                    llm, user_message, prior_user_msgs)
+            else:
+                with _thinking_off():
+                    tool_decisions = _route_to_tools(llm, user_message, prior_user_msg)
             tool_outputs: list[tuple[str, str]] = []  # [(tool_name, result_text)]
             for decision in tool_decisions:
                 yield ('data: ' + json.dumps({
@@ -1116,30 +1192,28 @@ def stream():
             # Budget for system prompt: n_ctx minus output reserve, chat history (~1000),
             # thinking instruction, and safety margin
             system_budget = n_ctx - reserve - 1000 - thinking_overhead - 64
-            system_base = assemble_context(user_message,
-                                           max_system_tokens=max(512, system_budget))
-            system = system_base
-
-            # Append tool-fetched data to the system prompt as separate
-            # sections so the model can ground its reply. Caps total tool
-            # output to ~5000 chars (≈1000-1300 tokens) to leave room for
-            # everything else; with 2 tools that's ~2500 chars each.
-            if tool_outputs:
-                per_tool_cap = 5000 // max(1, len(tool_outputs))
-                sections = []
-                for tname, text in tool_outputs:
-                    chunk = text
-                    if len(chunk) > per_tool_cap:
-                        chunk = chunk[:per_tool_cap].rstrip() + '\n[обрезано]'
-                    sections.append(
-                        f'[{tname}]\n{chunk}'
-                    )
-                system += (
-                    '\n\nДОПОЛНИТЕЛЬНЫЕ ДАННЫЕ ИЗ ДНЕВНИКА (получены '
-                    'инструментами; используй конкретные даты и цитаты при '
-                    'ответе, не пересказывай шаблонно):\n\n'
-                    + '\n\n'.join(sections)
-                )
+            if scenario is None:
+                system = assemble_context(user_message,
+                                          max_system_tokens=max(512, system_budget))
+                # Tool results go after the base prompt, capped at ~5000
+                # chars (≈1000-1300 tokens) to leave room for everything else.
+                if tool_outputs:
+                    system += _tool_section(tool_outputs, 5000)
+            else:
+                # Scenario router: the tools' evidence is measured first and
+                # the background layers get the rest of the budget, minus the
+                # ones that would repeat it.
+                from .scenarios import context_layers
+                tools_text = _tool_section(tool_outputs, 8000) if tool_outputs else ''
+                tools_tokens = _count_tokens(llm, tools_text) if tools_text else 0
+                system = assemble_context(
+                    user_message,
+                    max_system_tokens=max(512, system_budget - tools_tokens),
+                    **context_layers(scenario.scenario, bool(tool_outputs)),
+                ) + tools_text
+            # The grounded prompt, before tone and thinking hints — what the
+            # "final answer only" retry below starts from.
+            system_base = system
 
             # Inject emotional tone hint
             if tone_confidence > 0.5 and user_tone in ('distressed', 'sad'):

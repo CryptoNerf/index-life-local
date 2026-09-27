@@ -1482,11 +1482,17 @@ def _estimate_tokens(text: str) -> int:
     return max(1, len(text) * 10 // 25)
 
 
-def assemble_context(user_message: str, max_system_tokens: int = 0) -> str:
+def assemble_context(user_message: str, max_system_tokens: int = 0, *,
+                     relevant: bool = True, timeline: bool = True) -> str:
     """Build the full system prompt from all 4 memory layers.
 
     For short greetings, reduces context to avoid overwhelming responses.
     If max_system_tokens > 0, truncate sections to fit the budget.
+
+    `relevant=False` leaves out the entries found by meaning and by date,
+    `timeline=False` the monthly summaries: the scenario router turns them
+    off when its tools have already fetched the evidence, so the same days
+    do not fill the context twice.
     """
     light = _is_light_message(user_message)
 
@@ -1501,7 +1507,7 @@ def assemble_context(user_message: str, max_system_tokens: int = 0) -> str:
     period_summaries = (PeriodSummary.query
                         .filter_by(period_type='month')
                         .order_by(PeriodSummary.period_key)
-                        .all())
+                        .all()) if timeline else []
     if period_summaries:
         timeline_lines = []
         for ps in period_summaries:
@@ -1517,7 +1523,7 @@ def assemble_context(user_message: str, max_system_tokens: int = 0) -> str:
 
     # Layer 2: Relevant entries via semantic search + date extraction
     # Skip for greetings — search on "привет" returns noise
-    if light:
+    if light or not relevant:
         relevant_section = ''
     else:
         try:
