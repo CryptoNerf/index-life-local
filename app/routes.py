@@ -493,8 +493,11 @@ def account():
             flash(t('flash.profile_update_error', err=e), 'error')
 
     from app import signals
+    from app.models import SyncMeta
+    router_row = db.session.get(SyncMeta, 'assistant_router')
     return render_template('account.html',
                          profile=profile,
+                         assistant_router=(router_row.value if router_row else 'legacy'),
                          archive_years=archive_years,
                          year_stats=year_stats,
                          weather_enabled=signals.is_weather_enabled(),

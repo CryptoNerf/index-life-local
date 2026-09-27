@@ -23,6 +23,7 @@ import re
 
 from app import db
 from app.models import MoodEntry, EntryPerson, EntryActivity, PersonAlias
+from .llm_text import ru_date
 from .memory import search_relevant_entries, _normalize_mention
 
 log = logging.getLogger(__name__)
@@ -35,7 +36,7 @@ def _format_entry_line(entry: MoodEntry, extra: str = '', max_note: int = 280) -
     if len(note) > max_note:
         note = note[:max_note].rstrip() + '...'
     suffix = f' [{extra}]' if extra else ''
-    return f'[{entry.date.isoformat()}] {entry.rating}/10{suffix}. {note}'
+    return f'[{ru_date(entry.date)}] {entry.rating}/10{suffix}. {note}'
 
 
 def _excerpt_around_term(note: str, term: str, window_chars: int = 280) -> str:
@@ -190,7 +191,7 @@ def tool_person_history(name: str, limit: int = 30) -> str:
         tone_txt = ', '.join(tones) if tones else 'unknown'
         excerpt = _excerpt_around_term(e.note or '', target, window_chars=240)
         lines.append(
-            f'[{e.date.isoformat()}] {e.rating}/10 [тон: {tone_txt}]. {excerpt}'
+            f'[{ru_date(e.date)}] {e.rating}/10 [тон: {tone_txt}]. {excerpt}'
         )
     return '\n'.join(lines)
 

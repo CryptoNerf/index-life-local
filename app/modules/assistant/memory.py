@@ -44,6 +44,7 @@ from .llm_text import (
     strip_think as _strip_think,
     count_tokens as _count_tokens,
     truncate_to_tokens,
+    ru_date,
 )
 
 log = logging.getLogger(__name__)
@@ -1587,7 +1588,7 @@ def assemble_context(user_message: str, max_system_tokens: int = 0, *,
                 # Date-extracted entries get full text; semantic results truncated
                 if entry.id not in date_ids and len(note) > max_semantic_chars:
                     note = note[:max_semantic_chars] + '...'
-                rel_lines.append(f'[{entry.date.isoformat()}] {entry.rating}/10. {note}')
+                rel_lines.append(f'[{ru_date(entry.date)}] {entry.rating}/10. {note}')
             relevant_section = RELEVANT_SECTION.format(
                 entries_text='\n'.join(rel_lines)
             )
@@ -1609,7 +1610,7 @@ def assemble_context(user_message: str, max_system_tokens: int = 0, *,
         rec_lines = []
         for e in recent:
             note = plain_text(e.note).strip()
-            rec_lines.append(f'[{e.date.isoformat()}] {e.rating}/10. {note}')
+            rec_lines.append(f'[{ru_date(e.date)}] {e.rating}/10. {note}')
         recent_section = RECENT_SECTION.format(entries_text='\n'.join(rec_lines))
     else:
         recent_section = ''

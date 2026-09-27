@@ -135,6 +135,29 @@
         </form>
       </div>
     </div>
+    <div class="account-section">
+      <div class="account-narrow">
+        <h2>{{ t('account.ai_router_heading') }}</h2>
+        <div class="account-desc">{{ t('account.ai_router_desc') }}</div>
+        <form method="post" action="{{ url_for('assistant.set_router_mode') }}">
+          <div class="account-choice-list">
+            <label class="account-choice">
+              <input type="radio" name="mode" value="legacy"
+                     {% if assistant_router != 'scenario' %}checked{% endif %}>
+              <span><b>{{ t('account.ai_router_legacy') }}</b><br>
+                <span class="account-choice-desc">{{ t('account.ai_router_legacy_desc') }}</span></span>
+            </label>
+            <label class="account-choice">
+              <input type="radio" name="mode" value="scenario"
+                     {% if assistant_router == 'scenario' %}checked{% endif %}>
+              <span><b>{{ t('account.ai_router_scenario') }}</b><br>
+                <span class="account-choice-desc">{{ t('account.ai_router_scenario_desc') }}</span></span>
+            </label>
+          </div>
+          <button class="account-btn" type="submit">{{ t('account.ai_index_save') }}</button>
+        </form>
+      </div>
+    </div>
     {% endif %}
 
     <!-- Weather Section -->

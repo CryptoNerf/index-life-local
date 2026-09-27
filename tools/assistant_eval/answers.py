@@ -43,13 +43,19 @@ MONTHS_GEN = ['', 'января', 'февраля', 'марта', 'апреля'
 
 # ── the diary ─────────────────────────────────────────────────
 
+# A day left unwritten, so that one question finds nothing on its exact date
+# and the reply depends on the search widening.
+SKIPPED_DAYS_AGO = 2
+
+
 def diary_days():
-    """The synthetic diary, moved so that it ends today."""
+    """The synthetic diary, moved so that it ends today, one day left out."""
     shift = date.today() - assistant_diary.TODAY
+    skipped = date.today() - timedelta(days=SKIPPED_DAYS_AGO)
     days = assistant_diary.make_diary()
     for d in days:
         d.date = d.date + shift
-    return days
+    return [d for d in days if d.date != skipped]
 
 
 def build_db(app, days):
@@ -205,6 +211,14 @@ def questions(days):
         # no diary needed, or not in that way
         {'q': 'Мне сегодня очень тревожно, не могу ни на чём сосредоточиться', 'facts': []},
         {'q': 'Привет!', 'facts': [], 'max_len': 500},
+        # nothing on the exact day: the answer should say so, and use the days around it
+        {'q': 'Что было позавчера?',
+         'facts': [r'не (писал|было записи|нашл|нашёл|нашел|нахож|вижу)|нет запис|записи нет|пропуст|не заполн',
+                   any_of(d.date for d in days
+                          if 0 < abs((d.date - (today - timedelta(days=SKIPPED_DAYS_AGO))).days) <= 7)]},
+        # nobody by that name: the answer should say so, not invent them
+        {'q': 'Что я писал про Аркадия?',
+         'facts': [r'не (упомина|нашл|нашёл|нашел|нахож|вижу|встреча|писал)|нет (упоминаний|записей)|ни разу']},
     ]
 
 
@@ -277,6 +291,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--router', choices=('both', 'legacy', 'scenario'), default='both')
     ap.add_argument('--only', type=int, default=0, help='first N questions')
+    ap.add_argument('--match', default='', help='only questions matching this regex')
     ap.add_argument('--db', default=str(ROOT / 'tools' / 'assistant_eval' / '.answers_diary.db'))
     ap.add_argument('--out', default='', help='write every answer to this Markdown file')
     args = ap.parse_args()
@@ -301,6 +316,8 @@ def main():
     days = diary_days()
     build_db(flask_app, days)
     items = questions(days)
+    if args.match:
+        items = [i for i in items if re.search(args.match, i['q'], re.I)]
     if args.only:
         items = items[:args.only]
     modes = ['legacy', 'scenario'] if args.router == 'both' else [args.router]

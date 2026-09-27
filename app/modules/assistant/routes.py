@@ -278,11 +278,29 @@ def _execute_tool(tool_name: str, args: dict) -> str | None:
     return None
 
 
+ROUTER_MODES = ('legacy', 'scenario')
+_ROUTER_META_KEY = 'assistant_router'
+
+
+def router_setting() -> str:
+    """The router chosen on the account page, for this device."""
+    from app.models import SyncMeta
+    try:
+        row = db.session.get(SyncMeta, _ROUTER_META_KEY)
+    except Exception:
+        return 'legacy'
+    return row.value if row and row.value in ROUTER_MODES else 'legacy'
+
+
 def _router_mode() -> str:
-    """ASSISTANT_ROUTER=scenario turns on the scenario router (ROADMAP §17);
-    the tool router stays the default until the eval says otherwise."""
-    mode = os.environ.get('ASSISTANT_ROUTER', 'legacy').strip().lower()
-    return mode if mode in ('legacy', 'scenario') else 'legacy'
+    """Which router answers: ASSISTANT_ROUTER in the environment if set (the
+    evals and development), else the account page's choice. The tool router
+    stays the default until the scenario router has been tried on a real
+    diary (ROADMAP §17)."""
+    env = os.environ.get('ASSISTANT_ROUTER', '').strip().lower()
+    if env:
+        return env if env in ROUTER_MODES else 'legacy'
+    return router_setting()
 
 
 class _thinking_off:
@@ -351,6 +369,17 @@ def _gather_evidence(llm, user_message: str, prior_user_msgs: list[str],
         text = _execute_tool(call['tool'], call['args'])
         if text:
             outputs.append((call['tool'], text))
+        if scenario is not None:
+            # Found nothing: one step wider before the model says "нет записей".
+            from datetime import date
+            from .scenarios import is_empty, widen
+            wider = widen(call, date.today()) if is_empty(text) else None
+            if wider:
+                wider_call, note = wider
+                yield wider_call
+                more = _execute_tool(wider_call['tool'], wider_call['args'])
+                if more and not is_empty(more):
+                    outputs.append((wider_call['tool'], note + '\n' + more))
     # Plain strings from here on: release the connection before the next read.
     db.session.remove()
     return scenario, outputs
@@ -1568,6 +1597,24 @@ def set_index_mode():
         from .background import sync_missing_async, backfill_assistant_data_async
         sync_missing_async(app_obj)
         backfill_assistant_data_async(app_obj)
+    return redirect(request.referrer or '/account')
+
+
+@bp.route('/set-router-mode', methods=['POST'])
+def set_router_mode():
+    """Choose how replies gather diary data: the tool router or the scenario
+    router. Kept per device, like the model itself."""
+    from flask import redirect
+    from app.models import SyncMeta
+    mode = request.form.get('mode', 'legacy')
+    if mode not in ROUTER_MODES:
+        mode = 'legacy'
+    row = db.session.get(SyncMeta, _ROUTER_META_KEY)
+    if row:
+        row.value = mode
+    else:
+        db.session.add(SyncMeta(key=_ROUTER_META_KEY, value=mode))
+    db.session.commit()
     return redirect(request.referrer or '/account')
 
 

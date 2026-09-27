@@ -73,3 +73,32 @@ def truncate_to_tokens(llm, text: str, max_tokens: int, *, keep: str = 'head') -
         pass
     approx_chars = max(0, max_tokens * 4)
     return text[:approx_chars] if keep == 'head' else text[-approx_chars:]
+
+
+# ── dates as the model should read them ───────────────────────
+
+_MONTHS_GEN = ('', 'января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля',
+               'августа', 'сентября', 'октября', 'ноября', 'декабря')
+_WEEKDAYS = ('пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс')
+
+
+def ru_date(d, weekday: bool = True) -> str:
+    """"2 июня 2025, пн".
+
+    The 9B model misreads ISO dates it has to restate: shown 2025-06-02 and
+    2025-02-13 in one list, it answered "2 февраля". Written the way the
+    answer will say it, a date only has to be copied.
+    """
+    text = f'{d.day} {_MONTHS_GEN[d.month]} {d.year}'
+    return f'{text}, {_WEEKDAYS[d.weekday()]}' if weekday else text
+
+
+def ru_span(a, b) -> str:
+    """"с 29 августа по 27 сентября 2026", "с 5 по 12 марта 2026"; one day as itself."""
+    if a == b:
+        return ru_date(a, weekday=False)
+    if (a.year, a.month) == (b.year, b.month):
+        return f'с {a.day} по {ru_date(b, weekday=False)}'
+    if a.year == b.year:
+        return f'с {a.day} {_MONTHS_GEN[a.month]} по {ru_date(b, weekday=False)}'
+    return f'с {ru_date(a, weekday=False)} по {ru_date(b, weekday=False)}'

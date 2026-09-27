@@ -5,6 +5,7 @@ How well the model itself picks scenarios is measured by
 tools/assistant_eval/run.py on the labelled questions, not here.
 """
 import json
+import re
 from datetime import date, timedelta
 
 import pytest
@@ -325,9 +326,9 @@ def test_period_entries_takes_an_exact_range(app):
     _entries(db, [(date(2026, 3, d), 5) for d in range(1, 20)])
     out = tool_period_entries(start='2026-03-05', end='2026-03-12')
     assert 'Всего 8 записей' in out
-    assert '[2026-03-12]' in out and '[2026-03-04]' not in out and '[2026-03-13]' not in out
+    assert '[12 марта 2026, чт]' in out and '[4 марта 2026' not in out and '[13 марта 2026' not in out
     # Newest first, as before.
-    assert out.index('[2026-03-12]') < out.index('[2026-03-05]')
+    assert out.index('[12 марта 2026') < out.index('[5 марта 2026')
 
 
 def test_a_long_period_is_sampled_across_it_with_monthly_averages(app):
@@ -338,10 +339,10 @@ def test_a_long_period_is_sampled_across_it_with_monthly_averages(app):
     out = tool_period_entries(2025, limit=40)
     assert 'Всего 365 записей' in out
     assert 'По месяцам: 2025-01 — 3.0 (31)' in out and '2025-12 — 8.0 (31)' in out
-    lines = [ln for ln in out.splitlines() if ln.startswith('[2025-')]
+    lines = [ln for ln in out.splitlines() if re.match(r'\[\d+ \w+ 2025, ', ln)]
     assert len(lines) == 40
     # Not the newest forty: the first months are there too.
-    assert any(ln.startswith('[2025-01') for ln in lines)
+    assert any(' января 2025' in ln[:20] for ln in lines)
 
 
 def test_compare_periods_takes_ranges(app):
@@ -386,7 +387,7 @@ def test_execute_tool_passes_a_range_through(app):
     from app.modules.assistant.routes import _execute_tool
     _entries(db, [(date(2026, 9, 20), 6), (date(2026, 9, 26), 7)])
     out = _execute_tool('period_entries', {'start': '2026-09-26', 'end': '2026-09-26'})
-    assert '[2026-09-26]' in out and '[2026-09-20]' not in out
+    assert '[26 сентября 2026, сб]' in out and '[20 сентября 2026' not in out
 
 
 def test_thinking_is_off_while_routing_and_restored_after():
@@ -448,3 +449,46 @@ def test_a_day_question_filed_as_a_rhythm_still_gets_those_days():
         'tool': 'entries_query', 'args': {'start': '2026-06-01', 'end': '2026-08-31',
                                           'min_rating': 7, 'limit': 15}}
 
+
+
+# ── widening an empty result ──────────────────────────────────
+
+@pytest.mark.parametrize('text', [
+    'Записей за 2026-03 не найдено.', 'Записей не найдено (период с 1 по 3 марта 2026).',
+    'По теме «деньги» подходящих записей не найдено.', 'Упоминаний «Аркадий» в разобранных записях нет.',
+    'Записей с упоминанием «Аркадий» не найдено.', 'Записей за этот день (27.09) в прошлые годы нет.',
+    'Люди в записях ещё не размечены: нужен фоновый разбор записей.', '', None])
+def test_empty_results_are_recognised(text):
+    assert scenarios.is_empty(text)
+
+
+def test_a_result_with_entries_is_not_empty():
+    assert not scenarios.is_empty('Найдено 3 записей (период с 1 по 3 марта 2026), среднее 5.0/10.')
+    assert not scenarios.is_empty('Записи за 2026-03 (от свежих к старым):\nВсего 3 записей')
+
+
+def _widen(tool, **args):
+    return scenarios.widen({'tool': tool, 'args': args}, TODAY)
+
+
+def test_widening_drops_filters_one_at_a_time_then_the_period():
+    call, note = _widen('entries_query', start='2026-03-01', end='2026-03-31', max_rating=4, person='Маша')
+    assert call['args'] == {'start': '2026-03-01', 'end': '2026-03-31', 'person': 'Маша'}
+    assert note == 'По точному запросу ничего нет; ниже то же без фильтра по оценке.'
+    call, note = _widen('entries_query', start='2026-03-01', end='2026-03-31', person='Маша')
+    assert call['args'] == {'person': 'Маша'} and 'по всему дневнику' in note
+    # A period with nothing else: an empty period is the answer.
+    assert _widen('entries_query', start='2026-03-01', end='2026-03-31') is None
+
+
+def test_widening_a_day_a_topic_a_person_and_a_year_ago():
+    call, _ = _widen('period_entries', start='2026-09-26', end='2026-09-26')
+    assert call == {'tool': 'period_entries', 'args': {'start': '2026-09-19', 'end': '2026-09-27'}}
+    assert _widen('period_entries', year=2026, month=3) is None
+    call, _ = _widen('search_topic', query='деньги зарплата долг')
+    assert call == {'tool': 'entries_query', 'args': {'word': 'деньги|зарплата|долг'}}
+    call, _ = _widen('person_deep', name='Аркадий')
+    assert call == {'tool': 'entries_query', 'args': {'person': 'Аркадий'}}
+    call, _ = _widen('on_this_day')
+    assert call['args'] == {'start': '2025-09-20', 'end': '2025-10-04'}
+    assert _widen('diary_stats') is None

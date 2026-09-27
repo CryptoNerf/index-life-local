@@ -24,6 +24,7 @@ from datetime import date, timedelta
 from typing import Iterable
 
 from .daybook import Day
+from .llm_text import ru_date, ru_span
 
 BAD = 4    # a rating at or below this is a bad day
 GOOD = 7   # at or above, a good one
@@ -51,7 +52,7 @@ def _pct(part: int, whole: int) -> int:
 
 
 def _span(a: date, b: date) -> str:
-    return a.isoformat() if a == b else f'{a.isoformat()}…{b.isoformat()}'
+    return ru_span(a, b)
 
 
 def _in(days: Iterable[Day], start: date, end: date) -> list[Day]:
@@ -93,7 +94,7 @@ def _short(day: Day, limit: int = 140) -> str:
     text = ' '.join(text.split())
     if len(text) > limit:
         text = text[:limit].rstrip() + '…'
-    return f'[{day.date.isoformat()}] {day.rating}/10. {text}'
+    return f'[{ru_date(day.date)}] {day.rating}/10. {text}'
 
 
 def _forms(word: str) -> set[str]:
@@ -159,13 +160,13 @@ def what_changed(days: list[Day], before: tuple[date, date],
     disappeared or grew in the days, with each thing's usual effect on mood."""
     a, b = _in(days, *before), _in(days, *after)
     if not b:
-        return f'За {_span(*after)} записей нет.'
+        return f'Записей {_span(*after)} нет.'
     if not a:
-        return f'За {_span(*before)} записей нет, сравнивать не с чем.'
+        return f'Записей {_span(*before)} нет, сравнивать не с чем.'
     ra, rb = [d.rating for d in a], [d.rating for d in b]
     lines = [
-        f'Что изменилось: {_span(*after)} ({len(b)} записей) против '
-        f'{_span(*before)} ({len(a)} записей).',
+        f'Что изменилось. Раньше: {_span(*before)} ({len(a)} записей). '
+        f'Теперь: {_span(*after)} ({len(b)} записей).',
         f'- Настроение: {_avg(ra):.1f} → {_avg(rb):.1f} ({_avg(rb) - _avg(ra):+.1f}). '
         f'Плохих дней (≤{BAD}): {_pct(sum(r <= BAD for r in ra), len(ra))}% → '
         f'{_pct(sum(r <= BAD for r in rb), len(rb))}%, хороших (≥{GOOD}): '
@@ -226,7 +227,7 @@ def what_changed(days: list[Day], before: tuple[date, date],
 
     worst = sorted(b, key=lambda d: (d.rating, d.date))[:2]
     best = sorted(b, key=lambda d: (-d.rating, d.date))[:1]
-    lines.append('Самые тяжёлые дни второго периода:')
+    lines.append('Самые тяжёлые дни (теперь):')
     lines += [_short(d) for d in worst]
     if best and best[0].rating > worst[-1].rating:
         lines.append('Самый светлый: ' + _short(best[0]))
@@ -297,8 +298,8 @@ def person_deep(days: list[Day], name: str, today: date) -> str:
     first, last = with_p[0], with_p[-1]
     lines = [
         f'«{key}»: упоминается в {len(with_p)} из {len(days)} записей '
-        f'({_pct(len(with_p), len(days))}%). Первое упоминание {first.date.isoformat()}, '
-        f'последнее {last.date.isoformat()} ({(today - last.date).days} дн. назад).',
+        f'({_pct(len(with_p), len(days))}%). Первое упоминание {ru_date(first.date)}, '
+        f'последнее {ru_date(last.date)} ({(today - last.date).days} дн. назад).',
         f'- Тон упоминаний: тепло {tones.count("positive")}, нейтрально '
         f'{tones.count("neutral")}, негативно {tones.count("negative")} '
         f'(итог {_tone_score(tones):+.2f} на шкале от −1 до +1).',
@@ -347,7 +348,7 @@ def person_deep(days: list[Day], name: str, today: date) -> str:
             continue
         seen.add(d.date)
         tone = ', '.join(sorted({TONE_RU.get(t, t) for t in d.people[key]}))
-        quotes.append(f'[{d.date.isoformat()}] {d.rating}/10 ({tone}). {_excerpt(d.note, pattern)}')
+        quotes.append(f'[{ru_date(d.date)}] {d.rating}/10 ({tone}). {_excerpt(d.note, pattern)}')
     lines.append('Записи (первая, самые тёплые и тяжёлые, последние):')
     lines += quotes
     return '\n'.join(lines)
@@ -367,7 +368,8 @@ def entries_query(days: list[Day], *, start: date | None = None, end: date | Non
         s, e = start or date.min, end or date.max
         picked = [d for d in picked if s <= d.date <= e]
         conditions.append(f'период {_span(start, end)}' if start and end
-                          else f'с {start.isoformat()}' if start else f'до {end.isoformat()}')
+                          else f'с {ru_date(start, weekday=False)}' if start
+                          else f'до {ru_date(end, weekday=False)}')
     if min_rating is not None:
         picked = [d for d in picked if d.rating >= min_rating]
         conditions.append(f'оценка от {min_rating}')
@@ -426,7 +428,7 @@ def entries_query(days: list[Day], *, start: date | None = None, end: date | Non
     for d in reversed(shown):
         if pattern is not None:
             w = f' [{WEATHER_RU.get(d.weather, d.weather)}]' if weather and d.weather else ''
-            lines.append(f'[{d.date.isoformat()}] {d.rating}/10{w}. {_excerpt(d.note, pattern)}')
+            lines.append(f'[{ru_date(d.date)}] {d.rating}/10{w}. {_excerpt(d.note, pattern)}')
         else:
             lines.append(_short(d, 200))
     return '\n'.join(lines)
@@ -533,7 +535,7 @@ def themes(days: list[Day], today: date, start: date | None = None,
     label = 'по всему дневнику'
     if start or end:
         scope = _in(with_themes, start or date.min, end or date.max)
-        label = f'за {_span(start or with_themes[0].date, end or today)}'
+        label = _span(start or with_themes[0].date, end or today)
         if not scope:
             return f'Записей с темами {label} нет.'
 

@@ -577,3 +577,67 @@ def answer_guidance(scenario: str) -> str:
         lines.append(_ANSWER_RULES)
     return '\n\n' + '\n'.join(lines)
 
+
+
+# ── when a tool finds nothing ─────────────────────────────────
+
+# First lines of the tools' "nothing here" answers.
+_EMPTY = re.compile(r'^(?:Записей\b.*\b(?:не найдено|нет)\b|По теме .*не найдено|'
+                    r'Упоминаний «.*» в разобранных записях нет|Люди в записях ещё не размечены)')
+
+
+def is_empty(text: str | None) -> bool:
+    return not text or bool(_EMPTY.match(text.strip()))
+
+
+def widen(call: dict, today: date) -> tuple[dict, str] | None:
+    """One step wider than a call that found nothing, and a note saying how.
+
+    Without it the model reports "записей нет" when the entries are there,
+    just not on that exact day, with that exact word, or under that filter.
+    An empty month or year is left alone: that is itself the answer.
+    """
+    tool, args = call['tool'], dict(call['args'])
+
+    def again(new_tool, new_args, note):
+        return {'tool': new_tool, 'args': new_args}, f'По точному запросу ничего нет; {note}.'
+
+    if tool == 'entries_query':
+        for key, what in (('max_rating', 'без фильтра по оценке'), ('min_rating', 'без фильтра по оценке'),
+                          ('weather', 'без фильтра по погоде'), ('weekday', 'без фильтра по дню недели')):
+            if key in args:
+                args.pop(key)
+                return again(tool, args, f'ниже то же {what}')
+        if args.get('start') or args.get('end'):
+            if args.get('person') or args.get('word') or args.get('activity'):
+                args.pop('start', None)
+                args.pop('end', None)
+                return again(tool, args, 'ниже поиск по всему дневнику, без периода')
+        return None
+    if tool == 'period_entries' and args.get('start'):
+        try:
+            a = date.fromisoformat(args['start'])
+            b = date.fromisoformat(args.get('end') or args['start'])
+        except ValueError:
+            return None
+        if (b - a).days <= 7:
+            a, b = a - timedelta(days=7), min(today, b + timedelta(days=7))
+            return again(tool, {'start': a.isoformat(), 'end': b.isoformat()},
+                         'ниже записи за неделю до и после')
+        return None
+    if tool == 'search_topic' and args.get('query'):
+        words = [w for w in re.findall(r'\w+', args['query']) if len(w) > 2][:4]
+        if words:
+            return again('entries_query', {'word': '|'.join(words)},
+                         'ниже записи, где встречаются эти слова')
+        return None
+    if tool in ('person_deep', 'person_history') and args.get('name'):
+        return again('entries_query', {'person': args['name']},
+                     'ниже записи, где это имя встречается в тексте')
+    if tool == 'on_this_day':
+        d = today.replace(year=today.year - 1) if not (today.month == 2 and today.day == 29) \
+            else date(today.year - 1, 2, 28)
+        return again('period_entries', {'start': (d - timedelta(days=7)).isoformat(),
+                                        'end': (d + timedelta(days=7)).isoformat()},
+                     'ниже записи за неделю вокруг этой даты год назад')
+    return None
