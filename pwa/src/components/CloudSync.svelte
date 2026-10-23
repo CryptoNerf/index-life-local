@@ -4,7 +4,7 @@
   import PairScan from './PairScan.svelte';
   import ReplacedLog from './ReplacedLog.svelte';
   import { listDevices, resetSyncMarks } from '../lib/app-sync.js';
-  import { getProvider, setProvider, signOutCloud, getTransport, runSync, reconnectAndSync, syncState } from '../lib/sync-state.svelte.js';
+  import { getProvider, setProvider, signOutCloud, getTransport, runSync, reconnectAndSync, syncState, describeError } from '../lib/sync-state.svelte.js';
   import { timeAgo } from '../lib/mood.js';
 
   let provider = $state(getProvider()); // 'yandex' | 'google' | null
@@ -12,6 +12,10 @@
   let busy = $state(false);
   let error = $state('');
   let st = $state({ enabled: false, unlocked: false, vaultInFolder: false });
+  // Whether the cloud folder has been looked at since connecting. Until it
+  // has, "is there a vault?" has no answer: offering to create a passphrase
+  // then (as a failed request used to) invites a second, conflicting vault.
+  let checked = $state(false);
   let devices = $state([]);
 
   let pass = $state('');
@@ -34,12 +38,13 @@
     st = { enabled: vault.isEncryptionEnabled(), unlocked: vault.isUnlocked(), vaultInFolder: false };
     if (provider) {
       connected = getTransport().isConnected();
-      if (connected) refresh();
+      if (connected) run(refresh);
     }
   });
 
   async function refresh() {
     st = await vault.status(getTransport());
+    checked = true;
     // Best-effort devices panel — answers "did my phone and PC meet?".
     try {
       devices = await listDevices(getTransport());
@@ -54,7 +59,7 @@
     try {
       await fn();
     } catch (e) {
-      error = e?.message || String(e);
+      error = describeError(e, 'Не получилось');
     } finally {
       busy = false;
     }
@@ -63,7 +68,9 @@
   function chooseProvider(name) {
     setProvider(name);
     provider = name;
+    checked = false;
     connected = getTransport().isConnected();
+    if (connected) run(refresh);
   }
 
   const connect = () => run(async () => {
@@ -116,7 +123,11 @@
     await reconnectAndSync();
     connected = getTransport().isConnected();
     if (syncState.status === 'error' && syncState.error) error = syncState.error;
-    await refresh();   // the devices panel picks up the fresh snapshots
+    try {
+      await refresh();   // the devices panel picks up the fresh snapshots
+    } catch {
+      // The sync error above already says why the cloud could not be reached.
+    }
   }
 
   function lock() {
@@ -132,6 +143,7 @@
     signOutCloud();
     provider = null;
     connected = false;
+    checked = false;
     devices = [];
     st = { enabled: vault.isEncryptionEnabled(), unlocked: false, vaultInFolder: false };
   }
@@ -240,6 +252,15 @@
     <button class="link-btn" onclick={() => { provider = null; connected = false; }}>
       Выбрать другое облако
     </button>
+
+  {:else if !checked}
+    <div class="cloud-status">
+      {busy ? `Проверяю папку в ${providerName}…` : `Не удалось открыть папку в ${providerName}`}
+    </div>
+    {#if !busy}
+      <button class="row-btn" onclick={() => run(refresh)}>Повторить</button>
+      <button class="link-btn" onclick={switchCloud}>Сменить облако</button>
+    {/if}
 
   {:else if st.vaultInFolder}
     <div class="cloud-status">🔒 Папка зашифрована — разблокируйте</div>

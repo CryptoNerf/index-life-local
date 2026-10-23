@@ -12,6 +12,23 @@ import { isUnlocked } from './vault.js';
 const LAST_KEY = 'indexlife:last-sync';
 const PROVIDER_KEY = 'indexlife:cloud-provider'; // 'yandex' | 'google'
 
+// A network failure reads differently in every browser: Chrome "Failed to
+// fetch", Safari (every browser on iPhone) "Load failed", Firefox
+// "NetworkError when attempting to fetch resource". Showing those raw told
+// the user nothing.
+const NETWORK_ERROR = /failed to fetch|load failed|networkerror|network request failed/i;
+
+export function describeError(e, fallback = 'Ошибка синхронизации') {
+  const msg = e?.message || String(e || '');
+  if (NETWORK_ERROR.test(msg)) {
+    // The step (set by the transport) says which request the browser could
+    // not complete; without it every cloud failure looked the same.
+    const where = e?.step ? ` (${e.step})` : '';
+    return `Нет связи с облаком${where}: проверьте интернет и попробуйте ещё раз`;
+  }
+  return msg || fallback;
+}
+
 export function getProvider() {
   return localStorage.getItem(PROVIDER_KEY);
 }
@@ -86,11 +103,7 @@ export async function runSync({ silent = false } = {}) {
       return false;
     }
     syncState.status = 'error';
-    if (!silent) {
-      syncState.error = msg.includes('Failed to fetch')
-        ? 'Нет сети или облако недоступно — попробуйте позже'
-        : (msg || 'Ошибка синхронизации');
-    }
+    if (!silent) syncState.error = describeError(e);
     return false;
   }
 }

@@ -129,10 +129,24 @@ function authorize() {
   });
 }
 
-async function api(path, opts = {}) {
+// A request the browser could not complete says only "Load failed" (Safari)
+// or "Failed to fetch" (Chrome), whichever of Yandex's hosts refused it. The
+// step it failed at is what tells the API, the download host and the upload
+// host apart, so it travels with the error to the screen.
+async function net(step, url, opts) {
+  try {
+    return await fetch(url, opts);
+  } catch (e) {
+    const err = new Error(e?.message || 'network error');
+    err.step = step;
+    throw err;
+  }
+}
+
+async function api(path, opts = {}, step = 'запрос к Яндекс.Диску') {
   const token = loadToken();
   if (!token) throw new Error('not-connected');
-  const resp = await fetch(API + path, {
+  const resp = await net(step, API + path, {
     ...opts,
     headers: { Authorization: `OAuth ${token}`, ...(opts.headers || {}) }
   });
@@ -169,7 +183,7 @@ export class YandexDiskTransport {
       const fields = '_embedded.items.name,_embedded.items.md5,_embedded.items.modified';
       const data = await (await api(
         `/resources?path=${encodeURIComponent(APP)}&limit=1000`
-        + `&fields=${encodeURIComponent(fields)}`
+        + `&fields=${encodeURIComponent(fields)}`, {}, 'список файлов'
       )).json();
       return (data._embedded?.items || []).map((i) => ({
         name: i.name, tag: i.md5 || i.modified || null
@@ -183,12 +197,13 @@ export class YandexDiskTransport {
   async get(name) {
     let href;
     try {
-      href = (await (await api(`/resources/download?path=${at(name)}`)).json()).href;
+      href = (await (await api(`/resources/download?path=${at(name)}`, {},
+                               'ссылка на скачивание')).json()).href;
     } catch (e) {
       if (is404(e)) return null;
       throw e;
     }
-    const resp = await fetch(href); // temporary signed URL, no auth header
+    const resp = await net('скачивание файла', href); // temporary signed URL, no auth header
     if (resp.status === 404) return null;
     if (!resp.ok) throw new Error(`Yandex download ${resp.status}`);
     return resp.text();
@@ -196,15 +211,16 @@ export class YandexDiskTransport {
 
   async put(name, text) {
     const href = (await (await api(
-      `/resources/upload?path=${at(name)}&overwrite=true`
+      `/resources/upload?path=${at(name)}&overwrite=true`, {}, 'ссылка на загрузку'
     )).json()).href;
-    const resp = await fetch(href, { method: 'PUT', body: text });
+    const resp = await net('загрузка файла', href, { method: 'PUT', body: text });
     if (!resp.ok) throw new Error(`Yandex upload ${resp.status}`);
   }
 
   async delete(name) {
     try {
-      await api(`/resources?path=${at(name)}&permanently=true`, { method: 'DELETE' });
+      await api(`/resources?path=${at(name)}&permanently=true`, { method: 'DELETE' },
+                'удаление файла');
     } catch (e) {
       if (!is404(e)) throw e;
     }
