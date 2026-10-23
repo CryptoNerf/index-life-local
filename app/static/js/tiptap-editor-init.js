@@ -152,11 +152,57 @@ function cutAt(tr, pos) {
   tr.split(pos);
 }
 
-function toggleQuote(editor) {
+// Cut out of its paragraph exactly what a block format should apply to:
+// the selection, trimmed, or with nothing selected the line the cursor is
+// on. With `eachLine`, the line breaks inside it become paragraph breaks
+// too, so that every selected line becomes its own heading or list item.
+// Returns the range of the result, ready for the format to be applied.
+function isolateLines(editor, { eachLine = false } = {}) {
   const { state } = editor;
   const sel = state.selection;
-  const unquote = editor.isActive('blockquote');
-  if (!isPlainParagraph(sel.$from) || !isPlainParagraph(sel.$to)) {
+  let from = sel.from;
+  let to = sel.to;
+  if (sel.empty) {
+    [from, to] = lineAround(sel.$from);
+  } else {
+    // Whitespace at the edges of a selection is not part of it.
+    const text = state.doc.textBetween(from, to, '\n', '\n');
+    from += text.length - text.trimStart().length;
+    to -= text.length - text.trimEnd().length;
+    if (to <= from) [from, to] = lineAround(sel.$from);
+  }
+
+  const tr = state.tr;
+  cutAt(tr, to);
+  cutAt(tr, from);
+  let start = tr.mapping.map(from, 1);
+  let end = Math.max(start, tr.mapping.map(to, -1));
+  if (eachLine) {
+    const breaks = [];
+    tr.doc.nodesBetween(start, end, (node, pos) => {
+      if (node.type.name === 'hardBreak') breaks.push(pos);
+    });
+    for (const pos of breaks.reverse()) {
+      tr.delete(pos, pos + 1);
+      tr.split(pos);
+    }
+    // The splits come after `start`, so only the end moves.
+    end = Math.max(start, tr.mapping.map(to, -1));
+  }
+  editor.view.dispatch(tr);
+  return { from: start, to: end };
+}
+
+// Selection wholly inside top-level (or quoted) paragraphs: the case where
+// Tiptap's own toggles take a whole multi-line paragraph.
+function inPlainParagraphs(editor) {
+  const sel = editor.state.selection;
+  return isPlainParagraph(sel.$from) && isPlainParagraph(sel.$to);
+}
+
+function toggleQuote(editor) {
+  const sel = editor.state.selection;
+  if (!inPlainParagraphs(editor)) {
     // Headings, code: the standard whole-block behaviour.
     if (editor.chain().focus().toggleBlockquote().run()) return true;
     // A list item cannot hold a quote of its first line, and the button
@@ -167,28 +213,20 @@ function toggleQuote(editor) {
       .wrapIn('blockquote')
       .run();
   }
-
-  let from = sel.from;
-  let to = sel.to;
-  if (sel.empty) {
-    [from, to] = lineAround(sel.$from);
-  } else {
-    // Whitespace at the edges of a selection is not part of the quote.
-    const text = state.doc.textBetween(from, to, '\n', '\n');
-    from += text.length - text.trimStart().length;
-    to -= text.length - text.trimEnd().length;
-    if (to <= from) [from, to] = lineAround(sel.$from);
-  }
-
-  const tr = state.tr;
-  cutAt(tr, to);
-  cutAt(tr, from);
-  const start = tr.mapping.map(from, 1);
-  const end = Math.max(start, tr.mapping.map(to, -1));
-  editor.view.dispatch(tr);
-
-  const chain = editor.chain().focus().setTextSelection({ from: start, to: end });
+  const unquote = editor.isActive('blockquote');
+  const range = isolateLines(editor);
+  const chain = editor.chain().focus().setTextSelection(range);
   return (unquote ? chain.lift('blockquote') : chain.wrapIn('blockquote')).run();
+}
+
+// Headings and lists had the same flaw as quotes: on a note written line by
+// line, H2 or "• Список" on one line turned the whole note into a heading
+// or into one list item. Now they apply to the selected lines, one heading
+// or one item per line. Turning a format off keeps Tiptap's behaviour.
+function toggleLinesFormat(editor, apply) {
+  if (!inPlainParagraphs(editor)) return apply(editor.chain().focus()).run();
+  const range = isolateLines(editor, { eachLine: true });
+  return apply(editor.chain().focus().setTextSelection(range)).run();
 }
 
 function setupToolbarButtons(editor, toolbarElement) {
@@ -207,19 +245,19 @@ function setupToolbarButtons(editor, toolbarElement) {
           editor.chain().focus().toggleItalic().run();
           break;
         case 'h1':
-          editor.chain().focus().toggleHeading({ level: 1 }).run();
+          toggleLinesFormat(editor, (c) => c.toggleHeading({ level: 1 }));
           break;
         case 'h2':
-          editor.chain().focus().toggleHeading({ level: 2 }).run();
+          toggleLinesFormat(editor, (c) => c.toggleHeading({ level: 2 }));
           break;
         case 'h3':
-          editor.chain().focus().toggleHeading({ level: 3 }).run();
+          toggleLinesFormat(editor, (c) => c.toggleHeading({ level: 3 }));
           break;
         case 'list':
-          editor.chain().focus().toggleBulletList().run();
+          toggleLinesFormat(editor, (c) => c.toggleBulletList());
           break;
         case 'numbered':
-          editor.chain().focus().toggleOrderedList().run();
+          toggleLinesFormat(editor, (c) => c.toggleOrderedList());
           break;
         case 'link': {
           const url = prompt(window.LINK_PROMPT || 'Enter URL:', 'https://');

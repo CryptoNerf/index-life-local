@@ -16,6 +16,19 @@
 
   let rating = $state(0);
   let note = $state('');
+  let noteField = $state(null);
+
+  // The field grows with the note instead of scrolling inside itself, like
+  // the desktop editor: a long day is read and edited on the page.
+  function fitNote() {
+    if (!noteField) return;
+    noteField.style.height = 'auto';
+    noteField.style.height = noteField.scrollHeight + 2 + 'px';
+  }
+  $effect(() => {
+    note;                       // also when a day is loaded, not only on typing
+    queueMicrotask(fitNote);
+  });
   let saved = $state(false);
   // The day exists here only as a tombstone: it was deleted on another
   // device. A tombstone keeps its old text (that is how the deletion travels
@@ -162,7 +175,8 @@
 
   <RatingCubes value={rating} onchange={setRating} />
 
-  <textarea class="note" bind:value={note} oninput={() => { deletedElsewhere = false; touch(); }}
+  <textarea class="note" bind:this={noteField} bind:value={note}
+            oninput={() => { deletedElsewhere = false; touch(); }}
             placeholder="Как прошёл день?"></textarea>
 
   <button class="save-btn" class:is-saved={saved} disabled={!rating} onclick={save}>

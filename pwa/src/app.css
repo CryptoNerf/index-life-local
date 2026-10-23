@@ -205,6 +205,7 @@ button {
   color: var(--text);
   background: var(--surface);
   resize: none;
+  overflow: hidden;   /* grows with the text, see fitNote in Capture.svelte */
   outline: none;
 }
 .note:focus { border-color: var(--ink); }

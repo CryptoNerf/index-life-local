@@ -184,3 +184,35 @@ def test_typed_quotes_are_russian(editor):
                tiptapEditor.state.selection.to, ch)) || tiptapEditor.commands.insertContent(ch);
       return true; })()""")
     assert editor.markdown() == '«привет»'
+
+
+# ── headings and lists, the same way as quotes ────────────────
+
+def _click(editor, fmt):
+    editor.b.js(f"document.querySelector('[data-format={fmt}]').click(); true")
+    return editor.markdown()
+
+
+def test_a_heading_takes_one_line_not_the_whole_note(editor):
+    editor.load(LINES)
+    editor.select('Вторая строка')
+    assert _click(editor, 'h2') == 'Первая строка\n\n## Вторая строка\n\nТретья строка'
+    editor.load(LINES)
+    editor.select('Вторая строка', 2, 2)       # just the cursor
+    assert _click(editor, 'h3') == 'Первая строка\n\n### Вторая строка\n\nТретья строка'
+    editor.load('## Заголовок')
+    editor.select('Заголовок')
+    assert _click(editor, 'h2') == 'Заголовок'
+
+
+def test_a_list_gets_one_item_per_selected_line(editor):
+    editor.load(LINES)
+    editor.select('Вторая строка')
+    assert _click(editor, 'list') == 'Первая строка\n\n- Вторая строка\n\nТретья строка'
+    editor.load(LINES)
+    editor.b.js("""(() => { let a = null, z = null;
+      tiptapEditor.state.doc.descendants((n, p) => { if (!n.isText) return;
+        if (n.text === 'Первая строка') a = p;
+        if (n.text === 'Третья строка') z = p + n.text.length; });
+      tiptapEditor.commands.setTextSelection({from: a, to: z}); return true; })()""")
+    assert _click(editor, 'numbered') == '1. Первая строка\n2. Вторая строка\n3. Третья строка'
