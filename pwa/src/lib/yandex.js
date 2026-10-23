@@ -203,7 +203,19 @@ export class YandexDiskTransport {
       if (is404(e)) return null;
       throw e;
     }
-    const resp = await net('скачивание файла', href); // temporary signed URL, no auth header
+    // The download host lets a page read the file only on some requests:
+    // a plain fetch of the signed link comes back without an
+    // Access-Control-Allow-Origin header, and the browser blocks it ("Load
+    // failed"). Its preflight does allow an Authorization header, so the
+    // link is first fetched with the token (to Yandex's own host), and the
+    // plain fetch stays as the fallback.
+    let resp;
+    try {
+      resp = await net('скачивание файла', href,
+                       { headers: { Authorization: `OAuth ${loadToken()}` } });
+    } catch {
+      resp = await net('скачивание файла', href);
+    }
     if (resp.status === 404) return null;
     if (!resp.ok) throw new Error(`Yandex download ${resp.status}`);
     return resp.text();

@@ -141,3 +141,41 @@ describe('Yandex sign-in', () => {
     expect(localStorage.getItem(TOKEN_KEY)).toBe(null);
   });
 });
+
+describe('reading a file from Yandex.Disk', () => {
+  function signedIn() {
+    localStorage.setItem(TOKEN_KEY, JSON.stringify({ token: 'tok', expiry: Date.now() + 1e9 }));
+  }
+  const link = { ok: true, status: 200, json: async () => ({ href: 'https://downloader.disk.yandex.ru/x' }) };
+
+  it('fetches the download link with the token first', async () => {
+    signedIn();
+    const calls = [];
+    globalThis.fetch = vi.fn(async (url, opts) => {
+      calls.push([url, opts?.headers?.Authorization]);
+      return url.includes('cloud-api') ? link : { ok: true, status: 200, text: async () => 'vault' };
+    });
+    expect(await new YandexDiskTransport().get('vault.json')).toBe('vault');
+    expect(calls[1]).toEqual(['https://downloader.disk.yandex.ru/x', 'OAuth tok']);
+  });
+
+  it('falls back to a plain fetch, and names the step if both fail', async () => {
+    signedIn();
+    let downloads = 0;
+    globalThis.fetch = vi.fn(async (url, opts) => {
+      if (url.includes('cloud-api')) return link;
+      downloads += 1;
+      if (opts?.headers?.Authorization) throw new TypeError('Load failed');
+      return { ok: true, status: 200, text: async () => 'plain' };
+    });
+    expect(await new YandexDiskTransport().get('vault.json')).toBe('plain');
+    expect(downloads).toBe(2);
+
+    globalThis.fetch = vi.fn(async (url) => {
+      if (url.includes('cloud-api')) return link;
+      throw new TypeError('Load failed');
+    });
+    const err = await new YandexDiskTransport().get('vault.json').catch((e) => e);
+    expect(err.step).toBe('скачивание файла');
+  });
+});
