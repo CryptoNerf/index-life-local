@@ -3,18 +3,19 @@
 /* ========== Tiptap Custom Styles (Times New Roman Theme) ========== */
 
 /* Main editor container */
+/* The box grows with the note: a long day used to be written through a
+   400px slot with its own scrollbar while the page around it stood empty.
+   The toolbar above stays in view instead (sticky, edit_day.css). */
 .tiptap-editor {
   width: 100%;
-  min-height: 150px;
-  max-height: 400px;
+  min-height: 180px;
   font-family: var(--font-notes, 'Times New Roman', Times, serif);
   font-size: var(--il-text-note);
   border: 1px solid #222;
   border-top: none;
   box-sizing: border-box;
-  overflow-y: auto;
   background: #fff;
-  line-height: 1.6;
+  line-height: 1.55;
   /* Fixed light surface: keep text dark so auto-invert (white --text-color
      on a dark page) can't make typing invisible. Re-scope --text-muted for
      nested blockquotes/code too. */
@@ -24,9 +25,9 @@
 
 /* ProseMirror editor content */
 .ProseMirror {
-  padding: 8px;
+  padding: 10px 12px;
   outline: none;
-  min-height: 134px; /* 150px - 16px padding */
+  min-height: 160px; /* 180px - padding */
   white-space: pre-wrap;
   word-wrap: break-word;
 }
@@ -43,45 +44,63 @@
 
 /* ========== Typography Styles ========== */
 
-/* Visible paragraph spacing — matches how the saved note renders
-   (.preview-block p / .wysiwyg-editor p use 8px), so the editor is honest
-   WYSIWYG: pressing Enter shows a real gap, which makes block-level quoting
-   (a whole paragraph) predictable instead of an invisible structure. */
+/* One rhythm, in em so it scales with the note font:
+   - a line break (Shift+Enter) adds nothing: the next line follows;
+   - a paragraph (Enter) adds 0.6 of a line: clearly a new paragraph, which
+     is also what decides how much a quote takes;
+   - headings get more room above than below, so each sits with its text;
+   - lists, quotes and rules are blocks like paragraphs and keep the same
+     gap around them, so two lists in a row no longer run together.
+   Margins collapse between neighbours: the gap is the larger of the two. */
+
 .ProseMirror p {
-  margin: 8px 0;
+  margin: 0.6em 0;
+}
+
+.ProseMirror h1,
+.ProseMirror h2,
+.ProseMirror h3 {
+  font-weight: bold;
+  line-height: 1.25;
 }
 
 .ProseMirror h1 {
   font-size: var(--il-text-display);
-  font-weight: bold;
-  margin: 12px 0 0 0;
+  margin: 1em 0 0.3em;
 }
 
 .ProseMirror h2 {
   font-size: var(--il-text-page-title);
-  font-weight: bold;
-  margin: 10px 0 0 0;
+  margin: 0.9em 0 0.3em;
 }
 
 .ProseMirror h3 {
   font-size: var(--il-text-section-title);
-  font-weight: bold;
-  margin: 8px 0 0 0;
+  margin: 0.8em 0 0.25em;
 }
 
-/* Первый элемент без верхнего отступа */
-.ProseMirror > *:first-child {
+/* The text under a heading belongs to it. */
+.ProseMirror :is(h1, h2, h3) + * {
+  margin-top: 0.2em;
+}
+
+/* Nothing pushes the note away from the edges of the box. */
+.ProseMirror > :first-child {
   margin-top: 0;
+}
+
+.ProseMirror > :last-child {
+  margin-bottom: 0;
 }
 
 .ProseMirror ul,
 .ProseMirror ol {
-  margin: 0;
-  padding-left: 24px;
+  margin: 0.6em 0;
+  padding-left: 1.4em;
 }
 
 .ProseMirror li {
-  margin: 0;
+  margin: 0.15em 0;
 }
 
 .ProseMirror li p {
@@ -105,18 +124,29 @@
 }
 
 .ProseMirror blockquote {
-  border-left: 4px solid #b0b0b0;
-  padding: 8px 16px;
-  margin: 12px 0;
-  color: var(--text-muted, #555);
-  background: #f7f7f7;
+  border-left: 3px solid #a8a8a8;
+  padding: 0.35em 0.9em;
+  margin: 0.8em 0;
+  color: #444;
+  background: #f6f6f6;
   border-radius: var(--il-radius);
+}
+
+/* The quote's own padding is its inner space; paragraph margins on top of
+   it doubled the gap at the top and bottom. Between paragraphs inside a
+   quote the usual paragraph gap stays. */
+.ProseMirror blockquote > :first-child {
+  margin-top: 0;
+}
+
+.ProseMirror blockquote > :last-child {
+  margin-bottom: 0;
 }
 
 .ProseMirror hr {
   border: none;
   border-top: 1px solid #222;
-  margin: 16px 0;
+  margin: 1em 0;
 }
 
 .ProseMirror code {
@@ -129,10 +159,10 @@
 
 .ProseMirror pre {
   background: #e8e8e8;
-  padding: 12px;
+  padding: 0.6em 0.75em;
   border-radius: var(--il-radius);
   overflow-x: auto;
-  margin: 8px 0;
+  margin: 0.6em 0;
   font-family: 'Courier New', monospace;
   font-size: var(--il-text-body);
 }
@@ -153,13 +183,13 @@
 
 @media (max-width: 600px) {
   .tiptap-editor {
-    min-height: 100px;
-    max-height: 250px;
+    min-height: 140px;
     font-size: var(--il-text-subhead);
   }
 
   .ProseMirror {
-    min-height: 84px;
+    padding: 8px 10px;
+    min-height: 124px;
   }
 
   .ProseMirror code {

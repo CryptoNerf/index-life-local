@@ -6,6 +6,7 @@
   import { scheduleSync, syncState } from '../lib/sync-state.svelte.js';
   import { isUnlocked } from '../lib/vault.js';
   import { loadDraft, saveDraft, clearDraft, editorStateFor } from '../lib/drafts.js';
+  import { softenHardBreaks } from '../lib/markdown.js';
   import { currentStreak } from '../lib/stats.js';
   import { todayISO, prettyDate, isToday, addDays, pluralDays, timeAgo } from '../lib/mood.js';
 
@@ -71,7 +72,9 @@
     getEntry(d).then((e) => {
       const view = editorStateFor(e, loadDraft(d));
       rating = view.rating;
-      note = view.note;
+      // Shown as editable text: the desktop's "\" line-break markers would
+      // sit at the ends of lines here.
+      note = softenHardBreaks(view.note);
       deletedElsewhere = view.deletedElsewhere;
       hasEntry = !!e && !e.deleted;
       justDeleted = false;   // a fresh day, whatever happened on the last one
@@ -110,7 +113,7 @@
     const rec = await restoreEntry(date);
     if (!rec) return;
     rating = rec.rating;
-    note = rec.note ?? '';
+    note = softenHardBreaks(rec.note ?? '');
     hasEntry = true;
     justDeleted = false;
     deletedElsewhere = false;

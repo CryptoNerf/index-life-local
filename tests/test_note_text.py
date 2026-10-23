@@ -24,3 +24,9 @@ def test_leaves_text_that_only_looks_like_markup():
     or pasting a snippet on purpose keeps what they wrote."""
     note = 'люблю <3 и <b>жирный</b> текст'
     assert plain_text(note) == note
+
+
+def test_plain_text_has_no_line_break_backslashes():
+    # Notes saved before the editor stopped writing them still have them.
+    assert plain_text('Абзац\\\n- строка\\\nещё') == 'Абзац\n- строка\nещё'
+    assert plain_text('путь C:\\\\') == 'путь C:\\\\'

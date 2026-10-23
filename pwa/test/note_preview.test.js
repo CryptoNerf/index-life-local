@@ -63,3 +63,28 @@ describe('notePreview', () => {
       .toBe('Просто хороший день, ничего особенного.');
   });
 });
+
+import { softenHardBreaks } from '../src/lib/markdown.js';
+
+describe('line breaks written by the desktop editor', () => {
+  it('drops the backslash where a plain newline means the same', () => {
+    expect(softenHardBreaks('Абзац один.\\\nСтрока два.')).toBe('Абзац один.\nСтрока два.');
+    expect(softenHardBreaks('> Цитата\\\n> вторая')).toBe('> Цитата\n> вторая');
+    expect(softenHardBreaks('- пункт\\\n  продолжение')).toBe('- пункт\n  продолжение');
+  });
+
+  it('keeps it where the next line would start a block of its own', () => {
+    for (const next of ['- не список', '# не заголовок', '1. не пункт', '---', '> не цитата']) {
+      expect(softenHardBreaks(`Текст\\\n${next}`)).toBe(`Текст\\\n${next}`);
+    }
+  });
+
+  it('leaves code fences and escaped backslashes alone', () => {
+    expect(softenHardBreaks('```\nкод\\\nещё\n```')).toBe('```\nкод\\\nещё\n```');
+    expect(softenHardBreaks('путь C:\\\\\nдальше')).toBe('путь C:\\\\\nдальше');
+  });
+
+  it('never shows a stray backslash in the feed', () => {
+    expect(notePreview('Абзац\\\n- строка\\\nещё')).toBe('Абзац строка ещё');
+  });
+});

@@ -56,6 +56,7 @@ export function notePreview(note, limit = 240) {
   let text = String(note);
 
   text = text
+    .replace(/(?<!\\)\\\n/g, '\n')            // hard line breaks
     .replace(/```[\s\S]*?```/g, ' ')             // fenced code blocks
     .replace(/^\s{0,3}(?:[-*_]\s*){3,}$/gm, ' ')  // horizontal rules
     .replace(/^\s{0,3}#{1,6}\s+/gm, '')          // heading markers
@@ -71,4 +72,33 @@ export function notePreview(note, limit = 240) {
     .trim();
 
   return text.length > limit ? text.slice(0, limit).trimEnd() + '…' : text;
+}
+
+// ── Line breaks inside a paragraph ───────────────────────────────────
+// The desktop editor writes a line break inside a paragraph as Markdown's
+// "backslash, newline". Notes are read with single newlines as breaks, so the
+// backslash only matters where the next line would otherwise start a block of
+// its own (a heading, a list item, a quote, a rule, a fence). Everywhere else
+// it showed up here as a stray "\" at the end of a line. Same rule as the
+// desktop's app/note_text.py soften_hard_breaks.
+const BLOCK_START = /^\s{0,3}(?:#{1,6}(?:\s|$)|>|[*+-](?:\s|$)|\d{1,9}[.)](?:\s|$)|```|~~~|[-=]+\s*$|\*{3,}\s*$|_{3,}\s*$)/;
+const QUOTE_PREFIX = /^(?:\s{0,3}>\s?)+/;
+
+export function softenHardBreaks(markdown) {
+  if (!markdown || !markdown.includes('\\\n')) return markdown || '';
+  const lines = markdown.split('\n');
+  let inFence = false;
+  return lines.map((line, i) => {
+    if (/^\s*(```|~~~)/.test(line)) inFence = !inFence;
+    const trailing = line.length - line.replace(/\\+$/, '').length;
+    if (inFence || trailing % 2 !== 1 || i + 1 >= lines.length) return line;
+    const next = lines[i + 1];
+    const prefix = (line.match(QUOTE_PREFIX) || [''])[0];
+    let rest = next;
+    if (prefix) {
+      const np = next.match(QUOTE_PREFIX);
+      if (np && np[0].split('>').length === prefix.split('>').length) rest = next.slice(np[0].length);
+    }
+    return rest.trim() && !BLOCK_START.test(rest) ? line.slice(0, -1) : line;
+  }).join('\n');
 }

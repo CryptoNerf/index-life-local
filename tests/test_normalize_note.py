@@ -36,3 +36,19 @@ class NormalizeNoteTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ── line breaks inside a paragraph ────────────────────────────
+
+def test_saving_drops_the_backslash_of_a_line_break():
+    """The editor writes Shift+Enter as "backslash, newline". Single newlines
+    are already line breaks when a note is read, so the backslash only
+    showed up as a stray "\\" on the phone, in search and for the AI."""
+    assert normalize_note('Утром тихо.\\\nПотом пробежка.') == 'Утром тихо.\nПотом пробежка.'
+    assert normalize_note('> Цитата\\\n> вторая') == '> Цитата\n> вторая'
+
+
+def test_saving_keeps_it_where_the_next_line_would_change_meaning():
+    for nxt in ('- не пункт', '# не заголовок', '1. не пункт', '---', '> не цитата'):
+        assert normalize_note(f'Текст\\\n{nxt}') == f'Текст\\\n{nxt}', nxt
+    assert normalize_note('```\nкод\\\nещё\n```') == '```\nкод\\\nещё\n```'

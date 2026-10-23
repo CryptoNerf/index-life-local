@@ -6,8 +6,16 @@ function initTiptapEditor(options) {
     elementId,
     placeholderText = 'Write your note here...',
     initialContent = '',
-    onUpdate = null
+    onUpdate = null,
+    lang = 'ru'
   } = options;
+
+  // Typography turns typed straight double quotes into typographic ones; in
+  // Russian those are «ёлочки», not the English “…”. Single quotes keep the
+  // default: in a Russian note they are mostly apostrophes (don't, O'Brien).
+  const quotes = lang === 'ru'
+    ? { openDoubleQuote: '«', closeDoubleQuote: '»' }
+    : {};
 
   const element = document.getElementById(elementId);
   if (!element) {
@@ -24,7 +32,7 @@ function initTiptapEditor(options) {
       window.TiptapPlaceholder.configure({
         placeholder: placeholderText,
       }),
-      window.TiptapTypography,
+      window.TiptapTypography.configure(quotes),
       window.TiptapMarkdown.configure({
         html: false,               // Не разрешать сырой HTML в Markdown
         tightLists: true,
@@ -42,6 +50,15 @@ function initTiptapEditor(options) {
     editorProps: {
       attributes: {
         class: 'tiptap-editor-content',
+      },
+      // The quote shortcut does what the quote button does (toggleQuote),
+      // not Tiptap's whole-paragraph toggle.
+      handleKeyDown: (view, event) => {
+        if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.code === 'KeyB') {
+          toggleQuote(editor);
+          return true;
+        }
+        return false;
       },
       // Стандартное поведение Tiptap: Enter = новый параграф (виден как разрыв
       // с отступом — см. margin на .ProseMirror p в tiptap-custom.css, как в
@@ -76,6 +93,104 @@ function getMarkdownFromEditor(editor) {
   return editor.storage.markdown.getMarkdown();
 }
 
+/* ── Quoting exactly what is selected ──────────────────────────────────
+   A quote is a block, and Tiptap's toggleBlockquote wraps the WHOLE
+   paragraph. A note written line by line (Shift+Enter, or plain newlines
+   from the phone) is one paragraph with line breaks, so selecting one line
+   and pressing the quote button quoted the entire note. Here the paragraph
+   is first cut at the edges of the selection (or, with nothing selected, at
+   the edges of the line the cursor is on), and only that part is quoted.
+   The same cut works the other way: unquoting one line of a long quote
+   takes out that line, not the whole quote. */
+
+const QUOTE_HOSTS = new Set(['doc', 'blockquote']);
+
+function isPlainParagraph($pos) {
+  return $pos.parent.type.name === 'paragraph'
+    && QUOTE_HOSTS.has($pos.node(-1).type.name);
+}
+
+// [from, to] of the line around `$pos`: between the hard breaks (or the
+// paragraph's edges) on either side of the cursor.
+function lineAround($pos) {
+  const para = $pos.parent;
+  const start = $pos.start();
+  let lineStart = 0;
+  let lineEnd = para.content.size;
+  let offset = 0;
+  para.forEach((child) => {
+    if (child.type.name === 'hardBreak') {
+      if (offset < $pos.parentOffset) lineStart = offset + 1;
+      else if (lineEnd === para.content.size) lineEnd = offset;
+    }
+    offset += child.nodeSize;
+  });
+  return [start + lineStart, start + lineEnd];
+}
+
+// Split the paragraph at `pos`, unless `pos` is already at one of its edges.
+// A hard break at the cut becomes the paragraph boundary itself, and the
+// space left over by cutting mid-sentence goes with it.
+function cutAt(tr, pos) {
+  let $p = tr.doc.resolve(pos);
+  if ($p.parent.type.name !== 'paragraph') return;
+  const atEdge = (p) => p.parentOffset === 0 || p.parentOffset === p.parent.content.size;
+  if (atEdge($p)) return;
+  if ($p.nodeAfter && $p.nodeAfter.type.name === 'hardBreak') {
+    tr.delete(pos, pos + 1);
+  } else if ($p.nodeBefore && $p.nodeBefore.type.name === 'hardBreak') {
+    tr.delete(pos - 1, pos);
+    pos -= 1;
+  }
+  $p = tr.doc.resolve(pos);
+  if (atEdge($p)) return;
+  // A space on either side of a mid-sentence cut would be left dangling.
+  if (tr.doc.textBetween(pos, pos + 1) === ' ') tr.delete(pos, pos + 1);
+  if (tr.doc.textBetween(pos - 1, pos) === ' ') { tr.delete(pos - 1, pos); pos -= 1; }
+  $p = tr.doc.resolve(pos);
+  if (atEdge($p)) return;
+  tr.split(pos);
+}
+
+function toggleQuote(editor) {
+  const { state } = editor;
+  const sel = state.selection;
+  const unquote = editor.isActive('blockquote');
+  if (!isPlainParagraph(sel.$from) || !isPlainParagraph(sel.$to)) {
+    // Headings, code: the standard whole-block behaviour.
+    if (editor.chain().focus().toggleBlockquote().run()) return true;
+    // A list item cannot hold a quote of its first line, and the button
+    // used to do nothing at all there. Quote the whole list instead.
+    if (sel.$from.depth < 1) return false;
+    return editor.chain().focus()
+      .setNodeSelection(sel.$from.before(1))
+      .wrapIn('blockquote')
+      .run();
+  }
+
+  let from = sel.from;
+  let to = sel.to;
+  if (sel.empty) {
+    [from, to] = lineAround(sel.$from);
+  } else {
+    // Whitespace at the edges of a selection is not part of the quote.
+    const text = state.doc.textBetween(from, to, '\n', '\n');
+    from += text.length - text.trimStart().length;
+    to -= text.length - text.trimEnd().length;
+    if (to <= from) [from, to] = lineAround(sel.$from);
+  }
+
+  const tr = state.tr;
+  cutAt(tr, to);
+  cutAt(tr, from);
+  const start = tr.mapping.map(from, 1);
+  const end = Math.max(start, tr.mapping.map(to, -1));
+  editor.view.dispatch(tr);
+
+  const chain = editor.chain().focus().setTextSelection({ from: start, to: end });
+  return (unquote ? chain.lift('blockquote') : chain.wrapIn('blockquote')).run();
+}
+
 function setupToolbarButtons(editor, toolbarElement) {
   const buttons = toolbarElement.querySelectorAll('.format-btn');
 
@@ -107,14 +222,14 @@ function setupToolbarButtons(editor, toolbarElement) {
           editor.chain().focus().toggleOrderedList().run();
           break;
         case 'link': {
-          const url = prompt('Enter URL:', 'https://');
+          const url = prompt(window.LINK_PROMPT || 'Enter URL:', 'https://');
           if (url && url.trim()) {
             editor.chain().focus().setLink({ href: url.trim() }).run();
           }
           break;
         }
         case 'quote':
-          editor.chain().focus().toggleBlockquote().run();
+          toggleQuote(editor);
           break;
         case 'strike':
           editor.chain().focus().toggleStrike().run();

@@ -92,7 +92,9 @@ header {
   align-items: center;
   padding-top: 40px;
   padding-bottom: 40px;
-  overflow-y: auto;
+  /* No overflow here: nothing limits this block's height, so it never
+     scrolled itself, but as a scroll container it kept the note toolbar
+     from sticking while the page scrolled. */
 }
 
 /* Ноутбучные экраны */
@@ -176,11 +178,11 @@ textarea {
   overflow-y: auto;
 }
 .save-btn {
-  width: 80px;
+  min-width: 80px;
   background: #000;
   color: #fff;
   border: none;
-  padding: 6px 0;
+  padding: 6px 12px;
   font-family: var(--font-body, 'Times New Roman', Times, serif);
   font-size: var(--il-text-body);
   cursor: pointer;
@@ -195,6 +197,11 @@ textarea {
   border: 1px solid #222;
   flex-wrap: nowrap;
   justify-content: center;
+  /* The note box grows with the text; the buttons stay in reach while a
+     long note scrolls past. */
+  position: sticky;
+  top: 0;
+  z-index: 2;
 }
 .format-btn {
   background: #fff;
@@ -465,7 +472,7 @@ textarea {
     padding: 6px;
   }
   .save-btn {
-    width: 70px;
+    min-width: 70px;
   }
   .main-footer {
     bottom: 10px;
@@ -488,6 +495,9 @@ textarea {
   .formatting-toolbar {
     padding: 4px 3px;
     gap: 2px;
+    /* Translated labels are longer than "List" and "Link": on a phone the
+       row wraps instead of cutting them off. */
+    flex-wrap: wrap;
   }
   .format-btn {
     font-size: var(--il-text-hint);

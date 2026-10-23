@@ -20,7 +20,7 @@ import os
 import re
 
 from app import db
-from app.note_text import plain_text
+from app.note_text import plain_text, soften_hard_breaks
 from app.i18n import t
 from app.models import MoodEntry, UserProfile, SyncMeta
 
@@ -48,6 +48,7 @@ def normalize_note(note):
         return ''
 
     cleaned = note.replace('\r\n', '\n').replace('\r', '\n')
+    cleaned = soften_hard_breaks(cleaned)
     cleaned = cleaned.replace('\u00a0', ' ')
     cleaned = re.sub(r'[\u200B-\u200D\uFEFF]', '', cleaned)
 

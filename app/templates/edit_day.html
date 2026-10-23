@@ -93,16 +93,16 @@
             H3
           </button>
           <button type="button" class="format-btn" data-format="list" title="{{ t('edit_day.fmt_list') }}">
-            • List
+            {{ t('edit_day.btn_list') }}
           </button>
           <button type="button" class="format-btn" data-format="numbered" title="{{ t('edit_day.fmt_numbered') }}">
-            1. List
+            {{ t('edit_day.btn_numbered') }}
           </button>
           <button type="button" class="format-btn" data-format="link" title="{{ t('edit_day.fmt_link') }}">
-            Link
+            {{ t('edit_day.btn_link') }}
           </button>
           <button type="button" class="format-btn" data-format="quote" title="{{ t('edit_day.fmt_quote') }}">
-            "
+            «»
           </button>
           <button type="button" class="format-btn" data-format="strike" title="{{ t('edit_day.fmt_strike') }}">
             <s>S</s>
@@ -138,6 +138,7 @@
     var KILL_CONFIRM = {{ t('edit_day.kill_confirm')|tojson }};
     var RATING_REQUIRED = {{ t('edit_day.rating_required')|tojson }};
     var TIPTAP_PLACEHOLDER = {{ t('edit_day.placeholder')|tojson }};
+    var LINK_PROMPT = {{ t('edit_day.link_prompt')|tojson }};
     function confirmDelete() {
       if (confirm(KILL_CONFIRM)) {
         try {
@@ -252,6 +253,7 @@
       elementId: 'tiptap-editor',
       placeholderText: TIPTAP_PLACEHOLDER,
       initialContent: contentToLoad,
+      lang: document.documentElement.lang,
       onUpdate: (markdown, editor) => {
         noteTextarea.value = markdown;
         scheduleDraftSave(markdown);
