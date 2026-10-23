@@ -8,6 +8,7 @@ import { refreshEntries } from './store.svelte.js';
 import { GoogleDriveTransport, clearToken as clearGoogleToken } from './drive.js';
 import { YandexDiskTransport, clearToken as clearYandexToken } from './yandex.js';
 import { isUnlocked } from './vault.js';
+import { YANDEX_ENABLED } from './config.js';
 
 const LAST_KEY = 'indexlife:last-sync';
 const PROVIDER_KEY = 'indexlife:cloud-provider'; // 'yandex' | 'google'
@@ -78,6 +79,12 @@ export function getTransport() {
 export async function runSync({ silent = false } = {}) {
   if (!isUnlocked()) {
     if (!silent) syncState.error = 'Сначала включите шифрование';
+    return false;
+  }
+  if (getProvider() === 'yandex' && !YANDEX_ENABLED) {
+    // Switched off (see config.js): every attempt would fail on reading.
+    // The settings screen explains it and offers another cloud.
+    if (!silent) syncState.error = 'Яндекс.Диск временно недоступен: выберите другое облако в настройках';
     return false;
   }
   if (syncState.status === 'syncing') return false; // dedupe concurrent runs

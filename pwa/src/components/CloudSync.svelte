@@ -6,6 +6,7 @@
   import { listDevices, resetSyncMarks } from '../lib/app-sync.js';
   import { getProvider, setProvider, signOutCloud, getTransport, runSync, reconnectAndSync, syncState, describeError } from '../lib/sync-state.svelte.js';
   import { timeAgo } from '../lib/mood.js';
+  import { YANDEX_ENABLED } from '../lib/config.js';
 
   let provider = $state(getProvider()); // 'yandex' | 'google' | null
   let connected = $state(false);
@@ -163,6 +164,15 @@
       <button class="enc-done-btn" onclick={() => (recoveryShown = '')}>Я сохранил(а) ключ</button>
     </div>
 
+  {:else if provider === 'yandex' && !YANDEX_ENABLED}
+    <div class="cloud-status">Яндекс.Диск временно недоступен</div>
+    <p class="hint">
+      Яндекс не даёт браузеру читать файлы с Диска, поэтому синхронизация через него
+      пока не работает. Записи на телефоне в сохранности. Можно подключить Google Drive,
+      а Яндекс.Диск вернётся в одном из следующих обновлений.
+    </p>
+    <button class="row-btn" onclick={switchCloud}>Выбрать другое облако</button>
+
   {:else if st.unlocked}
     <div class="cloud-status">🔒 Зашифровано · {providerName}</div>
     <button class="save-btn" onclick={doSync} disabled={syncState.status === 'syncing'}>
@@ -236,12 +246,19 @@
 
   {:else if !provider}
     <div class="cloud-status">Куда синхронизировать?</div>
-    <button class="row-btn" onclick={() => chooseProvider('yandex')}>🟡 Яндекс.Диск</button>
+    {#if YANDEX_ENABLED}
+      <button class="row-btn" onclick={() => chooseProvider('yandex')}>🟡 Яндекс.Диск</button>
+    {/if}
     <button class="row-btn" onclick={() => chooseProvider('google')}>☁️ Google Drive</button>
     <p class="hint">
-      В России — <b>Яндекс.Диск</b> (работает без VPN). Google Drive — если он у вас
-      открывается. Данные в любом случае шифруются на телефоне, облако видит только
-      шифротекст.
+      {#if YANDEX_ENABLED}
+        В России — <b>Яндекс.Диск</b> (работает без VPN). Google Drive — если он у вас
+        открывается.
+      {:else}
+        Яндекс.Диск временно недоступен и вернётся в одном из следующих обновлений.
+        Google Drive в России может потребовать VPN.
+      {/if}
+      Данные в любом случае шифруются на телефоне, облако видит только шифротекст.
     </p>
 
   {:else if !connected}

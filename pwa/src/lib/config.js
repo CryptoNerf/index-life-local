@@ -14,3 +14,9 @@ export const DRIVE_FOLDER_NAME = 'index.life';
 // gets its own folder on Yandex.Disk via the cloud_api:disk.app_folder scope.
 // Reachable in Russia without a VPN (unlike Google/Cloudflare).
 export const YANDEX_CLIENT_ID = 'ace6472cc41f4101a181d5a94128f9b4';
+
+// Yandex.Disk is switched off for now: its download host gives a web page
+// no CORS header, so the app can write to the Disk but never read back
+// (every connect ended in "Нет связи с облаком (скачивание файла)"). It
+// returns with a small download proxy; the transport (yandex.js) stays.
+export const YANDEX_ENABLED = false;
